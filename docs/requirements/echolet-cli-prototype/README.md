@@ -17,6 +17,7 @@ Verification requires **Node 22.13+**; on Node 22.12 and below `node:sqlite` is 
 - [Technical specification](specification.md)
 - [Implementation plan](implementation-plan.md)
 - [Metrics and validation](metrics-and-validation.md)
+- [Runbook: reproduce the prototype from a clean checkout](runbook.md)
 - [Contact card schema](schemas/contact-card.schema.json)
 - [Client configuration schema](schemas/client-config.schema.json)
 - [Relay v2 exchange schema](schemas/relay-v2.schema.json)

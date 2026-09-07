@@ -33,7 +33,11 @@ The CLI commands and `test:e2e` script are planned surfaces. Add them in P0-04 a
 
 ## Manual reproduction
 
-After P0-09, the runbook must provide copyable commands that:
+Delivered: [runbook.md](runbook.md) carries the copyable commands, each executed
+against the real relay binary and the real `dist/cli.js` with the observed output
+quoted. Its numbered sections map one-to-one onto the requirements below.
+
+The runbook must provide copyable commands that:
 
 1. create temporary relay, Alice, and Bob directories;
 2. provide separate 32-byte store keys through environment variables;
