@@ -38,6 +38,51 @@ interface Options {
   readonly cliPath: string;
 }
 
+/**
+ * What `--help` prints.
+ *
+ * MEASURED (flow 003 T2 §4): `echolet-tui --help` answered "--help needs a value" and exited 2,
+ * because the option loop reads the next argv entry as a value before it recognises a flag. A
+ * console that cannot explain its own invocation is one an operator has to read the source of, so
+ * this is usage on stdout and exit 0 — and it never touches the alternate screen on the way out.
+ *
+ * No option here can carry a key value, and the text says where the key does travel.
+ */
+const USAGE = [
+  "echolet operator console — an UNAUDITED PROTOTYPE, not for sensitive communication.",
+  "",
+  "usage: echolet-tui --profile <dir> [options] [--profile <dir> [options] …]",
+  "",
+  "  --profile <dir>        a profile directory; repeat for more than one profile",
+  "  --label <name>         what to call the preceding profile on screen",
+  "  --relay-url <url>      the relay the preceding profile is configured against",
+  "  --store-key-env <var>  the NAME of the environment variable holding that profile's",
+  "                         32-byte store key. The value is never read here: it reaches",
+  "                         the CLI through the inherited environment.",
+  "  --card <path>          a contact card the preceding profile may import with [i]",
+  "  --cli <path>           the CLI bundle to drive (default: cli.js beside this file)",
+  "  --help                 print this and exit",
+  "",
+  "Keys: [1-5] pane  [p] poll  [d] doctor  [r] publish  [h] history  [i] import",
+  "      [c] contact  [t] profile  [?] help  [q] quit",
+].join("\n");
+
+const HELP_FLAGS = new Set(["--help", "-h"]);
+
+/**
+ * True when argv asks for usage, read POSITIONALLY so that a value which happens to look like the
+ * flag — `--label -h` — is a label and not a request for help.
+ */
+function wantsHelp(argv: readonly string[]): boolean {
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index] ?? "";
+    if (HELP_FLAGS.has(token)) return true;
+    // Every other option this binary has takes exactly one value; skip it.
+    index += 1;
+  }
+  return false;
+}
+
 /** Splits argv into one `ProfileView` per `--profile`. No option here can carry a key value. */
 function parseOptions(argv: readonly string[]): Options {
   const profiles: ProfileView[] = [];
@@ -57,6 +102,9 @@ function parseOptions(argv: readonly string[]): Options {
 
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index] ?? "";
+    // A zero-argument flag must be recognised BEFORE its successor is read as a value, or
+    // `--help` on its own is reported as a missing operand — which is what it did.
+    if (HELP_FLAGS.has(flag)) continue;
     const value = argv[index + 1];
     if (value === undefined) throw new Error(`${flag} needs a value`);
     index += 1;
@@ -106,7 +154,13 @@ function readIdentifiers(text: string): TrustIdentifiers | undefined {
 }
 
 async function main(): Promise<number> {
-  const options = parseOptions(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  if (wantsHelp(argv)) {
+    process.stdout.write(`${USAGE}\n`);
+    return 0;
+  }
+
+  const options = parseOptions(argv);
 
   type TrustListener = (input: { readonly cardPath: string; readonly profileLabel: string; readonly identifiers: TrustIdentifiers }) => void;
   let trustListener: TrustListener | undefined;

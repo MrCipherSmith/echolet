@@ -56,7 +56,11 @@ export interface ProfileView {
   readonly contactCardPath?: string;
 }
 
-/** A contact this session observed being exported or imported. See the design note §6. */
+/**
+ * A contact this session observed being imported through the trust modal. See the design note §6.
+ *
+ * An export creates no trust, so a card this session handed out never reaches this list.
+ */
 export interface ContactView {
   readonly identityId: string;
   readonly deviceId: string;
@@ -140,6 +144,15 @@ export interface OperatorState {
   readonly modal: Modal;
   readonly activity: readonly ActivityLine[];
   readonly busy: boolean;
+  /**
+   * True while the key list is open (`?`).
+   *
+   * Optional, and absent means closed, so a state constructed before this field existed still
+   * describes a console with the help list shut. It is a boolean rather than a second `Modal`
+   * because the key list is not a decision: it takes no exclusive control of the keyboard and the
+   * trust gate must never have a second door.
+   */
+  readonly help?: boolean;
 }
 
 /**
