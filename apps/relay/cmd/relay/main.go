@@ -74,7 +74,7 @@ func run() int {
 	srv, err := server.New(cfg, r)
 	if err != nil {
 		slog.Error("Failed to configure server", "error", err)
-		return closeStorage(st, 1)
+		return stopBackgroundWorkAndCloseStorage(r, st, 1)
 	}
 
 	// Paths only, never contents: the certificate is public, the key is not.
@@ -91,9 +91,9 @@ func run() int {
 		// here, and both are startup failures.
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Failed to start server", "error", err)
-			return closeStorage(st, 1)
+			return stopBackgroundWorkAndCloseStorage(r, st, 1)
 		}
-		return closeStorage(st, 0)
+		return stopBackgroundWorkAndCloseStorage(r, st, 0)
 	case sig := <-signals:
 		// The signal name is operational fact, not request content. Nothing
 		// about the requests being drained is logged here or below.
@@ -107,10 +107,14 @@ func run() int {
 	//     from the moment the signal is handled.
 	//  2. It then waits for requests already being served to finish, so an
 	//     operator stop completes work in flight instead of cutting it.
-	//  3. Only once that has finished - or been forced to finish - is Badger
-	//     closed. Closing the store underneath a running handler would be a
-	//     worse defect than the one this replaces: the handler's write would
-	//     fail against a closing database instead of simply being drained.
+	//  3. Only once that has finished - or been forced to finish - is the
+	//     router's background work stopped and Badger closed. Closing the store
+	//     underneath a running handler would be a worse defect than the one this
+	//     replaces: the handler's write would fail against a closing database
+	//     instead of simply being drained. The cleanup ticker belongs to the
+	//     same step for the same reason - it is a writer on a timer, and a
+	//     drained server with a ticker still running is the hazard this order
+	//     exists to remove, only harder to see.
 	//  4. Then, and only then, exit 0, because an operator stop is a success.
 	ctx, cancel := context.WithTimeout(context.Background(), drainTimeout)
 	defer cancel()
@@ -157,7 +161,22 @@ func run() int {
 		slog.Warn("Server stopped with an error", "error", err)
 	}
 
-	return closeStorage(st, 0)
+	return stopBackgroundWorkAndCloseStorage(r, st, 0)
+}
+
+// stopBackgroundWorkAndCloseStorage ends everything the router runs on its own
+// schedule, then closes Badger, and returns the exit status to use.
+//
+// The two are one step because their order is a correctness property, not a
+// preference: the cleanup ticker can write, so it has to be gone before the
+// store it writes into is closed - the same argument step 3 above makes about
+// in-flight handlers. Every path that closes the store goes through here,
+// including the two startup failures, because the router starts its ticker
+// before the server is even configured and a failure between those two points
+// would otherwise abandon a running goroutine over a closing database.
+func stopBackgroundWorkAndCloseStorage(r *router.Router, st *storage.Storage, code int) int {
+	r.Stop()
+	return closeStorage(st, code)
 }
 
 // closeStorage closes Badger and returns the exit status to use.
