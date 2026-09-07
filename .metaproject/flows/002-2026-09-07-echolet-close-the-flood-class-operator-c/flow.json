@@ -9,7 +9,7 @@
   "title": "Echolet: close the flood class, operator console, and two-relay deployment",
   "status": "in-progress",
   "createdAt": "2026-09-07T06:55:37.619Z",
-  "updatedAt": "2026-09-07T11:32:56.020Z",
+  "updatedAt": "2026-09-07T12:05:13.794Z",
   "source": {
     "type": "description",
     "ref": null
@@ -274,7 +274,7 @@
       "id": "T13",
       "title": "RED tests for the truncated contact-import re-walk and the unauthenticated count oracle",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -288,23 +288,31 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
       "title": "Fix T10-F-001 message loss, T10-F-002 count oracle, T10-F-003 relay URL path",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T13"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T11:34:31.853Z",
+            "outcome": "started",
+            "detail": "002-T14-implement"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -505,6 +513,21 @@
       "at": "2026-09-07T11:32:56.020Z",
       "event": "task-done",
       "detail": "T12: Prepare deployment artifacts: relay container image, unit files, runbook draft"
+    },
+    {
+      "at": "2026-09-07T11:34:31.770Z",
+      "event": "task-done",
+      "detail": "T13: RED tests for the truncated contact-import re-walk and the unauthenticated count oracle"
+    },
+    {
+      "at": "2026-09-07T11:34:31.853Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 002-T14-implement"
+    },
+    {
+      "at": "2026-09-07T12:05:13.794Z",
+      "event": "task-done",
+      "detail": "T14: Fix T10-F-001 message loss, T10-F-002 count oracle, T10-F-003 relay URL path"
     }
   ]
 }

@@ -51,6 +51,7 @@
     "apps/cli/src/tui/tui-shell.ts",
     "apps/cli/src/tui/tui.keyMaterial.test.ts",
     "apps/cli/test/e2e/flood-closure.test.ts",
+    "apps/cli/test/e2e/init-relay-url.test.ts",
     "apps/cli/test/e2e/publication-claimability.test.ts",
     "apps/cli/test/e2e/relay-tls.test.ts",
     "apps/cli/test/e2e/two-process.test.ts",
