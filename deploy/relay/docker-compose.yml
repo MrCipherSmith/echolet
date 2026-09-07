@@ -1,0 +1,92 @@
+# Echolet relay — one instance per host, parameterised entirely by an env file.
+#
+#   docker compose --env-file env/geekom.env -f docker-compose.yml up -d
+#   docker compose --env-file env/depr.env   -f docker-compose.yml up -d
+#
+# Nothing host-specific lives in this file; see env/*.env.example for what each
+# host supplies. No certificate, key or other secret is referenced by value
+# anywhere here — only by path, and only read-only.
+
+name: ${ECHOLET_STACK_NAME:-echolet-relay}
+
+services:
+  relay:
+    # No `build:` stanza on purpose. The hosts have no Go toolchain and no
+    # repository checkout; the image is built on the operator's machine and
+    # transferred with `docker save | ssh <host> docker load`. Pin the exact tag
+    # in the env file so `up -d` can never pick up something newer by accident.
+    image: ${ECHOLET_IMAGE:?set ECHOLET_IMAGE, e.g. echolet-relay:2026-09-07-<short-sha>}
+    container_name: ${ECHOLET_CONTAINER_NAME:-echolet-relay}
+    restart: unless-stopped
+
+    # Must match the ownership of the mounted certificate pair and data
+    # directory. Baked into the image as 10001:10001; overridable only if you
+    # rebuild with a different pair.
+    user: "${ECHOLET_UID:-10001}:${ECHOLET_GID:-10001}"
+
+    # BIND TO THE TAILSCALE ADDRESS, NOT 0.0.0.0.
+    #
+    # Docker publishes ports with its own DNAT rules, which are evaluated BEFORE
+    # ufw's INPUT chain. A container published on 0.0.0.0 is therefore reachable
+    # on every interface even on a host whose ufw denies the port — depr has an
+    # active ufw and it would not save you here. Naming the tailnet address in
+    # ECHOLET_BIND_ADDR is what keeps the relay on the tailnet, and it is the
+    # only thing that does.
+    ports:
+      - "${ECHOLET_BIND_ADDR:?set ECHOLET_BIND_ADDR to this host's tailscale IPv4 (tailscale ip -4) — never 0.0.0.0}:${ECHOLET_PORT:-8443}:8443"
+
+    environment:
+      # Inside the container the listen address is fixed; the host side of the
+      # mapping is what varies. One address, one scheme — the relay has no
+      # separate HTTPS port by design (T8 §1).
+      ECHOLET_HTTP_ADDR: "0.0.0.0:8443"
+
+      # Both, or the relay refuses to start. It never degrades to plain HTTP.
+      ECHOLET_TLS_CERT_FILE: /etc/echolet/tls/cert.pem
+      ECHOLET_TLS_KEY_FILE: /etc/echolet/tls/key.pem
+      ECHOLET_TLS_RELOAD_INTERVAL_SECONDS: "${ECHOLET_TLS_RELOAD_INTERVAL_SECONDS:-60}"
+
+      ECHOLET_DATA_DIR: /var/lib/echolet
+      ECHOLET_LOG_LEVEL: "${ECHOLET_LOG_LEVEL:-info}"
+      ECHOLET_NODE_CALLSIGN: "${ECHOLET_NODE_CALLSIGN:?set ECHOLET_NODE_CALLSIGN, e.g. RPT-GEEKOM-01}"
+
+      # Bounds. Left at the relay's own defaults unless the env file overrides
+      # them. ECHOLET_MAX_UNACKED_ENVELOPES_PER_SENDER and
+      # ECHOLET_MAX_MAILBOX_BATCH were sized against each other by the flood
+      # closure — raising one without the other widens the walk the per-sender
+      # quota was sized against (apps/relay/internal/config/config.go).
+      ECHOLET_MAILBOX_TTL_HOURS: "${ECHOLET_MAILBOX_TTL_HOURS:-168}"
+      ECHOLET_MAX_MESSAGE_BYTES: "${ECHOLET_MAX_MESSAGE_BYTES:-262144}"
+      ECHOLET_MAX_MAILBOX_BATCH: "${ECHOLET_MAX_MAILBOX_BATCH:-100}"
+      ECHOLET_MAX_UNACKED_ENVELOPES_PER_SENDER: "${ECHOLET_MAX_UNACKED_ENVELOPES_PER_SENDER:-16}"
+      ECHOLET_RATE_LIMIT_PER_MINUTE: "${ECHOLET_RATE_LIMIT_PER_MINUTE:-120}"
+      ECHOLET_CHALLENGE_TTL_SECONDS: "${ECHOLET_CHALLENGE_TTL_SECONDS:-60}"
+      ECHOLET_CLEANUP_INTERVAL_SECONDS: "${ECHOLET_CLEANUP_INTERVAL_SECONDS:-60}"
+      # Declared by the relay and enforced nowhere (T7 §6 R-3). Set here so the
+      # value is recorded, not because it bounds anything today.
+      ECHOLET_MAX_STORAGE_BYTES: "${ECHOLET_MAX_STORAGE_BYTES:-2147483648}"
+
+    volumes:
+      # READ-ONLY, always. The private key is written by `tailscale cert` on the
+      # host, chowned to the container uid, and never copied, never baked into
+      # an image and never committed. The relay only reads these two files and
+      # logs their paths, never their contents.
+      - "${ECHOLET_TLS_DIR:?set ECHOLET_TLS_DIR, e.g. /etc/echolet/tls}:/etc/echolet/tls:ro"
+      - "${ECHOLET_HOST_DATA_DIR:?set ECHOLET_HOST_DATA_DIR, e.g. /var/lib/echolet}:/var/lib/echolet"
+
+    # Hardening that costs nothing here. The relay writes only to its data
+    # directory, so the rest of the filesystem can be read-only; and it never
+    # needs to gain a privilege.
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "${ECHOLET_LOG_MAX_SIZE:-20m}"
+        max-file: "${ECHOLET_LOG_MAX_FILE:-5}"

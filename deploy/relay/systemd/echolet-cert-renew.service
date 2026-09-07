@@ -1,0 +1,38 @@
+[Unit]
+# Refresh the tailnet certificate pair the relay reads.
+#
+# `tailscale cert` is a no-op while the current certificate has plenty of life
+# left, so running this on a timer is cheap. When it does renew, it rewrites the
+# same two paths in place and the RUNNING relay picks the new bytes up within
+# ECHOLET_TLS_RELOAD_INTERVAL_SECONDS — detected by content digest, not mtime.
+# There is deliberately no `systemctl restart` and no `docker restart` here: a
+# renewal must not become an outage.
+Description=Renew the Echolet relay's tailnet TLS certificate
+Documentation=file:///docs/requirements/echolet-cli-prototype/deployment-runbook.md
+After=tailscaled.service
+Requires=tailscaled.service
+
+[Service]
+Type=oneshot
+
+# Set these two on the host, per host:
+#   sudo systemctl edit echolet-cert-renew.service
+#   [Service]
+#   Environment=ECHOLET_TLS_HOSTNAME=geekom.tail5a88fb.ts.net
+#   Environment=ECHOLET_TLS_DIR=/etc/echolet/tls
+#   Environment=ECHOLET_UID=10001
+Environment=ECHOLET_TLS_DIR=/etc/echolet/tls
+Environment=ECHOLET_UID=10001
+
+ExecStart=/usr/bin/env sh -c '\
+  test -n "$ECHOLET_TLS_HOSTNAME" || { echo "ECHOLET_TLS_HOSTNAME is unset; see the deployment runbook" >&2; exit 2; }; \
+  /usr/bin/tailscale cert \
+    --cert-file "$ECHOLET_TLS_DIR/cert.pem" \
+    --key-file  "$ECHOLET_TLS_DIR/key.pem" \
+    "$ECHOLET_TLS_HOSTNAME"; \
+  chown "$ECHOLET_UID:$ECHOLET_UID" "$ECHOLET_TLS_DIR/cert.pem" "$ECHOLET_TLS_DIR/key.pem"; \
+  chmod 0644 "$ECHOLET_TLS_DIR/cert.pem"; \
+  chmod 0600 "$ECHOLET_TLS_DIR/key.pem"'
+
+[Install]
+WantedBy=multi-user.target

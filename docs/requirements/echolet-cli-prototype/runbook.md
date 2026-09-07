@@ -180,6 +180,58 @@ ECHOLET_E2E_KEY="$CKEY" node "$CLI" send --to "$BID" --text "unsolicited" --prof
 Exit codes: `0` success, `2` input/configuration, `3` trust/protocol, `4`
 temporary relay/network, `5` local persistence.
 
+## Serving HTTPS (required for any non-loopback relay)
+
+Everything above runs on loopback plain HTTP, which the CLI accepts. It refuses a
+**non-loopback** relay URL that is not HTTPS (§Configuration in
+[specification.md](specification.md)), so a relay reachable from another machine
+must terminate TLS. The relay reads a certificate pair from disk; it never
+requests, renews or generates one.
+
+| Variable | Meaning |
+|---|---|
+| `ECHOLET_TLS_CERT_FILE` | PEM certificate chain |
+| `ECHOLET_TLS_KEY_FILE` | PEM private key for that certificate |
+| `ECHOLET_TLS_RELOAD_INTERVAL_SECONDS` | how often a handshake may re-read the pair to notice a renewal (default `60`, `0` = every handshake) |
+| `ECHOLET_HTTP_ADDR` | the one listen address, for HTTPS as well as HTTP |
+
+**Both or neither.** Setting exactly one, or pointing either at a file that is
+missing, malformed or mismatched, makes the relay exit non-zero at startup with
+the offending variable or path named. It never falls back to plain HTTP: a relay
+that came up unprotected after the operator asked for TLS would look healthy
+while carrying every envelope in the clear.
+
+On the tailnet the pair comes from `tailscale cert`, which issues a real Let's
+Encrypt certificate for a MagicDNS name with no public DNS record and no inbound
+port opened:
+
+```sh
+sudo tailscale cert --cert-file /etc/echolet/cert.pem --key-file /etc/echolet/key.pem <host>.<tailnet>.ts.net
+sudo chmod 600 /etc/echolet/key.pem
+ECHOLET_HTTP_ADDR="0.0.0.0:8443" \
+ECHOLET_TLS_CERT_FILE=/etc/echolet/cert.pem \
+ECHOLET_TLS_KEY_FILE=/etc/echolet/key.pem \
+ECHOLET_DATA_DIR=/var/lib/echolet ./relay
+```
+
+Clients then use `--relay-url https://<host>.<tailnet>.ts.net:8443`. The
+certificate must be issued for the **name the client dials**; an IP address in the
+URL will not match a MagicDNS certificate.
+
+**Renewal needs no restart.** Re-running `tailscale cert` (or a timer that does)
+rewrites the two files in place; the running relay notices the new bytes — by
+content digest, not modification time — and serves the renewed certificate. If a
+read lands mid-rewrite the last good pair keeps serving and a warning is logged,
+so a renewal cannot become an outage. Only the two paths are ever logged, never
+the contents.
+
+For a local HTTPS run without Tailscale, the relay module ships a self-signed
+generator for development and tests only:
+
+```sh
+go -C apps/relay run ./internal/devcert/gencert --out /tmp/echolet-tls --hosts localhost,127.0.0.1
+```
+
 ## 11. What this runbook does not establish
 
 Reproducing every step above demonstrates the local computer technical

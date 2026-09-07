@@ -1,0 +1,14 @@
+# Build context hygiene for apps/relay.
+#
+# Two of these are not cosmetic:
+#   .data/  is a relay data directory from a local run. It holds envelope
+#           ciphertext and would otherwise be copied into an image layer.
+#   *.pem / *.key  are certificate material. They must never enter a build
+#           context, let alone an image layer, whatever .gitignore says.
+.cache/
+.data/
+relay
+*.pem
+*.key
+*.crt
+*.test

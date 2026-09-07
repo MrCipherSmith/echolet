@@ -30,3 +30,16 @@
 - 2026-09-07T08:32:12.979Z - task-attempt: T9: started (attempt 2) — 002-T9-implement
 - 2026-09-07T09:04:14.679Z - task-done: T7: Implement the flooding closure
 - 2026-09-07T09:04:14.758Z - task-done: T9: Operator console over the local CLI
+- 2026-09-07T09:04:49.577Z - task-attempt: T8: started (attempt 1) — 002-T8-tls
+- 2026-09-07T09:43:36.913Z - task-done: T8: Serve HTTPS for non-loopback relay URLs
+- 2026-09-07T09:43:36.999Z - task-attempt: T10: started (attempt 1) — 002-T10-verify
+- 2026-09-07T10:26:24.540Z - task-added: T12: Prepare deployment artifacts: relay container image, unit files, runbook draft
+- 2026-09-07T10:26:24.625Z - task-depends-set: T11: dependsOn T10, T12 (was T10) — Deployment consumes the prepared artifacts and still waits for verification
+- 2026-09-07T10:26:24.708Z - task-attempt: T12: started (attempt 1) — 002-T12-deploy-prep
+- 2026-09-07T11:12:53.270Z - task-attempt: T10: failed (attempt 2) — T10-F-001: the contact-import re-walk is itself bounded at 16 pages and its flag is consumed regardless, so a message behind >16 pages of poison is permanently lost
+- 2026-09-07T11:12:53.358Z - task-added: T13: RED tests for the truncated contact-import re-walk and the unauthenticated count oracle
+- 2026-09-07T11:12:53.448Z - task-added: T14: Fix T10-F-001 message loss, T10-F-002 count oracle, T10-F-003 relay URL path
+- 2026-09-07T11:13:01.963Z - task-depends-set: T14: dependsOn T13 (was empty) — Implementation follows the RED tests
+- 2026-09-07T11:13:02.060Z - task-depends-set: T10: dependsOn T7, T8, T9, T14 (was T7, T8, T9) — Verification is re-run after the regression it found is fixed
+- 2026-09-07T11:13:02.151Z - task-attempt: T13: started (attempt 1) — 002-T13-tests
+- 2026-09-07T11:32:56.020Z - task-done: T12: Prepare deployment artifacts: relay container image, unit files, runbook draft

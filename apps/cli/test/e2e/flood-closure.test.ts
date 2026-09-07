@@ -38,7 +38,11 @@ import { deriveMailboxId, generateIdentityKeyPair, signUtf8Message } from "@echo
  *   RED-5  every flood assertion carries BYTES and REQUEST COUNTS beside the exit code, so an
  *          implementation that "delivers by re-downloading everything forever" fails on the
  *          counters instead of passing on the boolean (design §4, R-1)
- *   RED-6  the late-`contact import` recovery path (design §4, R-5) — a guard, not a RED
+ *   RED-6  the late-`contact import` recovery path (design §4, R-5), at a flood DEEPER than the
+ *          client's own page valve — the shape T10-F-001 measured, where the recovery path the
+ *          design added is itself truncated and the message is lost permanently
+ *   RED-7  the read position must not answer a question about the mailbox before the asker is
+ *          authenticated (T10-F-002)
  *
  * Leak discipline
  * ---------------
@@ -209,13 +213,18 @@ const postEnvelope = async (url: string, envelope: unknown) =>
  * stays 1 wherever an assertion talks about the ORDER the relay assigns, because with a
  * server-assigned sequence, concurrent stores are ordered by arrival rather than by index.
  *
+ * `indexOffset` shifts the envelope_id range this call mints. `mailbox_repo.go:429` keys an envelope
+ * on `(mailbox_id, envelope_id)`, so two floods into the SAME mailbox must not reuse an index or the
+ * second store addresses the first store's key. A test that places poison both AHEAD OF and BEHIND a
+ * legitimate envelope therefore calls this twice with disjoint ranges.
+ *
  * Returns the attacker's own cost, which is the number AC2 asks to be stated.
  */
-async function flood(relayUrl: string, recipient: Recipient, poison: number, ciphertextBytes: number, concurrency = 1) {
+async function flood(relayUrl: string, recipient: Recipient, poison: number, ciphertextBytes: number, concurrency = 1, indexOffset = 0) {
   const perIdentity = 16;
   const identities: Attacker[] = [];
   for (let placed = 0; placed < poison; placed += perIdentity) identities.push(await publishAttacker(relayUrl));
-  const work = Array.from({ length: poison }, (_, index) => ({ attacker: identities[Math.floor(index / perIdentity)]!, index }));
+  const work = Array.from({ length: poison }, (_, index) => ({ attacker: identities[Math.floor(index / perIdentity)]!, index: index + indexOffset }));
   let stored = 0, refused = 0, uploadedBytes = 0, next = 0;
   const worker = async () => {
     for (;;) {
@@ -583,57 +592,225 @@ it("RED-4: an interrupted poll resumes after the pages it already judged, and th
 }, 600000);
 
 // ===========================================================================
-// RED-6 — the residual the design predicted: a card imported after the envelope arrived
+// RED-6 — the residual the design predicted (§4, R-5), at the depth T10 measured
 // ===========================================================================
 
 /**
- * This is a GUARD, not a RED: it passes today, because a cursorless poll restarts at the head and
- * re-offers everything. It must still pass afterwards.
+ * A third real CLI profile, driven as a real process, whose card Bob has never seen.
  *
- * Design §4, R-5: with a durable read position, a `CONTACT_NOT_TRUSTED` envelope is passed ONCE
- * instead of being re-offered on every poll, so importing the card later would no longer recover
- * it. `contact import` therefore has to reset the mark. The poison in front of Alice's envelope is
- * what forces the walk to move the mark past her message before the card exists, so an
- * implementation that omits the reset fails here rather than in production.
+ * Alice is already pinned by Bob in `world`, so she cannot be the untrusted sender. Carol publishes
+ * and sends exactly as a real peer does; the only thing missing is Bob's import of her card, which
+ * is the condition R-5 is about.
  */
-it("RED-6 (guard): a contact card imported after the envelope arrived still recovers the message", async () => {
-  await world("red6-late-import", async (w) => {
-    // Poison first, so Bob's pre-import walk has to move past the untrusted envelope rather than
-    // stopping on it. The per-sender quota (16) forces three self-published identities for 40.
-    expect((await flood(w.relayUrl, w.bobRecipient, 40, 4)).stored).toBe(40);
-    // Alice is already pinned by Bob in `world`, so the untrusted sender here is a THIRD real CLI
-    // profile whose card Bob imports only after its envelope is already queued behind the poison.
-    const carol = join(dirname(w.bob), "carol");
-    const carolKey = randomBytes(32).toString("base64url");
-    const carolRun = async (args: string[], expected: number | null = 0) => {
-      const result = await command(process.execPath, [cli, ...args, "--profile", carol, "--json"], { ECHOLET_E2E_KEY: carolKey }, 60000);
-      if (expected !== null) expect(result.code, `carol ${args[0]}`).toBe(expected);
-      return JSON.parse(result.stdout) as { ok: boolean; data?: Record<string, unknown> };
+interface Carol { identityId: string; cardPath: string; send: (text: string) => Promise<void> }
+async function introduceCarol(w: World): Promise<Carol> {
+  const directory = dirname(w.bob);
+  const carol = join(directory, "carol");
+  const carolKey = randomBytes(32).toString("base64url");
+  const carolRun = async (args: string[], expected: number | null = 0) => {
+    const result = await command(process.execPath, [cli, ...args, "--profile", carol, "--json"], { ECHOLET_E2E_KEY: carolKey }, 60000);
+    if (expected !== null) expect(result.code, `carol ${args[0]}`).toBe(expected);
+    return JSON.parse(result.stdout) as { ok: boolean; data?: Record<string, unknown> };
+  };
+  await carolRun(["init", "--relay-url", w.proxyUrl, "--store-key-env", "ECHOLET_E2E_KEY"]);
+  const carolCard = join(directory, "carol-card.json"), bobCard = join(directory, "bob-card-for-carol.json");
+  await carolRun(["contact", "export", "--out", carolCard]);
+  await w.run(w.bob, ["contact", "export", "--out", bobCard]);
+  await carolRun(["contact", "import", "--from", bobCard, "--yes"]);
+  await carolRun(["relay", "publish"]);
+  const identityId = (JSON.parse(readFileSync(carolCard, "utf8")) as { signal_bundle: { device_record: { identity_id: string } } }).signal_bundle.device_record.identity_id;
+  return {
+    identityId, cardPath: carolCard,
+    send: async (text: string) => { await carolRun(["send", "--to", w.bobIdentity, "--text", text]); },
+  };
+}
+
+/**
+ * The two flood depths that isolate T10-F-001, and the ONLY thing that differs between them.
+ *
+ * `maxPollPagesPerPoll = 16` (`inbound.ts:148`) bounds every walk, including the `contact import`
+ * re-walk that is the design's own recovery path for R-5, and the re-walk request is consumed
+ * (`inbound.ts:135`) whether or not that walk reached the end of the mailbox. At the shipped
+ * defaults — poll byte budget `(1<<20)-4096`, `ECHOLET_MAX_MESSAGE_BYTES` 262 144, so 3 maximum-size
+ * envelopes per page — 16 pages is 48 envelopes. Poison 49 envelopes deep and the re-walk stops one
+ * page short of the message forever: the durable mark is already past it, every later poll is
+ * cursorless and resumes after it, and it is lost until it expires.
+ *
+ * The old RED-6 could not see this. It flooded 40 envelopes at `ciphertext: 4` — about ONE page —
+ * so it exercised the reset flag and never the truncation, and it passed while a 55-envelope flood
+ * (5 self-published identities, 14 457 630 B, 60 requests, paid once) destroyed a message
+ * permanently. Both depths are therefore run here, and the control is what makes the attack row a
+ * statement about the page bound rather than about late import in general.
+ *
+ * `behind` is poison stored AFTER the message, so the target does not sit in the never-marked final
+ * page: without it the residual the implementer disclosed would recover the message for a reason
+ * that has nothing to do with the re-walk.
+ */
+const lateImportDepths = [
+  {
+    label: "control — 30 maximum-size poison ahead (10 pages), inside the 16-page valve",
+    ahead: 30, behind: 6, aheadPages: 10, postImportPolls: 3, timeoutMs: 480000,
+  },
+  {
+    label: "attack — 49 maximum-size poison ahead (17 pages), past the 16-page valve (T10-F-001)",
+    ahead: 49, behind: 6, aheadPages: 17, postImportPolls: 8, timeoutMs: 720000,
+  },
+] as const;
+
+describe.each(lateImportDepths)("RED-6: a contact card imported after the envelope arrived recovers the message — $label", ({ ahead, behind, aheadPages, postImportPolls, timeoutMs }) => {
+  it("delivers the message the import was performed for", async () => {
+    await world(`red6-late-import-${String(ahead)}`, async (w) => {
+      // Poison FIRST, so Bob's pre-import walk has to move the durable mark past the untrusted
+      // envelope rather than stopping on it.
+      const aheadCost = await flood(w.relayUrl, w.bobRecipient, ahead, 262144, 4, 0);
+      expect(aheadCost.stored, `all ${String(ahead)} poison envelopes ahead of the message must be stored`).toBe(ahead);
+
+      const carol = await introduceCarol(w);
+      const text = `E2E_FLOOD_LATE_IMPORT_${randomUUID()}`;
+      await carol.send(text);
+
+      // ...and poison BEHIND it, from a disjoint envelope_id range, so the message is not left in
+      // the never-marked final page.
+      const behindCost = await flood(w.relayUrl, w.bobRecipient, behind, 262144, 1, 1000);
+      expect(behindCost.stored).toBe(behind);
+      const attackerCost = {
+        identities: aheadCost.identities + behindCost.identities,
+        envelopes: aheadCost.stored + behindCost.stored,
+        uploadedBytes: aheadCost.uploadedBytes + behindCost.uploadedBytes,
+        requests: aheadCost.requests + behindCost.requests,
+      };
+
+      // Bob walks the WHOLE mailbox before Carol is trusted: every envelope is judged and refused,
+      // and the mark ends up past Carol's message. A walk that stopped at the valve would leave the
+      // mark short of it and recover the message for the wrong reason, so the drive continues until
+      // a poll walks fewer pages than the valve allows - which is how "the walk reached the end of
+      // the mailbox" is distinguished from "the walk ran out of patience".
+      const beforeCodes: number[] = [];
+      let reachedTheEnd = false;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const marker = w.counters.pages.length;
+        const result = await w.run(w.bob, ["poll"], null, 240000);
+        beforeCodes.push(result.code ?? -1);
+        if (w.counters.pages.length - marker < 16) { reachedTheEnd = true; break; }
+      }
+      expect(beforeCodes[beforeCodes.length - 1], `pre-import poll exit codes ${JSON.stringify(beforeCodes)}: a mailbox holding only permanently unacceptable envelopes must still fail closed on exit 3`).toBe(3);
+      expect(reachedTheEnd, "the pre-import drive must have walked the mailbox to its end, so the durable mark is genuinely past the untrusted envelope").toBe(true);
+      expect(w.counters.ackedIds, "F-012: a batch that accepted nothing acknowledges nothing").toEqual([]);
+      expect(await w.historyLength(w.bob, carol.identityId), "the message must not be delivered before the card is imported").toBe(0);
+
+      // The supported recovery path: the operator imports the card the message was waiting for.
+      await w.run(w.bob, ["contact", "import", "--from", carol.cardPath, "--yes"]);
+
+      // Every poll after the import, whatever it exits. The exit code is NOT the assertion: once the
+      // mark is at the end of the mailbox a poll that delivers nothing exits 0, so a suite that
+      // asserted the exit code would go green on a permanently lost message. Delivery is the claim.
+      const afterCodes: number[] = [];
+      const beforePolls = w.counters.polls;
+      for (let attempt = 0; attempt < postImportPolls; attempt += 1) {
+        afterCodes.push((await w.run(w.bob, ["poll"], null, 240000)).code ?? -1);
+      }
+
+      expect(
+        await w.historyLength(w.bob, carol.identityId),
+        `after ${String(attackerCost.identities)} self-published identities placed ${String(attackerCost.envelopes)} poison envelopes ` +
+          `(${String(attackerCost.uploadedBytes)} B, ${String(attackerCost.requests)} requests, paid once) with ${String(ahead)} of them — ${String(aheadPages)} pages — ahead of the message, ` +
+          `${String(postImportPolls)} polls after \`contact import\` (exit codes ${JSON.stringify(afterCodes)}, ${String(w.counters.polls - beforePolls)} pages served) left the message UNDELIVERED. ` +
+          "It must be delivered. `contact import` is the design's own recovery path for R-5 and the only thing that makes the durable mark safe for a CONTACT_NOT_TRUSTED envelope, " +
+          "but the re-walk it requests is bounded by the same maxPollPagesPerPoll = 16 valve (inbound.ts:148) and the request is consumed whether or not the walk reached the end (inbound.ts:135). " +
+          "Past 16 pages of poison the re-walk never reaches the envelope, the mark is already past it, every later poll resumes after it, and the message is lost permanently — a denial of service traded for a lost message (T10-F-001). " +
+          "The recovery must survive a flood of any depth: consume the re-walk request only when the walk actually reached the end, or hold a durable re-walk floor the mark may not pass until it does",
+      ).toBe(1);
+    });
+  }, timeoutMs);
+});
+
+// ===========================================================================
+// RED-7 — the read position must not answer questions before the asker is authenticated
+// ===========================================================================
+
+/**
+ * T10-F-002. `resolveReadThrough` (`mailbox_handler.go:423-449`) is applied deliberately BEFORE
+ * `challengeService.GetValid` and before `authorizeMailboxDevice`, so that malformed input never
+ * depends on who is asking. The pure shape check belongs there. The BOUND does not: it calls
+ * `HighestIssuedPosition(mailboxID)` and answers `400 INVALID_SCHEMA` above it against
+ * `400 CHALLENGE_EXPIRED` below it, so the pair of answers is a comparator on a number that belongs
+ * to the mailbox owner.
+ *
+ * `mailbox_id` is `sha256(identity_id + ":mailbox:v1")` and `identity_id` is printed on every contact
+ * card, so anyone who has ever seen the victim's card can compute it. T10 recovered the exact
+ * lifetime envelope count of a mailbox in about twenty requests with a fabricated `challenge_id`, a
+ * fabricated `device_id` and the literal signature "AAAA". That is new metadata: it is the victim's
+ * lifetime received-envelope count, not traffic the asking party observed, and `SEC-01 §6.2` confines
+ * what the relay exposes to third parties.
+ *
+ * The assertion pins the OUTCOME — the answer must not vary with the mailbox's contents — not the
+ * mechanism. Moving the bound after signature verification satisfies it; so does any other design
+ * that makes an unauthenticated caller's answer independent of the mailbox. The control at the end
+ * is what keeps that from being satisfied by simply deleting the check: a legitimate, signed poll
+ * carrying a real read position must still work.
+ */
+it("RED-7: an unauthenticated caller cannot recover how many envelopes a mailbox has ever been issued", async () => {
+  await world("red7-count-oracle", async (w) => {
+    // A mailbox with an exactly known number of allocated positions, matching T10's measurement.
+    const allocated = 66;
+    expect((await flood(w.relayUrl, w.bobRecipient, allocated, 4)).stored).toBe(allocated);
+
+    /**
+     * One unauthenticated probe. Every credential is fabricated: a random challenge_id the relay
+     * never issued, a random device_id with no binding to this mailbox, and a signature that is not
+     * one. It goes straight to the relay rather than through the counting proxy, because it is the
+     * attacker's traffic and must not be charged to the recipient's measured cost.
+     *
+     * Only the status and the typed error code are retained — never a body.
+     */
+    const probe = async (readThrough: number): Promise<string> => {
+      const response = await fetch(`${w.relayUrl}/v1/mailbox/poll`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          challenge_id: randomUUID(), recipient_mailbox_id: w.bobRecipient.mailboxId,
+          device_id: randomUUID(), signature: "AAAA", batch_size: 50, read_through: String(readThrough),
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+      let code = "none";
+      try {
+        const parsed = await response.json() as { error?: { code?: unknown } };
+        if (typeof parsed.error?.code === "string" && /^[A-Z_]+$/.test(parsed.error.code)) code = parsed.error.code;
+      } catch { /* a non-JSON refusal contributes its status alone */ }
+      return `${String(response.status)} ${code}`;
     };
-    await carolRun(["init", "--relay-url", w.proxyUrl, "--store-key-env", "ECHOLET_E2E_KEY"]);
-    const carolCard = join(dirname(w.bob), "carol-card.json"), bobCard = join(dirname(w.bob), "bob-card-for-carol.json");
-    await carolRun(["contact", "export", "--out", carolCard]);
-    await w.run(w.bob, ["contact", "export", "--out", bobCard]);
-    await carolRun(["contact", "import", "--from", bobCard, "--yes"]);
-    await carolRun(["relay", "publish"]);
-    const carolIdentity = (JSON.parse(readFileSync(carolCard, "utf8")) as { signal_bundle: { device_record: { identity_id: string } } }).signal_bundle.device_record.identity_id;
-    const text = `E2E_FLOOD_LATE_IMPORT_${randomUUID()}`;
-    await carolRun(["send", "--to", w.bobIdentity, "--text", text]);
 
-    // Bob walks the whole mailbox before Carol is trusted: every envelope is judged and refused.
-    const before = await w.poll(w.bob, 3, 180000);
-    expect(before[before.length - 1], `poll exit codes ${JSON.stringify(before)}: a mailbox holding only permanently unacceptable envelopes must still fail closed on exit 3`).toBe(3);
-    expect(w.counters.ackedIds, "F-012: a batch that accepted nothing acknowledges nothing").toEqual([]);
-    expect(await w.historyLength(w.bob, carolIdentity)).toBe(0);
+    // The binary search T10 ran, reproduced so the failure message carries the number it recovers.
+    const baseline = await probe(0);
+    let low = 0, high = 4096;
+    while (low < high) {
+      const mid = Math.floor((low + high + 1) / 2);
+      (await probe(mid)) === baseline ? (low = mid) : (high = mid - 1);
+    }
 
-    await w.run(w.bob, ["contact", "import", "--from", carolCard, "--yes"]);
+    // A ladder that straddles the true count. If the answer is a function of the mailbox's contents
+    // rather than of the request alone, these are not all the same string.
+    const ladder = [0, 1, allocated - 33, allocated - 1, allocated, allocated + 1, allocated + 33, 1000, 4096];
+    const answers: string[] = [];
+    for (const value of ladder) answers.push(await probe(value));
+    const distinct = [...new Set(answers)];
 
-    const after = await w.poll(w.bob, 4, 180000);
     expect(
-      after[after.length - 1],
-      `poll exit codes ${JSON.stringify(after)} after importing the sender's card. The message must be delivered. ` +
-        "Design §4 R-5: a durable read position passes a CONTACT_NOT_TRUSTED envelope once, so `contact import` — the exact event that changes the verdict — must reset the mark, or importing a card late silently loses the message it was imported for",
-    ).toBe(0);
-    expect(await w.historyLength(w.bob, carolIdentity)).toBe(1);
+      distinct.length,
+      `an unauthenticated caller — fabricated challenge_id, fabricated device_id, a signature that is not one — got ${JSON.stringify(distinct)} ` +
+        `across read_through values ${JSON.stringify(ladder)}, and a binary search over those answers recovered ${String(low)} against a mailbox with exactly ${String(allocated)} allocated positions. ` +
+        "The relay's answer to an unauthenticated caller must not depend on the mailbox's contents. `resolveReadThrough` (mailbox_handler.go:438-446) reads HighestIssuedPosition before the challenge is validated and before authorizeMailboxDevice, " +
+        "so the pair of refusals is a comparator on the victim's LIFETIME received-envelope count — computable by anyone holding their contact card, since mailbox_id is sha256(identity_id + ':mailbox:v1'). " +
+        "SEC-01 §6.2 confines what the relay exposes to third parties, and this is not in it (T10-F-002). " +
+        "Keep the pure shape check before authentication; the bound that consults the mailbox must come after the signature is verified",
+    ).toBe(1);
+
+    // Control: the bound must not be satisfied by removing the protection. A real, signed poll that
+    // reports a real read position must still deliver, and the mark must still work.
+    const text = `E2E_ORACLE_CONTROL_${randomUUID()}`;
+    await w.run(w.alice, ["send", "--to", w.bobIdentity, "--text", text]);
+    const codes = await w.poll(w.bob, 4, 240000);
+    expect(codes[codes.length - 1], `control poll exit codes ${JSON.stringify(codes)}: a legitimate, signed poll carrying a real read position must still deliver`).toBe(0);
+    expect(await w.historyLength(w.bob, w.aliceIdentity)).toBe(1);
   });
 }, 420000);
