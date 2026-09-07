@@ -127,12 +127,22 @@ describe("CLI outbound messaging", () => {
     const messenger = await openOutboundMessenger({ profileDir: local.profileDir, environment: local.environment, relay, idFactory: ids, now: () => sendNow });
     opened.push(messenger);
 
+    // `send` presupposes `relay publish` (T19): since T50 the relay authenticates the deposit
+    // against an already-published device record, so a profile that never published is refused - and
+    // must be refused BEFORE it claims the recipient's one-time prekey. The scenario this test is
+    // about is a send that SUCCEEDS, so the profile publishes first, exactly as an operator does.
+    await messenger.publish();
     await expect(messenger.send({ recipientIdentityId: remote.identity.identityId, messageId: messageID, plaintext: "first private message" }))
       .resolves.toEqual({ messageId: messageID, envelopeId: envelopeID, status: "delivered" });
 
-    expect(fake.requests.map(({ path }) => path)).toEqual(["/v2/prekeys/claim", "/v1/messages/send"]);
-    expect(fake.requests[0]!.body).toEqual({ claim_id: claimID, identity_id: remote.identity.identityId, device_id: remote.identity.deviceId });
-    const envelope = MailboxEnvelopeSchema.parse((fake.requests[1]!.body as { envelope: unknown }).envelope);
+    // The exact request sequence, unchanged in what it pins about the send: the claim comes first,
+    // the deposit second, and nothing else is issued - now prefixed by the one publication the send
+    // presupposes.
+    expect(fake.requests.map(({ path }) => path)).toEqual(["/v2/prekeys/publish", "/v2/prekeys/claim", "/v1/messages/send"]);
+    const claimRequest = fake.requests.find(({ path }) => path === "/v2/prekeys/claim")!;
+    const sendRequest = fake.requests.find(({ path }) => path === "/v1/messages/send")!;
+    expect(claimRequest.body).toEqual({ claim_id: claimID, identity_id: remote.identity.identityId, device_id: remote.identity.deviceId });
+    const envelope = MailboxEnvelopeSchema.parse((sendRequest.body as { envelope: unknown }).envelope);
     expect(envelope).toMatchObject({
       envelope_id: envelopeID,
       message_id: messageID,
@@ -163,9 +173,13 @@ describe("CLI outbound messaging", () => {
     const messenger = await openOutboundMessenger({ profileDir: local.profileDir, environment: local.environment, relay, idFactory: ids, now: () => Date.now() });
     opened.push(messenger);
 
+    // This test's subject is the trust decision on a CLAIMED bundle, so the profile must get as far
+    // as the claim: it publishes first (T19 - `send` presupposes `relay publish`).
+    await messenger.publish();
     await expect(messenger.send({ recipientIdentityId: remote.identity.identityId, messageId: messageID, plaintext: "must stay local" }))
       .rejects.toMatchObject({ code: "CONTACT_PIN_MISMATCH" });
-    expect(fake.requests.map(({ path }) => path)).toEqual(["/v2/prekeys/claim"]);
+    // Still exactly one claim and NO deposit: the pin is judged before anything is sent or stored.
+    expect(fake.requests.map(({ path }) => path)).toEqual(["/v2/prekeys/publish", "/v2/prekeys/claim"]);
     await messenger.close();
     const store = new EncryptedSqliteStore(join(local.profileDir, "client.sqlite"), local.key);
     opened.push(store);
@@ -181,6 +195,10 @@ describe("CLI outbound messaging", () => {
     const firstRelay = new RelayClient({ baseUrl: local.config.relay_url, timeoutMs: local.config.request_timeout_ms, fetch: firstFake.fetch });
     const first = await openOutboundMessenger({ profileDir: local.profileDir, environment: local.environment, relay: firstRelay, idFactory: ids, now: () => Date.now() });
 
+    // The ambiguous send has to REACH /v1/messages/send to be ambiguous, so the profile publishes
+    // first (T19). The retry below still publishes nothing: `retryPending` replays a committed
+    // envelope and never re-enters the precondition.
+    await first.publish();
     await expect(first.send({ recipientIdentityId: remote.identity.identityId, messageId: messageID, plaintext: "retry exact body" }))
       .rejects.toMatchObject({ code: "RELAY_TIMEOUT", retryable: true });
     const originalSend = firstFake.requests.find(({ path }) => path === "/v1/messages/send")!;
@@ -206,6 +224,8 @@ describe("CLI outbound messaging", () => {
     opened.push(messenger);
 
     const input = { recipientIdentityId: remote.identity.identityId, messageId: messageID, plaintext: "immutable plaintext" };
+    // The first send must succeed for the replay/conflict comparison to mean anything (T19).
+    await messenger.publish();
     await expect(messenger.send(input)).resolves.toMatchObject({ status: "delivered" });
     const callsAfterDelivery = fake.fetch.mock.calls.length;
     await expect(messenger.send(input)).resolves.toEqual({ messageId: messageID, envelopeId: envelopeID, status: "delivered" });

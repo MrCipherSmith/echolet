@@ -51,6 +51,16 @@ async function send(sender: Local, recipient: Local, plaintext: string, beforeAc
   const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const path = new URL(String(input)).pathname;
     if (path === "/v2/prekeys/claim") return response({ bundle: recipient.card.signal_bundle });
+    // The SENDER's own publication. `send` presupposes `relay publish` (T19): since T50 the relay
+    // authenticates a deposit against an already-published device record, and the client now refuses
+    // locally, before any claim, when the profile has never published. This helper's job is to
+    // produce one real, fully valid envelope, so it satisfies that precondition the way an operator
+    // does. Nothing about the RECIPIENT's mailbox behaviour - which is what this file tests - is
+    // touched, and every other path still raises.
+    if (path === "/v2/prekeys/publish") {
+      const bundle = (JSON.parse(String(init?.body)) as { bundle: { bundle_id: string } }).bundle;
+      return response({ stored: true, bundle_id: bundle.bundle_id, claimable: true });
+    }
     if (path === "/v1/messages/send") {
       const envelope = (JSON.parse(String(init?.body)) as { envelope: MailboxEnvelope }).envelope;
       envelopes.push(envelope);
@@ -62,8 +72,10 @@ async function send(sender: Local, recipient: Local, plaintext: string, beforeAc
   const messenger = await openOutboundMessenger({ profileDir: sender.profileDir, environment: sender.environment,
     relay: new RelayClient({ baseUrl: sender.config.relay_url, timeoutMs: 500, fetch: fetcher }) });
   handles.push(messenger);
-  try { await messenger.send({ recipientIdentityId: recipient.record.identity_id, messageId: randomUUID(), plaintext }); }
-  finally { await messenger.close(); }
+  try {
+    await messenger.publish();
+    await messenger.send({ recipientIdentityId: recipient.record.identity_id, messageId: randomUUID(), plaintext });
+  } finally { await messenger.close(); }
   expect(envelopes).toHaveLength(1);
   return envelopes[0]!;
 }

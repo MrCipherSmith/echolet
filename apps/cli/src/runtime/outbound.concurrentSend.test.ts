@@ -66,6 +66,13 @@ function relayFetch(claimedBundle: SignalPreKeyBundleV2) {
     const request = { path: new URL(String(input)).pathname, body: JSON.parse(String(init?.body)) as Record<string, unknown> };
     requests.push(request);
     if (request.path === "/v2/prekeys/claim") return relayResponse({ ok: true, data: { bundle: claimedBundle } });
+    // The sending profile's own publication. `send` presupposes `relay publish` (T19), and this
+    // test's subject is the concurrency window between two runtime instances, not the precondition,
+    // so the fixture satisfies it once during warm-up. Every other path still raises.
+    if (request.path === "/v2/prekeys/publish") {
+      const published = request.body.bundle as SignalPreKeyBundleV2;
+      return relayResponse({ ok: true, data: { stored: true, bundle_id: published.bundle_id, claimable: true } });
+    }
     if (request.path === "/v1/messages/send") {
       const envelope = request.body.envelope as { envelope_id: string };
       return relayResponse({ ok: true, data: { accepted: true, envelope_id: envelope.envelope_id, status: "relayed" } });
@@ -137,12 +144,15 @@ describe("CLI concurrent same-id send", () => {
     await local.profile.importContact(remote.card, { confirm: async () => true });
     await local.profile.close();
 
-    // Establish the peer session first: the concurrent window is then purely local.
+    // Publish once and establish the peer session first: the concurrent window is then purely local.
+    // The publication is durable and shared by both runtime instances below, so neither of the two
+    // racing sends is refused by the T19 precondition and the race under test is unaffected.
     const warmupRelay = relayFetch(remote.bundle);
     const warmup = await openOutboundMessenger({
       profileDir: local.profileDir, environment: local.environment,
       relay: new RelayClient({ baseUrl: local.config.relay_url, timeoutMs: local.config.request_timeout_ms, fetch: warmupRelay.fetch }),
     });
+    await warmup.publish();
     await warmup.send({ recipientIdentityId: remote.identity.identityId, messageId: warmupMessageID, plaintext: "SYNTHETIC_WARMUP_BODY" });
     await warmup.close();
 

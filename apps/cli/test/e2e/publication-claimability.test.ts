@@ -25,6 +25,20 @@ import { setTimeout as delay } from "node:timers/promises";
 // unchanged across every publish here, because implicit rotation would break the lost-response
 // retry guarantee (specification.md:130) and collide with the permanent one-time-prekey
 // reservation.
+//
+// T19 additionally pins, against the same real relay binary, that `send` presupposes `relay
+// publish`. Since T50 the relay authenticates a deposit against an already-published, root-signed
+// device record, so a profile that has only run `init` and `contact import` is CERTAIN to be
+// refused - yet `/v2/prekeys/claim` is unauthenticated, so before T19 that doomed send permanently
+// consumed the RECIPIENT's only first-contact bundle on its way to failing. The refusal now happens
+// locally, before the claim, and the relay itself is the witness: an unpublished sender's attempt
+// leaves the recipient's bundle claimable, which the relay reports through `relay publish`.
+//
+// That is why step 5's original assertion moved rather than disappeared. It pinned that the CLI
+// names an exhausted recipient prekey (`/PREKEY/`) instead of a protocol rejection, and it still
+// does - from a sender that HAS published, which is the only sender that can reach the claim route
+// at all now. What was added in front of it is the stronger property: the unpublished sender is
+// refused without the relay observing any claim.
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const suite = mkdtempSync(join(tmpdir(), "echolet-claimability-e2e-"));
@@ -136,7 +150,37 @@ it("reports whether a republished bundle is still claimable, and names an exhaus
     expect(repeatPublish.data.claimable).toBe(true);
     expect(repeatPublish.data.bundleId).toBe(firstPublish.data.bundleId);
 
-    // 3. The first sender consumes it.
+    // 3. An unpublished sender's doomed attempt must cost the RECIPIENT nothing.
+    //    Carol has run `init` and `contact import` and nothing else, so the relay is certain to
+    //    refuse her deposit (T50). The CLI must therefore refuse locally, BEFORE it claims bob's
+    //    only first-contact bundle: through the frozen eight-command surface bob has no way to
+    //    allocate a replacement, so carol's own misconfiguration would otherwise permanently destroy
+    //    a third party's ability to receive first contact.
+    const unpublishedSender = await run(carol, ["send", "--to", bobIdentity, "--text", firstText], 3);
+
+    //    The relay itself is the witness, and it is asserted FIRST because it is the load-bearing
+    //    half: an error code says what the sender was told, only the relay says what the sender
+    //    COST somebody else. If any claim had reached it, bob's bundle would already be unclaimable
+    //    here - which is exactly what step 6 measures after a real claim. Still claimable, and still
+    //    the identical stored bundle, is the end-to-end proof that the refusal happened before the
+    //    irreversible step.
+    const afterRefusedSend = await run(bob, ["relay", "publish"]);
+    expect(
+      afterRefusedSend.data.claimable,
+      "an unpublished sender's refused send must leave the recipient's first-contact bundle intact",
+    ).toBe(true);
+    expect(afterRefusedSend.data.bundleId).toBe(firstPublish.data.bundleId);
+
+    // 4. And what carol was told: the operator's own missing publication, named as such.
+    expect(unpublishedSender.errorCode).not.toBe("PROTOCOL_REJECTED");
+    //    Nothing was claimed, so this is not - and must not be reported as - an exhausted prekey.
+    expect(unpublishedSender.errorCode).not.toMatch(/PREKEY/);
+    expect(
+      unpublishedSender.errorCode,
+      "the operator must be told the one thing they have to do: `relay publish`",
+    ).toBe("SENDER_NOT_PUBLISHED");
+
+    // 5. The first sender consumes it.
     //    T50 (finding T49-F-001): /v1/messages/send authenticates the sender against a
     //    DeviceRecord the relay already holds, so a sender must have identified itself to the relay
     //    before it can send. `relay publish` is that step - it stores the sender's root-signed
@@ -145,15 +189,19 @@ it("reports whether a republished bundle is still claimable, and names an exhaus
     await run(alice, ["relay", "publish"]);
     await run(alice, ["send", "--to", bobIdentity, "--text", firstText]);
 
-    // 4. The recovery attempt: the same publish now restores nothing, and must say so instead of
+    // 6. The recovery attempt: the same publish now restores nothing, and must say so instead of
     //    reporting plain success.
     const afterClaim = await run(bob, ["relay", "publish"]);
     expect(afterClaim.data.claimable).toBe(false);
     expect(afterClaim.data.bundleId).toBe(firstPublish.data.bundleId);
 
-    // 5. The originally reported symptom: a second distinct sender. The relay answers
+    // 7. The originally reported symptom: a second distinct sender. The relay answers
     //    404 PREKEY_BUNDLE_UNAVAILABLE, so the CLI must name that condition rather than reporting
     //    the recipient's exhausted prekey as a trust/protocol rejection.
+    //    Carol publishes first - the precondition step 3 refused her for - so that her send reaches
+    //    the claim route and this stays a measurement of the EXHAUSTED-PREKEY vocabulary rather
+    //    than of the precondition. Her publication is her own and touches no assertion about bob's.
+    await run(carol, ["relay", "publish"]);
     const secondSender = await run(carol, ["send", "--to", bobIdentity, "--text", firstText], 3);
     expect(secondSender.errorCode).not.toBe("PROTOCOL_REJECTED");
     expect(secondSender.errorCode).toMatch(/PREKEY/);

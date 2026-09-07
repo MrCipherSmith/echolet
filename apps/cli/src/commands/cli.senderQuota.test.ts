@@ -159,10 +159,15 @@ describe("the CLI names a per-sender mailbox quota instead of flattening it (T52
     let sendReply: Reply = rejected(403, "SENDER_QUOTA_EXCEEDED");
     const relayUrl = await startRelay({
       "/v2/prekeys/claim": () => accepted({ bundle: peer.card.signal_bundle }),
+      // Alice's own publication. `send` presupposes `relay publish` (T19), and the quota this test
+      // is about lives on /v1/messages/send - a route the send has to actually reach.
+      "/v2/prekeys/publish": (body) =>
+        accepted({ stored: true, bundle_id: (body.bundle as { bundle_id: string }).bundle_id, claimable: true }),
       "/v1/messages/send": () => sendReply,
     });
     await init(alice, relayUrl);
     expect(outcome(await run(alice, ["contact", "import", "--from", peer.path, "--yes"]))).toMatchObject({ code: 0 });
+    expect(outcome(await run(alice, ["relay", "publish"]))).toMatchObject({ code: 0, errorCode: "ok" });
 
     const quotaRun = await run(alice, ["send", "--to", peer.record.identity_id, "--text", marker]);
     const quota = outcome(quotaRun);

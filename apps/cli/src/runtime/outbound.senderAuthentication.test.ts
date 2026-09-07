@@ -92,6 +92,14 @@ function relayFetch(claimedBundle: SignalPreKeyBundleV2, send: (request: Recorde
     };
     requests.push(request);
     if (request.path === "/v2/prekeys/claim") return relayResponse({ ok: true, data: { bundle: claimedBundle } });
+    // The profile's own publication. It is answered rather than refused because `send` presupposes
+    // `relay publish` (T19): T50's sender authentication is exactly what this file is about, and the
+    // client now refuses locally, before any claim, when the profile has never published. Every
+    // other path still raises, so the fake keeps reporting requests this suite does not expect.
+    if (request.path === "/v2/prekeys/publish") {
+      const published = request.body.bundle as SignalPreKeyBundleV2;
+      return relayResponse({ ok: true, data: { stored: true, bundle_id: published.bundle_id, claimable: true } });
+    }
     if (request.path === "/v1/messages/send") return send(request);
     throw new Error(`unexpected relay path ${request.path}`);
   });
@@ -149,6 +157,9 @@ describe("CLI outbound sender authentication", () => {
     const messenger = await openOutboundMessenger({ profileDir: local.profileDir, environment: local.environment, relay });
     opened.push(messenger);
 
+    // T19: the profile publishes before it sends, which is the very device record the relay
+    // resolves this signature against.
+    await messenger.publish();
     await expect(messenger.send({ recipientIdentityId: remote.identity.identityId, messageId: randomUUID(), plaintext: "authenticated send" }))
       .resolves.toMatchObject({ status: "delivered" });
     await messenger.close();
@@ -178,6 +189,8 @@ describe("CLI outbound sender authentication", () => {
     const messenger = await openOutboundMessenger({ profileDir: local.profileDir, environment: local.environment, relay });
     opened.push(messenger);
 
+    // T19: the profile publishes before it sends.
+    await messenger.publish();
     await messenger.send({ recipientIdentityId: remote.identity.identityId, messageId: randomUUID(), plaintext: "bound to this envelope" });
     await messenger.close();
 
@@ -212,6 +225,10 @@ describe("CLI outbound sender authentication", () => {
     const firstRelay = new RelayClient({ baseUrl: local.config.relay_url, timeoutMs: local.config.request_timeout_ms, fetch: firstFake.fetch });
     const first = await openOutboundMessenger({ profileDir: local.profileDir, environment: local.environment, relay: firstRelay });
     const messageId = randomUUID();
+    // T19: the first attempt has to reach /v1/messages/send to be an ambiguous send at all, so the
+    // profile publishes first. The retry replays a committed envelope and never re-enters the
+    // precondition.
+    await first.publish();
     await expect(first.send({ recipientIdentityId: remote.identity.identityId, messageId, plaintext: "retry exact body" }))
       .rejects.toMatchObject({ code: "RELAY_TIMEOUT" });
     await first.close();
