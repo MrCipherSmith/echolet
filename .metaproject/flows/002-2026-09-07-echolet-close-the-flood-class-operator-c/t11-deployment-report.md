@@ -508,7 +508,7 @@ The log counts are worth reading twice. **`geekom`'s entire log for the whole sc
 - the relay serves **plain HTTP** — it says so itself: `scheme=http tls_cert_file="" tls_key_file=""`;
 - the confidentiality of the traffic between this Mac and `geekom` is **SSH's**, provided by the `ssh -L` tunnel. It is not the relay's TLS, and an SSH tunnel is not a substitute for it. The relay's own TLS path — certificate loading, the both-or-neither startup check, hot reload on renewal, chain validation by a client dialling the MagicDNS name — was exercised **not at all**.
 
-AC4 remains blocked on exactly one thing, unchanged from the reconnaissance: **HTTPS Certificates are disabled for tailnet `tail5a88fb.ts.net`** (`CertDomains: null` on both hosts). That is a toggle in the Tailscale admin console (DNS → HTTPS Certificates → Enable), owned by `aleks.zeitler@gmail.com`, and it cannot be set over SSH. Until it is set, `tailscale cert` fails, there is no certificate pair, and the relay — correctly — refuses to start rather than serving envelopes in the clear.
+AC4 remains blocked on exactly one thing, unchanged from the reconnaissance: **HTTPS Certificates are disabled for tailnet `tail5a88fb.ts.net`** (`CertDomains: null` on both hosts). That is a toggle in the Tailscale admin console (DNS → HTTPS Certificates → Enable), owned by the tailnet owner, and it cannot be set over SSH. Until it is set, `tailscale cert` fails, there is no certificate pair, and the relay — correctly — refuses to start rather than serving envelopes in the clear.
 
 ### Partially established — AC7
 

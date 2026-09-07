@@ -312,7 +312,7 @@ carried over.
 
 **The fix, and who can perform it.** Tailscale **admin console** → **DNS** →
 **HTTPS Certificates** → *Enable*. It is a toggle, performed by the tailnet
-owner (`aleks.zeitler@gmail.com` for `tail5a88fb.ts.net`), and it **cannot be
+owner (the tailnet owner for `tail5a88fb.ts.net`), and it **cannot be
 done over SSH** — no command on either host can enable it. This is the step that
 was performed on 2026-09-07 and that unblocked the TLS path. Re-run the
 `tailscale status --json` check above afterwards and require the host's MagicDNS
