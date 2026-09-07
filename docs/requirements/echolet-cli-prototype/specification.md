@@ -18,7 +18,7 @@ Version: 0.1.1
 | Encrypted transactional Node session/inbox/outbox persistence | Implemented reference | Implemented |
 | Relay v2 publication and atomic claim | Planned | Implemented over the network path, with `claimable` on the publish response |
 | CLI profiles, contact commands, transport, history, and demo | Planned | Implemented; the eight-command surface below is frozen |
-| Networked two-process end-to-end evidence | Planned | Implemented and passing (3/3 unfiltered iterations, `t55-final-verification.md`) |
+| Networked two-process end-to-end evidence | Planned | Implemented and passing: `test/e2e/two-process.test.ts`, 3/3 unfiltered iterations of one scenario (`t55-final-verification.md`). That file is what `pnpm --filter @echolet/cli test:e2e` runs; the other five files under `apps/cli/test/e2e/` run under `pnpm test` |
 
 ## Repository and storage structure
 

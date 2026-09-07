@@ -1,28 +1,39 @@
 # Echolet Relay Deployment Runbook
-Version: 0.3.0
+Version: 0.4.0
 
 Copyable commands for standing up a relay on a tailnet host, and for standing it
 up again on a clean one. Companion to
 [runbook.md](runbook.md), which reproduces the **local** prototype; that document
 is the one to read first, and every command here assumes the relay it describes.
 
-**Status of this document: partly executed.** Two relays are running right now,
-one on `geekom` and one on `depr` — but on the **loopback-only path of §6.5**,
-not the TLS path this document was originally written for. The deployment is
-recorded in
-[`t11-deployment-report.md`](../../../.metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t11-deployment-report.md).
-No `tailscale cert` has been run and no image has been pushed to a registry.
+**Status of this document: partly executed, and the two hosts are no longer in
+the same state.**
+
+- **`depr` is on the TLS path.** Since 2026-09-07 19:36 UTC it publishes HTTPS on
+  its tailnet address `100.100.188.64:8443`, with a real Let's Encrypt
+  certificate for `depr.tail5a88fb.ts.net` terminated by the relay process
+  itself. Recorded in
+  [`t11-tls-report.md`](../../../.metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t11-tls-report.md).
+  **Its renewal timer (§4) is not installed** — see the warning in §4.
+- **`geekom` is still on the loopback-only path of §6.5**, plain HTTP on
+  `127.0.0.1`, awaiting the one privileged step (`sudo tailscale cert`, §4) that
+  only the user can run there. The original two-host loopback deployment is
+  recorded in
+  [`t11-deployment-report.md`](../../../.metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t11-deployment-report.md).
+
+No image has been pushed to a registry; both hosts were loaded from a `docker
+save` tarball as §3 describes.
 
 **Which path to follow.**
 
 - **§2 → §3 → §3.1 → §4 → §5 → §6 → §7 → §8** is the TLS path. It is the
-  intended production route and it is **blocked today** at §3.1 on the tailnet's
-  HTTPS Certificates toggle, which lives in the Tailscale admin console and
-  cannot be set from either host.
-- **§2 → §3 → §6.5 → §7.5** is the loopback-only path. It is what is running
-  now. It needs no certificate, no `sudo` on the host and no firewall change,
-  and it publishes plain HTTP on `127.0.0.1` and nowhere else. Follow it from a
-  clean host and you reproduce the two running relays exactly.
+  intended production route and it is **no longer blocked**: HTTPS Certificates
+  are enabled for the tailnet and `depr` completed this path end to end. Follow
+  it on `geekom` too, once someone can run §4's `sudo` there.
+- **§2 → §3 → §6.5 → §7.5** is the loopback-only path. It is what `geekom` runs
+  today. It needs no certificate, no `sudo` on the host and no firewall change,
+  and it publishes plain HTTP on `127.0.0.1` and nowhere else. It is a
+  deliberate second path, not a fallback, and it never establishes AC4 (§7.5).
 
 Both target hosts were surveyed, read-only, before any of this: every fact in §1
 and in §1.1 was observed on the hosts on 2026-09-07 by the reconnaissance
@@ -35,12 +46,14 @@ recorded in
 client cannot talk to, or a mailbox that silently delivers nothing.
 
 §3.1 is a prerequisite that lives in the Tailscale admin console, not on the
-hosts, and it is **not satisfied today**. Check it before you build an image:
-`tailscale cert` fails without it, and **the relay has no plain-HTTP fallback to
-degrade to** — a missing or malformed certificate is a hard startup failure, by
-design, and nothing in §6.5 changes that. If §3.1 is still off and you need a
-relay running anyway, go to **§6.5**, which is a different thing you ask for
-explicitly, not a softer version of §6.
+hosts. It **is satisfied now** — the tailnet owner enabled HTTPS Certificates on
+2026-09-07 and `depr` issued a certificate on the first attempt — but check it
+anyway before you build an image, because it is a tailnet-wide setting that can
+be turned off again: `tailscale cert` fails without it, and **the relay has no
+plain-HTTP fallback to degrade to** — a missing or malformed certificate is a
+hard startup failure, by design, and nothing in §6.5 changes that. If §3.1 is
+ever off again and you need a relay running anyway, go to **§6.5**, which is a
+different thing you ask for explicitly, not a softer version of §6.
 
 ---
 
@@ -235,8 +248,11 @@ ssh "$USER_AT@$HOST" 'sha256sum /tmp/echolet-relay.tar && docker load -i /tmp/ec
 
 ## 3.1 Prerequisite: HTTPS Certificates must be enabled for the tailnet
 
-**Check this before §4. It is not satisfied today, it cannot be fixed on the
-host, and every step from §4 onward depends on it.**
+**Check this before §4. It cannot be fixed on the host, and every step from §4
+onward depends on it. It is satisfied now** — the tailnet owner enabled it on
+2026-09-07 and `depr` issued a certificate on the first attempt — **but it is a
+tailnet-wide setting that someone can turn off again, so re-run the check rather
+than trusting this paragraph.**
 
 `tailscale cert` can only issue a certificate for a name the tailnet has
 authorised the node to request. If the tailnet does not have **HTTPS
@@ -254,8 +270,12 @@ tailscale status --json | jq .CertDomains
 
 `CertDomains` is the field the Tailscale client populates with the names it is
 permitted to issue certificates for. `null` means HTTPS Certificates are not
-enabled for this tailnet. **As surveyed on 2026-09-07 it is `null` on both
-`geekom` and `depr`** — one tailnet, one setting, both hosts blocked at once.
+enabled for this tailnet. It was `null` on both `geekom` and `depr` when they
+were first surveyed on 2026-09-07 — one tailnet, one setting, both hosts blocked
+at once. **After the tailnet owner enabled the toggle later that day, `depr`
+reports `CertDomains: ["depr.tail5a88fb.ts.net"]`** and issuance succeeded.
+`geekom` was not re-checked, because the setting is tailnet-wide and `geekom` was
+deliberately not touched; run the command there before §4 rather than assuming.
 
 **What it looks like if you skip the check.** `sudo tailscale cert` in §4 fails
 and writes no `cert.pem` and no `key.pem`. The relay refuses to start without
@@ -267,7 +287,8 @@ carried over.
 **The fix, and who can perform it.** Tailscale **admin console** → **DNS** →
 **HTTPS Certificates** → *Enable*. It is a toggle, performed by the tailnet
 owner (`aleks.zeitler@gmail.com` for `tail5a88fb.ts.net`), and it **cannot be
-done over SSH** — no command on either host can enable it. Re-run the
+done over SSH** — no command on either host can enable it. This is the step that
+was performed on 2026-09-07 and that unblocked the TLS path. Re-run the
 `tailscale status --json` check above afterwards and require the host's MagicDNS
 name to be listed before continuing to §4.
 
@@ -319,7 +340,20 @@ notices the new bytes — by content digest, not modification time — within
 read lands mid-rewrite, the last good pair keeps serving and a warning is
 logged, so a renewal cannot become an outage.
 
-Install the timer that does it:
+That reload path is covered by an automated test
+(`apps/cli/test/e2e/relay-tls.test.ts`, "picks up a renewed certificate without a
+restart"), but it has **never been exercised on `depr`**: doing so means
+re-issuing the certificate, and Let's Encrypt rate-limits duplicates for one name
+at roughly five per week. Treat hot reload on that host as unproven rather than
+as demonstrated.
+
+Install the timer that does it. **This step has not been performed on `depr`.**
+`depr` serves a certificate valid `Sep 7 2026 → Dec 6 2026` and **nothing on that
+host renews it**: without the timer the relay will keep serving an expired
+certificate after 6 December 2026 until someone re-runs `tailscale cert` by
+hand. A manual renewal needs no restart (the reloader picks the new bytes up
+within `ECHOLET_TLS_RELOAD_INTERVAL_SECONDS`), but nothing schedules one. Run
+these five lines on `depr` before that deployment is left unattended.
 
 ```sh
 sudo cp deploy/relay/systemd/echolet-cert-renew.service /etc/systemd/system/
@@ -373,6 +407,20 @@ this path) and `ECHOLET_DATA_VOLUME` (a named Docker volume, the §6.5 path), an
 refuses if both are set. The TLS templates set the first and leave the second
 empty; leave them that way here.
 
+**Known limitation — `docker-compose.yml` cannot start a TLS relay on an
+existing named volume.** Its data mount is
+`"${ECHOLET_HOST_DATA_DIR:?…}:/var/lib/echolet"` and it has no
+`ECHOLET_DATA_VOLUME` branch at all, so `docker compose config` fails outright
+(`required variable ECHOLET_HOST_DATA_DIR is missing a value`) when the store
+lives in a named volume rather than a host directory. That is exactly the
+situation on a host that first ran the §6.5 loopback path, whose data is in
+`echolet-relay-data`. **Of the two committed start artifacts, only
+`run-relay.sh` can perform that switch**, and it is what was used on `depr`
+(`t11-tls-report.md` §3.1–§3.2). The alternative — migrating the Badger store
+out of the volume into `/var/lib/echolet` — destroys the continuity the switch
+is supposed to preserve. This is reported, not worked around; the compose file
+is unchanged.
+
 Then, on the host, with `deploy/relay/` copied over (`scp -r deploy/relay
 "$USER_AT@$HOST":~/echolet-deploy`):
 
@@ -399,15 +447,17 @@ cross-relay observation ambiguous.
 
 ## 6.5 The loopback-only path — plain HTTP, `127.0.0.1`, no certificate
 
-**This is what is running on `geekom` and `depr` today.** Follow §2, §3 and then
-this section, and a clean host ends up in exactly the same state.
+**This is what is running on `geekom` today.** (`depr` was moved to the TLS path
+of §6 on 2026-09-07 and no longer runs this one.) Follow §2, §3 and then this
+section, and a clean host ends up in exactly the same state as `geekom`.
 
 ### Why it exists, and what it is not
 
-§3.1 is off: `CertDomains` is `null` on both hosts, `tailscale cert` issues
-nothing, and there is no certificate pair to mount. The relay does not degrade to
-plain HTTP when a certificate is missing — it exits non-zero at startup, and that
-behaviour is deliberate and unchanged. So §6 cannot start anything today.
+This path exists for a host that has no certificate pair to mount — because §3.1
+is off, or because nobody can run §4's `sudo` there yet, which is `geekom`'s
+situation. The relay does not degrade to plain HTTP when a certificate is
+missing: it exits non-zero at startup, and that behaviour is deliberate and
+unchanged. So on such a host §6 cannot start anything at all.
 
 This section is the explicit alternative. It is **not** a fallback:
 
@@ -577,9 +627,11 @@ that proves the **data** survived is a byte-identical exact retry with the same
 stop, and the recipient's next poll must still receive `0`. Both answers can only
 come from stored ciphertext and a stored dedup record.
 
-One known rough edge: `docker stop` reports `Exited (2)`, not `Exited (0)` — the
-relay does not exit cleanly on SIGTERM. Nothing is lost, but a supervisor that
-keys off exit status will read an ordinary operator stop as a crash.
+`docker stop` reports `Exited (0)`. The relay handles SIGTERM and SIGINT, closes
+its listeners, drains requests already in flight for up to five seconds, closes
+Badger and then exits 0, so a supervisor keying off exit status reads an operator
+stop as a stop. (Before `a2f07bb` it installed no signal handler and exited 2;
+that was measured as `.State.ExitCode` 2 → 0 on both hosts during the upgrade.)
 
 ### Reaching this relay from another machine — SSH local forward
 
@@ -626,8 +678,18 @@ confidentiality on the wire is SSH's, not the relay's.** An SSH tunnel is a
 transport substitute, not a TLS substitute: the relay's own TLS path —
 certificate loading, the both-or-neither startup check, hot reload on renewal,
 chain validation by a client dialling the MagicDNS name — is exercised **not at
-all**. AC4 needs §3.1, §4, §6, §7 and §8, in that order, and it is blocked on
-§3.1 alone.
+all**. AC4 needs §3.1, §4, §6, §7 and §8, in that order.
+
+**AC4 is now established, by the TLS path on `depr`, not by this one.** On
+2026-09-07 `depr` completed §3.1 → §4 → §6 → §7 → §8 and the full acceptance
+scenario ran from a second machine against
+`https://depr.tail5a88fb.ts.net:8443` with no tunnel, forward, proxy or shim:
+`/health` answered 200 with `ssl_verify_result=0` against the system trust store
+and `remote_ip=100.100.188.64`; plain HTTP to that port answered
+`HTTP/1.0 400 Bad Request`. Evidence:
+[`t11-tls-report.md`](../../../.metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t11-tls-report.md).
+That changes nothing about this section: the §6.5 path is still not evidence for
+AC4 and must still never be cited for it.
 
 ## 8. Verify from a second tailnet machine
 
@@ -778,6 +840,13 @@ within 168 h.
 | Image definition | `apps/relay/Dockerfile` | build context is `apps/relay`, not the repository root. |
 | Renewal timer | `systemctl status echolet-cert-renew.timer` | `journalctl -u echolet-cert-renew` for its history. |
 
+The two data rows are the *templates*, not a description of `depr`. `depr` runs
+the **TLS** path against the **named volume** `echolet-relay-data`, because it
+was switched from §6.5 without migrating its store: its env file sets
+`ECHOLET_DATA_VOLUME` instead of `ECHOLET_HOST_DATA_DIR`, and `/var/lib/echolet`
+does not exist on that host. Read its data through the volume row, and treat the
+volume as the thing that must not be removed.
+
 Client-side, nothing changes: the profile directory, its encrypted store and the
 `ECHOLET_E2E_KEY`-style store key stay entirely on the operator's machine. **No
 key material of any kind exists on either server.**
@@ -852,11 +921,30 @@ Everything in this section is true **after** a successful deployment.
   exchange through a remote relay, and the deployment report treats it as such —
   but the encryption on that wire is SSH's. The relay serves plain HTTP and says
   so. AC4 asks for the **relay itself** to terminate TLS on a **non-loopback**
-  address; that requires §3.1, and §3.1 is a toggle in the Tailscale admin
-  console owned by `aleks.zeitler@gmail.com`, not a step on either host.
-- **`docker stop` on the relay exits 2, not 0.** The relay does not shut down
-  cleanly on SIGTERM. No data is lost, but any supervisor keying off exit status
-  reads a normal operator stop as a crash.
+  address. That was done on `depr` (§7.5), and it is `depr`'s TLS deployment —
+  not this path — that establishes AC4.
+- **`geekom` is still on the loopback-only path.** One relay of two serves
+  HTTPS. `geekom` needs the one privileged step in §4 (`sudo tailscale cert`)
+  that only the user can run there; until it is run, `geekom` is reachable from
+  no other machine except through an SSH forward.
+- **The certificate-renewal timer is not installed on `depr`.** The certificate
+  it serves is valid until **6 December 2026 18:35:37 GMT** and nothing on that
+  host renews it. After that date the relay keeps serving an expired certificate
+  and every client that validates the chain — which the CLI does, always — stops
+  being able to talk to it. §4 has the five commands that fix this. Related:
+  hot reload on renewal has an automated test but has never been exercised on
+  `depr`, so on that host it is unproven rather than demonstrated.
+- **`docker-compose.yml` cannot start a TLS relay on an existing named volume.**
+  It hard-requires `ECHOLET_HOST_DATA_DIR` and has no `ECHOLET_DATA_VOLUME`
+  branch, so `docker compose config` fails outright for a host whose store lives
+  in `echolet-relay-data`. Only `run-relay.sh` can perform that switch. See §6.
+- **`ECHOLET_CLEANUP_INTERVAL_SECONDS` bounds nothing.** Both compose files, all
+  three env examples and `run-relay.sh` set it, and the relay logs `Cleanup
+  service started interval_sec=60` at boot — but `CleanupService.runCleanup()`
+  is two `slog.Debug` calls and does no work. Retention is enforced entirely by
+  Badger's own TTL from `ECHOLET_MAILBOX_TTL_HOURS`. Tuning the cleanup interval
+  changes only how often two debug lines are emitted. Open; recorded here so no
+  operator tunes it expecting an effect.
 - **The pinned `@signalapp/libsignal-client@0.102.0` is not a permanent
   decision.** It was taken for this prototype.
 
