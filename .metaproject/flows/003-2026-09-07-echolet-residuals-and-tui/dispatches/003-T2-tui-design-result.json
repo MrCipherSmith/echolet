@@ -1,0 +1,291 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T2-tui-design",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Assessed the operator TUI by reading every module in apps/cli/src/tui and by building and driving it against a local relay I started on 127.0.0.1:18317 (nine scripted runs plus two injected-TuiIo probes of the pure layer). It is a launcher for five of the eight CLI commands with a very good trust modal attached, not yet an operator console. Five of eight commands are reachable (poll, doctor, relay publish, contact import, history); init, contact export and send are not, so a new operator cannot bootstrap a profile and nobody can produce a contact card without dropping to the shell. There is no refresh of any kind: the shell subscribes only to stdin 'data' and contains no timer, so arriving messages are invisible until a human presses p. One outright defect was measured rather than inferred: mapKey never reads state.busy, so ordinary key-mashing spawns concurrent children against the same SQLite store and manufactures PERSISTENCE_FAILURE (exit 5) - including turning a relay-down relay publish, which returns exit 4 RELAY_UNAVAILABLE when run alone against the same stopped relay, into exit 5 - and because only the last of 64 held activity lines is rendered, those failures vanish behind the next success within a second. Two further measured display defects: panes drop rows silently (30 history entries, 10 rendered, 20 dropped, no marker, oldest kept) and the key legend is 106 columns wide against a 72-column MIN_VIEWPORT, so the quit key is invisible at exactly the width the shell falls back to. The history pane is unreachable in a fresh session over an existing profile: the contact roster is populated only by an import observed in this session, so the only route to reading stored messages is to re-import a card you already trust, walking through the one irreversible security decision as a navigation step. Design: ten prioritised items, U1-U8 in the console and U9-U10 as CLI prerequisites, each naming its property, its RED tests, its blast radius and what it must not break, all preserving the purity and totality of renderFrame. Recommended against mouse support, colour themes or any persisted preference, a terminal scrollback, grapheme-width handling, and any ninth CLI command reached from the console. Design only; no source file and no test file was modified.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Enumerate what an operator can do end to end without dropping to the shell, and what they cannot",
+      "status": "met",
+      "evidence": "t2-tui-usability-design.md section 1. Measured Run A: doctor, poll, contact import through the modal, poll, select contact, history, all five panes, quit - 27 frames, exit 0, against a real relay. Section 1.2 tabulates all eight commands with the key that reaches them and the gate; init, contact export and send have no binding. Section 1.3 records the measured dead end: Run E received 15 messages and could not select a contact, so history was unreachable."
+    },
+    {
+      "criterion": "Determine whether the console refreshes and what the display does while a child runs",
+      "status": "met",
+      "evidence": "Section 2. Measured through an injected TuiIo: runTuiShell subscribes to exactly one event, stdin 'data'; keryx ctx rg over apps/cli/src/tui for setInterval|setTimeout|SIGWINCH|SIGINT|SIGTERM|process.on|resize returns three comment matches and zero code matches. While a child runs the frame repaints once with the busy prefix showing the PREVIOUS result and then freezes, while the keyboard stays live."
+    },
+    {
+      "criterion": "Determine whether the TUI distinguishes exit 3 / exit 4 / exit 5",
+      "status": "met",
+      "evidence": "Section 3. The activity line does carry the code and the numeric exit code, which is better than a generic error, but the exit class drives exactly one behaviour (applyOutcome: exitCode === 4 sets relay health unreachable, measured working with the relay stopped and restarted) and nothing else is differentiated in presentation, retryability or remedy. Measured that the console corrupts the contract it exists to surface: relay publish with the relay down returns exit 4 RELAY_UNAVAILABLE alone but exit 5 PERSISTENCE_FAILURE when the console had a poll in flight."
+    },
+    {
+      "criterion": "Assess input handling: keys, discoverability, help, modal escape, resize, small terminal, SIGINT",
+      "status": "met",
+      "evidence": "Section 4, a measured table. Footer 106 columns and header 83 columns against MIN_VIEWPORT 72, so [c] contact, [t] profile and [q] quit are invisible at the fallback width; ? is unbound and --help prints '--help needs a value' and exits 2; the modal is escapable by n and esc even when incomplete; TuiIo.stdout has no seam a resize could arrive through; at 40x10 the shell writes 16 lines of 72 columns, which shell-chrome.ts:30 documents it does not do; no SIGINT/SIGTERM/uncaughtException handler exists anywhere in src/tui."
+    },
+    {
+      "criterion": "Assess whether the trust modal puts the information a human needs in front of them",
+      "status": "met",
+      "evidence": "Section 5. Measured on a real card at 72 columns: all four identifiers complete (43/36/43/44 characters) with field names, footer and the notice on the same frame, and a malformed card opens no modal at all (Run I). Three gaps named with measurements: the card path is clipped at 58 characters at 72 columns and at 70 even at 120+, the modal never says whether the identity is already pinned, and 43 unbroken base64url characters is the hardest format to compare over another channel. The constraint that any grouped rendering must be ADDITIONAL to the verbatim line, because modal-host.test.ts asserts includes(value), is stated in the design."
+    },
+    {
+      "criterion": "Say for each proposal how it stays testable, preserving renderFrame(state, viewport) -> Frame as pure and total",
+      "status": "met",
+      "evidence": "Section 6 classifies every gap by whether the information is already in state or needs a new seam; section 7 gives each of U1-U10 an explicit RED-test list. The two new seams are additive and optional on TuiIo (setTimer for U7, onResize for U4), keeping the clock and the terminal outside the pure layer exactly as `now` already is. Section 7 opens with nine global invariants no item may break."
+    },
+    {
+      "criterion": "Deliver a prioritised plan ranked by what an operator feels first, with blast radius and non-regression per item",
+      "status": "met",
+      "evidence": "Section 7, U1 (single-flight commands, blocker) through U10, each with property / tests / blast radius / must-not-break. Section 8 lists what not to do and why; section 9 states two opinions that the current pane set is wrong and that state.busy is a display flag where it should be a gate."
+    },
+    {
+      "criterion": "Change no source file and no test file; run everything against a locally started relay and stop it",
+      "status": "met",
+      "evidence": "git status shows only the untracked flow-003 directory. The demo relay was built into the scratchpad, run on 127.0.0.1:18317 and stopped (pgrep for the scratchpad relay returns nothing, and lsof shows nothing listening on 18317). The relays on geekom and depr were never contacted. Two store keys were generated straight into environment variables; no key, plaintext body, private key or HTTP request body was printed or recorded, and every base64url run over 40 characters was redacted before display."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t2-tui-usability-design.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Usability assessment of the operator TUI with measured evidence, plus a prioritised ten-item design plan (U1-U10) with per-item property, RED tests, blast radius and non-regression constraints, and an explicit not-doing list.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T2-tui-design-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This subagent-result.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t2-tui-usability-design.md",
+      "change": "added - TUI usability assessment and design"
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T2-tui-design-result.json",
+      "change": "added - subagent-result for dispatch 003-T2-tui-design"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T2-F-001",
+      "global_id": "003-T2-tui-design#T2-F-001",
+      "reviewer": "tui-usability-design",
+      "severity": "blocker",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 87,
+      "symbol": "mapKey",
+      "problem": "mapKey never reads state.busy, and the stdin data handler in runTuiShell does not check whether a child is already in flight, so every command keystroke spawns another `node dist/cli.js` immediately against the same encrypted SQLite profile store. state.busy exists in the state model and is consumed only by shell-chrome.activityLine as a text prefix.",
+      "impact": "Ordinary key-mashing produces spurious PERSISTENCE_FAILURE (exit 5), which the specification defines as local persistence failed - stop and investigate. Worse, the console corrupts the very exit-code contract it exists to surface: with the relay stopped, `relay publish` returns exit 4 RELAY_UNAVAILABLE when run alone and exit 5 PERSISTENCE_FAILURE when the console had a poll in flight. Because only the last of the 64 held activity lines is rendered, the fabricated failures disappear behind the next success within a second, so an operator sees `poll -> ok (exit 0)` and never learns that two commands failed.",
+      "suggested_fix": "Make state.busy a gate rather than a display flag: mapKey returns undefined for every command key while busy, reduce emits no run-cli effect for a run intent while busy and instead appends a visible refusal to state.activity, and pane, quit and modal keys stay live so the operator can always leave. Test with a runCli that never settles, driven with five keystrokes, asserting exactly one call. This is item U1 of the design.",
+      "evidence": "Measured on Node v26.5.0 against a relay started for this assessment on 127.0.0.1:18317. Probe through an injected TuiIo: mapKey({name:'p'}, {...state, busy:true}) returns {kind:'run',request:{command:'poll',...}}. Run C, keys p,p,p,d at 5 ms intervals, activity trace in order: `doctor -> PERSISTENCE_FAILURE (exit 5)`, `poll -> PERSISTENCE_FAILURE (exit 5)`, `poll -> ok (exit 0)`. Run B, relay stopped, keys p then r: `relay publish -> PERSISTENCE_FAILURE (exit 5)` while poll was in flight; the control `node dist/cli.js relay publish --profile ./demo/alice --json` against the same stopped relay returned {\"ok\":false,\"error\":{\"code\":\"RELAY_UNAVAILABLE\"}} with exit 4.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:87-111 (mapKey - the five command keys p/d/r/h/i, none gated on busy)",
+          "apps/cli/src/tui/tui-shell.ts:126-127 (reduce, case \"run\" - sets busy:true and emits the effect unconditionally)",
+          "apps/cli/src/tui/tui-shell.ts:366-385 (the stdin data handler - no in-flight check before dispatching effects)",
+          "apps/cli/src/tui/tui-shell.ts:322-333 (apply, case \"run-cli\" - awaits io.runCli with no mutual exclusion)",
+          "apps/cli/src/tui/shell-chrome.ts:60-64 (activityLine - the only consumer of state.busy today)",
+          "apps/cli/src/tui/state.ts:142 (OperatorState.busy - declared, never used as a precondition)"
+        ],
+        "enumeration_method": "keryx ctx rg for 'busy' over apps/cli/src/tui returned every declaration and every read; the six sites above are all of them outside test files. The stdin handler and apply() were then read end to end at tui-shell.ts:282-389 to confirm there is no other serialisation point."
+      }
+    },
+    {
+      "id": "T2-F-002",
+      "global_id": "003-T2-tui-design#T2-F-002",
+      "reviewer": "tui-usability-design",
+      "severity": "major",
+      "file": "apps/cli/src/tui/shell-chrome.ts",
+      "line": 120,
+      "symbol": "renderFrame",
+      "problem": "renderFrame truncates a pane's lines to the available body rows with a bare slice and emits no indication that anything was dropped, and there is no offset or paging key, so the hidden rows are unreachable. The retained rows are the FIRST ones, so a history pane shows the oldest messages and hides the newest.",
+      "impact": "A display that hides rows without saying so is a correctness defect rather than a comfort gap: showing 10 of 30 messages is visually identical to having only 10. The same silent slice applies to the observed-contact roster and the rejection list, both of which are lists whose length the operator has no other way to learn - and the roster shortfall line that profiles-pane deliberately renders can itself be sliced off the bottom of the frame.",
+      "suggested_fix": "Add a clamped paneOffset field to the state, render an explicit `N more` marker whenever rows are dropped, order history and activity newest-first, and bind two paging keys. renderFrame stays a pure function of (state, viewport) because the offset lives in the state. This is item U5 of the design.",
+      "evidence": "Probe through the real renderFrame: 30 history entries at 100x16 render 10 rows, drop 20, and no line of the frame matches /more|hidden|\\.\\.\\.|.../; the last rendered row is `10  inbound  id-9  message 9`. Measured live in Run F on a real profile: 16 stored entries, 11 rendered at 72x16, entries 11-16 absent with no marker.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/shell-chrome.ts:120 (renderFrame - `paneLines(...).slice(0, bodyRows)`, the single truncation point for every pane)",
+          "apps/cli/src/tui/history-pane.ts:45-59 (formatHistoryLines - produces one line per entry, unbounded)",
+          "apps/cli/src/tui/profiles-pane.ts:90-99 (formatProfilesLines - one line per observed contact, plus the shortfall line that can be sliced away)",
+          "apps/cli/src/tui/mailbox-pane.ts:45-53 (formatMailboxLines - one line per rejection, unbounded)",
+          "apps/cli/src/tui/shell-chrome.ts:83-90 (the rejections pane body - one line per rejection, unbounded)"
+        ],
+        "enumeration_method": "keryx ctx rg for 'slice(' over apps/cli/src/tui located the single truncation site at shell-chrome.ts:120; every format*Lines producer that can exceed the body height was then read to enumerate which panes flow through it. All four list-producing panes do; the health pane emits a fixed three lines and cannot overflow."
+      }
+    },
+    {
+      "id": "T2-F-003",
+      "global_id": "003-T2-tui-design#T2-F-003",
+      "reviewer": "tui-usability-design",
+      "severity": "major",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 104,
+      "symbol": "mapKey (case \"c\") / observeContact",
+      "problem": "selectedContactId can only be set by cycling state.contacts, and state.contacts is populated in exactly one place - observeContact, after a successful contact import confirmed through the trust modal IN THIS SESSION. On a profile that already trusts its contacts, a fresh console can name none of them, so `c` and `h` are both unbound and the history pane is unreachable by any key sequence.",
+      "impact": "An operator with decrypted messages in their store has no way to read one from the console, and the only workaround is to press `i` and re-import a contact card they already trust, walking through the trust modal again purely as a navigation step. That trains an operator to click through the single irreversible security decision on the surface, which is a worse outcome than the missing feature itself. It also makes `history` - one of the five reachable commands - reachable only in sessions that performed an import.",
+      "suggested_fix": "Parse every contact card named by --card at startup in main.ts (the composition root) into a knownCards list carrying identity_id and the path; list them in the profiles pane clearly labelled as cards known to this console and NOT evidence of trust; let `c` cycle the union. A contact card holds only public identifiers, which is exactly why the console may read one with no store key. `i` remains the only path that records trust and the modal is unchanged. This is item U6 of the design; the deeper fix, enumerating what the profile actually trusts, belongs to the CLI surface and is raised as question Q2.",
+      "evidence": "Run E on a profile that already trusted its counterparty: `p` polled 15 messages (mailbox pane read `inbox 15 received`), then `c` and `h` produced no activity at all and the history pane read `no contact selected - history is shown only on an explicit request`. Probe through the real mapKey: mapKey({name:'c'}, state-with-empty-roster) and mapKey({name:'h'}, state-with-nothing-selected) both return undefined. Run F confirmed the workaround: pressing i and re-confirming the modal for an already-trusted card made `c` and `h` work.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:103-106 (mapKey case \"c\" - cycles state.contacts and nothing else)",
+          "apps/cli/src/tui/tui-shell.ts:93-96 (mapKey case \"h\" - gated on selectedContactId, which only case \"c\" can set)",
+          "apps/cli/src/tui/tui-shell.ts:314-320 (observeContact - the only writer of state.contacts, reached only from a confirmed trust modal)",
+          "apps/cli/src/tui/tui-shell.ts:328-331 (apply, contact import branch - the only caller of observeContact)",
+          "apps/cli/src/tui/state.ts:133-134 (OperatorState.contacts / selectedContactId - initialised empty and null by createInitialState:159-160)",
+          "apps/cli/src/tui/profiles-pane.ts:76-86 (the roster and its doctor cross-check, the surface that reports the shortfall)"
+        ],
+        "enumeration_method": "keryx ctx rg for 'contacts|selectedContactId' over apps/cli/src/tui enumerated every reader and writer; the six non-test sites above are all of them. createInitialState and main.ts parseOptions were read to confirm no other path can seed the roster."
+      }
+    },
+    {
+      "id": "T2-F-004",
+      "global_id": "003-T2-tui-design#T2-F-004",
+      "reviewer": "tui-usability-design",
+      "severity": "major",
+      "file": "apps/cli/src/tui/shell-chrome.ts",
+      "line": 55,
+      "symbol": "footerLine / headerLine",
+      "problem": "The key legend is 106 columns wide and the pane strip is 83, against a MIN_VIEWPORT of 72 columns to which runTuiShell.viewport() actively clamps whenever the terminal reports less. The legend is truncated from the right, so the keys that disappear first are [c] contact, [t] profile and [q] quit. There is no help key - `?` is unbound - and `--help` on the binary prints `--help needs a value` and exits 2.",
+      "impact": "At exactly the width the console falls back to, the only discoverability surface it has silently omits three of its eight bindings, including how to quit, and there is no second place to look. The footer's stated design intent - that a footer advertising an unbound key would be a lie - is preserved, but its converse, a bound key the footer never shows, is not.",
+      "suggested_fix": "Bind `?` to a help overlay listing every binding and carrying the notice; make the footer always end with [?] help and drop the least-needed items rather than the tail; print real usage for --help. Test the relation in both directions: every key the overlay names maps to an intent, and every key mapKey binds appears in the overlay. This is item U4 of the design.",
+      "evidence": "Probe through the real renderFrame: rendering at cols 400 and trimming gives header full width 83 and footer full width 106; at cols=72 the footer ends `...ry  [i] import` and the header ends `...y  4 rejection`. Live confirmation in every recorded run at the 72-column fallback. mapKey({name:'?'}) returns undefined. `node apps/cli/dist/tui.js --help` printed `--help needs a value` with exit 2.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/shell-chrome.ts:55-58 (footerLine - the 106-column legend, and the modal footer)",
+          "apps/cli/src/tui/shell-chrome.ts:48-52 (headerLine - the 83-column pane strip)",
+          "apps/cli/src/tui/shell-chrome.ts:123 (fitLine applied to every frame line - the truncation)",
+          "apps/cli/src/tui/tui-shell.ts:286-289 (runTuiShell.viewport() - the clamp to MIN_VIEWPORT that makes 72 the operative width)",
+          "apps/cli/src/tui/tui-shell.ts:70-112 (mapKey - the authority on what is actually bound; `?` is not)",
+          "apps/cli/src/tui/main.ts:42-83 (parseOptions - no --help arm, so --help is parsed as an option needing a value)"
+        ],
+        "enumeration_method": "The two chrome producers were measured directly by rendering at 400 columns and trimming; keryx ctx rg for 'footerLine|headerLine|MIN_VIEWPORT' over apps/cli/src/tui enumerated every producer and every consumer of the width, and main.ts parseOptions was read in full to confirm no --help path exists."
+      }
+    },
+    {
+      "id": "T2-F-005",
+      "global_id": "003-T2-tui-design#T2-F-005",
+      "reviewer": "tui-usability-design",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 287,
+      "symbol": "runTuiShell.viewport",
+      "problem": "viewport() clamps the reported terminal size UP to MIN_VIEWPORT, so on a terminal smaller than 72x16 the shell writes 16 lines of 72 columns into a narrower window; the terminal then wraps every line and the notice on row 0 scrolls out of view. shell-chrome.ts:30 documents the opposite behaviour - 'the shell shows the notice and a resize hint instead' - which was never implemented. Separately, TuiIo.stdout exposes only write/columns/rows, so there is no seam through which a resize could arrive, and the frame is re-laid-out only at the next keystroke.",
+      "impact": "A console started in a small pane is unreadable and, more seriously, the AC6 notice can be scrolled off the visible area by the console's own overflow. Every resize leaves a stale layout until the operator presses a key, which on a console with no auto-refresh can be a long time.",
+      "suggested_fix": "Stop clamping: pass the real viewport, and have shell-chrome render a dedicated too-small frame at the actual size carrying the notice - wrapped across two lines if it cannot fit on one - plus the required dimensions. renderFrame already honours any viewport, so this is one line in the shell plus one branch in the renderer. Add an optional onResize seam to TuiIo. This is item U4(c) of the design.",
+      "evidence": "Probe driving the real runTuiShell with an injected stdout reporting columns 40 and rows 10: the shell wrote 16 lines of 72 columns (80 bytes each after styleFrame's SGR pair on row 1). Probe on the same injected TuiIo: the shell registers exactly one listener, stdin 'data'. keryx ctx rg for 'SIGWINCH|resize|process.on' over apps/cli/src/tui returns three comment matches and zero code matches. The wrapping consequence of writing 72-column lines into a 40-column terminal is inferred from standard terminal behaviour rather than measured on a TTY.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "T2-F-006",
+      "global_id": "003-T2-tui-design#T2-F-006",
+      "reviewer": "tui-usability-design",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/profiles-pane.ts",
+      "line": 5,
+      "symbol": "module header",
+      "problem": "The module header states the pane 'lists the contacts it observed being exported or imported', and the design note repeats it, but contact export has no key binding anywhere in mapKey and no code path adds an exported card to state.contacts - observeContact is reached only from a confirmed trust modal after a successful contact import. The roster can therefore only ever contain imports.",
+      "impact": "A reader reasoning about the AC5 roster compromise from the comments will believe the roster is broader than it is, which matters because the roster's honesty about being partial is the whole content of that compromise. It also marks contact export as an unintentional omission rather than a decision - binding it costs one key and closes the other half of the runbook's card exchange.",
+      "suggested_fix": "Bind contact export (suggested `e`) so the comment becomes true, and add the exported card to the known-cards list rather than to the trusted roster; or, if export stays unbound, correct the two comments. Folded into item U6 of the design.",
+      "evidence": "keryx ctx rg over apps/cli/src/tui shows `contact export` present in CLI_COMMANDS and buildArgv (cli-bridge.ts:16, :79) and absent from mapKey (tui-shell.ts:89-111). observeContact (tui-shell.ts:314) is called from exactly one site, the contact import branch of apply (tui-shell.ts:329). Confirmed live: no recorded run produced a contact export invocation, and no key in the footer legend maps to one.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "T2-F-007",
+      "global_id": "003-T2-tui-design#T2-F-007",
+      "reviewer": "tui-usability-design",
+      "severity": "info",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "line": 221,
+      "symbol": "InboundMessenger.poll",
+      "problem": "`if (received === 0 && firstRejection) throw firstRejection;` means a poll that accepted nothing and rejected something raises instead of returning, so the rejected[] array reaches the console only when at least one message was also accepted in the same poll. The console's rejections pane therefore stays empty in the commonest rejection case, and the actual information reaches the operator as a bare exit-3 activity line with no envelope id.",
+      "impact": "One of the five panes is dead in the case it was built for, while the pane an operator would live in - what happened, in order, with exit classes - does not exist. This is a mis-split of the surface rather than a bug in either component: the CLI behaviour is deliberate and documented, and the console mirrors the CLI's shape rather than the operator's question.",
+      "suggested_fix": "Fold rejections into the mailbox pane, where its counts already live, fold the two-line health pane into profiles, and spend the freed ordinals on an activity pane that explains each exit class and its remedy - in particular translating poll + CONTACT_NOT_TRUSTED into 'an unimported sender wrote to you; import their card, then poll again'. Items U2 and section 9 of the design.",
+      "evidence": "Read at apps/cli/src/runtime/inbound.ts:221 with the surrounding walk at :171-223. Measured consistent in Run A: the mailbox held exactly one envelope from an untrusted sender, the console showed `poll -> CONTACT_NOT_TRUSTED (exit 3)` and the rejections pane read `no permanently rejected envelopes in the last poll`.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "T2-F-008",
+      "global_id": "003-T2-tui-design#T2-F-008",
+      "reviewer": "tui-usability-design",
+      "severity": "info",
+      "file": "apps/cli/src/tui/modal-host.ts",
+      "line": 120,
+      "symbol": "renderModal",
+      "problem": "The modal's `card:` line is clipped to the panel's inner width with no ellipsis and no wrap, and MODAL_PANEL_MAX_WIDTH is 80, so at most 70 characters of the path are ever shown regardless of terminal width. The clipped tail is the filename, which is the part that identifies the counterparty. The modal also never says whether the identity is already in the session roster, and prints each identifier as one unbroken 43-44 character base64url run.",
+      "impact": "An operator running two imports back to back cannot tell from the modal which card they are confirming, and the format shown is the hardest one to read aloud over the out-of-band channel the identifiers exist to be compared on. None of this weakens the security gates, which are correct; it weakens the human comparison the gates are in service of.",
+      "suggested_fix": "Wrap the card path across lines rather than clipping it; add a grouped reading aid beneath each identifier while keeping the verbatim value on its own line, because modal-host.test.ts asserts painted.includes(value) and a grouped rendering must be additional rather than a replacement; mark an identity already present in state.contacts. Item U8 of the design.",
+      "evidence": "Probe through the real renderModal with a 74-character path: 58 of 74 characters shown at cols=72, 66 at cols=80, and 70 at cols=100 and cols=120 alike. Measured live in Run A at 72 columns, where the card line read `card: /private/tmp/claude-502/-Users-Goodea-goodea-projects-echo` with the filename absent.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Should `send` be given a way to take the message body off the argument vector - a --text-file option, or reading stdin when --text is absent - before the console grows a compose key?",
+      "why": "The console cannot send today, which T9 justified by the fact that `send --text <plaintext>` puts the body in the local process table for the life of the child. That reasoning is sound and I would not add a send key while it holds: a console invites an operator to type messages all day and would multiply an exposure the runbook incurs once per command. But it means the console is a monitoring surface rather than a messaging one, and it should say so on its own help overlay rather than leaving the operator hunting for a compose key. The fix is a change to a frozen command's interface, not a ninth command, so it needs a deliberate decision.",
+      "options": [
+        { "id": "cli-first", "label": "Change `send` to accept the body off argv, then add a compose modal in a later task", "recommended": true },
+        { "id": "compose-now", "label": "Add a compose key now and accept the process-table exposure on every message", "recommended": false },
+        { "id": "never", "label": "Keep the console read-only and state that on its surface", "recommended": false }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q2",
+      "question": "Should the CLI gain a way to enumerate pinned contacts - either a ninth `contact list` command, or `doctor` returning contact identity ids alongside contact_count?",
+      "why": "The session-scoped roster is a workaround for a CLI-surface gap, and the design's U6 (reading the public contact cards named at startup) is a better workaround rather than a fix. Profile.listContacts() exists with no entry point. Returning identity ids from `doctor` reopens no frozen decision and would let the console list what the profile actually trusts, with no key material and no new command - but it changes a documented result shape, so it is the flow owner's call, not a TUI task's.",
+      "options": [
+        { "id": "doctor-ids", "label": "Extend doctor's result with the pinned contact identity ids", "recommended": true },
+        { "id": "ninth-command", "label": "Add `contact list` as a ninth command", "recommended": false },
+        { "id": "cards-only", "label": "Ship U6 alone and keep the roster honest about being partial", "recommended": false }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q3",
+      "question": "Should the pane set be re-cut - health folded into profiles, rejections folded into mailbox, and the freed ordinal spent on an activity pane - rather than the strip growing to six panes?",
+      "why": "The rejections pane is empty in the common case by construction (T2-F-007) and health is two lines, while the pane an operator would live in does not exist. Growing the strip instead pushes the header past 83 columns, where it already truncates at the fallback width. The five panes were fixed by the T9 design note, so re-cutting them is a change to a recorded decision rather than an implementation detail.",
+      "options": [
+        { "id": "recut", "label": "Re-cut to five panes with activity replacing rejections and health", "recommended": true },
+        { "id": "six", "label": "Add activity as a sixth pane and accept the wider header", "recommended": false }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tui_runs_driven": 13,
+    "scripted_key_runs_with_frames_captured": 9,
+    "pure_layer_probes": 2,
+    "frames_captured": 95,
+    "source_files_read": 21,
+    "repo_files_modified": 0,
+    "relays_started": 1,
+    "relays_stopped": 1
+  },
+  "timestamp_utc": "2026-09-07T19:45:00Z"
+}

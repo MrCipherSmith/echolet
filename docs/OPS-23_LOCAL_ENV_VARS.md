@@ -85,9 +85,10 @@
 * **Default:** `120`
 
 ### `ECHOLET_CLEANUP_INTERVAL_SECONDS`
-* **Назначение:** интервал cleanup job.
+* **Назначение:** интервал тикера cleanup job.
 * **Пример:** `60`
 * **Default:** `60`
+* **Открытое ограничение: сегодня эта переменная ничего не ограничивает.** `CleanupService.runCleanup()` (`apps/relay/internal/service/cleanup_service.go`) состоит из двух вызовов `slog.Debug` и не выполняет никакой работы; сохранённые конструктором `mailboxRepo`, `challengeRepo` и `mailboxTTL` не читаются; тестов у пакета `internal/service` нет. Удержание записей обеспечивает исключительно TTL самого Badger по `ECHOLET_MAILBOX_TTL_HOURS`. Изменение этого интервала меняет только частоту двух debug-строк. Оставлено как есть намеренно — исправление относится к отдельной задаче.
 
 ---
 

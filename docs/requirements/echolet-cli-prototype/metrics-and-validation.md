@@ -1,5 +1,5 @@
 # Echolet CLI Prototype Metrics and Validation
-Version: 0.1.1
+Version: 0.1.2
 
 ## Gate
 
@@ -14,13 +14,31 @@ go -C apps/relay test -race ./...
 pnpm --filter @echolet/cli test:e2e
 ```
 
-The CLI commands and `test:e2e` script are planned surfaces. Add them in P0-04 and P0-09 before claiming this gate.
+Read the fourth command narrowly. **`pnpm --filter @echolet/cli test:e2e` is
+`vitest run test/e2e/two-process.test.ts` — one file, 3 tests**, being three
+iterations of a single two-process scenario. It is not the end-to-end suite.
+`apps/cli/test/e2e/` holds **six files and 29 tests** (`two-process` 3,
+`flood-closure` 9, `init-relay-url` 9, `rewalk-crash-safety` 4, `relay-tls` 3,
+`publication-claimability` 1); the other five are executed by the second command,
+`pnpm test`, because `apps/cli/vitest.config.ts` sets no `include` and vitest's
+default pattern reaches them. So the broader end-to-end coverage is real and it
+comes from `pnpm test`, not from `test:e2e`. There is **no root `test:e2e`
+script** — the fourth command works only with `--filter @echolet/cli`.
+
+The CLI commands and the `test:e2e` script existed as planned surfaces when this
+document was written; both are implemented now. Any evidence recorded against
+this gate must name the script, the files and the test count rather than a bare
+figure.
+
+`pnpm lint` is deliberately absent from the list above, and should stay absent
+until it means something: the root script is `pnpm -r lint`, no workspace package
+declares a `lint` script, and the command exits 0 having run nothing.
 
 ## Required measurements
 
 | Metric | Threshold | Evidence source |
 |---|---:|---|
-| Clean end-to-end runs | 3/3 pass | CLI E2E report |
+| Clean two-process scenario iterations (`test/e2e/two-process.test.ts`) | 3/3 pass | CLI E2E report; this is one of six e2e files |
 | Concurrent claim winners | exactly 1 of at least 20 | Go race test |
 | Lost-response claim retries | same bundle bytes for same claim ID | Go integration test |
 | Reused OTK publications | 100% rejected across changed IDs, expiry, and restart | Go repository test |

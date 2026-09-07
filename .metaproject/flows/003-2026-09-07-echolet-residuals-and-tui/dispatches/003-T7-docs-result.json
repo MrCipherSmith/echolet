@@ -1,0 +1,176 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003-T7-docs-reconcile-2026-09-08",
+  "dispatch_id": "003-T7-docs-reconcile",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Reconciled every shipped document with HEAD 4346e2b. Deleted the two stale clean-shutdown claims in the deployment runbook (verified: main.go handles SIGTERM/SIGINT, drains and exits 0; all four tests in process_shutdown_test.go re-run and PASS here) and two of the four clauses of the STATUS_CURRENT test-coverage limitation (verified: mailbox_ordering_test.go:306 calls GetEnvelopeBatchFrom with a non-empty cursor; the first-envelope byte-budget mutation was re-run in an out-of-tree copy and is KILLED by mailbox_repo_test.go:217). Added the a2f07bb clean-shutdown fix to both flow 002 change-lists, which stopped one commit short. Reconciled AC4 across three documents from t11-tls-report.md: depr serves real HTTPS on its tailnet address and the full acceptance scenario ran from another machine over direct HTTPS - while carrying forward, in every one of them, that geekom is still on loopback plain HTTP and that the certificate-renewal timer is NOT installed (expiry 6 Dec 2026, no automation), plus the finding that docker-compose.yml cannot perform the TLS switch because it hard-requires a host data directory with no named-volume branch. Relabelled the e2e figure in every document that quoted it: `pnpm --filter @echolet/cli test:e2e` is one file and 3 tests (re-measured here), while apps/cli/test/e2e/ holds six files and 29 tests reached by the plain `test` script. Recorded two previously unrecorded limitations as open: CleanupService is a stub whose interval is presented as meaningful in both compose files and all three env examples, and no package declares a lint script so `pnpm lint` runs nothing. Three inventory pointers were wrong and are named in the report.",
+  "summary_markdown": "## T7 - documents reconciled against `4346e2b`\n\n**Deleted, each verified first.** The deployment runbook's two clean-shutdown claims (`:580-582`, `:857-859`) - the relay handles SIGTERM/SIGINT, drains, closes Badger and exits 0 (`main.go:104-160`), and all four tests in `process_shutdown_test.go` PASS here. Two of four clauses of `STATUS_CURRENT.md`'s test-coverage limitation - `GetEnvelopeBatchFrom` IS called with a non-empty cursor (`mailbox_ordering_test.go:306`), and the first-envelope byte-budget mutation IS killed (re-run in an out-of-tree copy: `mailbox_repo_test.go:217` fails).\n\n**Nothing to delete for four other stale items.** The ack-route count oracle, the loopback-predicate disagreement, `init`'s URL rule and the \"no sender authentication\" comments are all closed in code and are asserted by **no** shipped document (`rg -i oracle docs/` -> 0 matches).\n\n**Brought to HEAD.** `a2f07bb` (clean shutdown) added to the flow 002 change-lists in `STATUS_CURRENT.md` and the requirements `README.md`, with what it does *not* guarantee stated alongside.\n\n**AC4 reconciled** in three documents from `t11-tls-report.md`, carrying forward honestly: `geekom` still on loopback plain HTTP; the **renewal timer is not installed** (certificate expires 6 Dec 2026); hot reload unexercised on the host; `docker-compose.yml` cannot perform the TLS switch.\n\n**e2e relabelled everywhere.** `test:e2e` = **1 file / 3 tests** (measured: 45.7 s); `test/e2e/` = **6 files / 29 tests**, the other five reached by `pnpm test`. No coverage was lost - only the label was wider than the run.\n\n**Two new limitations recorded as open:** the `CleanupService` stub behind `ECHOLET_CLEANUP_INTERVAL_SECONDS`, and the absent `lint` script that makes `pnpm lint` vacuous.",
+  "acceptance": [
+    {
+      "criterion": "AC1 - stale items are shown to be stale and deleted from every document that still asserts them, with named evidence",
+      "status": "partial",
+      "evidence": "Four documentation-side stale assertions deleted with evidence re-established on this tree: deployment-runbook.md 580-582 and 857-859 (main.go:104-160 plus 4/4 PASS in process_shutdown_test.go), and two clauses of STATUS_CURRENT.md limitation 5 (mailbox_ordering_test.go:306 with a non-empty cursor; a re-run mutation of mailbox_repo.go:463 killed by mailbox_repo_test.go:217). Six further STALE items were checked and need no documentation edit because no shipped document asserts them - each named in t7-reconciliation-report.md section 2.5. Partial rather than met because AC1 covers the whole 62-item inventory; this task dispositioned only its documentation share."
+    },
+    {
+      "criterion": "AC2 - no document in the repository states something the tree contradicts; none says the relay fails to stop cleanly, none says the ack-route oracle is open, none says AC4 is blocked, none quotes an e2e result under a wrong label",
+      "status": "met",
+      "evidence": "Clean shutdown: both sites deleted and replaced; `rg -i 'exited \\(2\\)|exits 2' docs/` now returns only the corrected sentence in deployment-runbook.md:630. Oracle: `rg -i oracle docs/` returns 0 matches; the only in-repo statements are the T1 inventory (marked ALREADY-CLOSED) and the frozen acceptance-criteria.md. AC4: STATUS_CURRENT.md, requirements README.md and deployment-runbook.md (header, 3.1, 6.5, 7.5, 14) all now record AC4 as met on depr. e2e: every quoting document names the script, the file(s) and the count. Historical verification reports and flow 002's timestamped ac-confirmed lines were deliberately not rewritten - they mirror flow.json, which is out of scope - and a dated erratum was appended to flow 002's journal instead."
+    },
+    {
+      "criterion": "AC3 - every document quoting an e2e figure quotes it under the corrected name and the corrected count",
+      "status": "partial",
+      "evidence": "Corrected in docs/STATUS_CURRENT.md (matrix row, T55 bullet, flow 002 matrix sentence, plus a new dedicated section), docs/requirements/echolet-cli-prototype/README.md, metrics-and-validation.md and specification.md, and by an erratum in flow 002's journal. All five also record that there is no root test:e2e script. Partial because AC3's first half - repointing or renaming the scripts - belongs to another task: apps/cli/package.json is out of scope here and still declares `test:e2e` as `vitest run test/e2e/two-process.test.ts`."
+    },
+    {
+      "criterion": "Record what nobody had recorded: the CleanupService stub and the absent lint script, stated as open",
+      "status": "met",
+      "evidence": "CleanupService: recorded in STATUS_CURRENT.md limitation 10, requirements README.md, deployment-runbook.md section 14 and OPS-23_LOCAL_ENV_VARS.md, with cleanup_service.go:41-46 and the six deploy sites named. Lint: recorded in STATUS_CURRENT.md limitation 9, requirements README.md and metrics-and-validation.md, with the measured output `None of the selected packages has a \"lint\" script` at exit 0. Both are stated as open with the fix named as a different task."
+    },
+    {
+      "criterion": "Constraints: documentation and flow journals only; hosts untouched; no secret material recorded; searches routed through keryx ctx; wiki check-links clean",
+      "status": "met",
+      "evidence": "git status shows changes only under docs/ and .metaproject/flows/. No file under apps/, packages/ or deploy/, no test, no package.json, no flow.json and no acceptance-criteria.md was modified. Neither geekom nor depr was contacted; every AC4 statement is sourced from t11-tls-report.md and flow 002's flow.json record. No private key, store key, plaintext or request body appears in any written artifact. Every search ran through `keryx ctx rg` and every command through `keryx ctx run`; raw_rg_used: no. `keryx wiki check-links`: 19 pages, 38 internal links, 0 broken."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t7-reconciliation-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Every change with its justification, the evidence behind each deletion, three places where the T1 inventory's pointers were wrong, and seven contradictions that remain open."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t11-tls-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Source mined for the AC4 reconciliation. Read only; nothing in it was re-run."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "docs/requirements/echolet-cli-prototype/deployment-runbook.md",
+      "change": "Deleted both stale clean-shutdown claims (sections 7.5 and 14). Rewrote the status header, 3.1, 6.5 and 14 for the post-AC4 state: depr on TLS, geekom still loopback, renewal timer not installed, hot reload unexercised on the host. Added the docker-compose.yml named-volume finding to 6 and 14, a named-volume note to 12, and the CleanupService limitation to 14. Version 0.3.0 -> 0.4.0."
+    },
+    {
+      "path": "docs/STATUS_CURRENT.md",
+      "change": "Dropped two of four clauses of limitation 5. Added the clean-shutdown fix to the flow 002 change list. Replaced the AC4-blocked paragraph with the AC4 record plus four carried-forward open items. Added a section on what test:e2e actually runs. Added limitations 9 (no lint), 10 (CleanupService) and 11 (deployment half-closed). Updated the revision line and gate 5."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/README.md",
+      "change": "Added the clean-shutdown fix to the flow 002 change list and a 'What test:e2e actually runs' paragraph; removed the bare 3/3 from the status sentence. Replaced the AC4-not-established paragraph. Added the CleanupService and missing-lint limitations. Version 0.2.0 -> 0.2.1."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/metrics-and-validation.md",
+      "change": "Explained what the gate's fourth command runs and where the broader e2e coverage comes from; corrected the stale 'planned surfaces' sentence; relabelled the end-to-end metric row; recorded why pnpm lint is absent from the gate. Version 0.1.1 -> 0.1.2."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/specification.md",
+      "change": "Named the file and the script behind the '3/3 unfiltered iterations' cell in the implementation-state table."
+    },
+    {
+      "path": "docs/OPS-23_LOCAL_ENV_VARS.md",
+      "change": "Recorded that ECHOLET_CLEANUP_INTERVAL_SECONDS currently bounds nothing, with the reason and the fact that retention comes from Badger's TTL."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/journal.md",
+      "change": "Appended two dated errata (the e2e label; the shutdown claim and AC4). The timestamped ac-confirmed entries were deliberately not rewritten because they mirror flow.json."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t7-reconciliation-report.md",
+      "change": "New: the T7 report."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T7-docs-result.json",
+      "change": "New: this result."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T7-F-001",
+      "global_id": "003-T7-docs-reconcile#T7-F-001",
+      "reviewer": "003-T7-docs-reconcile",
+      "severity": "minor",
+      "file": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t1-residual-inventory.md",
+      "line": 489,
+      "symbol": null,
+      "problem": "The T1 inventory's STALE table sends RI-44's deletion to docs/STATUS_CURRENT.md:80, saying that line's parenthetical should drop the loopback-disagreement half of T10R3-F-003. That line lists the T10 r3 VERIFIER findings T10R3V-F-001 through F-004; the loopback-predicate disagreement is T10R3-F-003, without the V, and the line never mentions it.",
+      "impact": "An agent acting on the pointer literally would delete a clause about something else. All four items that line does list (the process finding, the untracked apps/relay/relay binary, the 'byte-identical' wording, and the IPv4-mapped loopback refusal) are still open per the inventory's own RI-46/RI-48/RI-45, so any deletion there would remove a true statement.",
+      "suggested_fix": "Treat RI-44 as needing no documentation edit: the loopback disagreement is asserted by no shipped document. Nothing was deleted at that line.",
+      "evidence": "Read docs/STATUS_CURRENT.md line 80 (now renumbered) in full: it names T10R3V-F-001, T10R3V-F-002, T10R3V-F-003 and T10R3V-F-004 only. Cross-checked against the inventory's own rows RI-45, RI-46 and RI-48, all STILL-OPEN.",
+      "confidence": "high"
+    },
+    {
+      "id": "T7-F-002",
+      "global_id": "003-T7-docs-reconcile#T7-F-002",
+      "reviewer": "003-T7-docs-reconcile",
+      "severity": "info",
+      "file": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t1-residual-inventory.md",
+      "line": 281,
+      "symbol": null,
+      "problem": "The inventory says the 'test:e2e 3/3' sentence appears in 'STATUS_CURRENT.md, the requirements README.md, both flow READMEs and every verification report'. Neither flow 001 nor flow 002 has a README.md; only flow 003 does, and it does not quote the figure.",
+      "impact": "A reader chasing 'both flow READMEs' finds nothing and may conclude the sweep was incomplete. The actual shipped-document set is four files, not six.",
+      "suggested_fix": "Read the set as: docs/STATUS_CURRENT.md, docs/requirements/echolet-cli-prototype/README.md, metrics-and-validation.md and specification.md, plus the historical verification reports. All four are corrected; the historical reports are left as records.",
+      "evidence": "`ls .metaproject/flows/001-*/ .metaproject/flows/002-*/` shows no README.md in either. `keryx ctx rg 'test:e2e' docs/` returns exactly three files plus apps/cli/package.json; `keryx ctx rg '3/3' docs/` returns four.",
+      "confidence": "high"
+    },
+    {
+      "id": "T7-F-003",
+      "global_id": "003-T7-docs-reconcile#T7-F-003",
+      "reviewer": "003-T7-docs-reconcile",
+      "severity": "info",
+      "file": "apps/relay/cmd/relay/main.go",
+      "line": 115,
+      "symbol": "run",
+      "problem": "The inventory's RI-29 row describes main.go:118-148 as 'Close() then closeStorage(st, 0), with no in-flight handler tracking anywhere in the relay'. On this tree the sequence is srv.Shutdown(ctx) first; srv.Close() is reached only when the drain returns an error or a second signal arrives.",
+      "impact": "The row's file:line characterisation is out of date, which could mislead whoever implements the counting middleware. The substance of RI-29 is unaffected.",
+      "suggested_fix": "Keep RI-29 open exactly as bucketed. The change-list entries written by this task state the limitation in its correct form: nothing counts in-flight handler goroutines, so 'no handler outlives the store' is an argument rather than a guarantee.",
+      "evidence": "Read apps/relay/cmd/relay/main.go:104-160 in full. Line 115 opens the drain context; 119 spawns srv.Shutdown; 130 and 146 are the only srv.Close() calls, both conditional; 160 is closeStorage(st, 0).",
+      "confidence": "high"
+    },
+    {
+      "id": "T7-F-004",
+      "global_id": "003-T7-docs-reconcile#T7-F-004",
+      "reviewer": "003-T7-docs-reconcile",
+      "severity": "minor",
+      "file": "apps/cli/package.json",
+      "line": 12,
+      "symbol": "scripts.test:e2e",
+      "problem": "The documents now state precisely what `test:e2e` runs, but the script itself is unchanged: `\"test:e2e\": \"vitest run test/e2e/two-process.test.ts\"` runs one of six files in apps/cli/test/e2e/. There is also still no root test:e2e script, so the gate command in metrics-and-validation.md cannot be run as bare `pnpm test:e2e`.",
+      "impact": "AC3's first half is unserved until the script is repointed or renamed. Until then the documents carry the correction and the script carries the misleading name, which is a weaker state than the two agreeing.",
+      "suggested_fix": "Either point test:e2e at test/e2e (and re-measure every quoted figure), or rename it test:e2e:two-process so the number cannot be over-read - then add the root alias. Fixing the narrowness must come before adding the root alias, or the alias hardens the over-reading into the documented matrix command.",
+      "evidence": "apps/cli/package.json:12. Measured on 4346e2b: `pnpm --filter @echolet/cli test:e2e` -> 1 file, 3 tests, 3 passed, 45.7 s. `npx vitest list` in apps/cli collects 39 files, of which six are under test/e2e/ carrying 29 tests. package.json is out of scope for this task.",
+      "confidence": "high"
+    },
+    {
+      "id": "T7-F-005",
+      "global_id": "003-T7-docs-reconcile#T7-F-005",
+      "reviewer": "003-T7-docs-reconcile",
+      "severity": "minor",
+      "file": "docs/requirements/echolet-cli-prototype/deployment-runbook.md",
+      "line": 274,
+      "symbol": null,
+      "problem": "geekom's CertDomains was never re-checked after the tailnet owner enabled HTTPS Certificates. The setting is tailnet-wide, so it is very likely non-null there too, but nobody has run the command on that host since.",
+      "impact": "A document that said 'CertDomains is non-null on both hosts' would be an unverified claim standing in for a verified one - exactly the failure mode this task exists to remove.",
+      "suggested_fix": "Section 3.1 now states what was observed on depr, says geekom was not re-checked and why, and instructs the operator to run the command there before section 4 rather than assume. Resolving it needs host access this task does not have.",
+      "evidence": "t11-tls-report.md is explicit that geekom was not touched in any way - not written, not read, not probed - and its only CertDomains observation is depr's [\"depr.tail5a88fb.ts.net\"]. This task may not contact either host.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "documents_changed": 6,
+    "flow_journals_changed": 1,
+    "stale_assertions_deleted": 4,
+    "stale_items_verified_needing_no_edit": 6,
+    "e2e_files_total": 6,
+    "e2e_tests_total": 29,
+    "e2e_script_files": 1,
+    "e2e_script_tests": 3
+  },
+  "timestamp_utc": "2026-09-07T20:20:00Z"
+}

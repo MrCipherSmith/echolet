@@ -1,0 +1,269 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "003",
+  "slug": "echolet-residuals-and-tui",
+  "title": "Echolet: close the recorded residuals and make the operator TUI usable",
+  "status": "in-progress",
+  "createdAt": "2026-09-07T19:26:13.895Z",
+  "updatedAt": "2026-09-07T20:18:09.226Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:e3ad5356dcb009b7fa69485cce34b9093da7e1fa7c66f1352af3230097a6af1a",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T19:50:07.041Z",
+            "outcome": "started",
+            "detail": "003-T3-tui-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "RED tests for the TUI concurrency defect, silent row dropping, and viewport/legend correctness",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T19:50:23.918Z",
+            "outcome": "started",
+            "detail": "003-T5-tui-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Fix the TUI concurrency defect, row dropping, and viewport/legend correctness",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Reconcile every document with the tree: stale deletions, the shutdown fix, AC4, and the e2e labelling",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T19:54:57.057Z",
+            "outcome": "started",
+            "detail": "003-T7-docs-reconcile"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Documents reconciled with the tree and spot-checked by the orchestrator: the stale clean-shutdown claims are gone from the deployment runbook, and the e2e labelling now names script, files and count in every document that quotes a figure. The agent verified each deletion against the tree itself rather than trusting the inventory, re-ran the four shutdown tests and re-killed the byte-budget mutation in a scratch copy. It also caught the inventory being wrong three times, including one deletion target that would have removed a TRUE statement. Unresolved and carried forward: apps/cli/package.json still runs one of six e2e files (T9's scope), there is no root test:e2e so the gate command cannot run as written, the renewal timer is still not installed on depr, and geekom's CertDomains was not re-checked after the toggle."
+    },
+    {
+      "id": "T8",
+      "title": "RED tests for the relay FIX NOW items: cleanup timer, backfill skip-and-count, poll byte budget, v1 identifier bounds, shutdown escalation",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T19:54:57.150Z",
+            "outcome": "started",
+            "detail": "003-T8-relay-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Implement the relay FIX NOW items",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-07T19:26:13.895Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-07T19:50:06.747Z",
+      "event": "task-added",
+      "detail": "T5: RED tests for the TUI concurrency defect, silent row dropping, and viewport/legend correctness"
+    },
+    {
+      "at": "2026-09-07T19:50:06.851Z",
+      "event": "task-added",
+      "detail": "T6: Fix the TUI concurrency defect, row dropping, and viewport/legend correctness"
+    },
+    {
+      "at": "2026-09-07T19:50:06.947Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T3 (was empty) — Implementation follows the RED tests"
+    },
+    {
+      "at": "2026-09-07T19:50:07.041Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — 003-T3-tui-tests"
+    },
+    {
+      "at": "2026-09-07T19:50:23.740Z",
+      "event": "task-depends-set",
+      "detail": "T6: dependsOn T5 (was empty) — Implementation follows the RED tests"
+    },
+    {
+      "at": "2026-09-07T19:50:23.830Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn cleared (was T3) — Bookkeeping correction: the dependency was meant for T6 on T5, not for the scaffold task T4 on the scaffold task T3"
+    },
+    {
+      "at": "2026-09-07T19:50:23.918Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 003-T5-tui-tests"
+    },
+    {
+      "at": "2026-09-07T19:54:50.026Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-07T19:54:50.109Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-07T19:54:50.193Z",
+      "event": "task-added",
+      "detail": "T7: Reconcile every document with the tree: stale deletions, the shutdown fix, AC4, and the e2e labelling"
+    },
+    {
+      "at": "2026-09-07T19:54:50.278Z",
+      "event": "task-added",
+      "detail": "T8: RED tests for the relay FIX NOW items: cleanup timer, backfill skip-and-count, poll byte budget, v1 identifier bounds, shutdown escalation"
+    },
+    {
+      "at": "2026-09-07T19:54:50.367Z",
+      "event": "task-added",
+      "detail": "T9: Implement the relay FIX NOW items"
+    },
+    {
+      "at": "2026-09-07T19:54:56.952Z",
+      "event": "task-depends-set",
+      "detail": "T9: dependsOn T8 (was empty) — Implementation follows the RED tests"
+    },
+    {
+      "at": "2026-09-07T19:54:57.057Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 003-T7-docs-reconcile"
+    },
+    {
+      "at": "2026-09-07T19:54:57.150Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 003-T8-relay-tests"
+    },
+    {
+      "at": "2026-09-07T20:18:09.226Z",
+      "event": "task-done",
+      "detail": "T7: Reconcile every document with the tree: stale deletions, the shutdown fix, AC4, and the e2e labelling"
+    }
+  ]
+}

@@ -9,7 +9,7 @@
   "title": "Echolet: close the flood class, operator console, and two-relay deployment",
   "status": "in-progress",
   "createdAt": "2026-09-07T06:55:37.619Z",
-  "updatedAt": "2026-09-07T18:27:39.009Z",
+  "updatedAt": "2026-09-07T19:48:42.045Z",
   "source": {
     "type": "description",
     "ref": null
@@ -43,6 +43,10 @@
     "AC8": {
       "at": "2026-09-07T18:13:34.419Z",
       "note": "STATUS_CURRENT.md, the requirements README and both runbooks were updated against HEAD c302485 and now state what remains untrue: no independent cryptographic audit, no mobile client, no user-demand evidence, no production deployment or readiness claim, no safety for sensitive communication, and the libsignal pin is not permanent. Five contradictions with the tree were corrected, including the stale claim that main is unborn with no commit and no remote, and the superseded flooding measurement. The flooding closure is stated as a bound, not as elimination. AC4 and the T16/T10r3 residuals are carried forward explicitly."
+    },
+    "AC4": {
+      "at": "2026-09-07T19:48:42.044Z",
+      "note": "Verified by the orchestrator from this Mac with no verification bypass: https://depr.tail5a88fb.ts.net:8443/health answers 200 with ssl_verify_result=0 against the system trust store, remote_ip 100.100.188.64 (non-loopback, over the tailnet), certificate CN=depr.tail5a88fb.ts.net issued by Let's Encrypt YE2, valid Sep 7 2026 to Dec 6 2026. No silent downgrade: plain HTTP to the same port answers 400 'Client sent an HTTP request to an HTTPS server', and the CLI still refuses an http:// non-loopback URL as exit 2 INVALID_CONFIGURATION. The full acceptance scenario ran from this machine against that URL with no tunnel: offline delivery, reply, byte-identical exact retry returning envelopeId 724fbc99-51db-41f2-8c7a-22f2a58105f0 twice, dedup poll 0, mirrored histories, CONTACT_NOT_TRUSTED exit 3, and 0 plaintext matches in the relay store and logs. The relay itself terminates TLS - not SSH, not a tunnel. State survived the switch on the original echolet-relay-data volume. The switch was performed by the unmodified committed run-relay.sh."
     }
   },
   "pr": {
@@ -815,6 +819,11 @@
       "at": "2026-09-07T18:27:39.009Z",
       "event": "task-done",
       "detail": "T17: Relay exits cleanly on SIGTERM so a normal operator stop is not a crash"
+    },
+    {
+      "at": "2026-09-07T19:48:42.045Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Verified by the orchestrator from this Mac with no verification bypass: https://depr.tail5a88fb.ts.net:8443/health answers 200 with ssl_verify_result=0 against the system trust store, remote_ip 100.100.188.64 (non-loopback, over the tailnet), certificate CN=depr.tail5a88fb.ts.net issued by Let's Encrypt YE2, valid Sep 7 2026 to Dec 6 2026. No silent downgrade: plain HTTP to the same port answers 400 'Client sent an HTTP request to an HTTPS server', and the CLI still refuses an http:// non-loopback URL as exit 2 INVALID_CONFIGURATION. The full acceptance scenario ran from this machine against that URL with no tunnel: offline delivery, reply, byte-identical exact retry returning envelopeId 724fbc99-51db-41f2-8c7a-22f2a58105f0 twice, dedup poll 0, mirrored histories, CONTACT_NOT_TRUSTED exit 3, and 0 plaintext matches in the relay store and logs. The relay itself terminates TLS - not SSH, not a tunnel. State survived the switch on the original echolet-relay-data volume. The switch was performed by the unmodified committed run-relay.sh."
     }
   ]
 }

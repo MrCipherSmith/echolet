@@ -1,0 +1,354 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003-T1-inventory-2026-09-07",
+  "dispatch_id": "003-T1-inventory",
+  "status": "DONE",
+  "summary": "Verified inventory of 62 open residuals, findings and limitations across flows 001 and 002, docs/STATUS_CURRENT.md, the requirements README and both runbooks, each re-established against HEAD 4346e2b by reading the code rather than by trusting the report that recorded it. Buckets: FIX NOW 21, FIX WITH CARE 15, RECORD PERMANENTLY 14, STALE 12. Twelve recorded items are no longer true, including two the dispatch listed as known-open (the ack-route lifetime-count oracle, closed by T15/T16 in c302485; the loopback-predicate disagreement, closed by the shared transport/loopback.ts) and one demonstrated dead by mutation (MG3, the first-envelope byte-budget exemption, now killed by mailbox_repo_test.go:217). One stale claim is still asserted in a shipped operator document: deployment-runbook.md:580-582 and :857-859 say the relay does not exit cleanly on SIGTERM, which a2f07bb fixed, 25bfed3 pinned and t11-upgrade-report.md measured on both hosts. Three items were found that nobody had recorded at all: test:e2e runs one of six e2e files while its 3/3 number is quoted in six documents as the e2e result; CleanupService carries three unused fields behind a documented config knob for a no-op that no test observes; and no workspace package declares a lint script, so the root pnpm lint runs nothing. Nothing in the tree was modified except the two deliverables.",
+  "summary_markdown": "## T1 — Residual inventory, verified against `4346e2b`\n\n**62 items.** FIX NOW **21** · FIX WITH CARE **15** · RECORD PERMANENTLY **14** · STALE **12**.\n\n### Twelve stale items\n`RI-04` sender-chosen drain ordering (closed by the `mailboxseq` index) · `RI-11` re-walk crash safety (closed by T16) · `RI-16` RED-6 `behind`=6 (now 60, with the finding id in the comment) · `RI-18` **ack-route lifetime-count oracle** (closed: `readThroughWithinIssued` now runs after `VerifyMessageSignature`) · `RI-43` `init` accepting a path-bearing relay URL · `RI-44` **loopback-predicate disagreement** (closed by the shared `transport/loopback.ts`) · `RI-50` \"no sender authentication\" comments · `RI-51` the documentation debt raised four times · `RI-52` **`docker stop` exits 2** · `RI-53` T49/T52 `todo` in `flow.json` · `RI-58` **MG3** (killed, demonstrated by mutation) · `RI-59` `GetEnvelopeBatchFrom` cursor coverage.\n\n### The one stale claim still shipped to operators\n`docs/requirements/echolet-cli-prototype/deployment-runbook.md:580-582` and `:857-859` assert the relay does not exit cleanly on SIGTERM. `a2f07bb` fixed it, `25bfed3` pinned it, `t11-upgrade-report.md` §0 measured container `.State.ExitCode` 2 → 0 on both hosts, and `4346e2b` corrected the phrasing **in the flow journal only** (`git show --stat` — 1 file, 3 insertions). All four tests in `process_shutdown_test.go` PASS here.\n\n### Three items nobody had recorded\n- `RI-62` `apps/cli`'s `test:e2e` runs `two-process.test.ts` alone — 1 of 6 e2e files — while \"`test:e2e` → 3/3\" is quoted as *the* e2e result in six documents.\n- `RI-63` `CleanupService` stores `mailboxRepo`, `challengeRepo` and `mailboxTTL` and reads none; `runCleanup()` is two debug lines; `internal/service` has zero test files; and `ECHOLET_CLEANUP_INTERVAL_SECONDS` is set in both compose files and all three env examples as if it bound something.\n- `RI-64` no workspace package declares a `lint` script, so the root `\"lint\": \"pnpm -r lint\"` runs nothing — the mechanical cause behind T56 §8.1.9's \"the health adapter cannot execute ESLint\".\n\n### FIX NOW, in priority order\n1. `RI-52` delete the stale shutdown claim · 2. `RI-61` record the shutdown fix in `STATUS_CURRENT.md`/`README.md` · 3. `RI-30` give `CleanupService` a `Stop()` · 4. `RI-23` backfill skip-and-count instead of abort · 5. `RI-09` derive the poll byte budget from config · 6. `RI-19` bound the v1 prekey-bundle identifiers · 7. `RI-31` test the two shutdown escalations · 8. `RI-48` delete the stale `apps/relay/relay` · 9. `RI-57` test mobile's transcript · 10. `RI-62` fix or rename `test:e2e` · 11–13. comment and tag hygiene (`RI-46`, `RI-47`, `RI-54`) · 14–21. `RI-10`, `RI-60`, `RI-64`, `RI-55`, `RI-35`, `RI-37`, `RI-63`, and the five-way tidy `RI-20`/`RI-21`/`RI-32`/`RI-67`/`RI-69`.\n\n### Two things could not be established here\n`RI-55` (Docker Compose adopting a volume created outside compose) needs a Docker daemon and a foreign volume — the hosts holding the real ones are out of bounds. `RI-66` (vitest's birpc 60 s ceiling) needs ~30× CPU oversubscription, which would invalidate anything measured alongside it.",
+  "acceptance": [
+    {
+      "criterion": "Every named source is mined, not sampled: flow 001 t56/t55/final-change-report/journal/tasks; flow 002 every t*-report.md, every dispatches/*-result.json findings array, journal.md, t5-flood-closure-design.md R-1..R-8; docs/STATUS_CURRENT.md; the requirements README and both runbooks; a TODO/FIXME sweep of the source tree.",
+      "status": "met",
+      "evidence": "t56-final-dispositions.md read in full (110 rows, 426 lines). All twelve flow 002 dispatch result findings arrays extracted verbatim through a routed jq sweep (39 findings across T5, T6, T7, T8, T9-tests, T9-implement, T10, T10-r2, T10-r3, T14, T15, T16, T17; T12/T13/T18 carry none). t5-flood-closure-design.md §4 read for R-1..R-8. T16 §8 (R-1..R-6) and T10 r3 §7-§8 read in full. STATUS_CURRENT.md read in full (138 lines). README limitations block, runbook §11 and deployment-runbook §13.1/§14 read. TODO/FIXME/XXX/HACK sweep over apps, packages and docs/requirements via `keryx ctx rg` returned exactly two hits, both `mktemp -d /tmp/...XXXXXX` templates in runbooks — there are no TODO or FIXME markers in this source tree."
+    },
+    {
+      "criterion": "Each item is marked STILL-OPEN, ALREADY-CLOSED (naming what closed it) or UNVERIFIABLE-HERE (with the reason), established by inspection of the CURRENT tree rather than by trusting the recording report.",
+      "status": "met",
+      "evidence": "Every row of the table cites a file:line read on 4346e2b or a command run here. Twelve rows are ALREADY-CLOSED and each names the closing change (mailboxseq index; T16's per-page keepMailboxRewalk; the readThroughWithinIssued move past VerifyMessageSignature plus mailbox_ack_read_position_oracle_test.go; transport/loopback.ts; parseClientConfig's isRelayOrigin; the reworded comments; the docs/ additions; flow.json's task states; mailbox_repo_test.go:217; mailbox_ordering_test.go:306; flood-closure.test.ts:805). Three rows are UNVERIFIABLE-HERE with the reason stated (RI-55 needs a Docker daemon and a foreign volume, RI-66 needs ~30x CPU oversubscription, RI-70 needs an admin-console toggle on an out-of-bounds tailnet)."
+    },
+    {
+      "criterion": "Where cheap and safe, something is run that demonstrates the item.",
+      "status": "met",
+      "evidence": "Ran: `go -C apps/relay test ./...` (exit 0, 8 packages ok, 7 with no test files — and that run is itself the evidence that internal/service has no tests, RI-30/RI-63); `go -C apps/relay test ./internal/server/ -run Shutdown|SIGTERM|SIGINT|Drain -v` (4/4 PASS, the demonstration that RI-52 is stale); `go -C apps/relay test ./internal/api/handler/ -run Oracle|ReadPosition|ReadThrough` (ok, RI-18); `gofmt -l apps/relay` (exactly the three recorded files, RI-35); `shasum -a 256 apps/relay/relay` = 08e33e83 against a fresh `go build` of HEAD = 4f3823d2 (RI-48); a node one-liner driving seven URLs through the shipped loopback predicate on v26.5.0 (RI-44 closed, RI-45 open); `git show --stat 4346e2b` and `85f5d77` (RI-52); `git check-ignore -v apps/relay/relay` (RI-48); a node read of every workspace package.json (RI-60, RI-62, RI-64). Plus one mutation experiment for RI-58, applied to a scratch copy."
+    },
+    {
+      "criterion": "Each item states the actual consequence concretely, in terms of what a user or operator would experience.",
+      "status": "met",
+      "evidence": "Consequence column of the table, written per item in operator terms: e.g. RI-09 'a silently undeliverable mailbox from one env var'; RI-23 'the relay comes up looking healthy and refuses legitimate owners with UNAUTHORIZED_MAILBOX_ACCESS'; RI-46 'a future verifier hashing the store file to check F-012 gets a false positive'; RI-52 'an operator believes an ordinary stop still looks like a crash'; RI-62 'a reader takes 3/3 as evidence that flood-closure, crash-safety and TLS e2e ran'."
+    },
+    {
+      "criterion": "Each item states what it would take to fix, which files, and whether it needs a protocol or schema change.",
+      "status": "met",
+      "evidence": "Fix-shape and protocol/schema columns are populated for every row. Fifteen rows are marked as needing a wire, stored-key-schema, documented-contract or security-boundary change and are bucketed FIX WITH CARE for exactly that reason; the twenty-one FIX NOW rows are marked 'no' on that column."
+    },
+    {
+      "criterion": "Each item notes whether a test is needed first, and where a deterministic test is genuinely hard, why.",
+      "status": "met",
+      "evidence": "Test-need column populated per row. Genuinely hard cases named with the reason: RI-12 (a universal property that one interruption sample cannot prove; a full sweep is minutes per arm and the 32-configuration sweep exists only in a report, not in the repository), RI-05 (a fix must be pinned by counting decodes rather than wall time or it will be tuned to the clock), RI-55 (needs a Docker daemon and a volume created outside compose), RI-66 (needs oversubscription that would invalidate anything measured alongside it)."
+    },
+    {
+      "criterion": "Items are triaged into FIX NOW / FIX WITH CARE / RECORD PERMANENTLY / STALE, each placement defended in one sentence; STALE items name the file and line where they are still asserted.",
+      "status": "met",
+      "evidence": "Section 3 of the report. Every FIX WITH CARE and RECORD PERMANENTLY placement carries its one-sentence defence, and RECORD PERMANENTLY rows say which of 'out of scope' or 'deliberate trade-off' applies. The STALE table names the deletion site per item; the load-bearing ones are docs/requirements/echolet-cli-prototype/deployment-runbook.md:580-582 and :857-859 (RI-52) and docs/STATUS_CURRENT.md:77, which loses two of its four clauses (RI-58, RI-59)."
+    },
+    {
+      "criterion": "The known items named in the dispatch are all covered.",
+      "status": "met",
+      "evidence": "ECHOLET_MAX_STORAGE_BYTES = RI-01 (open); free identity creation = RI-02 (open); one bundle per first-contact sender with rotation but no CLI entry point = RI-36 (open); the ack-route count bound = RI-18 (CLOSED, not open); T16's six residuals = RI-12/RI-47/RI-35/RI-13/RI-14/RI-15; T17's R-1..R-6 = RI-29/RI-30/RI-31/RI-32/RI-33/RI-34 (all six confirmed open, RI-33 by design); T10R3V-F-002 = RI-48 (open in substance, gitignore half applied); T10R3V-F-003 = RI-46 (open, both sites); T10R3V-F-004 = RI-45 (open, safe direction); the three gofmt files = RI-35; build-image.sh's dirty check = RI-54; the compose volume adoption = RI-55."
+    },
+    {
+      "criterion": "Modify nothing in the tree except the two deliverables; do not touch geekom or depr; record no key, private key, plaintext or request body.",
+      "status": "met",
+      "evidence": "`git status --porcelain` reported only `?? .metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/` at the start of the pass. The single mutation experiment ran on a `cp -R` copy of apps/relay in the session scratchpad with a symlink to the real packages/ for fixtures; apps/relay itself was never written. No SSH, no network call to either host. No key, key material, plaintext or HTTP body appears in either deliverable; the only digests recorded are of a compiled binary. NOTE: by the end of the pass `git status` additionally showed flow 002's flow.json and journal.md modified and t11-tls-report.md untracked. Those are not from this pass - this task wrote exactly two files, both under flows/003 - and are attributed to a concurrent session; see finding 003-T1-F-009 and section 2.8 of the report."
+    },
+    {
+      "criterion": "Deliverable JSON conforms to the subagent-result schema.",
+      "status": "met",
+      "evidence": "Validated with `keryx skills contracts validate .metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T1-inventory-result.json --schema subagent-result`."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t1-residual-inventory.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "The inventory: one table of 62 items with stable ids, source, verdict, consequence, fix shape, protocol/schema flag, test need and bucket; then per-item detail and evidence; then the four-bucket triage with a one-sentence defence per placement and a deletion site per stale item.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T1-inventory-result.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "This result document.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t1-residual-inventory.md",
+      "change": "created — the T1 deliverable"
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T1-inventory-result.json",
+      "change": "created — the T1 result document"
+    }
+  ],
+  "findings": [
+    {
+      "id": "003-T1-F-001",
+      "global_id": "003-T1-inventory#003-T1-F-001",
+      "reviewer": "residual-inventory",
+      "severity": "major",
+      "file": "docs/requirements/echolet-cli-prototype/deployment-runbook.md",
+      "line": 580,
+      "problem": "A shipped operator document asserts the opposite of what the relay now does. deployment-runbook.md:580-582 says `docker stop` reports `Exited (2)`, not `Exited (0)` - the relay does not exit cleanly on SIGTERM, and :857-859 repeats it in the What this deployment does not establish list. Commit a2f07bb (fix(relay): exit cleanly on SIGTERM and SIGINT) fixed it, 25bfed3 pinned it with four tests, and t11-upgrade-report.md section 0 measured the container .State.ExitCode going 2 -> 0 on both geekom and depr. Commit 4346e2b's message says it corrects the exit-code reporting, but `git show --stat 4346e2b` shows it touched journal.md only, 3 insertions. Neither document site was updated. Separately and in the same direction, STATUS_CURRENT.md and the requirements README never record the shutdown fix at all: both list four things flow 002 changed (flooding, re-walk, HTTPS, TUI) and stop one commit short.",
+      "impact": "An operator following the deployment runbook believes an ordinary stop still looks like a crash to a supervisor. They will either build a workaround for a defect that no longer exists, or distrust a restart-policy signal that is now correct. It is the only place in the tree where a document contradicts the code, and it is operational advice rather than background prose.",
+      "suggested_fix": "Delete deployment-runbook.md:580-582 and :857-859. Add one bullet to the flow 002 change lists in docs/STATUS_CURRENT.md and docs/requirements/echolet-cli-prototype/README.md: the relay drains in-flight requests and exits 0 on SIGTERM and SIGINT, pinned by four tests in apps/relay/internal/server/process_shutdown_test.go and measured on both hosts. Do the deletion and the addition together, or the tree ends up asserting nothing about a behaviour it now guarantees.",
+      "evidence": "`keryx ctx rg` located both sites verbatim. `go -C apps/relay test ./internal/server/ -run 'Shutdown|SIGTERM|SIGINT|Drain' -count=1 -v` -> TestRelayExitsZeroOnSIGTERM PASS (1.46s), TestRelayExitsZeroOnSIGINT PASS (1.08s), TestRelayDrainsInFlightRequestOnSIGTERM PASS (1.16s), TestRelayClosesStorageCleanlyOnSIGTERM PASS (1.11s), ok 5.706s. `git show --stat 4346e2b` -> 1 file changed, 3 insertions, journal.md only. `git show --stat 85f5d77` -> journal/gdgraph/t11-upgrade-report.md, no runbook. t11-upgrade-report.md section 0 records exit code 2 -> 0 on geekom and depr with wall times.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "docs/requirements/echolet-cli-prototype/deployment-runbook.md:580-582",
+          "docs/requirements/echolet-cli-prototype/deployment-runbook.md:857-859",
+          "docs/STATUS_CURRENT.md:45-54 (the flow 002 change list, which omits the fix)",
+          "docs/requirements/echolet-cli-prototype/README.md:19-24 (the same omission)"
+        ],
+        "enumeration_method": "keryx ctx rg over docs and deploy for 'Exited \\(2\\)|exits 2, not 0|does not exit cleanly|does not shut down' returned exactly the two deployment-runbook sites and nothing else; the two omission sites were found by reading each document's flow 002 change list in full and observing the fix is absent from both."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "The four shutdown tests were executed on 4346e2b and all pass, so the documented claim is false against the current binary. The two document sites were then read at the exact lines reported.",
+        "verifier": "residual-inventory (flow 003 T1); the claim originates in the T11 deployment report, not in this pass"
+      },
+      "blocking_merge": false,
+      "learning_candidate": true,
+      "source": "internal"
+    },
+    {
+      "id": "003-T1-F-002",
+      "global_id": "003-T1-inventory#003-T1-F-002",
+      "reviewer": "residual-inventory",
+      "severity": "major",
+      "file": "apps/cli/package.json",
+      "line": null,
+      "symbol": "scripts.test:e2e",
+      "problem": "Not previously recorded anywhere. apps/cli declares `\"test:e2e\": \"vitest run test/e2e/two-process.test.ts\"` - a single file. apps/cli/test/e2e/ holds six: two-process, relay-tls, publication-claimability, flood-closure, rewalk-crash-safety and init-relay-url. The other five run only under the plain `test` script, whose vitest default include reaches them, so no coverage is lost from `pnpm test`. What is lost is the meaning of the sentence `pnpm --filter @echolet/cli test:e2e` -> 3/3, which appears in docs/STATUS_CURRENT.md, the requirements README, both flow packages and every verification report as the e2e result.",
+      "impact": "A reader takes 3/3 as evidence that the flood-closure, crash-safety and TLS end-to-end suites ran. They did not; three two-process scenarios did. Worse, T17-F-006's recommended remedy - a root `\"test:e2e\": \"pnpm --filter @echolet/cli test:e2e\"` - would harden that misreading into the documented matrix command, so the fix for one recorded residual would entrench an unrecorded one.",
+      "suggested_fix": "Either point the script at the directory (`vitest run test/e2e`) and restate the reported number, or rename it `test:e2e:two-process` so the 3/3 cannot be over-read as a suite result. Decide this before adding the root alias (RI-34 / T17-F-006), not after.",
+      "evidence": "node read of apps/cli/package.json -> {\"build\",\"typecheck\",\"test\":\"vitest run\",\"test:e2e\":\"vitest run test/e2e/two-process.test.ts\"}. `keryx ctx run -- find apps/cli/test/e2e -type f` -> six .test.ts files. apps/cli/vitest.config.ts declares no `include`, so vitest's default pattern reaches all six under the plain `test` script.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/package.json (scripts.test:e2e)",
+          "docs/STATUS_CURRENT.md:35",
+          "docs/STATUS_CURRENT.md:47",
+          "docs/requirements/echolet-cli-prototype/README.md:9",
+          ".metaproject/flows/002-.../dispatches/002-T17-implement-result.json (T17-F-006's proposed root alias)"
+        ],
+        "enumeration_method": "Read apps/cli/package.json directly, enumerated apps/cli/test/e2e with find through keryx ctx run, then keryx ctx rg for 'test:e2e' across docs to find every place the 3/3 number is quoted."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "site-check",
+        "evidence": "The script string and the six-file directory listing were both read directly; no execution was needed because the discrepancy is between a literal path in a script and the contents of a directory.",
+        "verifier": "residual-inventory (flow 003 T1)"
+      },
+      "blocking_merge": false,
+      "learning_candidate": true,
+      "source": "internal"
+    },
+    {
+      "id": "003-T1-F-003",
+      "global_id": "003-T1-inventory#003-T1-F-003",
+      "reviewer": "residual-inventory",
+      "severity": "minor",
+      "file": "apps/relay/internal/service/cleanup_service.go",
+      "line": 31,
+      "symbol": "CleanupService",
+      "problem": "Not previously recorded in this form. CleanupService stores mailboxRepo, challengeRepo and mailboxTTL and reads none of them; runCleanup() is two slog.Debug calls; `go test ./...` reports internal/service [no test files], so nothing observes the goroutine at all; and ECHOLET_CLEANUP_INTERVAL_SECONDS is set in docker-compose.yml, docker-compose.insecure-loopback.yml, run-relay.sh and all three env examples, in the same block as bounds that do bind. T17-F-002 recorded the ticker's lifecycle problem; the dead fields, the absent tests and the operator-facing knob for a no-op are additional and compound it.",
+      "impact": "An operator tuning ECHOLET_CLEANUP_INTERVAL_SECONDS is tuning the frequency of two debug lines, and a maintainer reading the constructor concludes retention is enforced by a timer when Badger's TTL is doing all the work. Combined with T17-F-002 (the ticker is not cancellable and is not part of the shutdown sequence), the first person to give runCleanup real work gets Badger transactions on an unstoppable timer racing st.Close() - the exact hazard step 3 of the shutdown order exists to prevent - with no test to notice.",
+      "suggested_fix": "Either delete the three unused fields and label the interval reserved in the compose files and env examples, or give runCleanup its real work - in which case fix T17-F-002 first, because a cleanup that touches Badger on an unstoppable timer is the hazard. Add at least one test to internal/service either way.",
+      "evidence": "apps/relay/internal/service/cleanup_service.go read in full (47 lines): fields declared at :11-15, assigned at :23-27, never read; Start() at :31-39 creates the ticker inline with no stop channel and no ticker.Stop(); runCleanup at :41-45 is two slog.Debug calls. router.go:47-48 constructs it and keeps no handle. `go -C apps/relay test ./... -count=1` -> `? echolet/apps/relay/internal/service [no test files]`. keryx ctx rg for the env var found it in both compose files, run-relay.sh and three env examples.",
+      "confidence": "high",
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "`go -C apps/relay test ./... -count=1` exits 0 and reports internal/service as having no test files, which is the executable half; the unused fields and the empty body were read at source.",
+        "verifier": "residual-inventory (flow 003 T1)"
+      },
+      "blocking_merge": false,
+      "learning_candidate": false,
+      "source": "internal"
+    },
+    {
+      "id": "003-T1-F-004",
+      "global_id": "003-T1-inventory#003-T1-F-004",
+      "reviewer": "residual-inventory",
+      "severity": "minor",
+      "file": "package.json",
+      "line": null,
+      "symbol": "scripts.lint",
+      "problem": "Not previously recorded. The repository root declares `\"lint\": \"pnpm -r lint\"`. None of the seven workspace packages - apps/cli, apps/mobile, packages/protocol, packages/crypto-core, packages/session-node, packages/client-core, packages/client-db - declares a lint script, and there is no ESLint configuration anywhere in the workspace. The root command therefore runs nothing. T56 section 8.1.9 records that the strict health adapter cannot execute ESLint and treats that as an adapter limitation; the mechanical cause is that there is no ESLint to execute.",
+      "impact": "The lint leg of the quality matrix is vacuous. Every report that lists lint alongside typecheck and test is reporting a command that passes by doing nothing, which is worse than an absent command because it reads as coverage.",
+      "suggested_fix": "Either add ESLint with a per-package lint script, or delete the root script so its absence is honest and the health adapter's inability to run it stops needing an explanation.",
+      "evidence": "node read of the root package.json -> scripts are typecheck, lint, test, mobile:start, relay:dev. node read of all seven workspace package.json files -> `lint` absent from every one (printed as `lint: -` for each).",
+      "confidence": "high",
+      "verification": {
+        "verdict": "confirmed",
+        "method": "site-check",
+        "evidence": "Every workspace package.json was read and enumerated; the absence is exhaustive over the workspace, not sampled.",
+        "verifier": "residual-inventory (flow 003 T1)"
+      },
+      "blocking_merge": false,
+      "learning_candidate": false,
+      "source": "internal"
+    },
+    {
+      "id": "003-T1-F-005",
+      "global_id": "003-T1-inventory#003-T1-F-005",
+      "reviewer": "residual-inventory",
+      "severity": "minor",
+      "file": "apps/relay/internal/validation/validate.go",
+      "line": 51,
+      "symbol": "ValidatePreKeyBundle",
+      "problem": "T48-004 recorded that bundle_id carries no length bound in validate.go. Verified open, and wider than recorded: ValidatePreKeyBundle applies validation.MaxIdentifierBytes to nothing at all - identity_id, device_id and bundle_id are checked only for non-emptiness at :58-63 - while prekey_bundle_repo.go:28 builds the Badger key `prekey_bundle:<identity_id>:<bundle_id>` from two of them. /v1/prekeys/publish is still mounted at router.go:68 with a 1 MiB body limit (envelopeRequestBodyLimit, request_body.go:14). The v2 routes are not affected: signal_prekey_bundle_v2.go:167 requires validUUID(bundle_id) before it becomes a key.",
+      "impact": "A self-signed v1 bundle carrying a ~100 KiB bundle_id exceeds Badger's key limit, so the store refuses it and the handler answers HTTP 500. An internal error is the wrong answer to malformed client input, and it is exactly the defect F-006 and BE-R-001 closed on the mailbox and device-record routes. Sibling routes were fixed and this one was left because no RED test covered it.",
+      "suggested_fix": "Apply the same length loop ValidateDeviceRecord already has at validate.go:34 to ValidatePreKeyBundle's three identifiers - or, if /v1/prekeys/publish is dead now that the CLI publishes v2 bundles, remove the route and delete the repository path with it. Decide which before writing the test.",
+      "evidence": "validate.go:51-87 read in full: only non-emptiness checks and signature verification, no MaxIdentifierBytes. validate.go:34 shows the loop that exists on ValidateDeviceRecord. prekey_bundle_repo.go:28 builds the key from identity_id and bundle_id. router.go:68 mounts /v1/prekeys/publish. prekey_bundle_handler.go:28 uses envelopeRequestBodyLimit (1 MiB). signal_prekey_bundle_v2.go:167 shows the v2 half is bounded by validUUID.",
+      "confidence": "high",
+      "verification": {
+        "verdict": "confirmed",
+        "method": "site-check",
+        "evidence": "The absence of a bound was read at source and the key construction traced to the repository; the 500 was not provoked, because doing so needs a validly self-signed canonical-JSON v1 bundle, which is disproportionate for a site-check that is unambiguous.",
+        "verifier": "residual-inventory (flow 003 T1)"
+      },
+      "blocking_merge": false,
+      "learning_candidate": false,
+      "source": "internal"
+    },
+    {
+      "id": "003-T1-F-006",
+      "global_id": "003-T1-inventory#003-T1-F-006",
+      "reviewer": "residual-inventory",
+      "severity": "info",
+      "file": "apps/relay/relay",
+      "line": null,
+      "problem": "T10R3V-F-002 recommended two things: gitignore the binary, and build to a temporary path instead of leaving output at a stable in-tree path. Only the first was done. apps/relay/relay is still present (18 094 306 bytes) and still hashes 08e33e83..., the exact digest T10 r3 recorded, while a fresh build of HEAD hashes 4f3823d2... - so it corresponds to no commit in this repository. .gitignore:94 now lists it.",
+      "impact": "Anyone who runs apps/relay/relay directly - a reader following a runbook, or a future verification attempt - measures relay code of unknown provenance while believing they exercise the tree under test. The gitignore made the hazard quieter rather than smaller: the file no longer appears in `git status`, so the one signal that would have prompted someone to delete it is gone.",
+      "suggested_fix": "Delete apps/relay/relay. Keep the gitignore entry so it cannot come back tracked, and keep building to a temp path as apps/cli/test/e2e/rewalk-crash-safety.test.ts already does.",
+      "evidence": "`ls -l apps/relay/relay` -> 18094306 bytes, Sep 7 21:02. `git check-ignore -v apps/relay/relay` -> .gitignore:94. `shasum -a 256 apps/relay/relay` -> 08e33e8384e88b605e382a7b26377c8acead9847829c2394b19d46cdc596a5ec. `go -C apps/relay build -o <tmp>/relay-fresh ./cmd/relay && shasum -a 256` -> 4f3823d29194c6aadb205604f015eecbe981247fb507f06b36f3183820786eaa.",
+      "confidence": "high",
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "Both digests were computed in this session and differ; the gitignore entry was resolved with git check-ignore.",
+        "verifier": "residual-inventory (flow 003 T1)"
+      },
+      "blocking_merge": false,
+      "learning_candidate": false,
+      "source": "internal"
+    },
+    {
+      "id": "003-T1-F-007",
+      "global_id": "003-T1-inventory#003-T1-F-007",
+      "reviewer": "residual-inventory",
+      "severity": "info",
+      "file": "docs/STATUS_CURRENT.md",
+      "line": 77,
+      "problem": "Two of the four test-coverage residues asserted at docs/STATUS_CURRENT.md:77 are no longer true, and the same two appear in T56 section 8.1.6. (a) The first-envelope byte-budget exemption is claimed to survive deletion; it does not - removing `len(batch.Envelopes) > 0 &&` from the guard turns TestGetEnvelopeBatchFiltersExpiredBeforeApplyingBatchLimit red. (b) GetEnvelopeBatchFrom is claimed to have no repository test with a non-empty cursor; mailbox_ordering_test.go:306 calls it with first.NextCursor. The other two clauses of that line remain true (mobile signing is unobservable by any test; four fix areas were never reached by a mutation pass).",
+      "impact": "A status document asserting a coverage gap that has been closed misdirects whoever next tries to close it, and it understates the tree. Neither error is dangerous; both are the kind of drift that accumulates until nobody trusts the list.",
+      "suggested_fix": "Delete the two closed clauses from docs/STATUS_CURRENT.md:77 and from T56 section 8.1.6, keeping the two that still hold. If the narrower property behind (b) is still wanted - that expiry is skipped before the cursor is consumed, currently protected only by a source comment at mailbox_repo.go - add one case to mailbox_ordering_test.go rather than restoring the sentence.",
+      "evidence": "(a) Mutation run in an out-of-tree copy of apps/relay: control -> repository ok, handler ok; mutant with `len(batch.Envelopes) > 0 &&` removed -> `--- FAIL: TestGetEnvelopeBatchFiltersExpiredBeforeApplyingBatchLimit ... mailbox_repo_test.go:217: GetEnvelopeBatch(byteBudget=1) returned 0 envelopes (first \"\"), want exactly the valid envelope`. (b) keryx ctx rg for 'GetEnvelopeBatchFrom(' over apps/relay -> mailbox_ordering_test.go:292 with \"\" and :306 with first.NextCursor.",
+      "confidence": "high",
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "The mutation was executed with a control arm on the same copy, so the kill is attributable to the mutation and not to the copy. The cursor call site was located by routed search and read.",
+        "verifier": "residual-inventory (flow 003 T1)"
+      },
+      "blocking_merge": false,
+      "learning_candidate": true,
+      "source": "internal"
+    },
+    {
+      "id": "003-T1-F-008",
+      "global_id": "003-T1-inventory#003-T1-F-008",
+      "reviewer": "residual-inventory",
+      "severity": "info",
+      "file": "apps/relay/internal/storage/repository/device_record_repo.go",
+      "line": 125,
+      "symbol": "BackfillDeviceMailboxBindings",
+      "problem": "BE-R-002 and BE R-003 verified open, with one detail neither recorded: the caller does not treat failure as fatal. The View loop at :131-146 returns the first json.Unmarshal error and discards every already-collected record; the per-record r.db.Update at :156 has no bounded conflict retry (unlike Save at :49, which loops); and `return err` at :160 abandons the remainder. router.go:39 calls it, logs `failed to backfill mailbox device bindings` at Error level, and starts the relay anyway.",
+      "impact": "One corrupt device record leaves every pre-binding identity unable to authorise - measured by the round-1 verifier as 0 of 2 healthy records bound after one bad one. Because the failure is non-fatal, the relay comes up, answers /health, and refuses legitimate mailbox owners with UNAUTHORIZED_MAILBOX_ACCESS. An operator sees a healthy relay and users who cannot poll, with only one Error line in the log connecting the two.",
+      "suggested_fix": "Skip and count undecodable records instead of aborting the scan; reuse Save's retry loop for the per-record write; log a summary (scanned / bound / skipped) so the Error line carries a number. Keep the non-fatal behaviour - failing to start would be worse - but make the log say how much was lost.",
+      "evidence": "device_record_repo.go:125-168 read in full. Save's retry loop is at :41-60 for contrast. router.go:38-40: `if err := deviceRecordSvc.BackfillMailboxBindings(); err != nil { slog.Error(...) }` with no return.",
+      "confidence": "high",
+      "verification": {
+        "verdict": "confirmed",
+        "method": "site-check",
+        "evidence": "Both the repository function and its single caller were read in full; the non-fatal handling is the new half and is unambiguous at router.go:38-40.",
+        "verifier": "residual-inventory (flow 003 T1)"
+      },
+      "blocking_merge": false,
+      "learning_candidate": false,
+      "source": "internal"
+    },
+    {
+      "id": "003-T1-F-009",
+      "global_id": "003-T1-inventory#003-T1-F-009",
+      "reviewer": "residual-inventory",
+      "severity": "info",
+      "file": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/flow.json",
+      "line": null,
+      "problem": "One inventory item moved while this pass was being written, and this pass could not check the move. At 2026-09-07T19:48:42.045Z a concurrent session recorded `ac-confirmed: AC4` in flow 002's flow.json, with a note describing a verified HTTPS run from this Mac against depr's MagicDNS name over the tailnet, the full acceptance scenario with no tunnel, and state surviving on the original echolet-relay-data volume. A new t11-tls-report.md appeared untracked at the same time. RI-70 of this inventory - AC4's different-machine half not established, AC7 blocked on the tailnet HTTPS Certificates toggle - was read and written before that landed.",
+      "impact": "If the AC4 confirmation stands, then docs/STATUS_CURRENT.md:54, the requirements README and deployment-runbook.md sections 6.5 and 14 now understate the tree, and reconciling them is a FIX NOW documentation item of exactly the same shape as 003-T1-F-001 in the opposite direction. None of those three documents has been changed. If it does not stand, they are correct and nothing has changed. This pass cannot distinguish the two cases, because the task forbids connecting to geekom or depr.",
+      "suggested_fix": "Whoever takes flow 003's next task should mine t11-tls-report.md first, decide whether the AC4 record stands, and only then reconcile STATUS_CURRENT.md, the README and the deployment runbook. Do not fold that reconciliation into the 003-T1-F-001 edit; they are separate claims with separate evidence. Note also that the AC4 note is evidence about run-relay.sh, not about the compose path, so RI-55 (untested compose volume adoption) is unaffected.",
+      "evidence": "`git status --porcelain` at the start of the pass: one line, `?? .metaproject/flows/003-.../`. At the end: additionally ` M .../002-.../flow.json`, ` M .../002-.../journal.md`, `?? .../002-.../t11-tls-report.md`. `git diff` on flow.json shows one new acceptance entry keyed AC4 at 19:48:42.044Z and one new ac-confirmed journal event at 19:48:42.045Z. This pass wrote exactly two files, both under flows/003.",
+      "confidence": "high",
+      "verification": {
+        "verdict": "unverifiable",
+        "method": "reasoning",
+        "evidence": "The concurrent write itself is established by git diff. The claim it records - a working HTTPS acceptance run against depr over the tailnet - cannot be checked from here: this task may not connect to either host, and the underlying report did not exist when the sources were mined.",
+        "verifier": "residual-inventory (flow 003 T1)"
+      },
+      "blocking_merge": false,
+      "learning_candidate": false,
+      "source": "internal"
+    }
+  ],
+  "questions": [
+    {
+      "id": "003-T1-Q-001",
+      "question": "The two items with the largest consequence - unenforced storage bounds (RI-01) and unauthenticated identity creation (RI-02) - are the root of the flooding class and both need a design step. Should flow 003 take one of them, or hold both and spend this flow on the 21 FIX NOW items plus the operator TUI work the flow is named for?",
+      "why": "Every remediation round in flow 001 raised the attacker's price without touching either root, and the user has already chosen once (2026-09-07) to record mailbox flooding as a documented limitation rather than extend scope again. Repeating that choice is legitimate; making it silently is not.",
+      "options": [
+        { "id": "hold-both", "label": "Hold both; spend flow 003 on the 21 FIX NOW items and the TUI", "recommended": true },
+        { "id": "take-storage", "label": "Take RI-01: enforce ECHOLET_MAX_STORAGE_BYTES plus a fair-share per-mailbox occupancy cap" },
+        { "id": "take-identity", "label": "Take RI-02: authenticate POST /v1/device-records/publish" },
+        { "id": "take-both", "label": "Take both as one design, since a storage cap without identity cost is evadable" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "003-T1-Q-002",
+      "question": "RI-62: should apps/cli's `test:e2e` be widened to the whole test/e2e directory, or renamed so its 3/3 cannot be read as a suite result?",
+      "why": "T17-F-006 asks for a root `test:e2e` alias, and adding it before this is settled would make the documented matrix command run one of six e2e files. The choice also changes what six documents mean when they quote 3/3.",
+      "options": [
+        { "id": "widen", "label": "Point it at test/e2e and restate the reported number", "recommended": true },
+        { "id": "rename", "label": "Rename to test:e2e:two-process and add a separate directory-wide script" },
+        { "id": "leave", "label": "Leave it and add a note wherever 3/3 is quoted" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "003-T1-Q-003",
+      "question": "RI-37: `--json` is declared on all eight commands and read by none, while output is unconditionally JSON. Implement it, or delete it from the option table?",
+      "why": "Deleting it turns a currently-accepted flag into an error, which is a CLI-surface change even though it is not a wire change; implementing it implies a non-JSON default, which is a larger contract change. Either answer needs a pinning test, and neither should be chosen by an implementer in passing.",
+      "options": [
+        { "id": "delete", "label": "Remove `json` from cliOptions and commandOptions; pin that the flag is rejected", "recommended": true },
+        { "id": "implement", "label": "Make output human-readable by default and JSON under --json" },
+        { "id": "accept", "label": "Keep it as an accepted no-op and say so in the docstring" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-07T19:45:00Z"
+}
