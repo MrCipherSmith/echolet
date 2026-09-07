@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"echolet/apps/relay/internal/cryptoutil"
 	"echolet/apps/relay/internal/model"
@@ -122,8 +123,19 @@ func (r *DeviceRecordRepository) GetByMailboxAndDevice(mailboxID, deviceID strin
 // BackfillDeviceMailboxBindings derives the authorization index for device
 // records written before the binding existed. The binding is a pure function of
 // the stored record, so this is idempotent and safe to run at every start.
+//
+// A record the current model cannot decode is skipped, counted and reported,
+// never turned into a failure of the whole scan. The distinction is the
+// difference between losing one record and denying service to the whole store:
+// the caller (api/router) logs whatever this returns and starts the relay
+// anyway, so an aborted scan produces a relay that answers /health, looks
+// entirely healthy, and refuses every pre-binding identity - including the ones
+// that share nothing with the bad record - at their first authorization step.
+// A truncated write, a value from an older schema or a single corrupted page is
+// enough to cause that, so the blast radius has to be the record itself.
 func (r *DeviceRecordRepository) BackfillDeviceMailboxBindings() error {
 	var pending []*model.DeviceRecord
+	skipped := 0
 
 	err := r.db.View(func(txn *badger.Txn) error {
 		prefix := []byte(deviceRecordPrefix)
@@ -134,7 +146,12 @@ func (r *DeviceRecordRepository) BackfillDeviceMailboxBindings() error {
 			err := it.Item().Value(func(val []byte) error {
 				var record *model.DeviceRecord
 				if err := json.Unmarshal(val, &record); err != nil {
-					return err
+					// The value's own bytes, not the store. Counted here and
+					// reported below; the key is not carried out of this loop
+					// because it contains the identity it belongs to and this
+					// is a startup log line, not an audit record.
+					skipped++
+					return nil
 				}
 				if record == nil || record.IdentityID == "" || record.DeviceID == "" {
 					return nil
@@ -142,6 +159,9 @@ func (r *DeviceRecordRepository) BackfillDeviceMailboxBindings() error {
 				pending = append(pending, record)
 				return nil
 			})
+			// Anything still returned here came from Badger rather than from
+			// the record - a value log that cannot be read is a store failure
+			// and stays one.
 			if err != nil {
 				return err
 			}
@@ -153,15 +173,42 @@ func (r *DeviceRecordRepository) BackfillDeviceMailboxBindings() error {
 	}
 
 	for _, record := range pending {
-		err := r.db.Update(func(txn *badger.Txn) error {
-			return SaveDeviceMailboxBinding(txn, record)
-		})
-		if err != nil {
+		if err := r.saveDeviceMailboxBindingWithRetry(record); err != nil {
 			return err
 		}
 	}
 
+	if skipped > 0 {
+		// The relay starts regardless of what this returns, so a silent skip
+		// would only trade one invisible failure for another: the store would be
+		// quietly missing bindings with nothing anywhere saying so. Counts and
+		// nothing else - no key, no stored value.
+		slog.Warn("skipped undecodable device records during mailbox binding backfill",
+			"skipped", skipped, "bound", len(pending))
+	}
+
 	return nil
+}
+
+// saveDeviceMailboxBindingWithRetry writes one binding with the same bounded
+// conflict retry Save uses.
+//
+// The backfill runs at start while the relay is already able to serve, so a
+// device publishing itself at that moment can make this transaction conflict.
+// Without the retry that conflict is returned, and - before the skip above -
+// abandoned every record after it; with it, the write is simply reattempted the
+// way every other device_mailbox writer already does.
+func (r *DeviceRecordRepository) saveDeviceMailboxBindingWithRetry(record *model.DeviceRecord) error {
+	var lastErr error
+	for attempt := 0; attempt < deviceRecordConflictRetries; attempt++ {
+		lastErr = r.db.Update(func(txn *badger.Txn) error {
+			return SaveDeviceMailboxBinding(txn, record)
+		})
+		if !errors.Is(lastErr, badger.ErrConflict) {
+			return lastErr
+		}
+	}
+	return lastErr
 }
 
 // SaveDeviceMailboxBinding writes the (mailbox identity, device UUID) binding

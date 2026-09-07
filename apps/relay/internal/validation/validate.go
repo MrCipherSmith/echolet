@@ -61,6 +61,34 @@ func ValidatePreKeyBundle(bundle *model.PreKeyBundle) error {
 	if bundle.DeviceID == "" {
 		return &ValidationError{Code: "INVALID_SCHEMA", Message: "device_id is required"}
 	}
+	// /v1/prekeys/publish is unauthenticated in the same sense
+	// /v1/device-records/publish is: the bundle only has to verify against its
+	// own freshly generated identity key, so all three identifiers are
+	// caller-chosen. Two of them become the Badger key
+	// "prekey_bundle:<identity_id>:<bundle_id>"
+	// (storage/repository/prekey_bundle_repo.go), and an oversized value was
+	// refused by the store rather than by validation - HTTP 500 as the answer to
+	// malformed client input, the defect already closed on the device-record and
+	// mailbox routes. device_id is the other half of the same class and needs
+	// the bound for the opposite reason: it reaches no key, so nothing refused
+	// it at all and 65 kB of attacker-chosen identifier was simply accepted and
+	// stored.
+	//
+	// The loop runs before signature verification so that an over-long value
+	// answers with the bound it violated. identity_id doubles as the
+	// verification key at the check below and so was already refused
+	// incidentally - a coincidence of this route's shape, not a bound, and it
+	// would evaporate the moment identity_id stopped being the key. Only field
+	// names are returned; the values are never echoed.
+	for _, identifier := range []identifierField{
+		{"identity_id", bundle.IdentityID},
+		{"device_id", bundle.DeviceID},
+		{"bundle_id", bundle.BundleID},
+	} {
+		if len(identifier.Value) > MaxIdentifierBytes {
+			return &ValidationError{Code: "INVALID_SCHEMA", Message: identifier.Name + " exceeds the maximum identifier length"}
+		}
+	}
 	if bundle.Signature == "" {
 		return &ValidationError{Code: "INVALID_SIGNATURE", Message: "signature is required"}
 	}
@@ -100,9 +128,9 @@ func ValidatePreKeyBundle(bundle *model.PreKeyBundle) error {
 // maximum. Without a bound here an oversized identifier is refused by the store
 // instead of by validation and surfaces as HTTP 500 - an internal error is the
 // wrong answer to malformed client input. The same reasoning applies to
-// ValidateDeviceRecord's two identifiers and to the /v1/mailbox/ack envelope id
-// elements bounded in api/handler, which is why the constant is exported and
-// shared rather than repeated per route.
+// ValidateDeviceRecord's two identifiers, to ValidatePreKeyBundle's three, and
+// to the /v1/mailbox/ack envelope id elements bounded in api/handler, which is
+// why the constant is exported and shared rather than repeated per route.
 //
 // 256 bytes is far above every legitimate value: identity ids and mailbox ids
 // are 43-character base64url digests, and envelope/message/device ids are

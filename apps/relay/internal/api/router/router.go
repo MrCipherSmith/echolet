@@ -16,7 +16,28 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(cfg config.Config, st *storage.Storage) *chi.Mux {
+// Router is the relay's HTTP handler together with the background work whose
+// lifetime is tied to it.
+//
+// NewRouter used to hand back a bare *chi.Mux, which left the caller no way to
+// end the cleanup ticker it starts below: the goroutine outlived the store it
+// can write into, and cmd/relay's shutdown sequence - whose whole purpose is
+// that nothing is still writing when Badger closes - could not reach it. The mux
+// is embedded rather than wrapped so this stays an http.Handler everywhere one
+// is expected; the only thing added is a way to stop what NewRouter started.
+type Router struct {
+	*chi.Mux
+
+	cleanup *service.CleanupService
+}
+
+// Stop ends the background work NewRouter started and waits for it to finish.
+// It must be called before the storage the handlers were built over is closed.
+func (r *Router) Stop() {
+	r.cleanup.Stop()
+}
+
+func NewRouter(cfg config.Config, st *storage.Storage) *Router {
 	r := chi.NewRouter()
 
 	rateLimiter := middleware.NewRateLimiter(cfg.RateLimitPerMinute)
@@ -43,7 +64,7 @@ func NewRouter(cfg config.Config, st *storage.Storage) *chi.Mux {
 	mailboxSvc := service.NewMailboxService(mailboxRepo)
 	challengeSvc := service.NewChallengeService(challengeRepo, cfg.ChallengeTTLSeconds)
 
-	// Start cleanup service
+	// Start cleanup service. The handle is kept and returned: see Router.Stop.
 	cleanupSvc := service.NewCleanupService(mailboxRepo, challengeRepo, cfg.CleanupIntervalSec, cfg.MailboxTTLHours)
 	cleanupSvc.Start()
 
@@ -79,5 +100,5 @@ func NewRouter(cfg config.Config, st *storage.Storage) *chi.Mux {
 	r.Post("/v1/mailbox/poll", mailboxHandler.PollMailbox)
 	r.Post("/v1/mailbox/ack", mailboxHandler.AckMailbox)
 
-	return r
+	return &Router{Mux: r, cleanup: cleanupSvc}
 }
