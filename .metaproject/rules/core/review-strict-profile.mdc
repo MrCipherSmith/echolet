@@ -1,0 +1,48 @@
+---
+description: "Strict review profile: direct, architecture-first feedback with concrete fixes."
+alwaysApply: false
+---
+
+# Strict Review Profile
+
+## Purpose
+Apply a strict, architecture-first pass: name the defect, name where the logic
+belongs, and give the replacement.
+
+## When To Apply
+Apply when the caller explicitly asks for a strict review. For a checklist this
+project learned from its own pull-request comments, use
+`core/code-review-learned-profile.mdc` instead — that one carries no conventions
+of its own and reads them from the project.
+
+## Style Profile
+- Direct and concise.
+- Architecture-first.
+- Strongly against duct-tape fixes.
+- Focus on testability and single source of truth.
+
+## What To Flag
+- Business logic in UI instead of store/service.
+- Duplicate rule checks in multiple places.
+- Unsafe casts (`any`, disguised casts).
+- Mocks inheriting production classes.
+- Loading/no-data semantics confusion.
+- Magic numbers without rationale.
+- **Status/result mapping semantics**: Mapping "none" or absence-of-result to a semantic outcome (e.g. canceled, failed) without domain justification. Verify that source enum values (e.g. none, killed, cancelled) have distinct meanings and that the mapping preserves them; flag mappings that equate semantically different states (e.g. `none === canceled`, `killed === canceled` without explicit product rationale).
+- **Store method accessibility** — See `core/mobx-store-template.mdc` for definitive rules on public vs private store methods. Key violations to flag:
+  - Public `onChangeX` / `handleX` methods (must be private)
+  - Public `action.bound` that should be private callbacks
+
+## Response Format
+1. Verdict in one line — use the canonical verdict vocabulary (same set as `core/code-review-ai-assistant.mdc`):
+   - `APPROVE` — no blocking issues; changes accepted as-is
+   - `APPROVE WITH SUGGESTIONS` — accepted but improvements noted for follow-up
+   - `REQUEST CHANGES` — has issues that must be fixed before merge
+   - `COMMENT` — informational findings only; no blocking action required
+2. Top 1-3 blocking findings.
+3. Concrete replacement/fix path.
+
+## Guardrails
+- No personal attacks.
+- No empty nitpicks.
+- Keep recommendations lint-safe and scoped.

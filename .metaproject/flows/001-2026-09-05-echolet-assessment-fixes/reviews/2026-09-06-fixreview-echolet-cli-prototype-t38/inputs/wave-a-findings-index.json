@@ -1,0 +1,230 @@
+[
+ {
+  "role": "review-logic",
+  "id": "F-001",
+  "severity": "major",
+  "title": "T38 disposition: FIXED. Repeated relay publication no longer creates a different signed bundle for the same reserved one-time prekey."
+ },
+ {
+  "role": "review-logic",
+  "id": "F-002",
+  "severity": "major",
+  "title": "T38 disposition: FIXED. The interactive contact confirmation no longer waits for stdin EOF; it settles on a completed input line."
+ },
+ {
+  "role": "review-logic",
+  "id": "F-003",
+  "severity": "major",
+  "title": "T38 disposition: FIXED. Runtime database failures are no longer converted into trust/protocol errors and exit code 3; classification is by origin and "
+ },
+ {
+  "role": "review-logic",
+  "id": "F-008",
+  "severity": "blocker",
+  "title": "T38 disposition: FIXED. Concurrent same-id sends can no longer create duplicate outbound history or replace the CLI outbox envelope; the outbox rechec"
+ },
+ {
+  "role": "review-logic",
+  "id": "F-013",
+  "severity": "blocker",
+  "title": "T38 disposition: FIXED. Option values beginning with '-' are accepted for every declared string option, and inlineStringOptionValues cannot consume an"
+ },
+ {
+  "role": "review-logic",
+  "id": "T38-L-001",
+  "severity": "minor",
+  "title": "OutboundMessenger.rotateBundle() - the explicit fresh-allocation operation F-001's suggested fix asked for - has no CLI entry point, and neither does "
+ },
+ {
+  "role": "review-logic",
+  "id": "T38-L-002",
+  "severity": "info",
+  "title": "Because the rewrite is applied uniformly rather than only to dash-leading values, a declared string option consumes a following flag-shaped argument: "
+ },
+ {
+  "role": "review-logic",
+  "id": "T38-L-003",
+  "severity": "info",
+  "title": "Corruption of an already-readable persisted record still classifies as exit 3 rather than exit 5, because such failures originate inside the transacti"
+ },
+ {
+  "role": "review-logic",
+  "id": "T38-L-004",
+  "severity": "info",
+  "title": "The --json option is declared and allowed on every command but its parsed value is never read."
+ },
+ {
+  "role": "review-backend",
+  "id": "F-004",
+  "severity": "blocker",
+  "title": "T38 fix disposition: FIXED. Saving an existing envelope ID no longer replaces the accepted mailbox record."
+ },
+ {
+  "role": "review-backend",
+  "id": "F-005",
+  "severity": "major",
+  "title": "T38 fix disposition: FIXED. Retention and selection now honour the envelope's declared expiry."
+ },
+ {
+  "role": "review-backend",
+  "id": "F-006",
+  "severity": "blocker",
+  "title": "T38 fix disposition: FIXED. V1 request bodies are bounded before decoding and the ciphertext length is now the authority over the declared size_bytes."
+ },
+ {
+  "role": "review-backend",
+  "id": "T34-I-001",
+  "severity": "major",
+  "title": "T38 fix disposition: FIXED - accepted as-is for this prototype. A start-up backfill with no completion marker is the right trade here, and it cannot c"
+ },
+ {
+  "role": "review-backend",
+  "id": "T34-I-002",
+  "severity": "minor",
+  "title": "T38 fix disposition: FIXED. The hand-chosen send-route constant was replaced by a bound derived from config, and the MaxMessageBytes + 64 KiB derivati"
+ },
+ {
+  "role": "review-backend",
+  "id": "T34-I-003",
+  "severity": "minor",
+  "title": "T38 fix disposition: FIXED. The stricter size_bytes == len(ciphertext) contract matches what every existing implementation already does, so it breaks "
+ },
+ {
+  "role": "review-backend",
+  "id": "R-001",
+  "severity": "minor",
+  "title": "The envelope's variable-length STRING fields (envelope_id, recipient_mailbox_id, sender_identity_id, message_id, the device ids) carry no length bound"
+ },
+ {
+  "role": "review-backend",
+  "id": "R-002",
+  "severity": "minor",
+  "title": "The backfill's per-record r.db.Update is the one writer of the device_mailbox key space that is not wrapped in a bounded conflict retry, and it return"
+ },
+ {
+  "role": "review-backend",
+  "id": "R-003",
+  "severity": "info",
+  "title": "The scan appends every decoded device record to a pending slice before any write, so peak memory grows with the total record count; and a single recor"
+ },
+ {
+  "role": "review-backend",
+  "id": "R-004",
+  "severity": "info",
+  "title": "envelopeBodyLimit() substitutes defaultMaxMessageBytes when h.maxMessageBytes <= 0 (mailbox_handler.go:68-71), but line 86 passes the raw h.maxMessage"
+ },
+ {
+  "role": "review-backend",
+  "id": "R-005",
+  "severity": "info",
+  "title": "The relay now enforces size_bytes == len(ciphertext) and the CLI receiver enforces the same, but the protocol schema types the field as z.number() onl"
+ },
+ {
+  "role": "review-security-code",
+  "id": "R-001",
+  "severity": "minor",
+  "title": "The F-013 fix rewrites `--<declared string option> <next token>` into the inline form unconditionally whenever a next token exists and is not `--`, so"
+ },
+ {
+  "role": "review-security-code",
+  "id": "R-002",
+  "severity": "info",
+  "title": "ProfileError raised inside openProfile is converted to persistenceFailure() and exit 5 at six call sites (cli.ts:158-161, 247-250, 284-285, 293-294, 3"
+ },
+ {
+  "role": "review-security-code",
+  "id": "R-003",
+  "severity": "info",
+  "title": "envelopeBodyLimit substitutes defaultMaxMessageBytes (262144) when the handler was constructed with a non-positive maximum, but ValidateMailboxEnvelop"
+ },
+ {
+  "role": "review-security-code",
+  "id": "R-004",
+  "severity": "info",
+  "title": "Disposition of worker concern T34-I-001. The backfill reads the entire device_record:* key space into a pending slice before writing any binding, with"
+ },
+ {
+  "role": "review-security-code",
+  "id": "R-005",
+  "severity": "info",
+  "title": "Disposition of worker concern T35-I-001. pollEnvelopeByteBudget is the fixed constant 1 MiB minus a 4 KiB wrapper reserve, and the first envelope of a"
+ },
+ {
+  "role": "review-highload",
+  "id": "F-008",
+  "severity": "blocker",
+  "title": "Fix-review disposition: fixed. Concurrent same-id sends can no longer create duplicate outbound history or a second envelope, and the guarantee holds "
+ },
+ {
+  "role": "review-highload",
+  "id": "F-009",
+  "severity": "major",
+  "title": "Fix-review disposition: fixed-with-new-risk. The undrainable poll batch is fixed at the root cause, but the fix leaves the new next_cursor signal unre"
+ },
+ {
+  "role": "review-highload",
+  "id": "F-010",
+  "severity": "major",
+  "title": "Fix-review disposition: fixed. The shared limiter mutex is no longer held across the downstream handler, and the prune step now performed inside the l"
+ },
+ {
+  "role": "review-highload",
+  "id": "F-011",
+  "severity": "major",
+  "title": "Fix-review disposition: fixed. The quota key is the normalized transport peer host, untrusted forwarding headers cannot mint a bucket, and expired buc"
+ },
+ {
+  "role": "review-highload",
+  "id": "N-001",
+  "severity": "major",
+  "title": "One unacceptable envelope aborts the entire poll batch inside a single transaction, so nothing is acked and the mailbox wedges permanently. Pre-existi"
+ },
+ {
+  "role": "review-highload",
+  "id": "N-002",
+  "severity": "minor",
+  "title": "The CLI discards the next_cursor remaining-work signal that the F-009 fix added to the wire. Introduced by this fix wave."
+ },
+ {
+  "role": "review-highload",
+  "id": "N-003",
+  "severity": "minor",
+  "title": "Concern T35-I-001, verified and judged: nothing enforces a relationship between ECHOLET_MAX_MESSAGE_BYTES and the compile-time poll byte budget, and t"
+ },
+ {
+  "role": "review-highload",
+  "id": "N-004",
+  "severity": "info",
+  "title": "The rate-limiter bucket map has no max-entry cap between prune sweeps, and the sweep itself is a single O(len(clients)) pass taken under the shared lo"
+ },
+ {
+  "role": "review-highload",
+  "id": "N-005",
+  "severity": "info",
+  "title": "HasMore can be a false positive when every remaining item in the mailbox is expired."
+ },
+ {
+  "role": "review-testing-practices",
+  "id": "T38-TP-001",
+  "severity": "minor",
+  "title": "The F-008 concurrency barrier fires on the first store transaction that reads cli:outbox:<messageId> and misses. Today that is the pre-read at outboun"
+ },
+ {
+  "role": "review-testing-practices",
+  "id": "T38-TP-002",
+  "severity": "minor",
+  "title": "Four gates this wave added or relied on survive deletion with the nearest suite green. The material one is the expiry filter inside GetEnvelopeBatch: "
+ },
+ {
+  "role": "review-testing-practices",
+  "id": "T38-TP-003",
+  "severity": "minor",
+  "title": "Two assertions cannot fail. (1) expect.soft(persisted.outboxKeys).toHaveLength(1) calls tx.keys() with a prefix that is the COMPLETE key cli:outbox:<m"
+ },
+ {
+  "role": "review-testing-practices",
+  "id": "T38-TP-004",
+  "severity": "info",
+  "title": "Four fix areas were assessed by reading only and were not reached by the mutation pass: F-002 (readConfirmation in cli.ts), F-006 (request_body.go and"
+ }
+]

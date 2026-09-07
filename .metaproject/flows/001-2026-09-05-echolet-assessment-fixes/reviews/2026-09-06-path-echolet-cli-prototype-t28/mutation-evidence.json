@@ -1,0 +1,113 @@
+{
+  "isolated_root": "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/echolet-t28-mutations-n770zfoj",
+  "method": "Copied CLI tree; symlinked existing dependencies, mutated only local runtime sources one at a time; captured all stdout/stderr in memory; restored each local file before next mutation.",
+  "baselines": {
+    "profile.test.ts": {
+      "exit_code": 0,
+      "numTotalTests": 6,
+      "numPassedTests": 6,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "inbound.test.ts": {
+      "exit_code": 0,
+      "numTotalTests": 10,
+      "numPassedTests": 10,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "config.test.ts": {
+      "exit_code": 0,
+      "numTotalTests": 3,
+      "numPassedTests": 3,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    }
+  },
+  "mutations": [
+    {
+      "label": "confirmation",
+      "file": "apps/cli/src/runtime/profile.ts",
+      "suite": "profile.test.ts",
+      "deleted_guard": "if (await options.confirm(Object.freeze({ ...identifiers })) !== true) return false;",
+      "baseline": {
+        "exit_code": 0,
+        "numTotalTests": 6,
+        "numPassedTests": 6,
+        "numFailedTests": 0,
+        "numPendingTests": 0
+      },
+      "mutated": {
+        "exit_code": 1,
+        "numTotalTests": 6,
+        "numPassedTests": 5,
+        "numFailedTests": 1,
+        "numPendingTests": 0
+      },
+      "isolation_repair": "Initial copy missed relative packages imports (0 tests loaded). Repeated in new copy with packages symlink; only local CLI runtime source mutated."
+    },
+    {
+      "label": "inbound-trusted-peer",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "suite": "inbound.test.ts",
+      "deleted_guard": "if (!contactBytes) throw new InboundError(\"CONTACT_NOT_TRUSTED\");",
+      "baseline": {
+        "exit_code": 0,
+        "numTotalTests": 10,
+        "numPassedTests": 10,
+        "numFailedTests": 0,
+        "numPendingTests": 0
+      },
+      "mutated": {
+        "exit_code": 0,
+        "numTotalTests": 10,
+        "numPassedTests": 10,
+        "numFailedTests": 0,
+        "numPendingTests": 0
+      }
+    },
+    {
+      "label": "duplicate-content",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "suite": "inbound.test.ts",
+      "deleted_guard": "if (decode<string>(previous) !== hash) throw new InboundError(\"MESSAGE_ID_CONFLICT\");",
+      "baseline": {
+        "exit_code": 0,
+        "numTotalTests": 10,
+        "numPassedTests": 10,
+        "numFailedTests": 0,
+        "numPendingTests": 0
+      },
+      "mutated": {
+        "exit_code": 1,
+        "numTotalTests": 10,
+        "numPassedTests": 9,
+        "numFailedTests": 1,
+        "numPendingTests": 0
+      }
+    },
+    {
+      "label": "poll-minimum",
+      "file": "apps/cli/src/runtime/config.ts",
+      "suite": "config.test.ts",
+      "deleted_guard": "poll_batch_size: z.number().int().min(1).max(100),",
+      "baseline": {
+        "exit_code": 0,
+        "numTotalTests": 3,
+        "numPassedTests": 3,
+        "numFailedTests": 0,
+        "numPendingTests": 0
+      },
+      "mutated": {
+        "exit_code": 1,
+        "numTotalTests": 3,
+        "numPassedTests": 2,
+        "numFailedTests": 1,
+        "numPendingTests": 0
+      }
+    }
+  ],
+  "canonical_selected_files_unchanged": true,
+  "canonical_files_verified": 6,
+  "temporary_copies_removed": true
+}

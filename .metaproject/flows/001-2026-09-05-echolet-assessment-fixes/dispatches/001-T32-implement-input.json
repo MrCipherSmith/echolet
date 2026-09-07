@@ -1,0 +1,30 @@
+{
+  "task": {
+    "task_id": "task-32",
+    "task_name": "Register v2 published devices for mailbox authorization",
+    "task_type": "service_api",
+    "complexity": "medium",
+    "dependencies": ["task-22", "task-31"],
+    "description": "Make the three real-router RED tests green by atomically persisting the root-verified DeviceRecord embedded in a successful v2 bundle under the existing mailbox authorization index.",
+    "target_files": [
+      "apps/relay/internal/model/signal_prekey_bundle_v2.go",
+      "apps/relay/internal/validation/signal_prekey_bundle_v2.go",
+      "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go",
+      "apps/relay/internal/api/router/signal_prekey_bundle_v2_mailbox_test.go"
+    ],
+    "acceptance_criteria": [
+      "Only a fully validated successful v2 publish creates the existing device_record:<identity>:<device> authorization record.",
+      "Bundle, OTK indexes and DeviceRecord commit in the same Badger transaction and persist across restart.",
+      "Idempotent identical republish preserves/backfills the same verified DeviceRecord, while bundle conflict or invalid signature cannot replace it.",
+      "Mailbox challenge accepts the original signing device and rejects a different device key.",
+      "All three supplied tests plus full tagged race and untagged Go suites pass unchanged."
+    ],
+    "context": "Validation already has an ordered parsed DeviceRecord and proves its root signature before returning model.SignalPreKeyBundleV2. Carry a model.DeviceRecord into the validated model and persist it using the exact existing device_record:<identity_id>:<device_id> key inside SaveSignalV2's transaction. Avoid a second repository transaction. On an existing authorization record, require the same verified identity/device/public key and do not overwrite a conflict. Preserve exact raw bundle bytes and all permanent OTK semantics. No commits.",
+    "existing_tests": ["apps/relay/internal/api/router/signal_prekey_bundle_v2_mailbox_test.go"],
+    "existing_stories": [],
+    "module_patterns": "Go validation to model to Badger repository; one transaction; existing DeviceRecord JSON format and mailbox handler authorization.",
+    "test_case_specs": {"test_files": ["apps/relay/internal/api/router/signal_prekey_bundle_v2_mailbox_test.go"], "run_command": "cd apps/relay && go test -race -tags=relayv2 ./internal/api/router && go test -race -tags=relayv2 ./..."}
+  },
+  "workspace": {"codebase_path": "/Users/Goodea/goodea/projects/echolet", "branch": "main", "issue_number": 1, "issue_title": "Flow 001 Echolet CLI prototype"},
+  "automation": {"skip_confirmation": true, "auto_commit": false, "verify_lint": false, "verify_types": false, "verify_tests": true, "verify_stories": false, "max_self_fix_attempts": 3, "commit_message_style": "conventional"}
+}

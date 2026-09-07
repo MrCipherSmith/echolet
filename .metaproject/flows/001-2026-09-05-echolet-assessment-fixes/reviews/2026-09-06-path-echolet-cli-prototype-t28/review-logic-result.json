@@ -1,0 +1,122 @@
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Initial AC coverage gate passes using T27 and source evidence; focused logic review found three major defects: publication retry identity, EOF-bound interactive confirmation, and runtime persistence error classification. No new whole-AC implementation gap identified.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "apps/cli/src/runtime/outbound.ts",
+      "line": 33,
+      "problem": "Repeated relay publication creates a different signed bundle for the same reserved one-time prekey.",
+      "impact": "After relay publish commits but its response is lost, rerunning the CLI command submits a new bundle ID containing the same OTK. The relay rejects the retry under its permanent OTK uniqueness contract, so the user cannot recover a successful publication result. Even repeating a successful publish fails.",
+      "suggested_fix": "Persist the exact signed publication bundle before the first network call and reuse it across attempts and process restarts. Keep allocation of a fresh OTK and a fresh bundle as a separate explicit operation.",
+      "evidence": "outbound.ts:33 calls profile.exportContact on every attempt; profile.ts:89 calls exportSignedSignalBundleV2; wire.ts:51 assigns randomUUID; SignalClient.ts:228 reads the unchanged pre:1. Specification Relay v2 Publish permits idempotence only for identical stored bundle bytes and forbids OTK reuse under a new ID. This is a source-derived reproduction; no relay mutation was performed.",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/outbound.ts:33",
+          "apps/cli/src/runtime/profile.ts:89",
+          "packages/session-node/src/wire.ts:51",
+          "packages/session-node/src/SignalClient.ts:228"
+        ],
+        "enumeration_method": "Enumerated the single runtime publish producer and its export/publicBundle call chain; keryx ctx rg for publish, bundle_id: randomUUID, and preBytes verifies the producer and reuse sites."
+      },
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "dedupe_key": "F-001-logic",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 144,
+      "problem": "Interactive contact confirmation waits for stdin EOF instead of accepting a completed input line.",
+      "impact": "A user entering yes followed by Enter at the displayed [y/N] prompt remains blocked; contact import does not finish until the user supplies EOF. A negative line also waits for EOF.",
+      "suggested_fix": "Read one bounded line using a readline interface or stop at the first newline, close the reader, and settle on EOF or an overlong answer without requiring stdin to close after a valid line.",
+      "evidence": "cli.ts:144-148 iterates until stdin ends, with only an overlength early return. A read-only probe extracted the exact function and supplied a PassThrough: settledAfterCompleteLine=false after a yes newline, acceptedAfterEOF=true only after input.end(). cli.test.ts:29 always ends stdin, masking terminal behavior.",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/commands/cli.ts:144"
+        ],
+        "enumeration_method": "keryx ctx rg readConfirmation found its single definition and sole contact-import caller at cli.ts:199; no other interactive reader exists in the CLI command implementation."
+      },
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "dedupe_key": "F-002-logic",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-003",
+      "severity": "major",
+      "file": "apps/cli/src/runtime/outbound.ts",
+      "line": 28,
+      "problem": "Runtime database failures are converted into trust/protocol errors and exit code 3.",
+      "impact": "For example, let send finish its HTTP request while another SQLite connection holds BEGIN IMMEDIATE; the post-send delivery-state transaction fails with SQLITE_BUSY. Outbound serial rewrites it to OUTBOUND_REJECTED and classify returns 3, although the documented result for local persistence failure is 5. Inbound history/poll and contact-import commits similarly hide database failures as protocol or invalid-card errors.",
+      "suggested_fix": "Introduce a typed persistence failure at the store boundary and preserve it through runtime and contact-import catch blocks; map it to redacted PERSISTENCE_FAILURE/exit 5. Keep typed validation, trust and native decrypt failures mapped to exit 3.",
+      "evidence": "EncryptedSqliteStore.ts:25 uses busy_timeout=0 and :61 begins each transaction with BEGIN IMMEDIATE. Outbound.ts:26-28 and inbound.ts:23-25 replace all non-domain/non-relay errors; cli.ts:201 catches all import errors as INVALID_CONTACT_CARD, and :252-253 maps domain errors to trustFailure. Wrong-key open failures are handled correctly, but failures after opening are not. Reproduction is source-derived, not executed.",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/outbound.ts:28",
+          "apps/cli/src/runtime/inbound.ts:25",
+          "apps/cli/src/commands/cli.ts:201",
+          "apps/cli/src/commands/cli.ts:252"
+        ],
+        "enumeration_method": "Enumerated catch blocks with keryx ctx rg catch|OUTBOUND_REJECTED|INBOUND_REJECTED|PERSISTENCE_FAILURE across command and runtime files, then followed every store-transaction caller into the single CLI classify function; these runtime/import catch boundaries erase persistence errors while profile-open boundaries preserve exit 5."
+      },
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "dedupe_key": "F-003-logic",
+      "blocking_merge": false
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 3,
+    "minor": 0,
+    "info": 0
+  },
+  "stage1": {
+    "status": "PASS",
+    "mapping": {
+      "AC-01": "T27 TS protocol and tagged Go fixture evidence; wire validation boundary inspected.",
+      "AC-02/02a/02b": "T27 tagged relay race evidence; relay implementation delegated to backend reviewer.",
+      "AC-03/04": "CLI E2E uses independent child processes, exchanged/pinned cards, offline receiver and reply.",
+      "AC-05": "Outbound durable envelope and native retry path; E2E ambiguous send reuses explicit message ID across CLI restarts.",
+      "AC-06": "Inbound dedup/history transaction and E2E receiver restart/duplicate assertions.",
+      "AC-07": "Strict envelopes, pinned contact/native identity checks, fail-closed DB opening; T27 negative test evidence.",
+      "AC-08": "E2E scans relay data/logs and HTTP traffic for synthetic markers; T27 records success.",
+      "AC-09": "T27 command matrix provides passing verification evidence with explicit health limitations; exact test-command audit owned by testing reviewer.",
+      "AC-10": "Specification and implementation plan retain technical-prototype, audit and mobile exclusions."
+    }
+  },
+  "checked_and_cleared": [
+    {
+      "hypothesis": "A retry advances the outbound ratchet or changes ciphertext.",
+      "evidence": "outbound.ts loads the persisted CLI outbox, rejects changed contentHash, calls client.retry and compares exact ciphertext before HTTP; no new encrypt in the prior-record branch."
+    },
+    {
+      "hypothesis": "Ack loss duplicates history or decrypts twice.",
+      "evidence": "inbound.ts commits native state, inbox hash, history and pending ack together. Duplicate ciphertext checks hash and bypasses decrypt/history. E2E verifies unchanged native snapshot and history after ack loss."
+    },
+    {
+      "hypothesis": "Relay claim or inbound ciphertext silently creates a trust pin.",
+      "evidence": "profile.importContact alone records CLI contact and explicit native approval. Outbound compares the claim with pinned identity/device/keys; inbound requires both contact and native trust before decrypt."
+    },
+    {
+      "hypothesis": "History read mutates ordering or mixes contacts.",
+      "evidence": "history.ts uses safe monotonic sequence keys and filters by exact contact identity; writes participate in enclosing atomic transactions."
+    }
+  ],
+  "limitations": [
+    "No fresh full test suite was run; T27 evidence was read. Only the bounded confirmation-reader probe was executed.",
+    "Deep review focused on CLI and its session/store/wire call chains; retained legacy helpers and relay implementation are not claimed as independently exhaustively audited.",
+    "Publication and persistence scenarios are proven by source paths rather than live fault-injection runs."
+  ],
+  "routing_audit": {
+    "graph_used": "gdgraph affected apps/cli/src/commands/cli.ts; T27 graph freshness evidence",
+    "wiki_used": "wiki/index.md; no accepted CLI domain pages available",
+    "ctx_used": "compact reads and targeted keryx ctx rg",
+    "raw_rg_used": "no"
+  }
+}

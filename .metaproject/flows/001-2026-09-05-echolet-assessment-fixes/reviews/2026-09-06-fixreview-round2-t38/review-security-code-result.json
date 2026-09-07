@@ -1,0 +1,153 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T38r2-review-security-code",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Delta verdict: the four relay/CLI changes since round 1 are individually correct and introduce no new defect. T41's 256-byte bound is correct and complete for the mailbox envelope - probed: 400 INVALID_SCHEMA on all eight identifier fields at 257 bytes, 200 at 256, including the envelope_id half round 1 recorded as an understatement - and no bounded field can 5xx by another route (the only key built from them is ~530 bytes against Badger's 65000-byte ceiling; read paths have no key-size check and miss to 403). `!stored.Claimed` is an exact answer: expiry and not-yet-valid are rejected by ValidateSignalPreKeyBundleV2 (validation/signal_prekey_bundle_v2.go:216) on every publish including the re-store path, a concurrent claim conflicts and updateV2 recomputes it, and no other writer touches the availability index. Surfacing PREKEY_BUNDLE_UNAVAILABLE leaks nothing and gives an unauthenticated third party no oracle it lacked - the relay already returned that code at the wire; only the local CLI's own output changed, the relay's message is discarded at relayClient.ts:119-120, and cli.ts:353 can emit only a hard-coded literal. The delegating Go method is a one-line pure delegation with a single implementation, so it cannot diverge. Exit codes 0/2/3/4/5 intact and live-pinned; no test weakened, no schema loosened, no leakage found on any channel. Round-1 findings BE-R-001, SEC-R-001, T44-001 and T44-002 are all closed with evidence. Two new findings: R2-001 (major, blocks) - the relay accepts, and returns to the client, an envelope whose identifiers pass T41's length bound but violate the CLI wire schema's UUID/literal shape; the transport boundary parses the batch as one array, so one unauthenticated POST fails the whole poll before T40's per-envelope isolation runs, nothing is acked, and legitimate traffic is lost in 24h - verbatim the HL-N-001 harm, reproduced end to end. R2-002 (minor) - the BE-R-001 class is not closed: an unauthenticated 65 kB device_id on /v1/device-records/publish and an oversized envelope_ids element on /v1/mailbox/ack both still return HTTP 500.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Each change in your assigned delta is judged for correctness and for whether it introduced a new defect.",
+      "status": "met",
+      "evidence": "T41 identifier bound, T45 claimable (repository/service/handler), T45/T46 CLI error-code surfacing and claimableSchema, and the delegating Go method each judged in review-security-code-report.md sections 1.1-1.4 with file:line, control-flow arguments and bounded HTTP probes against a scratchpad relay. No defect was introduced by any of them; the two findings raised are gaps the delta left open, not regressions it caused."
+    },
+    {
+      "criterion": "The round-1 open findings touching your area are confirmed closed or reported as still open, with evidence.",
+      "status": "met",
+      "evidence": "BE-R-001 closed for the reported route (nine-row probe table, section 1.1) with the class gap reported separately as R2-002; SEC-R-001 closed (cli.ts:91-98 now states exactly what the verifier observed, all four remaining bullets re-checked against the code); T44-001 closed (both discard sites repaired, pinned live by cli.relayErrorCodes.test.ts:157-170); T44-002 closed (claimable reaches operator stdout through outbound.ts:34 -> cli.ts:309 -> cli.ts:368). Section 2 of the report."
+    },
+    {
+      "criterion": "The five non-negotiable criteria are re-checked over the delta: no test weakened, no strict schema loosened, no secret leakage, exit-code contract intact, prototype scope respected.",
+      "status": "met",
+      "evidence": "Section 1.5 table. No skip/only/todo markers anywhere under apps or packages; the new tests strengthen (cli.relayErrorCodes.test.ts:165-170 requires the two codes to differ; redacted() at :94-98 asserts the store key and message body never appear). claimable is a required z.boolean() on a .strict() object with no optional/passthrough/any; nextCursorSchema is still the closed string(1..256)|null union; relay-v2.schema.json has no publish-response definition to contradict. Leakage checked on five channels including relay-side logs (three 500s produced zero request detail). ExitCode is still the literal union 2|3|4|5 and every exit code is live-pinned by a spawned-CLI test. vitest.config.ts 5s->30s loosens no assertion. No finding demands production hardening, mobile support, deployment or external audit."
+    },
+    {
+      "criterion": "Any new defect is reported with severity, file:line and a concrete failure scenario, and states whether it blocks acceptance.",
+      "status": "met",
+      "evidence": "R2-001 major, blocks acceptance, with a four-step reproduction (relay accepts the poison envelope 200, returns it in a signed poll, and the expression copied verbatim from relayClient.ts:80 fails the whole batch on four paths) and a class_scope derived from a field-by-field schema comparison. R2-002 minor, does not block, with a five-row probe table. R2-I-003/004/005 info."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-round2-t38/review-security-code-report.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Round-2 security-code fix review: the four delta judgements, the closure of BE-R-001/SEC-R-001/T44-001/T44-002, the leakage and exit-code audit, and five findings."
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "R2-001",
+      "global_id": "2026-09-06-fixreview-round2-t38#R2-001",
+      "reviewer": "review-security-code",
+      "severity": "major",
+      "file": "apps/relay/internal/validation/validate.go",
+      "line": 117,
+      "symbol": "ValidateMailboxEnvelope",
+      "problem": "T41 bounds the eight envelope identifiers by length only, while the CLI's wire schema constrains five of them by shape (envelope_id, message_id, sender_device_id, recipient_device_id as z.string().uuid(); payload_type as z.literal). The unauthenticated /v1/messages/send route therefore accepts and stores envelopes the CLI's own transport boundary refuses to parse. relayClient.ts:79-82 validates the poll response as one z.array(MailboxEnvelopeSchema.strict()), all or nothing, so a single poisoned envelope throws RelayError(INVALID_RELAY_RESPONSE) at relayClient.ts:89, which leaves pollMailbox at inbound.ts:81 BEFORE accept() at :84. T40's per-envelope isolation (inbound.ts:98-114) never runs and ackPending() at :88 is never reached.",
+      "impact": "One unauthenticated POST, using only the recipient's published contact card to compute SHA-256(identity_id + \":mailbox:v1\"), disables the documented poll contract for a chosen recipient. Nothing is acknowledged, so every legitimate envelope queued behind the poison stays undelivered and is lost when its own declared 24h expiry passes (outbound.ts:83, mailbox_repo.go:183) - verbatim the HL-N-001 harm the round-1 verifier confirmed and T40 was written to remove. The attacker chooses the declared expiry, so the wedge lasts to the 7-day Badger retention cap and is re-armed with one more POST. The CLI reports it as exit 3 PROTOCOL_REJECTED and no CLI command can recover: retryPendingAcks() (inbound.ts:157) has no entry point.",
+      "suggested_fix": "Either alone closes it; both is defence in depth. (1) Relay-side, following the v2 validator's own precedent at validation/signal_prekey_bundle_v2.go:150,167,181: require UUID shape for envelope_id, message_id, sender_device_id and recipient_device_id and the literal \"ciphertext_message\" for payload_type in ValidateMailboxEnvelope, rejecting with INVALID_SCHEMA -> 400. Costs nothing legitimate: outbound.ts:80-83 always emits exactly these shapes. (2) Client-side, restoring T40's intent at the boundary: parse envelopes individually in pollMailbox and route an unparsable one into PollResult.rejected instead of failing the whole response.",
+      "evidence": "Bounded probe against a relay built into the scratchpad with its own temporary ECHOLET_DATA_DIR; nothing written to the repository. (1) Victim publishes a device record -> 200. (2) Unauthenticated POST /v1/messages/send with envelope_id \"poison-not-a-uuid\", message_id \"also-not-a-uuid\", sender_device_id \"not-a-uuid\", payload_type \"not_ciphertext_message\" -> HTTP 200, accepted and stored. (3) The victim's correctly signed POST /v1/mailbox/poll -> 200, batch of 1. (4) That batch parsed with the expression copied verbatim from relayClient.ts:80 -> \"poll response parses: false\", failing at data.envelopes.0.envelope_id, .message_id, .sender_device_id and .payload_type. Control-flow: relayClient.ts:122 -> validate():89 -> invalid() -> rethrown at :125 -> thrown out of inbound.ts:81 before :84 and :88. No test covers this: INVALID_RELAY_RESPONSE appears in relayClient.test.ts:70, pollCapacity.test.ts:159 and claimable.test.ts:40,61, none of which exercises a relay-accepted envelope wedging a poll.",
+      "confidence": "high",
+      "dedupe_key": "relay-client-envelope-shape-mismatch-wedges-poll",
+      "blocking_merge": true,
+      "source": "internal",
+      "class_scope": {
+        "sites": ["apps/relay/internal/validation/validate.go:117-121"],
+        "enumeration_method": "Field-by-field comparison of MailboxEnvelopeSchema (packages/protocol/src/types/mailboxEnvelope.ts:3-18) against ValidateMailboxEnvelope (apps/relay/internal/validation/validate.go:110-142). Five of fourteen fields are constrained on the client and not on the relay: envelope_id, message_id, sender_device_id, recipient_device_id (z.string().uuid()) and payload_type (z.literal). type and version are checked on both sides. ciphertext, the timestamps and size_bytes are only loosely typed on the client and their real checks live inside acceptOne (inbound.ts:118-131), where a failure IS isolated as INVALID_ENVELOPE - which is why only the transport-boundary five are dangerous. Extra keys cannot be relayed: Go's decoder drops unknown JSON fields."
+      }
+    },
+    {
+      "id": "R2-002",
+      "global_id": "2026-09-06-fixreview-round2-t38#R2-002",
+      "reviewer": "review-security-code",
+      "severity": "minor",
+      "file": "apps/relay/internal/validation/validate.go",
+      "line": 18,
+      "symbol": "ValidateDeviceRecord",
+      "problem": "T41 closed the unbounded-identifier-to-Badger-key class on the mailbox envelope only. Two further write paths still put an unbounded caller-supplied string straight into a Badger key and answer HTTP 500 when it exceeds Badger's 65000-byte ceiling (badger/v4@v4.9.1/txn.go:352,363): device_id on /v1/device-records/publish, where ValidateDeviceRecord checks only non-emptiness and device_record_repo.go:50,188 builds device_record:<identity>:<device_id>; and each element of envelope_ids on /v1/mailbox/ack, whose count is bounded at mailbox_handler.go:315 but whose element length is not, reaching an unconditional txn.Delete at mailbox_repo.go:219-223. The 64 KiB compactRequestBodyLimit does not save the device-record route because the rest of the record costs only ~340 bytes.",
+      "impact": "An internal error is returned for purely caller-supplied malformed input - the same wrong-status-code impact round 1 assigned to BE-R-001, at the same severity. The device-record path is fully unauthenticated (the attacker self-signs with a key they generate); the ack path requires the caller's own device signature for their own mailbox, so it is self-inflicted. No leakage (the 500 body is a fixed string and nothing is logged), no crash, no partial write.",
+      "suggested_fix": "Apply the same bound: reject device_id (and identity_id for symmetry) over maxEnvelopeIdentifierBytes in ValidateDeviceRecord; bound each envelope_ids element in AckMailbox; bound bundle_id in ValidatePreKeyBundle. device_id is a UUID everywhere the CLI produces one, so a UUID check would be tighter still and would also close R2-001's device_id half.",
+      "evidence": "Bounded probe against a scratchpad relay: /v1/device-records/publish with a 36-byte uuid device_id -> HTTP 200 ok; with a 64960-byte device_id in a 65307-byte body -> HTTP 500 INTERNAL_ERROR; with a 64900-byte device_id in a 65247-byte body -> HTTP 200 ok (the boundary sits exactly at Badger's 65000-byte key ceiling). /v1/mailbox/ack with a 36-byte uuid envelope_id -> HTTP 200 ok; with a 65000-byte envelope_id -> HTTP 500 INTERNAL_ERROR. The relay logged nothing for either 500.",
+      "confidence": "high",
+      "dedupe_key": "unbounded-identifier-badger-key-500-class-not-closed",
+      "blocking_merge": false,
+      "source": "internal",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/validation/validate.go:18",
+          "apps/relay/internal/api/handler/mailbox_handler.go:300",
+          "apps/relay/internal/validation/validate.go:34-70"
+        ],
+        "enumeration_method": "Enumerated every txn.Set/txn.Delete under apps/relay/internal/storage/repository/ and traced each key component back to its request field, then checked that field's validator. All /v2/* paths are safe by construction: validation/signal_prekey_bundle_v2.go:167 requires bundle_id to be a UUID, :181 requires device_id UUID and identity_id 32-byte base64, :152 (ValidateSignalSelector) does the same for the claim selector. Read paths cannot 500: txn.Get has no key-size check (badger/v4@v4.9.1/txn.go:429-434), so an oversized read key is a miss -> 403. The third site (bundle_id on /v1/prekeys/publish, key built at prekey_bundle_repo.go:28 under a 1 MiB body limit) is the same shape and was not probed."
+      }
+    },
+    {
+      "id": "R2-I-003",
+      "global_id": "2026-09-06-fixreview-round2-t38#R2-I-003",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "apps/cli/src/transport/relayClient.ts",
+      "line": 37,
+      "symbol": "claimableSchema",
+      "problem": "Making claimable a required z.boolean() means a CLI from this tree talking to a relay from before T45 fails relay publish with INVALID_RELAY_RESPONSE, which classify() (cli.ts:350-353, remoteCode undefined) reports as exit 3 PROTOCOL_REJECTED - a code that reads as 'the relay rejected you' rather than 'the relay is too old'.",
+      "impact": "Unreachable in the validated scenario: both binaries are built from one tree by the same runbook (metrics-and-validation.md:36-47). Recorded because the failure mode is confusing, not because it needs a fix.",
+      "suggested_fix": "No change requested - the required-and-closed choice is correct and the docstring at relayClient.ts:33-36 argues it correctly. If version skew ever becomes possible, distinguish a schema-shape failure from a relay rejection in classify().",
+      "evidence": "relayClient.ts:60 declares claimable inside a .strict() object with no .optional(); a response omitting it fails validate() at :89 and becomes RelayError(\"INVALID_RELAY_RESPONSE\", false), which cli.ts:351-353 maps to trustFailure(\"PROTOCOL_REJECTED\") at exit 3. Pinned by relayClient.claimable.test.ts:36-40.",
+      "confidence": "high",
+      "dedupe_key": "claimable-required-version-skew-exit3",
+      "blocking_merge": false,
+      "source": "internal"
+    },
+    {
+      "id": "R2-I-004",
+      "global_id": "2026-09-06-fixreview-round2-t38#R2-I-004",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/inputs/review-context.md",
+      "line": 79,
+      "symbol": "non-negotiable criterion 1",
+      "problem": "Five source files had their mtimes bumped during this review session (23:36-23:40, one per minute) with no content change, including two that hash byte-identical to the round-1 verifier's recorded baselines. mtime ordering is therefore not a sound integrity signal in this working tree, yet criterion 1's stated method is 'verified by mtime in every wave that tests were written before the implementation'.",
+      "impact": "Process only. Content integrity is fine - no unexplained change was found. The hash verification T37 and T42 performed is the sound method and should remain the one relied on.",
+      "suggested_fix": "State the test-integrity guarantee in terms of the recorded content hashes rather than mtime ordering.",
+      "evidence": "apps/cli/src/runtime/outbound.ts mtime 23:36:19, sha256 3720f372cb40931fee19bad5cc4c8378815f11ba29e8200397ef37077e8bba0f - identical to the round-1 verifier's recorded 3720f372...7e8bba0f. apps/relay/internal/storage/repository/mailbox_repo.go mtime 23:37:24, sha256 d598cbe175d2bd33142765a10ca995bc070fa582af21142cb89d69f07fc36ef7 - identical to the recorded d598cbe1...7fc36ef7. cli.ts (23:38:35) and relayClient.ts (23:39:25) were touched the same way after their genuine T46 edits.",
+      "confidence": "high",
+      "dedupe_key": "mtime-not-sound-integrity-signal",
+      "blocking_merge": false,
+      "source": "internal"
+    },
+    {
+      "id": "R2-I-005",
+      "global_id": "2026-09-06-fixreview-round2-t38#R2-I-005",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "docs/requirements/echolet-cli-prototype/specification.md",
+      "line": 88,
+      "symbol": "Relay v2 contract / Publish",
+      "problem": "claimable is now a field the CLI requires on every publish response, but it appears in neither specification.md's Publish section nor schemas/relay-v2.schema.json, which defines only publishRequest, claimRequest and claimResponse. It contradicts nothing, but it is an undocumented part of the wire contract.",
+      "impact": "Documentation only, and relevant to AC-10 (specification.md:151), which requires the status reports to retain the limitations. The T44 structural limitation - through the CLI a published bundle serves exactly one first-contact sender - belongs in the same place.",
+      "suggested_fix": "Add one sentence to the Publish section describing the response field, and add the one-first-contact-sender limitation to the retained-limitations list. Both are already drafted at t44-multisender-diagnosis.md:194-224.",
+      "evidence": "keryx ctx rg \"claimable\" returns 44 matches across 10 files, all under apps/; zero under docs/. The schema's oneOf branches are $ref publishRequest, claimRequest, claimResponse only.",
+      "confidence": "high",
+      "dedupe_key": "claimable-undocumented-in-relay-contract",
+      "blocking_merge": false,
+      "source": "internal"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "delta_changes_judged": 4,
+    "round1_findings_confirmed_closed": 4,
+    "new_defects_reported": 2,
+    "info_observations": 3,
+    "http_probes_run": 18,
+    "raw_rg_used": false
+  },
+  "timestamp_utc": "2026-09-06T19:50:00Z"
+}

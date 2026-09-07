@@ -1,0 +1,279 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T38-review-backend",
+  "status": "DONE",
+  "summary": "F-004, F-005 and F-006 are all fixed, verified against the working tree rather than the implementer's word. F-004: the read and write are in one badger.Update closure AND the read joins the conflict set (txn.Get calls addReadKey on update txns even for a missing key; DetectConflicts is true under DefaultOptions), so the RMW is genuinely atomic; the 64-attempt replay cannot mask a genuine conflict because ErrEnvelopeIDConflict is a distinct sentinel returned on the first attempt, and cannot spin because the loop is bounded with one synchronous txn per attempt. F-005: retention is min(declared, now+cap) floored at now so it is never zero (badger's keep-forever) nor unbounded, expired records are skipped inside the value callback before either poll bound is touched, and an identical retry returns before SetEntry. F-006: all six enumerated v1 decoder sites go through decodeJSONRequest/MaxBytesReader, the send bound is derived as MaxMessageBytes + 64 KiB so it structurally cannot fall below the configured maximum, and ValidateMailboxEnvelope makes len(Ciphertext) the authority over the declared size_bytes. T34-I-001 accepted: the backfill runs from NewRouter strictly before ListenAndServe, badger's directory lock excludes a second process, and mis-binding is not representable because the binding key and its value are both pure functions of the same identity - so every writer of a given key writes identical bytes. T34-I-002 and T34-I-003 fixed; the MaxMessageBytes + 64 KiB derivation is sound (base64url ciphertext needs no JSON escaping and the real overhead is a few hundred bytes, so the margin is ~100x while staying 3x below the client's 1 MiB ceiling). Five residual observations raised: 1 minor class-scope divergence, 1 minor input-validation gap, 3 info. None blocks acceptance of the fix wave. All five non-negotiable criteria met.",
+  "acceptance": [
+    {
+      "criterion": "Every finding in the assigned set (F-004, F-005, F-006 and concerns T34-I-001, T34-I-002, T34-I-003) receives an explicit disposition of fixed, partially-fixed, not-fixed or fixed-with-new-risk, each with concrete evidence.",
+      "status": "met",
+      "evidence": "All six dispositioned `fixed` in review-backend-report.md, each with file:line plus a control-flow argument; the transaction-semantics claim for F-004 is grounded in the vendored badger source (txn.go:446-464, 489-498; options.go:175) rather than assumed, and a bounded probe re-ran the five anchoring tests (exit 0)."
+    },
+    {
+      "criterion": "Any new defect introduced by a fix is reported with severity, file:line and a concrete failure scenario, including defects outside the assigned set that are encountered in the changed code.",
+      "status": "met",
+      "evidence": "No defect was introduced by the fixes themselves. Five residual issues encountered in the changed code are reported as R-001..R-005 with severity, file:line and a concrete trigger; R-001 (oversized envelope identifier -> badger 65000-byte key limit -> HTTP 500 instead of 400) and R-002 (backfill is the one device_mailbox writer without the bounded conflict retry) are minor, the rest info."
+    },
+    {
+      "criterion": "The five non-negotiable criteria in the shared review context are checked and reported on: no test weakened, no strict schema loosened, no secret leakage, exit-code contract intact, prototype scope respected.",
+      "status": "met",
+      "evidence": "Reported as a table in review-backend-report.md. Test mtimes 17:15-17:16 precede implementation mtimes 17:25-18:06; nextCursorSchema is a closed union on a .strict() object with a server-controlled 4-byte token on the Go side; all 10 relay log sites enumerated and none carries a body, ciphertext or key; the only new status (413) maps to the same exit 3 bucket 400 already used; no finding demands production hardening."
+    },
+    {
+      "criterion": "Findings are ranked by severity and each states whether it blocks acceptance of the fix wave.",
+      "status": "met",
+      "evidence": "Findings section ordered minor then info; R-001 and R-002 each state 'does not block acceptance' inline, and the Stats block records 0 blocker / 0 major."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-backend-report.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Backend fix review: dispositions for F-004, F-005, F-006, T34-I-001/002/003, five residual findings, the five non-negotiable criteria and a routing audit."
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-004",
+      "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-004",
+      "reviewer": "review-backend",
+      "severity": "blocker",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 56,
+      "symbol": "MailboxRepository.SaveEnvelope",
+      "problem": "T38 fix disposition: FIXED. Saving an existing envelope ID no longer replaces the accepted mailbox record.",
+      "impact": "The described loss can no longer occur. A different envelope under an already-used (recipient mailbox, envelope_id) pair is refused with HTTP 409 / ENVELOPE_ID_CONFLICT and the stored envelope is left untouched; a byte-identical replay is a no-op that also preserves the original retention deadline.",
+      "suggested_fix": "None. Optional hardening only: after the 64 attempts are exhausted the caller receives badger.ErrConflict, which surfaces as HTTP 500; a 503 with a retry hint would read better, and the loop has no backoff. Neither is reachable on a local prototype relay.",
+      "evidence": "mailbox_repo.go:65-88 performs txn.Get(key) and txn.SetEntry(entry) inside one r.db.Update closure. The read genuinely joins the conflict set, verified in the vendored dependency rather than assumed: badger/v4@v4.9.1/txn.go:446-464 calls txn.addReadKey(key) for every Get on an update txn BEFORE the lookup (so a key that turns out missing is still tracked - exactly the first-write race), txn.go:489-498 appends unconditionally for txn.update, and options.go:175 sets DetectConflicts:true which storage.go:15 inherits via badger.DefaultOptions. The bounded retry cannot mask a genuine conflict: model.ErrEnvelopeIDConflict (model/mailbox_envelope.go:8) is a distinct sentinel, so mailbox_repo.go:254 returns it on the first attempt without consuming a retry; it cannot spin, being bounded at 64 (mailbox_repo.go:23, 252) with one synchronous transaction per attempt and no inner loop. Idempotent replay returns nil at :73-77 before any write. Wire mapping at mailbox_handler.go:102-114. Bounded probe: TestSendEnvelopeRejectsConflictingEnvelopeIDWithHTTP409 (mailbox_envelope_lifecycle_test.go:33-87) passes, asserting 200/200/409, the exact error code, and unchanged stored ciphertext and size_bytes.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "backend-F-001",
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "fixed - mailbox_repo.go:56-89 (same-transaction read-modify-write with badger conflict detection confirmed at badger/v4@v4.9.1/txn.go:446-464 and options.go:175), mailbox_repo.go:250-259 (bounded non-masking retry), mailbox_handler.go:102-114 (HTTP 409 mapping); mailbox_envelope_lifecycle_test.go:33-87 re-run green in a bounded probe."
+      },
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/storage/repository/mailbox_repo.go:56",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:219",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:250",
+          "apps/relay/internal/api/handler/mailbox_handler.go:102"
+        ],
+        "enumeration_method": "keryx ctx rg for the mailbox key writers plus a full read of MailboxRepository and MailboxService: SaveEnvelope and DeleteEnvelope are the only two writers of the mailbox: key space, both now routed through the single `update` retry helper, and SendEnvelope is the only handler that reaches StoreEnvelope. All four sites carry the fixed shape."
+      }
+    },
+    {
+      "id": "F-005",
+      "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-005",
+      "reviewer": "review-backend",
+      "severity": "major",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 229,
+      "symbol": "MailboxRepository.retentionDeadlineSeconds",
+      "problem": "T38 fix disposition: FIXED. Retention and selection now honour the envelope's declared expiry.",
+      "impact": "The delayed-receiver wedge can no longer occur. Physical retention is min(declared, now+cap) floored at now, so it is never zero (which badger reads as keep-forever) and never unbounded; expired records are skipped before either poll bound is consumed, so a stale envelope cannot block newer valid ones; and an identical retry cannot extend expiry.",
+      "suggested_fix": "None required. One theoretical hole recorded only: mailbox_repo.go:241-243 clamps a negative deadline to 0, which badger reads as no expiry - reachable only if the host clock were before 1970.",
+      "evidence": "retentionDeadlineSeconds (mailbox_repo.go:229-246): deadline = ExpiresAtMs/1000, capped at now.Add(retentionCap).Unix() at :233, floored at now.Unix() at :236 - min(declared, now+cap) floored at now, exactly as required. The cap is applied from config at router.go:32 and SetRetentionCap ignores a non-positive value (:42-47) so an unconfigured Config cannot collapse retention to zero. Expired records are skipped BEFORE either bound: GetEnvelopeBatch returns from the value callback at :183-185 before usedBytes, batch.Envelopes and the >= limit check at :170 are touched; GetEnvelopes increments count only for live envelopes at :117-121. An identical retry returns nil at :73-77 before SetEntry, so ExpiresAt is never rewritten (expiresAt computed at :63 is deliberately unused on that branch). Submission side rejects an already-past expires_at_ms at mailbox_handler.go:97-100 with 400/INVALID_SCHEMA. cleanup_service.go:41-46 remaining a no-op is now correct: the per-entry deadline plus the read-side filter enforce the lifetime. Bounded probe: TestSaveEnvelopeRetentionNeverExceedsDeclaredLifetime (three subtests) and TestGetEnvelopesFiltersExpiredBeforeApplyingBatchLimit both pass.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "backend-F-002",
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "fixed - mailbox_repo.go:229-246 (min/floor arithmetic), :183-185 and :117-121 (expiry filtered before the bounds), :73-77 (retry cannot extend), mailbox_handler.go:97-100 (submission rejection), router.go:32 (cap from config); mailbox_repo_test.go:33-153 re-run green in a bounded probe."
+      },
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/storage/repository/mailbox_repo.go:63",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:117",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:183",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:229",
+          "apps/relay/internal/api/handler/mailbox_handler.go:97",
+          "apps/relay/internal/api/router/router.go:32",
+          "apps/relay/internal/service/cleanup_service.go:41"
+        ],
+        "enumeration_method": "keryx ctx rg for WithTTL|ExpiresAtMs|ExpiresAt|retentionCap across apps/relay, plus a full read of MailboxRepository, MailboxService and CleanupService: the one writer of a retention deadline, the two readers that select envelopes, the submission-side expiry gate, the cap injection point and the (now correctly inert) cleanup loop. Every original F-005 site is covered and each now consults the clock."
+      }
+    },
+    {
+      "id": "F-006",
+      "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-006",
+      "reviewer": "review-security-code",
+      "severity": "blocker",
+      "file": "apps/relay/internal/api/handler/request_body.go",
+      "line": 42,
+      "symbol": "decodeJSONRequest",
+      "problem": "T38 fix disposition: FIXED. V1 request bodies are bounded before decoding and the ciphertext length is now the authority over the declared size_bytes.",
+      "impact": "The configured message-byte limit can no longer be bypassed, oversized records can no longer be accepted, and the decoder can no longer be fed an unbounded body. The send-route bound is derived from config so it cannot drift below MaxMessageBytes.",
+      "suggested_fix": "None for the finding as stated. One residual from the same suggested_fix remains and is reported separately as R-001: the envelope's variable-length STRING fields are still unvalidated, so an identifier over badger's 65000-byte key limit yields HTTP 500 instead of 400.",
+      "evidence": "decodeJSONRequest (request_body.go:42-56) wraps r.Body in http.MaxBytesReader before encoding/json, answering http.MaxBytesError with 413/PAYLOAD_TOO_LARGE and any other decode error with 400/INVALID_JSON without echoing the decoder error. All six enumerated v1 sites use it: mailbox_handler.go:77, 142, 199, 306; device_record_handler.go:38; prekey_bundle_handler.go:28. Enumeration by keryx ctx rg 'json.NewDecoder|decodeJSONRequest|MaxBytesReader|io.ReadAll' over apps/relay (17 matches, 7 files): the only remaining raw json.NewDecoder(r.Body) is the already-bounded v2 sibling signal_prekey_bundle_v2.go:31-32, and validation/signal_prekey_bundle_v2.go:158 decodes from an already-bounded in-memory buffer, not the socket. The send bound stays above MaxMessageBytes by construction: envelopeBodyLimit() = maxMessageBytes + envelopeJSONOverheadBytes (mailbox_handler.go:67-73, request_body.go:22), with a defaultMaxMessageBytes fallback at request_body.go:26. ValidateMailboxEnvelope (validate.go:85-94) checks len(Ciphertext) > maxBytes -> 413, SizeBytes > maxBytes -> 413, SizeBytes != len(Ciphertext) -> INVALID_SCHEMA. Variable-length arrays bounded at mailbox_handler.go:315-318 and prekey_bundle_handler.go:37-40. Bounded probe: TestV1JSONHandlersBoundRequestBodyBeforeDecoding drives an 8 MiB body at all six sites and passes.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "security-F-001",
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "fixed - request_body.go:42-56 plus the six call sites (mailbox_handler.go:77,142,199,306; device_record_handler.go:38; prekey_bundle_handler.go:28), mailbox_handler.go:67-73 (config-derived send bound), validate.go:85-94 (real ciphertext length is the authority); request_body_limit_test.go:43-93 re-run green in a bounded probe. Residual tracked as R-001."
+      },
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/api/handler/mailbox_handler.go:77",
+          "apps/relay/internal/api/handler/mailbox_handler.go:142",
+          "apps/relay/internal/api/handler/mailbox_handler.go:199",
+          "apps/relay/internal/api/handler/mailbox_handler.go:306",
+          "apps/relay/internal/api/handler/device_record_handler.go:38",
+          "apps/relay/internal/api/handler/prekey_bundle_handler.go:28",
+          "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go:31",
+          "apps/relay/internal/validation/validate.go:85"
+        ],
+        "enumeration_method": "keryx ctx rg 'json.NewDecoder|decodeJSONRequest|MaxBytesReader|io.ReadAll' over apps/relay returned 17 matches across 7 files; every handler-side reader of an HTTP request body is in this list. Six v1 sites now route through decodeJSONRequest, the v2 site was already bounded, and validate.go:85 is the sole claimed-size comparison before mailbox persistence. No unbounded decoder site remains."
+      }
+    },
+    {
+      "id": "T34-I-001",
+      "reviewer": "review-backend",
+      "severity": "major",
+      "file": "apps/relay/internal/storage/repository/device_record_repo.go",
+      "line": 125,
+      "symbol": "BackfillDeviceMailboxBindings",
+      "problem": "T38 fix disposition: FIXED - accepted as-is for this prototype. A start-up backfill with no completion marker is the right trade here, and it cannot corrupt or mis-bind anything, including under concurrency, which is itself unreachable.",
+      "impact": "No corruption or mis-binding is representable. The cost is one prefix scan of device_record:* per start on a local prototype relay, and the absence of a marker is what makes a transient failure self-heal on the next start rather than becoming permanent.",
+      "suggested_fix": "Do not add a completion marker: it would convert a self-healing failure into a permanent one for no benefit at this scale. Two sub-issues are reported separately as R-002 (the backfill is the one device_mailbox writer without the bounded conflict retry) and R-003 (every record is materialised before writing, and one undecodable record aborts the scan).",
+      "evidence": "Four independent arguments. (1) No in-process concurrency with live publication: main.go:31 calls router.NewRouter, which runs the backfill at router.go:39, and only then main.go:34 calls http.ListenAndServe - a call-ordering guarantee, not a timing assumption. (2) No cross-process concurrency: storage.go:15-18 opens badger with DefaultOptions and no BypassLockGuard, so the directory lock excludes a second relay on the same DataDir. (3) Mis-binding is not representable even if (1) and (2) were removed: the binding key is device_mailbox:<DeriveMailboxID(record.IdentityID)>:<device_id> and the value written is that SAME record.IdentityID (device_record_repo.go:175-184), so key and value are both pure functions of one identity and every writer of a given key writes byte-identical bytes - first-writer-wins at :176-179 is value-preserving, not a race with a winner. Two identities cannot share a binding key short of a SHA-256 collision (cryptoutil/signatures.go:14-17). Key and content cannot diverge either: Save (:50-53) derives both the record key and the binding from record.IdentityID, and ValidateDeviceRecord (validate.go:27-30) verifies the record signature against that same IdentityID. (4) A backfill failure is logged and non-fatal (router.go:39-41), so the next start retries the whole scan.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "fixed / accepted - main.go:31,34 and router.go:39 establish the pre-serve ordering; storage.go:15-18 establishes the exclusive directory lock; device_record_repo.go:175-184 with cryptoutil/signatures.go:14-17 establishes that the binding key and value are both pure functions of the same identity, so concurrent writers can only write identical bytes."
+      },
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/storage/repository/device_record_repo.go:41",
+          "apps/relay/internal/storage/repository/device_record_repo.go:85",
+          "apps/relay/internal/storage/repository/device_record_repo.go:125",
+          "apps/relay/internal/storage/repository/device_record_repo.go:170",
+          "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go",
+          "apps/relay/internal/api/router/router.go:39",
+          "apps/relay/cmd/relay/main.go:31"
+        ],
+        "enumeration_method": "keryx ctx rg for the device_record: and device_mailbox: key spaces plus a full read of DeviceRecordRepository: the three writers of a binding are Save (v1), saveSignalV2Authorization (v2) and the backfill, all funnelling through the single SaveDeviceMailboxBinding at :170; the one reader on the authorization path is GetByMailboxAndDevice at :85; the two call sites that decide whether the backfill can race anything are router.go:39 and main.go:31/34."
+      }
+    },
+    {
+      "id": "T34-I-002",
+      "reviewer": "review-backend",
+      "severity": "minor",
+      "file": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "line": 67,
+      "symbol": "MailboxHandler.envelopeBodyLimit",
+      "problem": "T38 fix disposition: FIXED. The hand-chosen send-route constant was replaced by a bound derived from config, and the MaxMessageBytes + 64 KiB derivation is sound.",
+      "impact": "The drift this concern warned about is now structurally impossible: the send bound is by construction strictly greater than MaxMessageBytes and moves with it, so raising ECHOLET_MAX_MESSAGE_BYTES can never leave the route rejecting legitimate maximum-size envelopes.",
+      "suggested_fix": "None. One asymmetry recorded as R-004: envelopeBodyLimit() substitutes a default when maxMessageBytes <= 0 but mailbox_handler.go:86 passes the raw value into validation, so the two paths read an unset value differently (fail-closed either way).",
+      "evidence": "mailbox_handler.go:67-73 computes maxMessageBytes + envelopeJSONOverheadBytes with a defaultMaxMessageBytes fallback (request_body.go:22, 26). The derivation holds: the largest legal body is {\"envelope\":{...}} with at most MaxMessageBytes ciphertext characters plus twelve fixed-shape fields (two UUIDs, two device UUIDs, three base64url ids of 43 chars, keys and numbers) totalling a few hundred bytes; ciphertext is base64url (outbound.ts:83) so no JSON escaping expands it. 64 KiB is therefore roughly 100x the real overhead while 262144 + 65536 = 327680 stays a factor of three below the 1 MiB response ceiling the client enforces at relayClient.ts:96. compactRequestBodyLimit (64 KiB) and envelopeRequestBodyLimit (1 MiB, prekey publication) remain constants but carry no MaxMessageBytes-scaled data and have their arrays bounded separately (mailbox_handler.go:315-318, prekey_bundle_handler.go:37-40).",
+      "confidence": "high",
+      "blocking_merge": false,
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "fixed - mailbox_handler.go:67-73 derives the send bound from cfg.MaxMessageBytes via request_body.go:22,26; arithmetic checked against outbound.ts:83 (base64url ciphertext, no escaping) and relayClient.ts:96 (1 MiB client ceiling)."
+      }
+    },
+    {
+      "id": "T34-I-003",
+      "reviewer": "review-backend",
+      "severity": "minor",
+      "file": "apps/relay/internal/validation/validate.go",
+      "line": 92,
+      "symbol": "ValidateMailboxEnvelope",
+      "problem": "T38 fix disposition: FIXED. The stricter size_bytes == len(ciphertext) contract matches what every existing implementation already does, so it breaks nothing in this prototype.",
+      "impact": "No CLI-generated envelope can be rejected by the new equality check, and the relay is now strictly more consistent with the receiver than before. The residual risk named by the concern - a third-party sender using different semantics - is a specification gap, not a contract break.",
+      "suggested_fix": "None required for this flow. Record the semantics in the specification or tighten the protocol schema; tracked as R-005.",
+      "evidence": "outbound.ts:83 writes size_bytes: Buffer.byteLength(ciphertext); inbound.ts:51 rejects an envelope whose size_bytes !== Buffer.byteLength(ciphertext); validate.go:85 compares against len(envelope.Ciphertext), which in Go is the byte length of the decoded string - the same number for the same bytes on both sides, ASCII or not. So the Go and TypeScript contracts agree exactly. The documentary gap is real: packages/protocol/src/types/mailboxEnvelope.ts:17 types the field as z.number() only, and keryx ctx rg size_bytes over docs/requirements returns zero hits.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "fixed - validate.go:85-94 against outbound.ts:83 and inbound.ts:51; Go len() on the decoded string and JS Buffer.byteLength are the same byte count, so the two contracts agree. Documentation gap tracked as R-005."
+      }
+    },
+    {
+      "id": "R-001",
+      "reviewer": "review-backend",
+      "severity": "minor",
+      "file": "apps/relay/internal/validation/validate.go",
+      "line": 72,
+      "symbol": "ValidateMailboxEnvelope",
+      "problem": "The envelope's variable-length STRING fields (envelope_id, recipient_mailbox_id, sender_identity_id, message_id, the device ids) carry no length bound. F-006's suggested_fix asked for other variable-length request fields to be bounded in the same decoder contract; the arrays were bounded, these were not.",
+      "impact": "The store key is mailbox:<recipient_mailbox_id>:<envelope_id> (mailbox_repo.go:262). Badger rejects a key over 65000 bytes (badger/v4@v4.9.1/txn.go:352, 363-367), so a send whose recipient_mailbox_id exceeds that - comfortably inside the 327680-byte body bound - fails inside SaveEnvelope and surfaces as HTTP 500 / INTERNAL_ERROR (mailbox_handler.go:112) on purely attacker-controlled input, where a 4xx is correct. No content leaks, because the handler writes a fixed message, and the body cap prevents amplification. Does not block acceptance of the fix wave.",
+      "suggested_fix": "Bound the identifier fields in ValidateMailboxEnvelope alongside the existing emptiness checks - e.g. reject any of them longer than 256 bytes with INVALID_SCHEMA.",
+      "evidence": "validate.go:72-99 validates type, version, ciphertext presence, the two size comparisons and the expiry ordering, and never inspects the length of any identifier. mailbox_repo.go:261-263 concatenates recipient_mailbox_id and envelope_id into the badger key. badger/v4@v4.9.1/txn.go:352 const maxKeySize = 65000, enforced at :363-367. mailbox_handler.go:102-113 maps every non-conflict storage error to 500.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "R-002",
+      "reviewer": "review-backend",
+      "severity": "minor",
+      "file": "apps/relay/internal/storage/repository/device_record_repo.go",
+      "line": 156,
+      "symbol": "BackfillDeviceMailboxBindings",
+      "problem": "The backfill's per-record r.db.Update is the one writer of the device_mailbox key space that is not wrapped in a bounded conflict retry, and it returns on the first error, abandoning every record after it.",
+      "impact": "Unreachable today, because the backfill runs before ListenAndServe (main.go:31, 34) and badger's directory lock excludes a second writer - which is why this is minor rather than major. It is reported as a class divergence: the invariant 'every writer of the device_mailbox key space retries a conflict' now has exactly one exception, and the next change that moves the backfill off the pre-serve path would make it real. Does not block acceptance of the fix wave.",
+      "suggested_fix": "Route the backfill's write through the same bounded-retry shape Save uses (device_record_repo.go:48-58), or continue past a per-record failure instead of returning, so one bad record cannot abandon the rest.",
+      "evidence": "device_record_repo.go:156-161 calls r.db.Update once with no retry and returns err. Compare Save at :48-58 (64 attempts on badger.ErrConflict) and MailboxRepository.update at mailbox_repo.go:250-259 (the same shape). router.go:39-41 logs the returned error and continues.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "R-003",
+      "reviewer": "review-backend",
+      "severity": "info",
+      "file": "apps/relay/internal/storage/repository/device_record_repo.go",
+      "line": 126,
+      "symbol": "BackfillDeviceMailboxBindings",
+      "problem": "The scan appends every decoded device record to a pending slice before any write, so peak memory grows with the total record count; and a single record failing json.Unmarshal aborts the whole scan, so no legacy binding is written that start.",
+      "impact": "Acceptable at prototype scale, and self-healing on the next start. Recorded so the trade is explicit rather than accidental. Does not block acceptance of the fix wave.",
+      "suggested_fix": "None required for the prototype. If it ever matters, write each binding inside the iteration and skip an undecodable record rather than returning.",
+      "evidence": "device_record_repo.go:126 declares pending, :142 appends every record, :155-162 writes only afterwards; :134-147 returns the unmarshal error out of the View closure, aborting the scan. router.go:39-41 logs and continues.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "R-004",
+      "reviewer": "review-backend",
+      "severity": "info",
+      "file": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "line": 86,
+      "symbol": "MailboxHandler.SendEnvelope",
+      "problem": "envelopeBodyLimit() substitutes defaultMaxMessageBytes when h.maxMessageBytes <= 0 (mailbox_handler.go:68-71), but line 86 passes the raw h.maxMessageBytes into ValidateMailboxEnvelope, so the two paths assign different meanings to the same unset value.",
+      "impact": "With ECHOLET_MAX_MESSAGE_BYTES=0 the route accepts a 327680-byte body and then rejects every envelope with PAYLOAD_TOO_LARGE. Fail-closed, and arguably the right reading of 'maximum 0'. Flagged only for the inconsistency. Does not block acceptance of the fix wave.",
+      "suggested_fix": "Resolve the effective maximum once (the envelopeBodyLimit fallback logic) and pass that same value to both the body bound and ValidateMailboxEnvelope.",
+      "evidence": "mailbox_handler.go:67-73 versus mailbox_handler.go:86; request_body.go:26 defines defaultMaxMessageBytes; config.go:13 defaults MaxMessageBytes to 262144, so this is only reachable through explicit operator misconfiguration.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "R-005",
+      "reviewer": "review-backend",
+      "severity": "info",
+      "file": "packages/protocol/src/types/mailboxEnvelope.ts",
+      "line": 17,
+      "symbol": "MailboxEnvelopeSchema.size_bytes",
+      "problem": "The relay now enforces size_bytes == len(ciphertext) and the CLI receiver enforces the same, but the protocol schema types the field as z.number() only and the requirements documentation never mentions size_bytes.",
+      "impact": "Three implementations agree by coincidence of authorship; a fourth sender has nothing normative to read. Does not block acceptance of the fix wave.",
+      "suggested_fix": "State the semantics in docs/requirements/echolet-cli-prototype/specification.md, or add a refinement to the protocol schema so the equality is expressed once rather than three times.",
+      "evidence": "packages/protocol/src/types/mailboxEnvelope.ts:17 (z.number()); validate.go:92 and apps/cli/src/runtime/inbound.ts:51 both enforce the equality; keryx ctx rg size_bytes over docs/requirements returns zero hits.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T15:35:00Z"
+}

@@ -1,0 +1,137 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T42-verify",
+  "status": "DONE",
+  "summary": "T42 attempt 3: the full verification matrix was re-run independently on the working tree with Node v26.5.0. GATE PASS. Twenty checks: 19 PASS, 1 WARN (advisory health adapter, exit 0, 0 P0/P1, 7 P2 complexity), 0 FAIL. pnpm test was green in 6 of 6 complete workspace executions (137 tests; apps/cli 18 files / 92 tests), three of them under deliberate CPU oversubscription of 16, 24 and 48 spinner workers on a 10-core machine. T42-F-001 is shown closed by mechanism, not merely absent: under 24- and 48-worker load, five individual tests in apps/cli/src/runtime/inbound.test.ts exceeded the old 5000ms vitest default (5184, 5439, 5164, 5280, 6743 ms) and the runs stayed green because T43's testTimeout 30000 absorbed them; before T43 each would have been a failure. The T43-N-001 look-alike (Timeout calling onTaskUpdate) occurred 0 times; load was deliberately kept below the ~30x oversubscription level at which T43 recorded it. T45/T46 confirmed at the binary level against a real relay binary and real dist/cli.js: first publish claimable=true, repeat-while-unclaimed claimable=true with identical bundle_id, and post-claim republish claimable=false with identical bundle_id; a second distinct sender reports exactly PREKEY_BUNDLE_UNAVAILABLE at exit 3, while an untrusted sender still reports CONTACT_NOT_TRUSTED at exit 3, so the two are distinguishable; and a publish response with claimable deleted by a mutating loopback proxy is refused rather than reported as success. E2E evidence is completely unfiltered: 24 of 24 two-process iterations clean across eight complete executions, plus 7 green runs of the new publication-claimability e2e suite. Go: untagged, untagged -race -count=1, and relayv2 -race -count=1 all exit 0; the verbose relayv2 run records 39 top-level tests, 39 PASS, 0 FAIL, 0 SKIP, 0 data races. Test integrity: 46 test files and 5 key config files SHA-256 verified unchanged before and after (46 OK / 0 FAILED, 5 OK / 0 FAILED); 0 skip/only/todo/t.Skip matches workspace-wide. Reconciliation against the 128 recorded at the previous T42 attempt: now 137, +9, entirely in apps/cli (83 to 92), and every one of the +9 is an addition in four new files - relayClient.prekeyUnavailable (+3, T45), relayClient.claimable (+3, T46), cli.relayErrorCodes (+2, T45), e2e/publication-claimability (+1, T44/T45). The five test stubs T46 tightened kept identical test counts and now emit the field the real relay emits, which is a tightening, not a weakening. One INFO finding recorded (T42-I-001): a malformed relay publish response is correctly refused but surfaces as the generic PROTOCOL_REJECTED rather than a distinct malformed-response code. Nothing was modified and nothing committed; the revision identifier is the working tree on unborn main. This gate establishes local technical-prototype behaviour on one macOS arm64 machine only.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Every check from the matrix is re-run independently and reported with its exact command, status and bounded evidence.",
+      "status": "met",
+      "evidence": "Twenty rows in the 'Independent checks' table of t42-verification-report.md (attempt 3), each with command, status and bounded evidence; per-check gdctx raw log paths listed under Evidence."
+    },
+    {
+      "criterion": "T42-F-001 must be shown closed, not merely absent: at least three workspace runs, at least one under deliberate CPU load, each reported individually.",
+      "status": "met",
+      "evidence": "Six complete workspace executions, all exit 0, reported individually with load_workers and wall time. Three were loaded (16, 24, 48 workers on 10 cores; wall 58s idle to 151s at 48). Under 24- and 48-worker load, 5 tests in inbound.test.ts exceeded the old 5000ms default (max 6743ms) and were absorbed by testTimeout 30000 - the old failure mode was reproduced under load, not avoided."
+    },
+    {
+      "criterion": "A T43-N-001 look-alike must not be misdiagnosed as a T42-F-001 recurrence.",
+      "status": "met",
+      "evidence": "ontaskupdate_count=0 and timeout_any_count=0 in every workspace run, including the 48-worker one. Load was held at 1.6x-4.8x oversubscription, below the ~30x level at which T43 recorded T43-N-001, so no disambiguation was needed. Stated explicitly in the report."
+    },
+    {
+      "criterion": "The three-iteration end-to-end evidence is taken completely unfiltered - no test file or path exclusions of any kind.",
+      "status": "met",
+      "evidence": "24/24 two-process iterations clean across eight complete executions. The apps/cli suite ran unfiltered (18 files / 92 tests) seven times including both e2e files; the only argument used is the test:e2e script's own definition at apps/cli/package.json:12, not an exclusion applied by this verification. Build-race question re-answered: build.mjs is invoked from exactly two sites and INVALID_ARGUMENTS did not recur."
+    },
+    {
+      "criterion": "Confirm the T45/T46 behaviour holds at the binary level: an exhausted prekey is reported distinguishably from a trust/protocol rejection, and a republish of an already-claimed bundle reports claimable:false, while a genuine trust violation still reports as one.",
+      "status": "met",
+      "evidence": "Binary probe against a freshly built relay and dist/cli.js: publish 1 claimable=true; publish 2 while unclaimed claimable=true, same bundle_id; publish 3 after claim claimable=false, same bundle_id; second distinct trusted sender exit 3 with exactly PREKEY_BUNDLE_UNAVAILABLE (is_CONTACT_NOT_TRUSTED=false); untrusted sender exit 3 CONTACT_NOT_TRUSTED; codes_distinguishable=true. A mutating loopback proxy deleting claimable from the publish response caused the CLI to refuse the response (exit 3, ok=false) rather than report success, confirming T46 at the binary level."
+    },
+    {
+      "criterion": "Test-integrity and reconciliation: no test weakened, skipped or deleted; reconcile the workspace test count against the 128 recorded at the previous T42 attempt.",
+      "status": "met",
+      "evidence": "46 test files and 5 config files hash-verified unchanged (46 OK / 0 FAILED, 5 OK / 0 FAILED). 0 real matches for .skip(/.only(/.todo(/xit(/xdescribe(/t.Skip; 0 SKIP in the verbose Go run. 128 to 137 (+9), all in apps/cli (83 to 92), all additions in four new test files (+3, +3, +2, +1). Per-file table in the report; the five T46-tightened stubs kept identical counts."
+    },
+    {
+      "criterion": "Report the required measurements named in docs/requirements/echolet-cli-prototype/metrics-and-validation.md.",
+      "status": "met",
+      "evidence": "All ten measurements tabulated with measured values and evidence sources: E2E 3/3 in every execution, concurrent claim winners 1 of 20 under -race, lost-response claim replay exact, reused-OTK publications rejected, offline delivery 1/1, sender restart byte-identical retry, 0 duplicate history entries, 0 known-plaintext-marker occurrences (count only), 4/4 shared invalid contract cases in both languages, and 19 pages / 38 links / 0 broken."
+    },
+    {
+      "criterion": "Do not stop at the first failure; keep the limitations section honest and do not claim production readiness.",
+      "status": "met",
+      "evidence": "The whole matrix was executed; no check was skipped. The Limitations section restates the metrics-and-validation.md boundary verbatim in substance (no production security, mobile delivery, deployment readiness, external audit, user demand or permanent libsignal suitability) and adds eight specific honesty notes, including the finite sample, the untested >30x load regime, the 5000ms default still in force for the other six packages, and the unchanged structural one-sender-per-bundle limitation T44 identified."
+    },
+    {
+      "criterion": "Record which Node was used (T45-I-003).",
+      "status": "met",
+      "evidence": "Node v26.5.0 at /opt/homebrew/bin/node, the default node on PATH, confirmed before the first check and used for every command. The v22.12.0 node:sqlite collection failure did not apply."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t42-verification-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Extended with the attempt-3 section (787 lines total); the attempt-2 FAIL report is preserved above it as history.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/testing/artifacts/latest.md",
+      "kind": "health",
+      "exists": true,
+      "summary": "keryx test run --strict: PASS, passed 2 / failed 0; its underlying pnpm run test execution was green with 137 tests.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/health/artifacts/latest.md",
+      "kind": "health",
+      "exists": true,
+      "summary": "keryx health run --strict: WARN, score 94, 7 findings all P2 complexity, 0 P0, 0 P1. Advisory; ESLint and TypeScript are auto-skipped by the adapter.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "kind": "graph",
+      "exists": true,
+      "summary": "Rebuilt: 83 nodes, 126 edges (attempt 2: 79 / 121). No cycles.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdwiki/link-check/latest.md",
+      "kind": "wiki",
+      "exists": true,
+      "summary": "19 pages, 38 internal links, 0 broken.",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "T42-I-001",
+      "reviewer": "code-verifier",
+      "severity": "info",
+      "problem": "A malformed relay publish response - specifically one omitting the now-required `claimable` field - is correctly refused by the CLI, but the machine-readable code surfaced to the operator is the generic `PROTOCOL_REJECTED` at exit 3, not a code that names a malformed relay response. The transport raises its own `INVALID_RELAY_RESPONSE` (apps/cli/src/transport/relayClient.ts:20), which `classify()` in apps/cli/src/commands/cli.ts flattens because `reportedRelayCodes` enumerates relay-chosen codes only.",
+      "impact": "Diagnostic only; the refusal itself is correct and T46's requirement is met. The operator is told the relay rejected the request when in fact the relay's answer was malformed - the same shape of misreporting that T44/T45 fixed one layer in, for the exhausted-prekey case. No requirement currently names a code for this condition and no test asserts one, so this is an observation for the orchestrator rather than a gate failure.",
+      "suggested_fix": "If the flow's documentation task enumerates operator-facing CLI error codes, consider whether a malformed relay response deserves its own code alongside PREKEY_BUNDLE_UNAVAILABLE, or record deliberately that it does not. No code change is proposed by this verification.",
+      "evidence": "Binary probe via a mutating loopback proxy that deleted `claimable` from the /v2/prekeys/publish response: erin_via_proxy_claimable_stripped exit=3 ok=false code=PROTOCOL_REJECTED, versus the pass-through control exit=0 ok=true claimable=true. Log: .metaproject/data/gdctx/raw/2026-09-06T19-18-25-784Z_run.log",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": 1200000,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "checks_total": 20,
+    "checks_pass": 19,
+    "checks_warn": 1,
+    "checks_fail": 0,
+    "gate": "PASS",
+    "workspace_test_count": 137,
+    "workspace_test_count_previous_attempt": 128,
+    "cli_test_count": 92,
+    "cli_test_files": 18,
+    "test_files_total": 46,
+    "workspace_runs_total": 6,
+    "workspace_runs_green": 6,
+    "workspace_runs_under_load": 3,
+    "e2e_two_process_iterations": 24,
+    "e2e_two_process_iterations_clean": 24,
+    "go_relayv2_top_level_tests": 39,
+    "go_relayv2_skipped": 0,
+    "go_data_races": 0,
+    "inbound_tests_over_old_5000ms_default_under_load": 5,
+    "inbound_max_per_test_ms_under_load": 6743,
+    "ontaskupdate_timeouts_observed": 0,
+    "test_files_hash_verified_ok": 46,
+    "test_files_hash_verified_failed": 0
+  },
+  "timestamp_utc": "2026-09-06T19:30:00Z"
+}

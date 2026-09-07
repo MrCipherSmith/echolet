@@ -1,0 +1,51 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "keryx security check-input --source untrusted-external --runtime claude"
+          }
+        ],
+        "_keryxManaged": "security-agent-hooks"
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "keryx orient claude"
+          }
+        ],
+        "_keryxManaged": "ctx-orient-hooks"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "keryx ctx hook claude"
+          }
+        ],
+        "_keryxManaged": "ctx-agent-hooks"
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "keryx security check-output --runtime claude"
+          }
+        ],
+        "_keryxManaged": "security-agent-hooks"
+      }
+    ]
+  },
+  "_keryxManaged": [
+    "ctx-agent-hooks",
+    "security-agent-hooks",
+    "ctx-orient-hooks"
+  ]
+}

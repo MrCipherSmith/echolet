@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "task-implementer-input-contract",
+  "title": "Task Implementer Input Contract",
+  "description": "Defines all input parameters required to run task-implementer skill autonomously. Receives one atomic task object from issue-analyzer plus workspace context. Registered as contract `task-implementer-input`: validate a request with `keryx skills contracts validate <request.json> --schema task-implementer-input`.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task", "workspace", "automation"],
+  "properties": {
+    "task": {
+      "type": "object",
+      "description": "The atomic task to implement, as issue-analyzer decomposed it.",
+      "additionalProperties": false,
+      "required": ["task_id", "task_name", "task_type", "description", "target_files", "acceptance_criteria"],
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "pattern": "^(?:task|fix)-\\d+$",
+          "description": "Unique task identifier. `fix-<n>` is legal because orchestrator-prompt.md Step 4 builds exactly that for a fix round; the pattern was `^task-\\d+$`, so every fix dispatch this skill documents was one the contract would have refused.",
+          "examples": ["task-1", "task-3", "fix-1"]
+        },
+        "task_name": {
+          "type": "string",
+          "description": "Descriptive name of the task",
+          "examples": ["Add validation to pipeline form"]
+        },
+        "task_type": {
+          "type": "string",
+          "enum": ["ui_component", "store_logic", "service_api", "refactoring", "fix", "mixed"],
+          "description": "Type of implementation task"
+        },
+        "complexity": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "default": "medium",
+          "description": "Estimated complexity"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^task-\\d+$"
+          },
+          "default": [],
+          "description": "Task IDs this task depends on (already completed)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Full description of what to implement"
+        },
+        "target_files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "File paths to modify or create",
+          "examples": [["src/pipelines/components/StepForm.tsx", "src/pipelines/stores/step.store.ts"]]
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Criteria that must be met for task to be considered complete"
+        },
+        "context": {
+          "type": "string",
+          "description": "Relevant code context: key types, function signatures, patterns"
+        },
+        "existing_tests": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Paths to existing test files (empty array if none)"
+        },
+        "existing_stories": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Paths to existing story files (empty array if none)"
+        },
+        "module_patterns": {
+          "type": "string",
+          "description": "Notes on how similar code is written in the module"
+        },
+        "test_case_specs": {
+          "type": "object",
+          "description": "RED-phase test stubs already written and committed by tests-creator. Present => TDD Mode (SKILL.md Phase 4.0): the implementer makes these GREEN and writes no new tests.",
+          "additionalProperties": false,
+          "required": ["test_files", "run_command"],
+          "properties": {
+            "test_files": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1,
+              "description": "Test files that must be failing when the task starts"
+            },
+            "run_command": {
+              "type": "string",
+              "description": "Command that runs exactly those test files"
+            }
+          }
+        }
+      }
+    },
+    "workspace": {
+      "type": "object",
+      "description": "Workspace context managed by the orchestrator.",
+      "additionalProperties": false,
+      "required": ["codebase_path", "branch", "issue_number"],
+      "properties": {
+        "codebase_path": {
+          "type": "string",
+          "description": "Absolute path to the repository root",
+          "examples": ["/Users/dev/<PROJECT>"]
+        },
+        "branch": {
+          "type": "string",
+          "description": "Feature branch to work on (already created and checked out by orchestrator)",
+          "examples": ["feature/4141-add-pipeline-validation"]
+        },
+        "issue_number": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "GitHub issue number for commit references"
+        },
+        "issue_title": {
+          "type": "string",
+          "description": "GitHub issue title for context"
+        },
+        "job_name": {
+          "type": "string",
+          "description": "Job package slug, when the dispatch came from job-orchestrator. Phase 6.1 records its result against this name with `keryx job document <job_name> --type implementation-report --file <path>`; absent, Phase 6.1 skips the file write.",
+          "examples": ["issue-4141--pipeline-validation"]
+        },
+        "context_path": {
+          "type": "string",
+          "description": "Job context document read at the start of Phase 2, e.g. .metaproject/jobs/<job_name>/ai/context.md"
+        }
+      }
+    },
+    "fix_context": {
+      "type": "object",
+      "description": "Present only for fix tasks dispatched from review loop.",
+      "additionalProperties": false,
+      "properties": {
+        "review_feedback": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["file", "severity", "message"],
+            "properties": {
+              "file": {
+                "type": "string",
+                "description": "File path where the issue was found"
+              },
+              "line": {
+                "type": "integer",
+                "description": "Line number (if available)"
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["CRITICAL", "WARNING", "INFO"],
+                "description": "Severity of the finding"
+              },
+              "message": {
+                "type": "string",
+                "description": "Review finding description"
+              },
+              "reviewer": {
+                "type": "string",
+                "description": "Which review skill found this",
+                "examples": ["code-ai-review", "code-learned-review", "code-style-review"]
+              }
+            }
+          },
+          "description": "Structured findings from review skills"
+        },
+        "original_task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^task-\\d+$"
+          },
+          "minItems": 1,
+          "description": "The tasks that introduced the findings. Plural because a fix round collects findings across a whole wave — orchestrator-prompt.md Step 4 has always sent an array, while this field was named `original_task_id` and typed as one string, so the two could never agree."
+        },
+        "iteration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3,
+          "description": "Fix iteration number. Three, the same bound `flow-orchestrator`, `job-orchestrator` and SKILL.md Phase 5.4 carry and `src/gdskills/round-bound.test.ts` pins; it was 2 here, a fourth disagreeing repair bound."
+        }
+      }
+    },
+    "automation": {
+      "type": "object",
+      "description": "Controls for autonomous execution. This object is the ONLY definition of the automation settings — SKILL.md points here rather than restating the defaults.",
+      "additionalProperties": false,
+      "required": ["skip_confirmation"],
+      "properties": {
+        "skip_confirmation": {
+          "type": "boolean",
+          "const": true,
+          "description": "Must be true for autonomous mode"
+        },
+        "auto_commit": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically commit changes after implementation"
+        },
+        "verify_lint": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run ESLint after implementation"
+        },
+        "verify_types": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run type-check after implementation"
+        },
+        "verify_tests": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run tests after implementation"
+        },
+        "verify_stories": {
+          "type": "boolean",
+          "default": false,
+          "description": "Build storybook to verify stories compile"
+        },
+        "max_self_fix_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3,
+          "default": 3,
+          "description": "Max attempts to fix verification failures. Bounded at 3, not 5: SKILL.md Phase 5.4 states an absolute \"Maximum 3 self-fix attempts per verification step\" and cites the evidence for it, so a request asking for 4 was asking for something the skill refuses to do."
+        },
+        "commit_message_style": {
+          "type": "string",
+          "const": "conventional",
+          "description": "Commit format. One value: SKILL.md Phase 4.5 documents the conventional form and no other."
+        }
+      }
+    }
+  }
+}

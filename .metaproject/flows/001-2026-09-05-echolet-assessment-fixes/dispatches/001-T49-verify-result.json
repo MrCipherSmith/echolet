@@ -1,0 +1,154 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T49-verify",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Full independent re-verification of the echolet-cli-prototype matrix after the T47/T48 round-2 fix wave, on Node v26.5.0. Twenty checks executed: 19 PASS, 1 WARN (advisory strict health adapter, exit 0, 0 P0/P1), 0 FAIL. All ten required measurements in metrics-and-validation.md meet their thresholds, so the gate is satisfied on its own terms. Workspace tests were green in four complete unfiltered executions (139 tests: apps/cli 19 files / 94 tests, other six packages 45), two of them under deliberate 24- and 48-worker CPU oversubscription; zero 'Test timed out' and zero 'Timeout calling onTaskUpdate' occurrences. The three-iteration real E2E was 3/3 in every execution with no path or name exclusion (18/18 iterations). Go: untagged, untagged -race -count=1 and uncached relayv2-tagged race all exit 0, with 44 top-level tests, 44 PASS, 0 FAIL, 0 SKIP, 0 DATA RACE (T42: 39). Against the real relay binary and the real dist/cli.js, T48 path A is confirmed closed: eight shape-invalid envelopes, including the three zod-4 edge cases (max UUID, version nibble 0, variant nibble c), are refused at ingress with 400 INVALID_SCHEMA while a shape-valid control is accepted, and both R2-002 routes answer 400 instead of 500. Path B is confirmed working: at 60 and at 799 head-of-mailbox poison envelopes the walk resumes past the poison via the server-issued cursor and the legitimate message is delivered and acknowledged exactly once. THE WEDGE IS NOT ELIMINATED. It is bounded at 16 pages and the bound was measured on the real relay at default configuration: 800 minimum-size envelopes (count-bounded pages of 50) or 49 maximum-size envelopes (byte-budget-bounded pages of 3, about 12.8 MB) permanently wedge a mailbox - poll exit 3 INBOUND_REJECTED, history 0, and three further polls make no progress. Preconditions are only the victim's mailbox id from their own contact card; 49 requests is under 30 seconds at the default 120/minute rate limit, and one flood holds for up to the 168 h retention cap. Recorded as T49-F-001 (major). The new cursor is server-controlled, never derived from envelope_id (every issued token was a two-digit decimal position), bounded at 15 digits server-side and 256 chars client-side, cannot select another mailbox, and 9 of 11 tampered tokens produce a bounded 400 with 0 of 11 producing a 500 and no silent reset to position zero; a syntactically valid out-of-range position returns an empty final page instead of a 4xx, and the cursor is outside the signed challenge message (T49-I-001, info). F-005 (c) still holds: expired envelopes are skipped before the cursor decrement and before both bounds, confirmed by source order and by a probe with poll_batch_size 2 in which one page carrying exactly one live envelope sufficed. A coverage gap was found: no test anywhere calls GetEnvelopeBatchFrom with a non-empty cursor (T49-F-002, minor). Test integrity was verified by SHA-256, not mtime: 57 OK / 0 FAILED over 51 test files and 6 configuration files, file set identical, and all five T47 RED files byte-identical to the hashes T47 recorded. Test count reconciles 137 -> 139: +2 from the new apps/cli/src/runtime/inbound.pollProgress.test.ts, with the other four new files being Go and contributing exactly the +5 the tagged race suite grew by. Nothing in the repository was modified.",
+  "summary_markdown": null,
+  "acceptance": [
+    { "criterion": "Frozen install, CLI build and workspace typecheck pass", "status": "met", "evidence": "pnpm install --frozen-lockfile exit 0 (8 projects up to date); pnpm --filter @echolet/cli build exit 0; pnpm typecheck exit 0 across 7 TypeScript projects." },
+    { "criterion": "Focused CLI process-contract tests pass", "status": "met", "evidence": "vitest run src/commands/cli.test.ts src/commands/cli.dashOptionValues.test.ts -> exit 0, 2 files / 24 tests (6 + 18), both files hash-unchanged." },
+    { "criterion": "Full workspace tests pass, at least three executions including one under CPU load", "status": "met", "evidence": "4 complete executions, all exit 0 with 139 tests: idle 56 s, 24-worker load 101 s, 48-worker load 153 s, plus the keryx test run --strict execution. timeout_any_count=0 and ontaskupdate_count=0 in every one." },
+    { "criterion": "Three-iteration real E2E passes, taken completely unfiltered", "status": "met", "evidence": "pnpm --filter @echolet/cli test:e2e exit 0, two-process 3/3; the same suite ran inside five further complete unfiltered runs. 18/18 iterations clean. No -t, file list or path filter anywhere." },
+    { "criterion": "Go untagged, untagged race and uncached relayv2 race pass", "status": "met", "evidence": "All three exit 0. Verbose relayv2 -race -count=1: 44 top-level RUN, 44 PASS, 0 FAIL, 0 SKIP, 0 DATA RACE, 5 packages ok." },
+    { "criterion": "keryx test run --strict and keryx health run --strict", "status": "met", "evidence": "test --strict PASS (exit 0, passed 2 / failed 0; underlying pnpm run test green at 139). health --strict WARN, exit 0, score 94, 7 findings all cyclomatic complexity, 0 P0 and 0 P1; advisory adapter that auto-skips ESLint and TypeScript." },
+    { "criterion": "Graph rebuild, graph cycles and wiki link check", "status": "met", "evidence": "keryx gdgraph build: 84 nodes, 130 edges. keryx gdgraph query cycles: no cycles found. keryx wiki check-links: 19 pages, 38 internal links, 0 broken." },
+    { "criterion": "Obligation 1 - the wedge is confirmed against the real relay binary, both halves", "status": "met", "evidence": "Probe built apps/relay/cmd/relay from source and drove the real dist/cli.js through a recording proxy. Half one: 8/8 shape-invalid envelopes refused 400 INVALID_SCHEMA (including max UUID, version nibble 0, variant nibble c), shape-valid control 200, both R2-002 routes bounded 4xx. Half two: at 60 and 799 head-of-mailbox poison the walk resumed past it via the server cursor, received=1, history=1, exactly one ack carrying only the legitimate envelope." },
+    { "criterion": "Obligation 2 - the residual is probed honestly and the threshold and attacker cost stated", "status": "met", "evidence": "Measured on the real relay at default configuration. Count-bounded regime: pages of 50, 799 delivers and 800 wedges. Byte-bounded regime with max-size ciphertext: pages of 3, 48 delivers and 49 wedges. At 49 the poll exits 3 INBOUND_REJECTED with history 0 and three retries all repeat 16 pages with no progress. Cost: 49 unauthenticated POSTs, ~12.8 MB, under 30 s at the default 120/minute rate limit, holding for up to the 168 h retention cap. Reported as T49-F-001 (major), not softened." },
+    { "criterion": "Obligation 3 - the cursor cannot be abused", "status": "met", "evidence": "11 tampered tokens injected in flight: 9 bounded 400 INVALID_SCHEMA, 0 of 11 produced a 500, no silent reset to zero. Every server-issued next_cursor was a 1-2 digit decimal matching ^[0-9]{1,15}$ with no UUID shape; encodeMailboxCursor is strconv.Itoa over a server-computed count. Bounded at 15 digits (relay) and 256 chars (client, on a strict object). Mailbox comes from challenge.RecipientMailboxID, so no cross-mailbox reach. Two residual observations recorded as T49-I-001." },
+    { "criterion": "Obligation 4 - F-005 (c) still holds after the cursor skip", "status": "met", "evidence": "Source order in mailbox_repo.go:249-265 puts the ExpiresAtMs skip before the cursor decrement and before both bounds. Probe with poll_batch_size 2 and three expired envelopes at the head: pages_walked=1, page_envelope_counts=[1], next_cursor null, poll exit 0, received 1, history 1. Both F-005 (c) Go regressions PASS in the tagged race suite." },
+    { "criterion": "Obligation 5 - unfiltered E2E evidence and load runs", "status": "met", "evidence": "No exclusion of any kind in any run. 18/18 two-process iterations clean across idle and 24/48-worker load; publication-claimability green in all 5 full-suite runs. 0 occurrences of 'Timeout calling onTaskUpdate' and 0 of 'Test timed out' at any budget." },
+    { "criterion": "Obligation 6 - integrity by SHA-256 and the 137 reconciliation", "status": "met", "evidence": "57 OK / 0 FAILED over 51 test files plus 6 configuration files; test-file set diff 0 lines; mtime not used. All five T47 RED files MATCH the hashes recorded in 001-T47-tests-result.json. 137 -> 139 (+2) is entirely apps/cli 92 -> 94 from the new inbound.pollProgress.test.ts (2 tests); the four other new files are Go and account exactly for the tagged race suite's 39 -> 44. 0 skip/only/todo markers; 0 Go SKIP." },
+    { "criterion": "Verifier did not modify any source, test or configuration file", "status": "met", "evidence": "57/57 hashes OK after the last command; git status --porcelain reports 23 untracked entries, unchanged from the T48 snapshot; probes ran from the session scratchpad against temp directories only." }
+  ],
+  "artifacts": [
+    { "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t49-verification-report.md", "kind": "final-report", "exists": true, "summary": "T49 verification report in the metrics-and-validation.md evidence format: 20-check matrix, real-relay wedge evidence, measured residual threshold and attacker cost, cursor-abuse results, F-005 (c) confirmation, unfiltered E2E evidence, SHA-256 integrity and the 137 -> 139 reconciliation." },
+    { "path": ".metaproject/data/testing/artifacts/latest.md", "kind": "report", "exists": true, "summary": "keryx test run --strict normalized report: PASS, passed 2 / failed 0." },
+    { "path": ".metaproject/data/health/artifacts/latest.md", "kind": "health", "exists": true, "summary": "keryx health run --strict: WARN, score 94, 7 complexity findings, 0 P0 and 0 P1." },
+    { "path": ".metaproject/data/gdgraph/artifacts/summary.md", "kind": "graph", "exists": true, "summary": "Graph rebuild: 84 nodes, 130 edges; no cycles." },
+    { "path": ".metaproject/data/gdwiki/link-check/latest.md", "kind": "wiki", "exists": true, "summary": "Wiki link check: 19 pages, 38 internal links, 0 broken." }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "T49-F-001",
+      "global_id": "001-T49-verify#T49-F-001",
+      "reviewer": "code-verifier",
+      "severity": "major",
+      "problem": "The poison-envelope mailbox wedge is bounded rather than eliminated. The CLI walks at most maxPollPagesPerPoll = 16 relay pages inside one poll(), so a mailbox whose first 16 pages are entirely permanently-unacceptable envelopes still re-raises before ackPending() and never reaches the legitimate traffic behind them. Measured on the real relay binary at default configuration, the bound is reached at 800 minimum-size envelopes (count-bounded pages of 50) or at 49 maximum-size envelopes (byte-budget-bounded pages of 3).",
+      "impact": "A permanent, unauthenticated denial of message delivery against any mailbox whose id the attacker knows - and the mailbox id is a digest of the identity id published in the victim's own contact card. Cost is 49 POST /v1/messages/send requests totalling about 12.8 MB, which is under 30 seconds of traffic at the default 120 requests/minute rate limit, and the flood holds for up to the 168 h retention cap, so refreshing it costs the same amount per week per victim. Verified permanent: after the wedging poll, three further polls each walked 16 pages, exited 3 INBOUND_REJECTED, acknowledged nothing and left the recipient's history at 0. The wedge also amplifies cost for both sides, since each victim poll now issues 32 HTTP requests (16 challenge plus 16 poll) instead of 2.",
+      "suggested_fix": "A client-side page bound cannot outrun a mailbox an unauthenticated party can fill, so raising 16 only moves the number. The lever belongs on the relay or at ingress: relay-side accounting for envelopes that are repeatedly selected and never acknowledged, sender authentication or proof-of-work on /v1/messages/send, or per-sender mailbox quotas. Which of these is appropriate is an architecture decision for the flow owner, not a verification one; whatever is chosen should be pinned by a test that floods past the chosen bound.",
+      "evidence": "Probe against a relay built from this tree and the real apps/cli/dist/cli.js at default configuration. 49 max-size poison: pages_walked=16, page_envelope_counts=[3 x 16], poll exit=3 code=INBOUND_REJECTED, bob history entries=0, acks_issued=0; retries exit=3/pages=16 x3, history_after_retries=0 (.metaproject/data/gdctx/raw/2026-09-06T21-03-12-679Z_run.log). Boundary at 48 delivers (…T21-02-46-803Z_run.log). 800 small poison wedges (…T21-01-49-406Z_run.log); 799 delivers (…T21-02-18-866Z_run.log). Bound declared at apps/cli/src/runtime/inbound.ts:71.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/inbound.ts:71 (maxPollPagesPerPoll = 16, the page bound)",
+          "apps/cli/src/runtime/inbound.ts:113-127 (the walk and the re-raise that ends it)",
+          "apps/relay/internal/api/handler/mailbox_handler.go:51 (pollEnvelopeByteBudget, the byte bound that sets pages of 3 for max-size envelopes)",
+          "apps/relay/internal/api/handler/mailbox_handler.go:296-302 (pollBatchSize, the count bound that sets pages of 50 at the default poll_batch_size)",
+          "apps/relay/internal/api/handler/mailbox_handler.go:78 (SendEnvelope, the unauthenticated route that lets the mailbox be filled)"
+        ],
+        "enumeration_method": "The class is the set of bounds that jointly determine how many envelopes one poll() can consult. It was enumerated by reading the walk in inbound.ts, then following the two bounds it depends on through keryx ctx rg for maxPollPagesPerPoll, pollEnvelopeByteBudget, pollBatchSize, defaultMaxMailboxBatch and poll_batch_size across apps/relay, apps/cli/src and packages, which returned exactly these declaration sites and no others. Both resulting regimes were then executed against the real relay at their boundaries (799/800 count-bounded, 48/49 byte-bounded), so the list is exhaustive for the observed behaviour rather than asserted."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "Reproduced end to end against the real relay binary and the real CLI binary, with both boundaries (48/49 and 799/800) executed and the permanence of the wedge confirmed across three retries."
+      }
+    },
+    {
+      "id": "T49-F-002",
+      "global_id": "001-T49-verify#T49-F-002",
+      "reviewer": "code-verifier",
+      "severity": "minor",
+      "problem": "No test anywhere calls MailboxRepository.GetEnvelopeBatchFrom with a non-empty cursor. A routed search returns exactly three references: the two-line GetEnvelopeBatch delegation, the service passthrough and the handler. Both F-005 (c) regressions (TestGetEnvelopeBatchFiltersExpiredBeforeApplyingBatchLimit and TestGetEnvelopesFiltersExpiredBeforeApplyingBatchLimit) call the no-cursor forms.",
+      "impact": "The cursor-aware selection path that now serves every production poll has no repository-level test. In particular the ordering property T48 relies on - that an expired record is skipped before the cursor's remaining-- and before both bounds, so a stale envelope can neither wedge delivery nor shift the resume position - is protected only by a source comment. A future edit that moved the expiry skip after the cursor decrement would keep the Go suite green while reintroducing an F-005 (c) style defect on the paged path.",
+      "suggested_fix": "Add a repository-level test that seeds an expired record and live records in the same mailbox and calls GetEnvelopeBatchFrom with a non-empty cursor, asserting both that the expired record is not returned and that it did not shift the position the cursor resumes at. A second case should pin that a cursor past the end returns an empty batch with HasMore false rather than restarting at the head.",
+      "evidence": "keryx ctx rg GetEnvelopeBatchFrom apps -> 8 matches across mailbox_repo.go (4), mailbox_service.go (3) and mailbox_handler.go (1); no test file appears. Ordering asserted only by apps/relay/internal/storage/repository/mailbox_repo.go:249-265.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/storage/repository/mailbox_repo.go:220 (GetEnvelopeBatchFrom, the cursor-aware selection)",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:190 (GetEnvelopeBatch, the no-cursor delegation the two existing regressions call)",
+          "apps/relay/internal/service/mailbox_service.go:33 (service passthrough)",
+          "apps/relay/internal/api/handler/mailbox_handler.go:258 (the only production caller, which always passes req.Cursor)"
+        ],
+        "enumeration_method": "keryx ctx rg GetEnvelopeBatchFrom over apps/ returned all 8 references, which resolve to exactly these four sites plus three doc-comment lines; no *_test.go file appears among them. The complementary search for GetEnvelopeBatch shows both F-005 (c) regressions calling the three-argument no-cursor form. The list is therefore the complete set of entry points into the cursor-aware path."
+      }
+    },
+    {
+      "id": "T49-I-001",
+      "global_id": "001-T49-verify#T49-I-001",
+      "reviewer": "code-verifier",
+      "severity": "info",
+      "problem": "The new poll `cursor` field is outside the signed challenge message: CreateMailboxChallengeMessage covers challenge_id, recipient_mailbox_id, device_id and the nonce only (mailbox_handler.go:234-243). Separately, a syntactically valid but out-of-range position such as 15 nines is accepted and answered with an empty final page (HTTP 200, 0 envelopes, next_cursor absent) rather than a bounded 4xx.",
+      "impact": "Bounded. An on-path attacker who rewrites the cursor cannot read another mailbox (the mailbox is taken from the challenge record, never from the request), cannot produce a 500 (0 of 11 tampered tokens did), cannot cause an acknowledgement, and cannot make a message disappear, because every subsequent poll restarts at the head of the mailbox. The worst outcome is suppressing the remaining pages of a single poll, which the same attacker could achieve by dropping the request outright.",
+      "suggested_fix": "No change required for the prototype gate. If the poll request is ever hardened, including the cursor in the signed challenge message is the natural place; alternatively an out-of-range position could be answered with the same 400 INVALID_SCHEMA as an unparsable one, which would make 'this token could not have been issued for this mailbox right now' a single, uniform answer.",
+      "evidence": "Cursor-abuse probe, 11 tampered tokens: 9 x 400 INVALID_SCHEMA, 0 x 5xx, '999999999999999' -> 200 with 0 envelopes and no next_cursor, '0' -> 200 with the head page (.metaproject/data/gdctx/raw/2026-09-06T21-03-31-247Z_run.log).",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/api/handler/mailbox_handler.go:234-243 (CreateMailboxChallengeMessage: the signed fields, which exclude cursor)",
+          "apps/relay/internal/api/handler/mailbox_handler.go:187-201 (PollRequest, where Cursor is declared alongside the signed fields and BatchSize)",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:168-185 (decodeMailboxCursor, which accepts any in-range decimal, including a position past the end)"
+        ],
+        "enumeration_method": "The class is 'poll request fields the signature does not cover'. Enumerated by reading the signed-message construction at the single call site of CreateMailboxChallengeMessage and comparing it field by field with the PollRequest struct: challenge_id, recipient_mailbox_id and device_id are signed; batch_size and cursor are not. batch_size was already outside the signature before T48 and is separately bounded, so cursor is the one member T48 added. The out-of-range acceptance is the single decode site."
+      }
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Should T49-F-001 (a mailbox permanently wedged by 49 unauthenticated POSTs at default configuration) be treated as blocking for this flow's completion, or accepted as a documented prototype limitation?",
+      "why": "The gate in metrics-and-validation.md is satisfied on its own terms - it measures nothing about mailbox availability under an unauthenticated flood - so the verifier cannot decide this. The fix is an architecture choice (relay-side accounting, sender authentication, proof-of-work or per-sender quotas), which is outside a verification dispatch.",
+      "options": [
+        { "id": "block", "label": "Treat as blocking: open a further RED/GREEN pair before the flow completes", "recommended": true },
+        { "id": "document", "label": "Accept as a documented limitation in specification.md and the prototype claims, with the measured threshold and cost stated" },
+        { "id": "defer", "label": "Defer to a follow-up flow, leaving T49-F-001 open" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "retries": 0,
+    "checks_executed": 20,
+    "checks_pass": 19,
+    "checks_warn": 1,
+    "checks_fail": 0,
+    "workspace_tests": 139,
+    "workspace_tests_previous": 137,
+    "cli_test_files": 19,
+    "cli_tests": 94,
+    "go_relayv2_toplevel_tests": 44,
+    "go_relayv2_toplevel_tests_previous": 39,
+    "go_skips": 0,
+    "go_data_races": 0,
+    "workspace_executions": 4,
+    "workspace_executions_red": 0,
+    "workspace_executions_under_load": 2,
+    "e2e_iterations_clean": 18,
+    "e2e_iterations_total": 18,
+    "timeout_any_count": 0,
+    "ontaskupdate_count": 0,
+    "test_files_hashed": 51,
+    "config_files_hashed": 6,
+    "hash_mismatches": 0,
+    "graph_nodes": 84,
+    "graph_edges": 130,
+    "health_score": 94,
+    "health_p0": 0,
+    "health_p1": 0,
+    "wedge_threshold_min_size_envelopes": 800,
+    "wedge_threshold_max_size_envelopes": 49,
+    "wedge_page_size_count_bounded": 50,
+    "wedge_page_size_byte_bounded": 3,
+    "wedge_attacker_bytes_approx": 12845056,
+    "cursor_tamper_cases": 11,
+    "cursor_tamper_bounded_4xx": 9,
+    "cursor_tamper_5xx": 0,
+    "node_version": "v26.5.0"
+  },
+  "timestamp_utc": "2026-09-07T00:06:00Z"
+}

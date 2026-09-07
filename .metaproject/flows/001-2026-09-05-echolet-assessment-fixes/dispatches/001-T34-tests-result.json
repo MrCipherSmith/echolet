@@ -1,0 +1,158 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T34-tests",
+  "status": "DONE",
+  "summary": "RED phase complete for F-004, F-005, F-006 and F-007. Five new Go test files were added to apps/relay (no implementation code, no test seam). Baseline was green before the change (go -C apps/relay test -race -count=1 ./... and the -tags relayv2 variant both exit 0). After the change all four findings demonstrate a failing intended-behaviour assertion, and every pre-existing test still passes under both tag sets. F-004: SendEnvelope(different body, same envelope_id) status = 200, want 409 ENVELOPE_ID_CONFLICT; the byte-identical replay already returns 200 as required. F-005: SendEnvelope(already expired) status = 200, want 400; SaveEnvelope stored retention deadline over-retained by 601200s versus the declared lifetime; identical retry keeps the 7-day deadline; GetEnvelopes(limit=1) returned the expired envelope 00000000-0000-4000-8000-000000000001 instead of the newer valid ffffffff-ffff-4fff-8fff-ffffffffffff. F-006: all six enumerated v1 decoder sites consumed 8388630 of 8388630 body bytes (want at most 4194304), and ValidateMailboxEnvelope returned nil for a 4096-byte ciphertext declared as size_bytes=16 under a 1024-byte maximum, and for a 512-byte ciphertext declared as size_bytes=8. F-007: CreateChallenge(legitimate owner) status = 403 UNAUTHORIZED_MAILBOX_ACCESS, want 200, reproduced 10/10 times under -count=10 with freshly generated identities.",
+  "acceptance": [
+    {
+      "criterion": "F-004 (blocker): a different envelope body under an already-used (recipient mailbox, envelope_id) pair is rejected as a conflict mapped to HTTP 409; the originally accepted envelope stays retrievable unchanged; a byte-identical replay still succeeds idempotently. The conflict case must currently FAIL.",
+      "status": "met",
+      "evidence": "apps/relay/internal/api/handler/mailbox_envelope_lifecycle_test.go::TestSendEnvelopeRejectsConflictingEnvelopeIDWithHTTP409. RED at mailbox_envelope_lifecycle_test.go:66 -- 'SendEnvelope(different body, same envelope_id) status = 200, want 409 ENVELOPE_ID_CONFLICT (got code \"\")'. The idempotent-replay assertion (line 55) and the first-send assertion already pass, so the test isolates the missing conflict branch. The unchanged-body assertion (line 88) is reached only once the conflict is implemented. ENVELOPE_ID_CONFLICT is the code the CLI already expects at HTTP 409 (apps/cli/src/transport/relayClient.ts:11)."
+    },
+    {
+      "criterion": "F-005 (major): already-expired envelopes rejected at submission; stored retention never exceeds the remaining declared lifetime nor the configured server cap; GetEnvelopes filters expired records BEFORE the batch limit; an identical retry does not extend expiry. Must currently FAIL.",
+      "status": "met",
+      "evidence": "(a) apps/relay/internal/api/handler/mailbox_envelope_lifecycle_test.go::TestSendEnvelopeRejectsAlreadyExpiredEnvelope -- RED at line 104: 'SendEnvelope(already expired) status = 200, want 400'. (b) apps/relay/internal/storage/repository/mailbox_repo_test.go::TestSaveEnvelopeRetentionNeverExceedsDeclaredLifetime/declared_lifetime_shorter_than_the_server_cap -- RED at line 56: 'stored retention deadline ... (+/-1s): physical retention must not exceed the envelope's declared lifetime (over-retained by 601200s)'; subtest identical_retry_does_not_extend_expiry -- RED at line 109: 'retention deadline after identical retry ... want at most the declared expiry'. The server-cap subtest passes today and is a regression guard against a fix that drops the cap. (c) TestGetEnvelopesFiltersExpiredBeforeApplyingBatchLimit -- RED at line 139: 'GetEnvelopes(limit=1) returned envelope \"00000000-0000-4000-8000-000000000001\", want \"ffffffff-ffff-4fff-8fff-ffffffffffff\": expired records must be filtered before the batch limit is applied'."
+    },
+    {
+      "criterion": "F-006 (blocker): every v1 JSON handler bounds the request body before decoding and rejects an over-limit body with a bounded error; mailbox envelope validation verifies the ACTUAL decoded ciphertext byte length against both size_bytes and the configured maximum. Enumerate the v1 decoder sites. Must currently FAIL.",
+      "status": "met",
+      "evidence": "(a) apps/relay/internal/api/handler/request_body_limit_test.go::TestV1JSONHandlersBoundRequestBodyBeforeDecoding enumerates all six v1 decoder sites from the finding's class_scope (mailbox_handler.go:46/96/149/225, device_record_handler.go:38, prekey_bundle_handler.go:28). All six are RED at request_body_limit_test.go:88, e.g. 'mailbox_handler.go:46 SendEnvelope: consumed 8388630 bytes of a 8388630 byte body, want at most 4194304: the request body must be bounded with http.MaxBytesReader before decoding'. The probe body is field-free valid JSON so every handler already answers 4xx today; the only property under test is bytes consumed. signal_prekey_bundle_v2.go:31 is the already-bounded v2 sibling and is deliberately not asserted as RED. (b) apps/relay/internal/validation/mailbox_envelope_size_test.go::TestValidateMailboxEnvelopeChecksActualCiphertextBytes -- RED at line 70 for 'oversized ciphertext with understated size_bytes' (ciphertext_len=4096, size_bytes=16, max=1024, got nil, want PAYLOAD_TOO_LARGE) and for 'declared size_bytes does not match ciphertext' (ciphertext_len=512, size_bytes=8, got nil). The third subtest (consistent ciphertext within the limit) passes today and pins the CLI's size_bytes semantics so the fix cannot over-reject."
+    },
+    {
+      "criterion": "F-007 (blocker): mailbox device authorization resolves the device by (mailbox identity, device UUID) binding; a device UUID registered under an unrelated identity cannot deny the legitimate recipient challenge, poll and ack. Must currently FAIL.",
+      "status": "met",
+      "evidence": "apps/relay/internal/api/handler/mailbox_device_authorization_test.go::TestMailboxAuthorizationIsScopedToOwningMailboxIdentity. Two signed device records share the fixed device UUID 8cc8010b-d4a1-4ce7-8203-a8f6b055c1b9 under different identities; the test sorts them so the UNRELATED identity always sorts first in the device_record: key scan, making the reproduction independent of key randomness. RED at mailbox_device_authorization_test.go:83 -- 'CreateChallenge(legitimate owner) status = 403, want 200 (code \"UNAUTHORIZED_MAILBOX_ACCESS\"): a duplicate device UUID under an unrelated identity must not deny the owner'. Poll and ack assertions follow in the same test and are reached once challenge authorizes. Determinism confirmed: 10/10 identical failures under -count=10."
+    },
+    {
+      "criterion": "Tests run under `go -C apps/relay test -race -count=1 ./...` and the relayv2-tagged suite; deterministic, no wall-clock sleeps.",
+      "status": "met",
+      "evidence": "`go -C apps/relay vet ./...` exits 0. The new tests fail identically with and without `-tags relayv2`. No test sleeps; timing values are absolute millisecond timestamps derived once from time.Now() with at least one hour of slack on either side of every boundary, and the Badger retention assertions use a +/-1 second tolerance. F-007 verified deterministic at -count=10 (10/10 same failing assertion). The findings are all v1-surface, so no new relayv2-tagged file was needed; the untagged files run under both tag sets."
+    },
+    {
+      "criterion": "All existing relay tests remain green; no existing assertion is weakened or deleted.",
+      "status": "met",
+      "evidence": "No existing file was modified -- all five files are new. Targeted re-run of every pre-existing test name with `-tags relayv2` (TestMailboxPollAndAckRequireVerifiedOwnershipAndSignature, TestMailboxChallengeRejectsUnauthorizedMailboxAccess, TestMailboxChallengeRejectsInvalidSignature, TestMailboxConcurrentPollConsumesChallengeExactlyOnce, TestSignalV2*, TestChallengeInvalidate*, TestValidateDeviceRecordRejectsInvalidSignature, TestValidatePreKeyBundleRejectsInvalidSignatures, TestSignalPreKeyBundleV2*) exits 0 across all packages. The internal/api/router package stays fully green in the post-change full run."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_envelope_lifecycle_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RED tests for F-004 (envelope-id conflict -> HTTP 409, idempotent replay, original body preserved) and F-005 (a) (already-expired envelope rejected at submission and never persisted)."
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_device_authorization_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RED test for F-007: duplicate device UUID under an unrelated identity must not deny the legitimate owner challenge, poll or ack."
+    },
+    {
+      "path": "apps/relay/internal/api/handler/request_body_limit_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RED test for F-006 (a): all six enumerated v1 JSON decoder sites must bound the request body before decoding."
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/mailbox_repo_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RED tests for F-005 (b) and (c): retention bounded by declared lifetime and server cap, no extension on identical retry, expired records filtered before the batch limit."
+    },
+    {
+      "path": "apps/relay/internal/validation/mailbox_envelope_size_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RED test for F-006 (b): actual ciphertext byte length checked against both declared size_bytes and the configured maximum."
+    },
+    {
+      "path": ".metaproject/data/gdctx/artifacts/2026-09-06T13-17-19-419Z_run.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Bounded RED evidence: full post-change `go -C apps/relay test -race -count=1 ./...` output."
+    },
+    {
+      "path": ".metaproject/data/gdctx/artifacts/2026-09-06T13-13-40-595Z_run.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Pre-change green baseline: `go -C apps/relay test -race -count=1 ./...` exit 0."
+    },
+    {
+      "path": ".metaproject/data/gdctx/artifacts/2026-09-06T13-13-52-698Z_run.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Pre-change green baseline for the relayv2-tagged suite, exit 0."
+    },
+    {
+      "path": ".metaproject/data/gdctx/artifacts/2026-09-06T13-17-36-801Z_run.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Post-change proof that every pre-existing relay test (including relayv2-tagged) is still green."
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/relay/internal/api/handler/mailbox_envelope_lifecycle_test.go", "change": "added" },
+    { "path": "apps/relay/internal/api/handler/mailbox_device_authorization_test.go", "change": "added" },
+    { "path": "apps/relay/internal/api/handler/request_body_limit_test.go", "change": "added" },
+    { "path": "apps/relay/internal/storage/repository/mailbox_repo_test.go", "change": "added" },
+    { "path": "apps/relay/internal/validation/mailbox_envelope_size_test.go", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "T34-N-001",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "problem": "No exported test seam was added. The F-005 retrieval test seeds two envelopes directly into Badger under the current key layout \"mailbox:<recipient_mailbox_id>:<envelope_id>\", because there is no injectable clock on MailboxRepository and an envelope that has already passed its declared expiry cannot otherwise be produced without a wall-clock wait.",
+      "impact": "If the GREEN implementation changes the mailbox key layout, the seeding helper in mailbox_repo_test.go must be updated with it. The retention assertions likewise read Badger's physical item.ExpiresAt() through storage.Storage.DB(), which is already exported.",
+      "suggested_fix": "Keep the key layout, or update mailboxEnvelopeKeyForTest and seedStoredEnvelope alongside any layout change. If an injectable clock is introduced on MailboxRepository during GREEN, the seeding helper can be replaced by advancing that clock.",
+      "evidence": "apps/relay/internal/storage/repository/mailbox_repo_test.go seedStoredEnvelope/mailboxEnvelopeKeyForTest mirror mailbox_repo.go:29 and mailbox_repo.go:69.",
+      "confidence": "high"
+    },
+    {
+      "id": "T34-N-002",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "problem": "The F-006 (b) test pins the current two-argument signature ValidateMailboxEnvelope(envelope, maxBytes) and reads \"actual decoded ciphertext byte length\" as the JSON-decoded ciphertext string length, matching the reviewer's evidence (\"never len(Ciphertext)\") and the CLI contract size_bytes = Buffer.byteLength(ciphertext).",
+      "impact": "If GREEN adds a clock parameter to ValidateMailboxEnvelope, this test stops compiling. The already-expired rejection is therefore asserted end-to-end through the handler instead, which keeps the placement of that check free.",
+      "suggested_fix": "Implement the ciphertext-length check inside ValidateMailboxEnvelope without changing its signature, and place the expiry check where a clock is available (the handler). If the signature must change, update mailbox_envelope_size_test.go in the same commit.",
+      "evidence": "apps/cli/src/runtime/outbound.ts:79 sets size_bytes = Buffer.byteLength(ciphertext); apps/cli/src/runtime/inbound.ts:46 rejects size_bytes !== Buffer.byteLength(ciphertext). The third subtest (consistent ciphertext within the limit is accepted) passes today and enforces that semantics.",
+      "confidence": "high"
+    },
+    {
+      "id": "T34-N-003",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "problem": "The F-006 (a) test asserts boundedness rather than a specific byte limit: an 8 MiB probe body must be consumed to at most 4 MiB and answered 4xx.",
+      "impact": "The exact MaxBytesReader limit per v1 route is left to the implementer. It must exceed ECHOLET_MAX_MESSAGE_BYTES (262144) for /v1/messages/send so legitimate maximum-size envelopes still pass.",
+      "suggested_fix": "Pick a per-route limit above the configured message maximum for the send route (the v2 sibling uses 64 KiB, which is too small for /v1/messages/send) and tighten the test constant if a precise limit is later specified.",
+      "evidence": "apps/relay/internal/api/handler/request_body_limit_test.go constants oversizedRequestBodyBytes and maxRequestBodyReadBytes; apps/relay/internal/config/config.go MaxMessageBytes default 262144.",
+      "confidence": "high"
+    },
+    {
+      "id": "T34-N-004",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "problem": "The F-005 (a) test accepts either INVALID_SCHEMA or ENVELOPE_EXPIRED as the rejection code for an already-expired envelope, because ENVELOPE_EXPIRED is not in packages/protocol/src/constants/errorCodes.ts and packages/** is owned by a parallel worker this run.",
+      "impact": "Choosing INVALID_SCHEMA needs no CLI or protocol change; choosing ENVELOPE_EXPIRED requires adding the code to the protocol constant list and the CLI's remoteCodes set.",
+      "suggested_fix": "Prefer INVALID_SCHEMA unless the protocol package is being extended in the same flow.",
+      "evidence": "packages/protocol/src/constants/errorCodes.ts lists no expiry code; apps/cli/src/transport/relayClient.ts:11 already carries ENVELOPE_ID_CONFLICT, which is why the F-004 test pins that exact code.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "test_files_added": 5,
+    "tests_added": 6,
+    "failing_tests": 6,
+    "failing_subtests": 11,
+    "findings_covered": 4
+  },
+  "timestamp_utc": "2026-09-06T13:20:00Z"
+}

@@ -1,0 +1,85 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T38r2-review-security-code",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-security-code",
+  "task": {
+    "title": "Round-2 fix review: the relay delta and a leakage/exit-code audit over every change since round 1",
+    "description": "Review only the changes made SINCE the round-1 fix review, and confirm the ten findings round 1 left open are genuinely closed. Do not re-derive round-1 dispositions that the independent verifier already confirmed.",
+    "intent": "review",
+    "scope": "Read-only review of the delta since round 1."
+  },
+  "acceptance_criteria": [
+    "Each change in your assigned delta is judged for correctness and for whether it introduced a new defect.",
+    "The round-1 open findings touching your area are confirmed closed or reported as still open, with evidence.",
+    "The five non-negotiable criteria are re-checked over the delta: no test weakened, no strict schema loosened, no secret leakage, exit-code contract intact, prototype scope respected.",
+    "Any new defect is reported with severity, file:line and a concrete failure scenario, and states whether it blocks acceptance."
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/inputs/review-context.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-verifier-report.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t42-verification-report.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/specification.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "apps/relay/internal/validation/validate.go",
+    "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go",
+    "apps/relay/internal/service/signal_prekey_bundle_v2.go",
+    "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go",
+    "apps/cli/src/commands/cli.ts",
+    "apps/cli/src/transport/relayClient.ts",
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t44-multisender-diagnosis.md",
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t45-implementation-report.md"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "Load and follow .metaproject/skills/gdskills/review/review-security-code/SKILL.md.",
+    "Read .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/inputs/review-context.md for the disposition vocabulary and the five non-negotiable criteria, and .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-verifier-report.md for what round 1 already established. Do not redo confirmed round-1 work; review the DELTA.",
+    "You are a reviewer. Do NOT modify any source, test or configuration file. Report, do not fix.",
+    "Every judgement needs concrete evidence: file:line, a control-flow argument, or a bounded read-only probe.",
+    "The repository is on unborn `main` with everything untracked, so an empty `git diff` is NOT an empty change set.",
+    "Do not re-run the full verification matrix; T42 passed it (19 PASS, 1 advisory WARN, 0 FAIL, 137 tests, six green workspace runs including under 16-, 24- and 48-worker load).",
+    "Use Node 26 (/opt/homebrew/bin/node, the default here) for anything you execute; Node v22.12.0 lacks node:sqlite and makes 13 of 17 CLI suites fail to collect.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Use `keryx ctx rg` for searches, never bare rg/grep. Use `keryx ctx run` for long command output.",
+    "Never print plaintext message bodies, ciphertext, profile store keys, private key material or HTTP request bodies.",
+    "Do not commit and do not create a branch, PR or remote.",
+    "Respect prototype scope: a local computer CLI prototype. No findings demanding production hardening, mobile support, deployment or external audit.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-round2-t38/review-security-code-result.json and a report to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-round2-t38/review-security-code-report.md, and make the final response start with STATUS:."
+  ],
+  "allowed_actions": [
+    "read",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-round2-t38/review-security-code-result.json",
+    "summary_max_tokens": 1000
+  },
+  "budget": {
+    "max_output_tokens": 7000,
+    "max_runtime_ms": 3000000
+  },
+  "provenance": {
+    "created_at": "2026-09-06T19:00:00+04:00",
+    "created_by": "flow-orchestrator",
+    "source_request": "T38 round 2: review the remediation delta and close the fix review."
+  }
+}

@@ -1,0 +1,285 @@
+{
+  "review_context": {
+    "request": {
+      "intent": "Independent full CLI prototype review",
+      "scope_mode": "path",
+      "round": 1
+    },
+    "git": {
+      "branch": "main",
+      "head": null,
+      "unborn": true
+    },
+    "pr": null,
+    "cross_repo": [],
+    "scope": {
+      "mode": "path",
+      "files": [
+        "apps/cli/src/commands/cli.test.ts",
+        "apps/cli/src/commands/cli.ts",
+        "apps/cli/src/runtime/config.test.ts",
+        "apps/cli/src/runtime/config.ts",
+        "apps/cli/src/runtime/history.ts",
+        "apps/cli/src/runtime/inbound.test.ts",
+        "apps/cli/src/runtime/inbound.ts",
+        "apps/cli/src/runtime/outbound.test.ts",
+        "apps/cli/src/runtime/outbound.ts",
+        "apps/cli/src/runtime/profile.test.ts",
+        "apps/cli/src/runtime/profile.ts",
+        "apps/cli/src/transport/relayClient.test.ts",
+        "apps/cli/src/transport/relayClient.ts",
+        "apps/cli/test/e2e/two-process.test.ts",
+        "packages/client-core/src/identity/createIdentityProfile.test.ts",
+        "packages/client-core/src/identity/createIdentityProfile.ts",
+        "packages/client-core/src/identity/createSignedDeviceRecord.ts",
+        "packages/client-core/src/identity/createSignedPreKeyBundle.test.ts",
+        "packages/client-core/src/identity/createSignedPreKeyBundle.ts",
+        "packages/client-core/src/index.ts",
+        "packages/client-core/src/messages/encryption.ts",
+        "packages/client-core/src/sessions/sessionAdapter.ts",
+        "packages/client-core/src/sessions/sessions.ts",
+        "packages/crypto-core/src/encoding/base64url.ts",
+        "packages/crypto-core/src/identity/generateKeyPair.ts",
+        "packages/crypto-core/src/identity/generateSeed.ts",
+        "packages/crypto-core/src/index.ts",
+        "packages/crypto-core/src/mailbox/auth.test.ts",
+        "packages/crypto-core/src/mailbox/auth.ts",
+        "packages/crypto-core/src/mailbox/deriveMailboxId.ts",
+        "packages/crypto-core/src/session/session.test.ts",
+        "packages/crypto-core/src/session/session.ts",
+        "packages/crypto-core/src/session/sessionKeys.ts",
+        "packages/crypto-core/src/signatures/canonicalJson.ts",
+        "packages/crypto-core/src/signatures/sign.ts",
+        "packages/protocol/src/constants/errorCodes.ts",
+        "packages/protocol/src/constants/limits.ts",
+        "packages/protocol/src/constants/protocolVersion.ts",
+        "packages/protocol/src/index.ts",
+        "packages/protocol/src/types/chatMessage.ts",
+        "packages/protocol/src/types/deviceRecord.ts",
+        "packages/protocol/src/types/fixtures/relay-v2.json",
+        "packages/protocol/src/types/mailboxEnvelope.ts",
+        "packages/protocol/src/types/preKeyBundle.ts",
+        "packages/protocol/src/types/receipt.ts",
+        "packages/protocol/src/types/signalPreKeyBundleV2.test.ts",
+        "packages/protocol/src/types/signalPreKeyBundleV2.ts",
+        "packages/protocol/src/validators/validateDeviceRecord.test.ts",
+        "packages/protocol/src/validators/validateDeviceRecord.ts",
+        "packages/protocol/src/validators/validatePreKeyBundle.ts",
+        "packages/session-node/src/EncryptedSqliteStore.test.ts",
+        "packages/session-node/src/EncryptedSqliteStore.ts",
+        "packages/session-node/src/SignalClient.test.ts",
+        "packages/session-node/src/SignalClient.ts",
+        "packages/session-node/src/index.ts",
+        "packages/session-node/src/store.ts",
+        "packages/session-node/src/wire.test.ts",
+        "packages/session-node/src/wire.ts",
+        "apps/cli/package.json"
+      ],
+      "changed_lines": null,
+      "risk_areas": [
+        "trust",
+        "transaction",
+        "mailbox",
+        "retry",
+        "process lifecycle"
+      ]
+    },
+    "requirements": {
+      "specification": "docs/requirements/echolet-cli-prototype/specification.md",
+      "implementation_plan": "docs/requirements/echolet-cli-prototype/implementation-plan.md",
+      "prior_validation": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T27-verify-result.json",
+      "limits": [
+        "CLI prototype only; no mobile production or external crypto audit approval",
+        "Official libsignal Node reference is intentional; rollback attack protection is excluded"
+      ]
+    },
+    "memory": {
+      "query": "CLI relay prekey Signal identity inbox outbox idempotency",
+      "entries": [],
+      "status_filter": "accepted",
+      "searched": true
+    },
+    "routing": {
+      "selected_reviewers": [
+        "review-logic",
+        "review-backend",
+        "review-security-code",
+        "review-highload",
+        "review-testing-practices",
+        "review-verifier"
+      ],
+      "skipped_reviewers": [
+        "frontend",
+        "MobX",
+        "legacy profiles"
+      ],
+      "reasons": {
+        "selection": "explicit task domains",
+        "frontend": "no frontend paths",
+        "legacy profiles": "not selected",
+        "project": "none discovered"
+      }
+    },
+    "token_policy": {
+      "context_mode": "light",
+      "omissions": [
+        "generated dist and lockfile not candidates",
+        "file contents available through exact local paths"
+      ],
+      "budget": {
+        "max_findings": 10,
+        "parallel": 4,
+        "outstanding": 2,
+        "spend": "not recorded"
+      },
+      "model_plan": {
+        "strategy": "current-session",
+        "current_model": "GPT-6",
+        "detector_ran": true
+      }
+    },
+    "review_plan": {
+      "dispatch_plan": [
+        {
+          "reviewer": "review-logic",
+          "runtime": "general-purpose-fallback",
+          "skill_path": ".metaproject/skills/gdskills/review/review-logic/SKILL.md",
+          "reason": "native named agent unavailable"
+        },
+        {
+          "reviewer": "review-backend",
+          "runtime": "general-purpose-fallback",
+          "skill_path": ".metaproject/skills/gdskills/review/review-backend/SKILL.md",
+          "reason": "native named agent unavailable"
+        },
+        {
+          "reviewer": "review-security-code",
+          "runtime": "general-purpose-fallback",
+          "skill_path": ".metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+          "reason": "native named agent unavailable"
+        },
+        {
+          "reviewer": "review-highload",
+          "runtime": "general-purpose-fallback",
+          "skill_path": ".metaproject/skills/gdskills/review/review-highload/SKILL.md",
+          "reason": "native named agent unavailable"
+        },
+        {
+          "reviewer": "review-testing-practices",
+          "runtime": "general-purpose-fallback",
+          "skill_path": ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md",
+          "reason": "native named agent unavailable"
+        },
+        {
+          "reviewer": "review-verifier",
+          "runtime": "general-purpose-fallback",
+          "skill_path": ".metaproject/skills/gdskills/review/review-verifier/SKILL.md",
+          "reason": "native named agent unavailable"
+        }
+      ]
+    }
+  },
+  "reviewer": "review-logic",
+  "scope_mode": "path",
+  "context_doc": "docs/requirements/echolet-cli-prototype/specification.md",
+  "model_class": "current-session",
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard"
+    ],
+    "provider": "openai",
+    "model": "GPT-6",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "openai",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"openai\""
+    }
+  },
+  "budget": {
+    "max_findings": 10,
+    "max_prompt_tokens": 18000
+  },
+  "target_path": [
+    "apps/cli/src/commands/cli.test.ts",
+    "apps/cli/src/commands/cli.ts",
+    "apps/cli/src/runtime/config.test.ts",
+    "apps/cli/src/runtime/config.ts",
+    "apps/cli/src/runtime/history.ts",
+    "apps/cli/src/runtime/inbound.test.ts",
+    "apps/cli/src/runtime/inbound.ts",
+    "apps/cli/src/runtime/outbound.test.ts",
+    "apps/cli/src/runtime/outbound.ts",
+    "apps/cli/src/runtime/profile.test.ts",
+    "apps/cli/src/runtime/profile.ts",
+    "apps/cli/src/transport/relayClient.test.ts",
+    "apps/cli/src/transport/relayClient.ts",
+    "apps/cli/test/e2e/two-process.test.ts",
+    "packages/client-core/src/identity/createIdentityProfile.test.ts",
+    "packages/client-core/src/identity/createIdentityProfile.ts",
+    "packages/client-core/src/identity/createSignedDeviceRecord.ts",
+    "packages/client-core/src/identity/createSignedPreKeyBundle.test.ts",
+    "packages/client-core/src/identity/createSignedPreKeyBundle.ts",
+    "packages/client-core/src/index.ts",
+    "packages/client-core/src/messages/encryption.ts",
+    "packages/client-core/src/sessions/sessionAdapter.ts",
+    "packages/client-core/src/sessions/sessions.ts",
+    "packages/crypto-core/src/encoding/base64url.ts",
+    "packages/crypto-core/src/identity/generateKeyPair.ts",
+    "packages/crypto-core/src/identity/generateSeed.ts",
+    "packages/crypto-core/src/index.ts",
+    "packages/crypto-core/src/mailbox/auth.test.ts",
+    "packages/crypto-core/src/mailbox/auth.ts",
+    "packages/crypto-core/src/mailbox/deriveMailboxId.ts",
+    "packages/crypto-core/src/session/session.test.ts",
+    "packages/crypto-core/src/session/session.ts",
+    "packages/crypto-core/src/session/sessionKeys.ts",
+    "packages/crypto-core/src/signatures/canonicalJson.ts",
+    "packages/crypto-core/src/signatures/sign.ts",
+    "packages/protocol/src/constants/errorCodes.ts",
+    "packages/protocol/src/constants/limits.ts",
+    "packages/protocol/src/constants/protocolVersion.ts",
+    "packages/protocol/src/index.ts",
+    "packages/protocol/src/types/chatMessage.ts",
+    "packages/protocol/src/types/deviceRecord.ts",
+    "packages/protocol/src/types/fixtures/relay-v2.json",
+    "packages/protocol/src/types/mailboxEnvelope.ts",
+    "packages/protocol/src/types/preKeyBundle.ts",
+    "packages/protocol/src/types/receipt.ts",
+    "packages/protocol/src/types/signalPreKeyBundleV2.test.ts",
+    "packages/protocol/src/types/signalPreKeyBundleV2.ts",
+    "packages/protocol/src/validators/validateDeviceRecord.test.ts",
+    "packages/protocol/src/validators/validateDeviceRecord.ts",
+    "packages/protocol/src/validators/validatePreKeyBundle.ts",
+    "packages/session-node/src/EncryptedSqliteStore.test.ts",
+    "packages/session-node/src/EncryptedSqliteStore.ts",
+    "packages/session-node/src/SignalClient.test.ts",
+    "packages/session-node/src/SignalClient.ts",
+    "packages/session-node/src/index.ts",
+    "packages/session-node/src/store.ts",
+    "packages/session-node/src/wire.test.ts",
+    "packages/session-node/src/wire.ts",
+    "apps/cli/package.json"
+  ],
+  "file_contents": null,
+  "round": 1,
+  "is_fix_round": false,
+  "prior_findings": [],
+  "metaproject": {
+    "memory": [],
+    "wiki": [
+      {
+        "path": ".metaproject/wiki/index.md",
+        "title": "Project Wiki (drafts, not authority)"
+      }
+    ],
+    "graph": {
+      "files": 70,
+      "edges": 104,
+      "freshness": "T27 rebuild"
+    }
+  }
+}

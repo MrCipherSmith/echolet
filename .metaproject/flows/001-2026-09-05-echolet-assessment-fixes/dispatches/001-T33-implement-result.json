@@ -1,0 +1,131 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T33-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "GREEN phase complete for F-001, F-002, F-003 and F-008. All 12 tests written by 001-T33-tests pass unmodified, no test file was created, edited, skipped or deleted, and apps/relay was not touched. F-001: the exact signed publication bundle is now persisted at cli:publication before the first network call and resubmitted byte-identically across retries and restarts; fresh allocation happens only through the new explicit rotateBundle(), backed by a minimal additive SignalClient.rotateOneTimePreKey() and a pre-current pointer whose absence still means the original pre:1, so no existing store changes on disk. F-002: the interactive confirmation is a bounded reader that settles on the newline, on EOF without one, or on an overlong answer, then removes its listeners, pauses and unrefs stdin so the process exits while the parent pipe stays open. F-003: a typed PersistenceError is raised at a single Profile.transact() store boundary, discriminated by origin (a rejection raised by the transactional operation keeps its own type; only a store-machinery rejection becomes PersistenceError) and preserved through both serial() catch blocks, the contact-import catch and classify() into a redacted PERSISTENCE_FAILURE / exit 5. Exit 5 was not widened: the green control test asserting exit 3 for typed validation, trust and native decrypt failures still passes. F-008: the outbox is re-read and validated inside the encrypt/history transaction and the persisted record is returned without regenerating the envelope or appending history; the outer lookup remains only as an optimization. Anti-vacuity check performed and recorded. Concerns: (1) one e2e flake on the first full apps/cli run, attributed to a pre-existing concurrent dist/cli.js build race and not to this change; (2) the F-008 barrier remains test-only instrumentation on EncryptedSqliteStore.prototype.transaction.",
+  "acceptance": [
+    {
+      "criterion": "F-001: the exact signed bundle is persisted before the first network call and reused byte-identically across retries and restarts; fresh allocation only through the explicit rotateBundle().",
+      "status": "met",
+      "evidence": "Profile.publicationBundle() commits the signed bundle to cli:publication and returns it unchanged thereafter; OutboundMessenger.publish() submits that record instead of calling exportContact(). OutboundMessenger.rotateBundle() -> Profile.rotatePublicationBundle() -> SignalClient.rotateOneTimePreKey(). apps/cli/src/runtime/outbound.publish.test.ts: 3 tests passed, including byte-identical bodyText across a lost response plus restart, an unchanged bundle_id on a repeated successful publish, and a rotated bundle carrying a different bundle_id and a different one-time prekey public key that is then itself stable."
+    },
+    {
+      "criterion": "F-002: the confirmation reads one bounded line, settles on the newline, on EOF without a newline, or on an overlong answer, and releases stdin so the process exits.",
+      "status": "met",
+      "evidence": "cli.ts readConfirmation() is now an event-driven bounded reader; on settling it removes its data/end/error listeners, pauses stdin and unrefs it when the handle supports unref. All four tests in 'interactive contact-import confirmation (F-002)' pass with timedOut false, including 'yes\\n' -> exit 0 and 'n\\n' -> exit 3 CONTACT_NOT_CONFIRMED with the parent end of the pipe still open. The pre-existing cli.test.ts confirmation cases (empty stdin -> exit 3, 'no\\n' -> exit 3) still pass."
+    },
+    {
+      "criterion": "F-003: a typed persistence failure is introduced at the store boundary and preserved into a redacted PERSISTENCE_FAILURE / exit 5, while typed validation, trust and native decrypt failures stay on exit 3.",
+      "status": "met",
+      "evidence": "New PersistenceError in apps/cli/src/runtime/profile.ts plus one private Profile.transact() through which every profile transaction runs; discrimination is by origin using Object.is on the operation's own rejection, so callback failures keep their type. Passthrough added to outbound.ts serial(), inbound.ts serial(), the cli.ts contact-import catch and cli.ts classify(). All four tests in 'runtime persistence failure classification (F-003)' pass: post-send delivery commit, inbound poll commit and contact-import commit each return exit 5 PERSISTENCE_FAILURE, and the green control test still returns exit 3 for a forged device-record signature, an unpinned recipient send and an undecryptable envelope from a pinned contact."
+    },
+    {
+      "criterion": "F-008: the outbox is re-read and validated inside the mutation transaction; the persisted record is returned without regenerating the envelope or appending history; the pre-transaction lookup remains an optimization.",
+      "status": "met",
+      "evidence": "sendOwned()'s encrypt/history transaction now reads cli:outbox:<message-id> as its first action and returns { record, existed: true } when present; the new settle() helper raises MESSAGE_ID_CONFLICT on a different contentHash and otherwise delivers idempotently. The outer lookup is retained and delegates to settle(). apps/cli/src/runtime/outbound.concurrentSend.test.ts passes: one history entry, one outbox key, one relayed envelope id, and firstReceipt.envelopeId === secondReceipt.envelopeId."
+    },
+    {
+      "criterion": "Anti-vacuity check for F-008: reverting only the in-transaction recheck must turn the concurrency test red again.",
+      "status": "met",
+      "evidence": "With only the tx.get(keyFor(input.messageId)) read neutralised (barrier and outer lookup untouched), vitest run src/runtime/outbound.concurrentSend.test.ts failed again with exactly the three original soft assertions: history entries 'to have a length of 1 but got 2' at :180, relayed envelope ids 'to have a length of 1 but got 2' at :182, and 'expected aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa to be bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' at :183. The barrier therefore still fires under the fix. The recheck was restored and the file re-verified green (recorded run 2026-09-06T13-41-50-695Z)."
+    },
+    {
+      "criterion": "Every test added by 001-T33-tests passes unmodified, the full apps/cli suite, pnpm test and pnpm typecheck pass, and no pre-existing test was weakened, skipped or deleted.",
+      "status": "met",
+      "evidence": "pnpm --filter @echolet/cli test: 'Test Files 10 passed (10)', 'Tests 49 passed (49)', including test/e2e/two-process.test.ts (3/3). pnpm test (workspace): protocol 8, client-db 1, crypto-core 4, client-core 2, session-node 24, mobile 6, cli 49, all passed. pnpm typecheck: all 7 projects Done. No lint script exists in any package. Only five production files were edited; no test file, schema, flow.json or acceptance-criteria.md was touched."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t33-implementation-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Per-finding implementation report: persisted publication-bundle record, typed persistence error boundary, session-node rotation addition and the F-008 anti-vacuity evidence."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T13-41-18-993Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Recorded workspace pnpm test run: every package and app suite green."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T13-41-36-812Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Recorded F-008 anti-vacuity run: concurrency test red again with the recheck neutralised."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T13-40-25-416Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Recorded workspace pnpm typecheck run: all seven projects clean."
+    }
+  ],
+  "changed_files": [
+    { "path": "packages/session-node/src/SignalClient.ts", "change": "modified" },
+    { "path": "apps/cli/src/runtime/profile.ts", "change": "modified" },
+    { "path": "apps/cli/src/runtime/outbound.ts", "change": "modified" },
+    { "path": "apps/cli/src/runtime/inbound.ts", "change": "modified" },
+    { "path": "apps/cli/src/commands/cli.ts", "change": "modified" },
+    { "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t33-implementation-report.md", "change": "added" },
+    { "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T33-implement-result.json", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "T33-I1",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "problem": "test/e2e/two-process.test.ts failed once, on run 3 of the first full apps/cli suite execution, with 'CLI send exit (INVALID_ARGUMENTS): expected 2 to be 4'.",
+      "impact": "A flaky e2e failure can mask or fake a regression in later verification runs. It is not caused by this change: INVALID_ARGUMENTS is produced only by parseCommand() and required() in cli.ts, neither of which was modified, and no new code path can return exit 2.",
+      "suggested_fix": "apps/cli/src/commands/cli.test.ts runs 'pnpm run build' and apps/cli/test/e2e/two-process.test.ts runs 'pnpm --filter @echolet/cli build' in their beforeAll hooks; vitest runs the two files in parallel and both write and then spawn the same apps/cli/dist/cli.js. Give the e2e suite its own private bundle (as cli.processFailures.test.ts already does) or introduce one shared build fixture.",
+      "evidence": "First full run: 'Test Files 1 failed | 9 passed (10)', the single failure at two-process.test.ts:139 with the run-3 iteration finishing in 1846ms instead of the usual 10-14s. The same file then passed in isolation (3/3) and in two subsequent full runs (49/49 each).",
+      "confidence": "medium"
+    },
+    {
+      "id": "T33-I2",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "problem": "SignalClient.rotateOneTimePreKey() retains the superseded pre:<n> records instead of deleting them.",
+      "impact": "Retention is deliberate - an in-flight PreKeySignalMessage that referenced the previous one-time prekey must still decrypt, and libsignal removes a consumed prekey itself through removePreKey(). The cost is that the encrypted snapshot grows by one prekey record per rotation, with no pruning policy.",
+      "suggested_fix": "If rotation ever becomes routine rather than exceptional, add an explicit bounded retention policy (for example, keep the current prekey plus the last N) rather than deleting eagerly at rotation time.",
+      "evidence": "packages/session-node/src/SignalClient.ts rotateOneTimePreKey(): the next id is max(pointer, existing pre: ids) + 1 and only pre-current is repointed; nothing is deleted.",
+      "confidence": "high"
+    },
+    {
+      "id": "T33-I3",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "problem": "Profile.transact() classifies 'Nested transaction is not supported' and 'Store is closed' from EncryptedSqliteStore as PersistenceError.",
+      "impact": "Both are genuine local-storage refusals rather than trust or protocol outcomes, so exit 5 is the defensible classification, but they are programming errors rather than durable-storage faults and a reviewer may prefer them to be distinguished.",
+      "suggested_fix": "Leave as is unless the specification requires a separate code for a runtime misuse of the store boundary.",
+      "evidence": "packages/session-node/src/EncryptedSqliteStore.ts transaction() rejects with those two plain Errors before the operation runs; they are not raised by the operation callback, so Profile.transact() maps them to PersistenceError.",
+      "confidence": "high"
+    },
+    {
+      "id": "T33-I4",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "problem": "The F-008 barrier remains test-only instrumentation on EncryptedSqliteStore.prototype.transaction (carried over from finding T33-N1).",
+      "impact": "The fix did not introduce a production seam for it. The barrier stayed anchored to the semantic stale-read event and still fires under the fix, which the anti-vacuity check demonstrates, so the coupling is acceptable but should be confirmed by the verifier rather than assumed.",
+      "suggested_fix": "Confirm during verification that the anti-vacuity evidence is sufficient, or ask for a production-visible seam if the project wants the concurrency window observable outside tests.",
+      "evidence": "apps/cli/src/runtime/outbound.concurrentSend.test.ts holdFirstMissingOutboxRead(); the anti-vacuity run reproduced all three original soft failures with only the recheck neutralised.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "production_files_modified": 5,
+    "test_files_modified": 0,
+    "new_tests_passing": 12,
+    "cli_tests_passing": 49,
+    "workspace_tests_passing": 94,
+    "self_fix_attempts": 0
+  },
+  "timestamp_utc": "2026-09-06T13:45:00Z"
+}

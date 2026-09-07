@@ -1,0 +1,101 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T44-investigate",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Reproduced the multi-sender prekey-claim failure deterministically and diagnosed it. The relay is correct and returns the specified 404 PREKEY_BUNDLE_UNAVAILABLE; the CLI discards that code twice (relayClient.ts:11 allowlist omits it, cli.ts:336 flattens every non-retryable RelayError to PROTOCOL_REJECTED) and additionally reports ok for a re-publish that restores nothing. Classified as (b): behaviour consistent with the specification, reported through a misleading error code - a small defect, plus a real structural prototype limitation caused by rotateBundle() having no CLI entry point (T38-L-001). No acceptance criterion requires two distinct senders to reach one recipient; AC-03 and the manual runbook are strictly two-party, and AC-02 requires the extra claimants to fail. Recommendation: preserve the relay error code and stop reporting a no-op re-publish as success, both inside the frozen eight-command surface, and document the one-sender-per-published-bundle limitation. Nothing implemented; no source, test or configuration file modified.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Reproduce the finding deterministically with a bounded probe, recording relay HTTP status/error code and CLI exit/error code",
+      "status": "met",
+      "evidence": "Scratchpad probe (removed after the run) built the relay, started it on loopback and drove only the frozen CLI surface: recipient publish ok; sender A send exit 0 ok; sender B send exit 3 PROTOCOL_REJECTED; direct POST /v2/prekeys/claim HTTP 404 PREKEY_BUNDLE_UNAVAILABLE; recipient re-publish exit 0 ok (restores nothing); sender B send again exit 3 PROTOCOL_REJECTED; direct claim again HTTP 404 PREKEY_BUNDLE_UNAVAILABLE."
+    },
+    {
+      "criterion": "Explain the mechanism precisely at file:line across the CLI claim path and the relay claim/publish handlers",
+      "status": "met",
+      "evidence": "Section 3 of t44-multisender-diagnosis.md: profile.ts:137-145 (publicationBundle returns stored bytes), profile.ts:151-160 and outbound.ts:36 (rotate exists), cli.ts:52-61/290-296 (no entry point), signal_prekey_bundle_v2.go:114-181 (claim consumes and deletes the availability index, returns ErrV2Unavailable at line 175), signal_prekey_bundle_v2.go:33-45 vs line 73 (idempotent re-publish never re-adds v2:available)."
+    },
+    {
+      "criterion": "Resolve the error-code discrepancy between the specified PREKEY_BUNDLE_UNAVAILABLE and the observed PROTOCOL_REJECTED",
+      "status": "met",
+      "evidence": "Relay returns the specified code (model/signal_prekey_bundle_v2.go:12, handler/signal_prekey_bundle_v2.go:14-28, observed 404 PREKEY_BUNDLE_UNAVAILABLE at the wire). The CLI loses it at relayClient.ts:11 (allowlist omits PREKEY_BUNDLE_UNAVAILABLE, carries the unrelated PREKEYS_EXHAUSTED) so relayClient.ts:105-106 sets remoteCode undefined, and again at cli.ts:336 which consults neither remoteCode nor httpStatus."
+    },
+    {
+      "criterion": "Classify the outcome as (a) specified limitation, (b) misleading error code, or (c) specification violation",
+      "status": "met",
+      "evidence": "(b), with both halves evidenced in section 5: specification.md:88 and :92 require exactly this claim/publish behaviour, so it is not (c); a documented limitation is still entitled to a truthful error code, so it is not (a)."
+    },
+    {
+      "criterion": "State the consequence for the acceptance criteria, quoting rather than inferring",
+      "status": "met",
+      "evidence": "Section 6 quotes specification.md:144 (AC-03, two profiles), :98 and :105 (two-party flow, replies reuse the session), :141 and :131 (AC-02 requires extra claimants to fail), and metrics-and-validation.md:36-47 and :78 (strictly two-party runbook and claim). No criterion requires two distinct senders; the affected criterion is AC-10 (retained limitations)."
+    },
+    {
+      "criterion": "Recommend a fix inside the frozen eight-command CLI surface or a documented limitation, with the trade-off, without implementing",
+      "status": "met",
+      "evidence": "Section 7: preserve the relay error code (relayClient.ts:11 allowlist plus cli.ts:336 surfacing remoteCode) and stop reporting a no-op re-publish as ok - both inside the eight commands; explicitly do NOT add a ninth command and do NOT make publish rotate implicitly, because that destroys the lost-response retry guarantee at specification.md:130 and the deliberate design at profile.ts:132-136; document the one-sender limitation. Nothing implemented."
+    },
+    {
+      "criterion": "Do not modify any source, test or configuration file; remove probe artifacts and verify removal",
+      "status": "met",
+      "evidence": "Section 8: probe lived in the scratchpad outside the repository, its mkdtemp work directory is removed in its own finally block, and the script was deleted after the run. git status --porcelain after the probe is byte-identical to the session-start snapshot (23 untracked entries, no modified/added/deleted paths)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t44-multisender-diagnosis.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Reproduction table, mechanism at file:line, error-code resolution, classification (b), acceptance-criteria consequence, recommendation, probe removal evidence and routing audit.",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "T44-001",
+      "global_id": "001-T44-investigate#T44-001",
+      "reviewer": "context-collector",
+      "severity": "minor",
+      "problem": "An exhausted prekey bundle is reported to the operator as a protocol violation. The relay correctly returns 404 PREKEY_BUNDLE_UNAVAILABLE (model/signal_prekey_bundle_v2.go:12, handler/signal_prekey_bundle_v2.go:14-28), but apps/cli/src/transport/relayClient.ts:11 omits that code from the remoteCodes allowlist (it carries the unrelated v1-era PREKEYS_EXHAUSTED), so relayClient.ts:105-106 builds a RelayError with remoteCode undefined; apps/cli/src/commands/cli.ts:336 then flattens every non-retryable RelayError to PROTOCOL_REJECTED without consulting remoteCode or httpStatus.",
+      "impact": "A normal, expected, recoverable condition - the recipient has no unclaimed one-time prekey - is indistinguishable from a genuine trust or protocol failure such as a forged signature, BUNDLE_ID_CONFLICT or INVALID_REQUEST. specification.md:74 documents exit 3 as trust/protocol rejection, so an exhausted prekey is surfaced as a trust failure. The operator gets no signal about what to do and cannot discover the real cause from the CLI at all.",
+      "suggested_fix": "Add PREKEY_BUNDLE_UNAVAILABLE to the remoteCodes allowlist at relayClient.ts:11 and let cli.ts:336 surface error.remoteCode when it is present instead of collapsing every non-retryable RelayError to one code. Exit code 3 may stay. Both changes are inside the frozen eight-command surface. Trade-off: the CLI failure vocabulary grows past the five codes an operator learns today.",
+      "evidence": "Probe steps 3 and 4 on the same relay instance: sender B send exit 3 PROTOCOL_REJECTED, direct POST /v2/prekeys/claim HTTP 404 PREKEY_BUNDLE_UNAVAILABLE. Code path confirmed at relayClient.ts:5 (RelayError carries httpStatus and remoteCode), :11, :105-106 and cli.ts:336.",
+      "confidence": "high"
+    },
+    {
+      "id": "T44-002",
+      "global_id": "001-T44-investigate#T44-002",
+      "reviewer": "context-collector",
+      "severity": "minor",
+      "problem": "`echolet relay publish` returns ok for a re-publish that restores nothing. apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go:33-45 takes the byte-identical idempotent path and returns without re-adding the v2:available: index that line 73 writes only on the first-store path, so the previously claimed bundle stays claimed and unclaimable, while the handler still reports stored: true and the CLI prints ok.",
+      "impact": "The recipient's only available recovery attempt through the CLI reports success while having no effect on claimability. An operator following the obvious remedy is told it worked. Confirmed by probe step 5 (re-publish ok) followed immediately by steps 6 and 7 (send still exit 3, direct claim still 404).",
+      "suggested_fix": "Have the publish result distinguish 'stored and available for claim' from 'already stored, previously claimed', so the CLI can report the no-op honestly. This stays inside the frozen eight-command surface. Do not make publish rotate implicitly: that would destroy the lost-response retry guarantee at specification.md:130 and the deliberate design recorded at profile.ts:132-136, and would collide with the one-time-prekey reservation at signal_prekey_bundle_v2.go:49-62.",
+      "evidence": "Probe steps 5-7 on a live relay; repository code path at signal_prekey_bundle_v2.go:33-45 versus line 73.",
+      "confidence": "high"
+    },
+    {
+      "id": "T44-003",
+      "global_id": "001-T44-investigate#T44-003",
+      "reviewer": "context-collector",
+      "severity": "info",
+      "problem": "Structural prototype limitation, confirming and giving functional weight to T38-L-001: through the frozen eight-command CLI surface a recipient can serve exactly one first-contact sender per profile lifetime. profile.ts:137-145 returns the same stored bundle on every publish, the relay consumes it on the first claim (signal_prekey_bundle_v2.go:151-162), and rotatePublicationBundle()/rotateBundle() - the only fresh-allocation operation - has no CLI entry point (cli.ts:52-61, 290-296; rotateBundle appears only at outbound.ts:36 and in outbound.publish.test.ts:131).",
+      "impact": "Multi-sender inbound messaging is impossible through the CLI, and no CLI command can restore claimability once the single bundle is claimed. This breaks no acceptance criterion - AC-03 (specification.md:144), the message flow (:98, :105) and the manual runbook (metrics-and-validation.md:36-47) are strictly two-party, and AC-02 (:141) requires extra claimants to fail - but it is a real limitation that belongs in the retained limitations required by AC-10 (specification.md:151) rather than in a footnote.",
+      "suggested_fix": "State the limitation plainly in the final status documentation: a published bundle serves exactly one first-contact sender, and the CLI has no command to allocate a fresh one-time prekey. Keep T38-L-001 open as a known gap. Do not add a ninth rotate command - that would break the frozen surface this flow is validating.",
+      "evidence": "Probe steps 1-7; specification.md:88 and :92 for the one-time-prekey and claim rules; specification.md:144, :98, :105, :141, :131 and metrics-and-validation.md:36-47, :78 for the two-party scope.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "probe_steps": 7,
+    "files_modified": 0
+  },
+  "timestamp_utc": "2026-09-06T18:00:00Z"
+}

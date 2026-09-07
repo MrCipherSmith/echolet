@@ -1,0 +1,124 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T46-implement",
+  "status": "DONE",
+  "summary": "T46 closes the one loosening T45 was forced into. `claimableSchema` in apps/cli/src/transport/relayClient.ts went from `z.boolean().optional()` to a required `z.boolean()`, so a relay v2 publish success that omits `claimable` is now refused by the `.strict()` response object and mapped by request() to INVALID_RELAY_RESPONSE / retryable false, exactly like any other malformed envelope. That is the whole production change: one token removed from one line, plus the comment above it. The comment at relayClient.ts:31-36 previously justified the optionality ('Optional only so that a relay predating the field is reported as unknown rather than misreported as available') and was rewritten in the same edit to state the contract that now holds - the relay always emits the field and always as a boolean, so a publish success without it is malformed and is refused rather than carried inland as an absent key that would silently degrade a no-op republish back into plain success (T46-N-001). T46-N-002 was checked and needed no code change: cli.ts does not mention `claimable` at all, and there is no conditional anywhere that omits it. The 'key is simply omitted from the JSON result' behaviour T45 section 3.3 describes was not a branch but a property of JSON.stringify dropping an undefined-valued key - outbound.ts:34 passes RelayClient.publishBundle()'s object straight through and cli.ts:361 stringifies it whole - so there is no dead conditional to remove, and with the field required the value is now always a boolean and always printed. No other production line needed changing: publishBundle() at line 61 already returned data.claimable, whose type simply narrowed from `boolean | undefined` to `boolean`, which typecheck confirms. No test file was read for editing and none was modified, skipped or relaxed; the only file written in this dispatch is relayClient.ts. Verification under Node v26.5.0: apps/cli 18 files / 92 tests all green (the RED at relayClient.claimable.test.ts:39 now passes and both green guards still hold), workspace `pnpm test` 137/137 green across 7 packages, `pnpm typecheck` green across 7 projects, and both Go variants green - `go -C apps/relay test -race -count=1 ./...` and the same with `-tags relayv2`. No git commit was made; `git status --porcelain` still lists the same 23 untracked entries as the session-start snapshot.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "`claimable` is required on the relay v2 publish response schema",
+      "status": "met",
+      "evidence": "apps/cli/src/transport/relayClient.ts:37 is now `const claimableSchema = z.boolean();`. It is consumed unchanged at line 60 inside `z.object({ stored: z.literal(true), bundle_id: z.literal(bundle.bundle_id), claimable: claimableSchema }).strict()`, so a missing key is a parse failure on a strict object, and `validate()` (line 87-91) turns every parse failure into `invalid()` = `new RelayError('INVALID_RELAY_RESPONSE', false)`."
+    },
+    {
+      "criterion": "The RED test at relayClient.claimable.test.ts:39 is green",
+      "status": "met",
+      "evidence": "`pnpm --filter @echolet/cli test`: `src/transport/relayClient.claimable.test.ts (3 tests)` all pass. The previously observed `AssertionError: promise resolved \"{ stored: true, …(2) }\" instead of rejecting` is gone - the publish response `{ stored: true, bundle_id }` now rejects with `{ code: 'INVALID_RELAY_RESPONSE', retryable: false }` as the test requires."
+    },
+    {
+      "criterion": "The two green guards in the same file are still green, so the field was not made required by hard-coding, coercion or widening",
+      "status": "met",
+      "evidence": "'carries both claimability answers through the transport unchanged' and 'keeps claimable closed to anything that is not a boolean, and the envelope closed to unknown keys' both pass. `true` and `false` still round-trip exactly through `publishBundle()` - `false` in particular, the case T44-002 exists for - because line 61 still returns `data.claimable` verbatim with no default, no `??`, no cast. `'true'`, `null` and `1` are still rejected because the schema is `z.boolean()` and not `z.coerce.boolean()`, and the extra `unexpected` key is still rejected because the response object is still `.strict()`."
+    },
+    {
+      "criterion": "T46-N-001: the comment no longer contradicts the schema",
+      "status": "met",
+      "evidence": "The comment at relayClient.ts:31-36 was rewritten in the same edit as the schema line. The sentence asserting a tolerance the schema no longer has ('Optional only so that a relay predating the field is reported as \"unknown\" rather than misreported as available; the CLI omits the key in that case instead of guessing') is gone, replaced by 'Required and closed: the relay always emits the field and always as a boolean, so a publish success without it is a malformed response and is refused like any other, rather than being carried inland as an absent key that would silently degrade a no-op republish back into plain success.' The first three lines - what the field answers and why the client cannot answer it itself - were kept, because they remain true and are the reason the field exists."
+    },
+    {
+      "criterion": "T46-N-002: any dead conditional in cli.ts that omits `claimable` from the printed result is handled",
+      "status": "met",
+      "evidence": "There is no such conditional, so nothing was removed and nothing became dead. A routed search for `claimable` across apps/cli/src returns 29 matches in 7 files and cli.ts is not among them - the CLI never names the field. The publish path is: cli.ts:309 `return await messenger.publish()`, outbound.ts:34 `publish() { return this.serial(async () => this.options.relay.publishBundle(...)); }` - a straight pass-through with no reshaping - and cli.ts:361 `process.stdout.write(`${JSON.stringify(value)}\\n`)`. The T45 report's 'the key is simply omitted from the JSON result' (section 3.3) therefore described JSON.stringify's own dropping of an undefined-valued property, not a branch in the CLI. With the field required, `data.claimable` is a boolean on every successful publish, so the key is now always present in the printed object. Consistent with the test author's note, no test pinning the exact stdout shape of `relay publish` was added: that is a wider contract than this task, and the transport-level guards already pin the value the CLI prints."
+    },
+    {
+      "criterion": "T46-N-003: nothing else in apps/cli stubs a publish response without `claimable`",
+      "status": "met",
+      "evidence": "Confirmed by execution rather than by search: the whole apps/cli suite is 18 files / 92 tests all green. Had any other stub omitted the field it would have surfaced immediately as an INVALID_RELAY_RESPONSE failure once the schema was tightened. The e2e suites (publication-claimability.test.ts, two-process.test.ts) talk to the real relay binary, which always emits the field, and both are green."
+    },
+    {
+      "criterion": "No test was modified, weakened, skipped or deleted",
+      "status": "met",
+      "evidence": "Exactly one file was written in this dispatch - apps/cli/src/transport/relayClient.ts - and it is production code. No `*.test.ts` file was opened for writing, no `.skip`/`.only`/`.todo` was introduced, and apps/cli/vitest.config.ts and apps/cli/test/globalSetup.ts (owned by T43) were neither read for editing nor written. flow.json and acceptance-criteria.md were not touched."
+    },
+    {
+      "criterion": "The change is narrow: the schema module was not restructured and the Go side was not touched",
+      "status": "met",
+      "evidence": "The diff is one line of schema and six lines of comment, in place, in the same named-constant style the rest of the module uses (`nextCursorSchema`, `authorizationSchema`, `pollRequestSchema`). No constant was moved, renamed, split or reordered; `publishBundle()` and `request()` are byte-identical to before. No file under apps/relay was opened for writing - the Go handler already always emits the field."
+    },
+    {
+      "criterion": "Full verification is green",
+      "status": "met",
+      "evidence": "Node v26.5.0 (/opt/homebrew/bin/node). `pnpm --filter @echolet/cli test`: 'Test Files 18 passed (18) / Tests 92 passed (92)'. `pnpm test` (workspace): 137 passed, 0 failed - protocol 8, client-db 1, crypto-core 4, client-core 2, session-node 24, mobile 6, cli 92. `pnpm typecheck`: exit 0 across 7 projects, which is also what proves the `boolean | undefined` -> `boolean` narrowing broke no caller. `go -C apps/relay test -race -count=1 ./...`: exit 0, 5 packages ok. `go -C apps/relay test -tags relayv2 -race -count=1 ./...`: exit 0, same 5 packages ok."
+    },
+    {
+      "criterion": "No secret, plaintext, ciphertext, store key, private key material or HTTP request body is printed",
+      "status": "met",
+      "evidence": "The change adds no logging and removes no redaction. Nothing in this dispatch printed a message body, a bundle payload, a profile store key or a request body: the only outputs read were routed test summaries (pass/fail lines and durations), a typecheck project list, Go package results and a file hash."
+    },
+    {
+      "criterion": "No git commit was made",
+      "status": "met",
+      "evidence": "`git status --porcelain | wc -l` is 23 after all work, identical to the session-start snapshot - the edited file lives inside the already-untracked apps/ entry. The repository is still on unborn main. No `git add`, `git commit`, `git reset` or `git clean` was run."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T46-implement-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This result contract.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The only file changed. `claimableSchema` is now a required `z.boolean()` and the comment above it states the required-and-closed contract instead of justifying optionality.",
+      "hash": "94f93198e8c201969e0612a9419308e059ce835e12220e19be06fd350eafefd9"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/transport/relayClient.ts",
+      "change": "Line 37: `const claimableSchema = z.boolean().optional();` -> `const claimableSchema = z.boolean();`, making `claimable` a required key on the `.strict()` publish response object at line 60, so an omission is a parse failure and is mapped to INVALID_RELAY_RESPONSE / retryable false. Lines 31-36: the comment was rewritten in the same edit (T46-N-001) - the first three lines explaining what the field answers are kept, and the sentence justifying `.optional()` is replaced by a statement of the contract that now holds: the relay always emits the field and always as a boolean, so a publish success without it is malformed and refused, rather than carried inland as an absent key that would silently degrade a no-op republish back into plain success. No other line changed: `publishBundle()` at line 61 already returned `data.claimable`, whose type narrows from `boolean | undefined` to `boolean`."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T46-I-001",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": null,
+      "problem": "T46-N-002 anticipated a conditional in cli.ts that omits `claimable` from the printed result and would become dead once the field is required. No such conditional exists. cli.ts never names `claimable`; outbound.ts:34 returns RelayClient.publishBundle()'s object unchanged and cli.ts:361 stringifies it whole, so the T45 report's 'the key is simply omitted from the JSON result' was describing JSON.stringify dropping an undefined-valued property, not a branch.",
+      "impact": "None. Nothing was removed because nothing was dead. Worth recording so a later reader does not go looking for a conditional that was never written, and so the verifier can confirm the note was acted on rather than skipped.",
+      "suggested_fix": "No change needed. The stdout shape of `relay publish` is now `{ stored, bundleId, claimable }` with `claimable` always present and always a boolean; if the flow later wants that exact shape pinned by a test, that is a separate and wider contract than this task, as the test author noted.",
+      "evidence": "A routed search for `claimable` over apps/cli/src returns 29 matches across 7 files and cli.ts is not one of them. The publish path reads cli.ts:309 -> outbound.ts:34 -> relayClient.ts:57-62, with the single stdout write at cli.ts:361.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_modified": 1,
+    "test_files_modified": 0,
+    "production_lines_changed": 1,
+    "comment_lines_rewritten": 6,
+    "tests_weakened": 0,
+    "tests_skipped": 0,
+    "cli_suite_after": "18 files / 92 tests, 92 passed, 0 failed",
+    "workspace_test_after": "137 passed / 0 failed (7 packages)",
+    "typecheck": "green (7 projects)",
+    "go_relay": "green (-race -count=1 ./...)",
+    "go_relay_relayv2": "green (-tags relayv2 -race -count=1 ./...)",
+    "node_version": "v26.5.0 (/opt/homebrew/bin/node)",
+    "self_fix_attempts": 0,
+    "git_commits": 0
+  },
+  "timestamp_utc": "2026-09-06T19:00:00Z"
+}

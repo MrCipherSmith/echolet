@@ -1,0 +1,39 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T32-tests",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {"title": "Define RED v2 publish to mailbox authorization integration test", "description": "Add focused Go integration tests proving that a successful v2 bundle publish atomically registers its validated DeviceRecord for signed mailbox challenge authorization, including restart persistence.", "intent": "test", "scope": "apps/relay v2 publish and mailbox handler/router tests only"},
+  "acceptance_criteria": [
+    "After only POST /v2/prekeys/publish, the embedded device can create a correctly signed mailbox challenge without a separate v1 device-record publish.",
+    "Authorization survives Badger close/reopen and invalid device signatures remain rejected.",
+    "A failed/conflicting v2 publish cannot create or replace an authorized DeviceRecord.",
+    "The focused integration is RED only because v2 storage currently omits the DeviceRecord index."
+  ],
+  "context_refs": [
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T22-implement-result.json", "kind": "report", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T24-implement-result.json", "kind": "report", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/relay/internal/api/router/router.go",
+    "apps/relay/internal/api/handler/mailbox_handler.go",
+    "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go",
+    "apps/relay/internal/storage/repository/device_record_repo.go",
+    "apps/relay/internal/validation/signal_prekey_bundle_v2.go",
+    "packages/protocol/src/types/fixtures/relay-v2.json",
+    ".metaproject/data/testing/context.md"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; load tests-creator/testing.",
+    "Tests only; do not edit production code, flow.json, or acceptance-criteria.md.",
+    "Use the real router/handlers/Badger and shared signed fixture; use apply_patch and keryx ctx rg; do not commit.",
+    "Do not require the CLI to call the legacy v1 device-record endpoint.",
+    "Write and validate .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T32-tests-result.json; final starts STATUS:."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T32-tests-result.json", "summary_max_tokens": 350},
+  "budget": {"max_output_tokens": 3500, "max_runtime_ms": 900000},
+  "provenance": {"created_at": "2026-09-06T11:28:30+04:00", "created_by": "flow-orchestrator", "source_request": "Close v2 publish to mailbox authorization integration gap before CLI E2E."}
+}

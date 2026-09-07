@@ -1,0 +1,167 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T37-verify",
+  "status": "DONE",
+  "summary": "Second attempt at T37. The complete T27 verification matrix plus the two additional checks required by this dispatch were re-run independently on the current working tree: 18 checks, 17 PASS, 1 WARN (the advisory keryx health adapter, exit 0, score 93, 7 P2 complexity findings, no P0/P1), 0 FAIL. Gate verdict: PASS. The workspace suite was executed three times and was green all three times (exit 0, 114 tests, apps/cli 13 files / 69 tests each run); two further complete unfiltered executions (pnpm --filter @echolet/cli test and test:e2e) were also green, giving 5 clean executions and 15/15 clean end-to-end iterations with no file or path exclusions of any kind. keryx test run --strict is back to PASS/exit 0 (it was FAIL/exit 1 in attempt 1). The F-013 class is CLOSED: an independent probe of the built dist/cli.js shows a dash-leading --to reaching the trust layer (exit 3 CONTACT_NOT_TRUSTED, identical to the non-dash control), --with reaching history (exit 0), --text carried as content, and --relay-url reaching the configuration validator (exit 2 INVALID_CONFIGURATION) rather than the argument parser; meanwhile unknown flag, missing value at end of argv, repeated option, stray positional, operand after '--' and unknown command all still fail closed with exit 2 INVALID_ARGUMENTS, and a bare trailing '--' remains a no-op, each emitting exactly one JSON object on stdout. The sixteen tests in apps/cli/src/commands/cli.dashOptionValues.test.ts pass unmodified, 16/16 standalone and inside every full run; the file's hash was verified before and after. Test integrity: 38 hashed test files re-verified with 38 OK / 0 FAILED; zero skip/only/todo/t.Skip matches workspace-wide. Test count reconciliation against the T27 baseline of 82: now 114 (+32), entirely in apps/cli (37 to 69) with the other six packages unchanged at 45; the +32 is 31 tests in six new files plus one added case in inbound.test.ts, and no pre-existing test was weakened, skipped or deleted. All ten required measurements from metrics-and-validation.md meet their thresholds, including 0 known-plaintext-marker occurrences, 1 of 20 concurrent claim winners under -race, byte-identical sender restart retry and 0 duplicate receiver history entries. The T36 harness fix holds: dist/cli.js is built exactly once per vitest run by globalSetup, only two build sites exist, and neither the INVALID_ARGUMENTS build race nor its symptom recurred. No source, test, configuration or dependency file was modified. Limitations: local technical-prototype behaviour on one macOS arm64 machine only; no claim of production security, mobile delivery, deployment readiness, external audit completion or user demand.",
+  "acceptance": [
+    {
+      "criterion": "Every check from the T27 matrix is re-run independently and reported with its exact command, status and bounded evidence.",
+      "status": "met",
+      "evidence": "18-row per-check table in t37-verification-report.md (Attempt 2): frozen_install, cli_build, workspace_typecheck, cli_process, cli_dash_options, workspace_tests x3, cli_suite_unfiltered, e2e_3_iterations, go_untagged, go_untagged_race, relayv2_race, metaproject_test_strict, health_strict, graph_rebuild, graph_cycles, wiki_links. Each row carries the command, exit status and a bounded measurement; per-check raw logs listed under Evidence."
+    },
+    {
+      "criterion": "Additionally run the untagged Go suite under the race detector.",
+      "status": "met",
+      "evidence": "go -C apps/relay test -race -count=1 ./... exit 0, uncached; handler, router, middleware, repository and validation all ok. Log 2026-09-06T15-11-54-324Z_run.log."
+    },
+    {
+      "criterion": "The three-iteration end-to-end evidence is UNFILTERED, with no test file or path exclusions; state whether the INVALID_ARGUMENTS build race recurs.",
+      "status": "met",
+      "evidence": "Five complete unfiltered executions (pnpm test x3, pnpm --filter @echolet/cli test, test:e2e), 3/3 E2E iterations in each, 15/15 total. Build invocations under apps/cli exist at exactly two sites (test/globalSetup.ts:17 and package.json:9); processFailures builds a separate private bundle. Neither the build race nor the INVALID_ARGUMENTS symptom recurred."
+    },
+    {
+      "criterion": "Report the required measurements named in metrics-and-validation.md.",
+      "status": "met",
+      "evidence": "All ten measured and tabulated: clean E2E 3/3 in all five executions; concurrent claim winners 1 of 20 under -race (claimants = 20 at prekey_bundle_v2_test.go:138); lost-response claim replay exact; reused OTK publications rejected in 5 sub-cases; offline delivery 1/1; sender restart retry byte-identical (two-process.test.ts:143-145); 0 duplicate receiver history entries; 0 known-plaintext-marker occurrences across HTTP traffic, relay log and a recursive byte scan of the relay data directory; 4/4 shared invalid contract fixtures rejected in both languages; wiki links 19 pages / 38 links / 0 broken."
+    },
+    {
+      "criterion": "Confirm test-integrity and reconcile the workspace test count against the 82 recorded at T27.",
+      "status": "met",
+      "evidence": "38 test files hashed before the first command and re-verified after the last: 38 OK / 0 FAILED. Zero skip/only/todo/xit/xdescribe/t.Skip matches (three hits are os.Exit in main.go). 82 to 114 (+32), all in apps/cli (37 to 69); other six packages unchanged at 45. Per-file T27/attempt-1/attempt-2 table in the report. Caveat recorded: apps/mobile MessagingScreen.test.mjs fell outside the hashed glob."
+    },
+    {
+      "criterion": "Report explicitly whether the F-013 class is closed, and confirm the sixteen tests pass unmodified.",
+      "status": "met",
+      "evidence": "Closed. Dedicated F-013 section with a 12-row probe table against the built binary, plus 16/16 passes of cli.dashOptionValues.test.ts standalone and in every full run, with the file hash-verified unmodified. The fix keeps parseArgs strict:true (cli.ts:107) and normalizes only declared string options (cli.ts:89-102)."
+    },
+    {
+      "criterion": "Any failure is reported as a failure with its exact output; do not stop at the first failure.",
+      "status": "met",
+      "evidence": "The whole matrix was executed in a single pass. No check failed. The one non-PASS row (health_strict WARN) is reported as WARN with its score, finding counts and gate reason rather than being smoothed over."
+    },
+    {
+      "criterion": "Use the evidence format from metrics-and-validation.md and keep the limitations section honest.",
+      "status": "met",
+      "evidence": "The report opens Attempt 2 with the prescribed evidence block (Acceptance target / Revision / Environment / Status / Checks / Metrics / Failures / Artifacts / Decision) and carries a limitations section naming the single-machine scope, the probabilistic-versus-deterministic evidence distinction, the health adapter's inability to run ESLint, the cached Go packages, the mjs hashing gap and the unborn-main revision identifier."
+    },
+    {
+      "criterion": "Do not modify any source file, test file, configuration or dependency; do not edit flow.json or acceptance-criteria.md.",
+      "status": "met",
+      "evidence": "Only the report and this result file were written. Test-file hash re-check: 38 OK / 0 FAILED. No commit was created (main is unborn)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t37-verification-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Second-attempt verification report. Attempt 2 first (PASS), attempt 1 preserved verbatim below as superseded history."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T15-07-38-612Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Workspace tests run 1: exit 0, 114 tests, apps/cli 13 files / 69 tests."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T15-09-47-851Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Workspace tests runs 2 and 3: WSRUN2_EXIT=0, WSRUN3_EXIT=0, 114 tests each."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T15-11-35-448Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Unfiltered CLI suite (13 files / 69 tests) and dedicated 3-iteration E2E, both exit 0."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T15-11-54-324Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Go untagged, untagged -race -count=1, and relayv2-tagged -race -count=1 suites, all exit 0."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T15-14-03-767Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "F-013 probe of the built binary: dash-leading values reach their intended layer; all invalid-input classes still exit 2 INVALID_ARGUMENTS."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T15-15-26-097Z_run.log",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Test-file integrity re-check: 38 OK / 0 FAILED."
+    },
+    {
+      "path": ".metaproject/data/testing/artifacts/latest.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "keryx test run --strict normalized report: PASS, passed 2 / failed 0."
+    },
+    {
+      "path": ".metaproject/data/health/artifacts/latest.md",
+      "kind": "health",
+      "exists": true,
+      "summary": "keryx health run --strict: WARN, score 93, 7 findings, all P2 complexity, no P0/P1."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t37-verification-report.md",
+      "change": "Extended with the attempt-2 verification report; attempt 1 preserved verbatim under a superseded heading."
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T37-verify-result.json",
+      "change": "Created: subagent-result for the second T37 attempt."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": 660000,
+    "retries": 0,
+    "checks_total": 18,
+    "checks_pass": 17,
+    "checks_warn": 1,
+    "checks_fail": 0,
+    "gate": "PASS",
+    "workspace_test_runs": 3,
+    "workspace_test_runs_green": 3,
+    "workspace_tests_total": 114,
+    "workspace_tests_t27_baseline": 82,
+    "cli_test_files": 13,
+    "cli_tests": 69,
+    "e2e_complete_executions": 5,
+    "e2e_iterations_clean": 15,
+    "e2e_iterations_total": 15,
+    "f013_status": "closed",
+    "f013_pinning_tests": 16,
+    "f013_pinning_tests_passed": 16,
+    "go_relayv2_race_toplevel_tests": 36,
+    "go_relayv2_race_failed": 0,
+    "go_relayv2_race_skipped": 0,
+    "test_files_hashed": 38,
+    "test_files_hash_mismatches": 0,
+    "skipped_or_focused_tests": 0,
+    "known_plaintext_marker_occurrences": 0,
+    "concurrent_claim_winners": 1,
+    "concurrent_claimants": 20,
+    "invalid_contract_fixtures_rejected": 4,
+    "invalid_contract_fixtures_total": 4,
+    "graph_nodes": 78,
+    "graph_edges": 117,
+    "graph_cycles": 0,
+    "wiki_pages": 19,
+    "wiki_internal_links": 38,
+    "wiki_broken_links": 0,
+    "health_score": 93,
+    "health_findings_p0": 0,
+    "health_findings_p1": 0,
+    "health_findings_p2": 7,
+    "source_files_modified": 0
+  },
+  "timestamp_utc": "2026-09-06T15:16:00Z"
+}

@@ -1,0 +1,55 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T39-tests",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {
+    "title": "Define RED tests for CLI option values that begin with a dash (F-013)",
+    "description": "Write failing tests pinning that every string-valued CLI option accepts a value beginning with '-', which base64url identity_id values produce roughly once in 64. Do NOT write implementation code.",
+    "intent": "test",
+    "scope": "apps/cli tests only. Do not modify apps/relay or packages/**."
+  },
+  "acceptance_criteria": [
+    "F-013 (blocker): a deterministic test proves that `send --to <identity>` succeeds when the identity_id begins with '-'. Today Node parseArgs with strict:true raises ERR_PARSE_ARGS_INVALID_OPTION_VALUE for any option value starting with '-', which cli.ts:66 maps to INVALID_ARGUMENTS / exit 2. The test must currently FAIL.",
+    "The test class is enumerated, not sampled: every string-valued option across the documented command surface is covered - at minimum --to, --with, --text, --profile, --out, --from, --message-id, --relay-url, --store-key-env - each asserted with a value beginning with '-'. Use fixed literal values; do not rely on randomly generated identities to hit the case.",
+    "A `--text` value beginning with '-' is accepted as message content, including a value that looks like a known flag (for example '--profile'), and is not reinterpreted as an option.",
+    "Genuinely invalid input still fails closed with exit 2: an unknown flag, a missing required value, and a repeated option must keep their current INVALID_ARGUMENTS behaviour. Assert these so the fix cannot be obtained by simply disabling strict parsing.",
+    "`--` end-of-options handling, if the fix introduces it, is pinned by a test rather than left implicit.",
+    "The existing exit-code contract is unchanged for every other case, and the one JSON object on stdout / redacted diagnostics on stderr behaviour still holds.",
+    "All currently-passing tests stay green; no existing assertion is weakened or deleted."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t37-verification-report.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T37-verify-result.json", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/data/testing/context.md", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/cli/src/commands/cli.ts",
+    "apps/cli/src/commands/cli.test.ts",
+    "apps/cli/src/commands/cli.processFailures.test.ts",
+    "apps/cli/test/e2e/two-process.test.ts",
+    "apps/cli/test/globalSetup.ts",
+    "apps/cli/vitest.config.ts",
+    "packages/crypto-core/src/identity"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "Load and follow the project tests-creator skill and the project testing skill; preserve explicit RED-before-GREEN evidence with recorded command output.",
+    "Do NOT write implementation code.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Do not weaken or delete existing assertions, and do not modify the T36-owned harness build sequencing in apps/cli/vitest.config.ts or apps/cli/test/globalSetup.ts beyond reading them.",
+    "The tests must be deterministic. Do not depend on a randomly generated identity happening to start with '-'; construct the case explicitly.",
+    "Use `keryx ctx rg` for searches, never bare rg/grep. Use `keryx ctx run` for long command output.",
+    "Never print plaintext message bodies, ciphertext, profile store keys, private key material or HTTP request bodies into reports or logs.",
+    "Do not commit: this repository has an unborn untracked baseline, so partial root commits are forbidden.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T39-tests-result.json and make the final response start with STATUS:.",
+    "In the result, list every added test by file and test name, state the exact failing assertion, and name every string-valued option you enumerated so the reviewer can confirm the class is complete rather than sampled."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T39-tests-result.json", "summary_max_tokens": 800},
+  "budget": {"max_output_tokens": 5000, "max_runtime_ms": 2400000},
+  "provenance": {"created_at": "2026-09-06T14:45:00+04:00", "created_by": "flow-orchestrator", "source_request": "T37 verification found blocker F-013; fix before the matrix can be re-taken."}
+}

@@ -1,0 +1,60 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T35-tests",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {
+    "title": "Define RED tests for poll response capacity and relay rate limiting",
+    "description": "Write failing (RED) tests that pin the intended behaviour for review findings F-009, F-010 and F-011 across apps/relay and apps/cli transport. Do NOT write implementation code.",
+    "intent": "test",
+    "scope": "apps/relay Go tests and apps/cli transport/config tests. Do not change relay mailbox integrity/auth/validation semantics owned by T34."
+  },
+  "acceptance_criteria": [
+    "F-009 (major): tests prove that a mailbox poll can always make progress. Server-side batch selection must honour a shared aggregate response-byte budget (not only a batch count), must always return at least one valid envelope even when that single envelope is large, and must signal remaining work so the client can drain the mailbox across polls. A client-side test must prove the CLI never receives a response above its response-byte bound for a mailbox filled with maximum-size valid envelopes, and that repeated polls drain it rather than returning the same rejected batch forever. The CLI `poll_batch_size` configuration value must actually reach the relay request. These must currently FAIL.",
+    "F-010 (major): a test proves the rate-limiting middleware does not hold its shared lock across downstream handler execution - quota accounting happens under the lock, the allow/deny decision is computed, the lock is released, and only then is the rejection written or next.ServeHTTP invoked. Demonstrate it deterministically, for example with a handler that blocks on a channel while a second independent request must still reach the limiter decision. Must run clean under -race and must currently FAIL.",
+    "F-011 (major): tests prove that (a) the quota key is the normalized remote HOST (net.SplitHostPort), so many connections from one host share one bucket instead of each source port getting a fresh quota, and (b) idle buckets are pruned/expired rather than accumulating forever. Trusted-proxy handling must be explicitly asserted as whatever the implementation declares, not left implicit. These must currently FAIL.",
+    "Carried from the completed T34 fix (finding T34-I-003, minor): a test pins that the /v1/messages/send request-body limit is DERIVED from cfg.MaxMessageBytes rather than a hand-chosen constant, so raising ECHOLET_MAX_MESSAGE_BYTES cannot silently make the route reject legitimate envelopes. The relay currently hardcodes 1 MiB there; assert the derived relationship, not the literal.",
+    "Tests are deterministic - no wall-clock sleeps for correctness; use injected clocks or explicit synchronisation.",
+    "Go tests pass under `go -C apps/relay test -race -count=1 ./...`; CLI tests pass under the workspace vitest run.",
+    "All existing tests remain green; no existing assertion is weakened or deleted."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/plan.md", "kind": "plan", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/HANDOFF-CLI-PROTOTYPE-2026-09-06.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-path-echolet-cli-prototype-t28/consolidated-findings.json", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/data/testing/context.md", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/relay/internal/middleware/rate_limit.go",
+    "apps/relay/internal/api/handler/mailbox_handler.go",
+    "apps/relay/internal/api/handler/mailbox_handler_test.go",
+    "apps/relay/internal/config/config.go",
+    "apps/relay/internal/storage/repository/mailbox_repo.go",
+    "apps/cli/src/transport/relayClient.ts",
+    "apps/cli/src/transport/relayClient.test.ts",
+    "apps/cli/src/runtime/config.ts",
+    "apps/cli/src/runtime/config.test.ts",
+    "apps/cli/src/runtime/inbound.ts"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "Load and follow the project tests-creator skill and the project testing skill; preserve explicit RED-before-GREEN evidence with recorded command output.",
+    "Do NOT write implementation code. A minimal test seam is allowed only if unavoidable; declare it explicitly in the result.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Do not change or re-test mailbox integrity, expiry or device authorization semantics - flow task T34 owns those and its fixes are already applied and green. Build on them; do not contradict them. The single exception is the derived send-route body limit named in the acceptance criteria, which T34 explicitly handed over.",
+    "T34 landed the following relay changes you must build on, not undo: handler/request_body.go decodeJSONRequest with http.MaxBytesReader at all six v1 decoder sites; absolute Badger ExpiresAt = min(declared, now+cap) with expired records excluded from the batch count in GetEnvelopes; model.ErrEnvelopeIDConflict mapped to HTTP 409; GetByDeviceID removed in favour of a device_mailbox:<mailbox_id>:<device_id> binding resolved by GetByMailboxAndDevice.",
+    "Do not weaken or delete existing assertions.",
+    "Use `keryx ctx rg` for searches, never bare rg/grep. Use `keryx ctx run` for long command output.",
+    "Never print ciphertext, plaintext, key material or HTTP request bodies into reports or logs.",
+    "Do not commit: this repository has an unborn untracked baseline, so partial root commits are forbidden.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T35-tests-result.json and make the final response start with STATUS:.",
+    "In the result, list every added test by file and test name, and state per finding (F-009, F-010, F-011) whether the RED demonstration succeeded, with the exact failing assertion."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T35-tests-result.json", "summary_max_tokens": 900},
+  "budget": {"max_output_tokens": 6000, "max_runtime_ms": 2400000},
+  "provenance": {"created_at": "2026-09-06T13:20:00+04:00", "created_by": "flow-orchestrator", "source_request": "Fix T28 review findings F-001..F-012 through managed flow tasks T33-T38."}
+}

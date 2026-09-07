@@ -1,0 +1,61 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T33-tests",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {
+    "title": "Define RED tests for CLI publish retry, bounded confirmation, persistence classification and concurrent same-ID send",
+    "description": "Write failing (RED) tests that pin the intended behaviour for review findings F-001, F-002, F-003 and F-008 in apps/cli. Do NOT write implementation code. F-003 and F-008 additionally require deterministic fault-injection / concurrency hooks that make the current defect reproducible without timing luck.",
+    "intent": "test",
+    "scope": "apps/cli tests only (src/**/*.test.ts and test/**). packages/session-node may be read but not modified."
+  },
+  "acceptance_criteria": [
+    "F-001: a test proves that a repeated `relay publish` after a lost response submits the byte-identical previously signed bundle (same bundle_id and same one-time prekey) rather than regenerating a new bundle_id around the same reserved OTK, and that allocating a fresh bundle is a separate explicit operation. The test must currently FAIL.",
+    "F-002: a test drives the interactive contact-import confirmation with a stream that delivers a complete line ('yes\\n' and 'n\\n') and never ends the stream, and asserts the confirmation settles on the newline. It must also assert settling on EOF without a newline and on an overlong answer. The complete-line case must currently FAIL.",
+    "F-003: a deterministic persistence-failure test or fault injection proves the intended exit code 5 / PERSISTENCE_FAILURE classification for a SQLite failure occurring AFTER the profile store is successfully opened. Cover at least the outbound send commit path, the inbound poll/history commit path, and contact import commit. Typed validation, trust and native decrypt failures must still map to exit 3, and that must be asserted too so the fix cannot be made by widening exit 5. The fault must be injected deterministically (for example a second connection holding BEGIN IMMEDIATE against the same database file with busy_timeout=0, or an injectable store boundary) - not by sleeping or racing.",
+    "F-008: a deterministic concurrent-send test uses two independent runtime/store instances (two separate messenger/runtime objects, or two child processes) opening the same profile database and sends the SAME --message-id concurrently. It must assert exactly one outbox envelope, exactly one envelope_id, and exactly one history entry for that message_id. Determinism must come from an explicit synchronisation barrier or transaction hook, not from timing. The test must currently FAIL.",
+    "All new tests are RED for the intended behaviour and GREEN for the assertions that already hold; every currently-passing test in the workspace stays green.",
+    "No test is weakened, deleted or made less strict to accommodate a future fix."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/plan.md", "kind": "plan", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/HANDOFF-CLI-PROTOTYPE-2026-09-06.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-path-echolet-cli-prototype-t28/consolidated-findings.json", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/data/testing/context.md", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/cli/src/runtime/outbound.ts",
+    "apps/cli/src/runtime/outbound.test.ts",
+    "apps/cli/src/runtime/inbound.ts",
+    "apps/cli/src/runtime/inbound.test.ts",
+    "apps/cli/src/runtime/profile.ts",
+    "apps/cli/src/runtime/profile.test.ts",
+    "apps/cli/src/commands/cli.ts",
+    "apps/cli/src/commands/cli.test.ts",
+    "apps/cli/src/transport/relayClient.ts",
+    "apps/cli/test/e2e/two-process.test.ts",
+    "packages/session-node/src/EncryptedSqliteStore.ts",
+    "packages/session-node/src/SignalClient.ts",
+    "packages/session-node/src/wire.ts"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "Load and follow the project tests-creator skill (.metaproject/skills/gdskills/quality/tests-creator/SKILL.md) and the project testing skill; preserve explicit RED-before-GREEN evidence with recorded command output.",
+    "Do NOT write implementation code. Adding a narrowly scoped, production-safe test seam (for example an injectable store factory or an exported barrier hook) is allowed ONLY if no test-only alternative exists; if you add one, name it explicitly in the result findings so the reviewer can judge it.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Do not modify apps/relay; another worker owns that scope in parallel.",
+    "Do not weaken or delete existing assertions.",
+    "Use `keryx ctx rg` for searches, never bare rg/grep. Use `keryx ctx run` for long command output.",
+    "Never print or assert on plaintext bodies, ciphertext, profile keys, private key material or HTTP request bodies in reports or logs.",
+    "Do not commit: this repository has an unborn untracked baseline, so partial root commits are forbidden.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T33-tests-result.json and make the final response start with STATUS:.",
+    "In the result, list every added test by file and test name, and state per finding (F-001, F-002, F-003, F-008) whether the RED demonstration succeeded, with the exact failing assertion."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T33-tests-result.json", "summary_max_tokens": 900},
+  "budget": {"max_output_tokens": 6000, "max_runtime_ms": 2400000},
+  "provenance": {"created_at": "2026-09-06T13:15:00+04:00", "created_by": "flow-orchestrator", "source_request": "Fix T28 review findings F-001..F-012 through managed flow tasks T33-T38."}
+}

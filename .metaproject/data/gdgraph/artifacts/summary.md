@@ -1,0 +1,57 @@
+# gdgraph Summary
+
+## Stats
+
+- Source files indexed: 89
+- Imported asset files indexed: 1
+- Total nodes: 90
+- Edges: 139
+- Import edges: 134
+- Asset edges: 5
+- Unresolved imports: 0
+- Import resolution: 100%
+- Skipped generated/static directories: 13
+
+## Top Modules
+
+| Module | Source Files |
+|---|---:|
+| packages | 49 |
+| apps | 39 |
+| .opencode | 1 |
+
+## Unresolved By Type
+
+| Type | Count |
+|---|---:|
+| _none_ | 0 |
+
+## Skipped Directories
+
+- `.claude`
+- `.git`
+- `.metaproject`
+- `apps/cli/dist`
+- `apps/cli/node_modules`
+- `apps/mobile/node_modules`
+- `apps/relay/.cache`
+- `node_modules`
+- `packages/client-core/node_modules`
+- `packages/client-db/node_modules`
+- `packages/crypto-core/node_modules`
+- `packages/protocol/node_modules`
+- `packages/session-node/node_modules`
+
+## Generated Files
+
+- `.metaproject/data/gdgraph/storage/nodes.jsonl`
+- `.metaproject/data/gdgraph/storage/edges.jsonl`
+- `.metaproject/data/gdgraph/artifacts/module-map.json`
+
+## Next Commands
+
+```bash
+keryx gdgraph query cycles
+keryx gdgraph query orphans
+keryx gdgraph affected <file>
+```

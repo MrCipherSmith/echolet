@@ -1,0 +1,279 @@
+{
+  "review_context": {
+    "request": {
+      "intent": "Independent full CLI prototype review",
+      "scope_mode": "path",
+      "round": 1
+    },
+    "git": {
+      "branch": "main",
+      "head": null,
+      "unborn": true
+    },
+    "pr": null,
+    "cross_repo": [],
+    "scope": {
+      "mode": "path",
+      "files": [
+        "apps/cli/src/transport/relayClient.test.ts",
+        "apps/cli/src/transport/relayClient.ts",
+        "apps/relay/cmd/relay/main.go",
+        "apps/relay/internal/api/handler/device_record_handler.go",
+        "apps/relay/internal/api/handler/mailbox_handler.go",
+        "apps/relay/internal/api/handler/mailbox_handler_test.go",
+        "apps/relay/internal/api/handler/prekey_bundle_handler.go",
+        "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go",
+        "apps/relay/internal/api/handler/signal_prekey_bundle_v2_test.go",
+        "apps/relay/internal/api/router/router.go",
+        "apps/relay/internal/api/router/signal_prekey_bundle_v2_mailbox_test.go",
+        "apps/relay/internal/api/router/signal_prekey_bundle_v2_test.go",
+        "apps/relay/internal/config/config.go",
+        "apps/relay/internal/cryptoutil/signatures.go",
+        "apps/relay/internal/logging/logger.go",
+        "apps/relay/internal/middleware/rate_limit.go",
+        "apps/relay/internal/middleware/recover.go",
+        "apps/relay/internal/middleware/request_id.go",
+        "apps/relay/internal/model/device_record.go",
+        "apps/relay/internal/model/mailbox_challenge.go",
+        "apps/relay/internal/model/mailbox_envelope.go",
+        "apps/relay/internal/model/prekey_bundle.go",
+        "apps/relay/internal/model/signal_prekey_bundle_v2.go",
+        "apps/relay/internal/service/challenge_service.go",
+        "apps/relay/internal/service/cleanup_service.go",
+        "apps/relay/internal/service/device_record_service.go",
+        "apps/relay/internal/service/mailbox_service.go",
+        "apps/relay/internal/service/prekey_bundle_service.go",
+        "apps/relay/internal/service/signal_prekey_bundle_v2.go",
+        "apps/relay/internal/storage/repository/challenge_repo.go",
+        "apps/relay/internal/storage/repository/challenge_repo_test.go",
+        "apps/relay/internal/storage/repository/device_record_repo.go",
+        "apps/relay/internal/storage/repository/mailbox_repo.go",
+        "apps/relay/internal/storage/repository/prekey_bundle_repo.go",
+        "apps/relay/internal/storage/repository/prekey_bundle_v2_test.go",
+        "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go",
+        "apps/relay/internal/storage/storage.go",
+        "apps/relay/internal/validation/signal_prekey_bundle_v2.go",
+        "apps/relay/internal/validation/signal_v2_encoding_test.go",
+        "apps/relay/internal/validation/validate.go",
+        "apps/relay/internal/validation/validate_test.go",
+        "packages/protocol/src/constants/errorCodes.ts",
+        "packages/protocol/src/constants/limits.ts",
+        "packages/protocol/src/constants/protocolVersion.ts",
+        "packages/protocol/src/index.ts",
+        "packages/protocol/src/types/chatMessage.ts",
+        "packages/protocol/src/types/deviceRecord.ts",
+        "packages/protocol/src/types/fixtures/relay-v2.json",
+        "packages/protocol/src/types/mailboxEnvelope.ts",
+        "packages/protocol/src/types/preKeyBundle.ts",
+        "packages/protocol/src/types/receipt.ts",
+        "packages/protocol/src/types/signalPreKeyBundleV2.test.ts",
+        "packages/protocol/src/types/signalPreKeyBundleV2.ts",
+        "packages/protocol/src/validators/validateDeviceRecord.test.ts",
+        "packages/protocol/src/validators/validateDeviceRecord.ts",
+        "packages/protocol/src/validators/validatePreKeyBundle.ts"
+      ],
+      "changed_lines": null,
+      "risk_areas": [
+        "trust",
+        "transaction",
+        "mailbox",
+        "retry",
+        "process lifecycle"
+      ]
+    },
+    "requirements": {
+      "specification": "docs/requirements/echolet-cli-prototype/specification.md",
+      "implementation_plan": "docs/requirements/echolet-cli-prototype/implementation-plan.md",
+      "prior_validation": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T27-verify-result.json",
+      "limits": [
+        "CLI prototype only; no mobile production or external crypto audit approval",
+        "Official libsignal Node reference is intentional; rollback attack protection is excluded"
+      ]
+    },
+    "memory": {
+      "query": "CLI relay prekey Signal identity inbox outbox idempotency",
+      "entries": [],
+      "status_filter": "accepted",
+      "searched": true
+    },
+    "routing": {
+      "selected_reviewers": [
+        "review-logic",
+        "review-backend",
+        "review-security-code",
+        "review-highload",
+        "review-testing-practices",
+        "review-verifier"
+      ],
+      "skipped_reviewers": [
+        "frontend",
+        "MobX",
+        "legacy profiles"
+      ],
+      "reasons": {
+        "selection": "explicit task domains",
+        "frontend": "no frontend paths",
+        "legacy profiles": "not selected",
+        "project": "none discovered"
+      }
+    },
+    "token_policy": {
+      "context_mode": "light",
+      "omissions": [
+        "generated dist and lockfile not candidates",
+        "file contents available through exact local paths"
+      ],
+      "budget": {
+        "max_findings": 10,
+        "parallel": 4,
+        "outstanding": 2,
+        "spend": "not recorded"
+      },
+      "model_plan": {
+        "strategy": "current-session",
+        "current_model": "GPT-6",
+        "detector_ran": true
+      }
+    },
+    "review_plan": {
+      "dispatch_plan": [
+        {
+          "reviewer": "review-logic",
+          "runtime": "general-purpose-fallback",
+          "skill_path": ".metaproject/skills/gdskills/review/review-logic/SKILL.md",
+          "reason": "native named agent unavailable"
+        },
+        {
+          "reviewer": "review-backend",
+          "runtime": "general-purpose-fallback",
+          "skill_path": ".metaproject/skills/gdskills/review/review-backend/SKILL.md",
+          "reason": "native named agent unavailable"
+        },
+        {
+          "reviewer": "review-security-code",
+          "runtime": "general-purpose-fallback",
+          "skill_path": ".metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+          "reason": "native named agent unavailable"
+        },
+        {
+          "reviewer": "review-highload",
+          "runtime": "general-purpose-fallback",
+          "skill_path": ".metaproject/skills/gdskills/review/review-highload/SKILL.md",
+          "reason": "native named agent unavailable"
+        },
+        {
+          "reviewer": "review-testing-practices",
+          "runtime": "general-purpose-fallback",
+          "skill_path": ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md",
+          "reason": "native named agent unavailable"
+        },
+        {
+          "reviewer": "review-verifier",
+          "runtime": "general-purpose-fallback",
+          "skill_path": ".metaproject/skills/gdskills/review/review-verifier/SKILL.md",
+          "reason": "native named agent unavailable"
+        }
+      ]
+    }
+  },
+  "reviewer": "review-backend",
+  "scope_mode": "path",
+  "context_doc": "docs/requirements/echolet-cli-prototype/specification.md",
+  "model_class": "current-session",
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard"
+    ],
+    "provider": "openai",
+    "model": "GPT-6",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "openai",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"openai\""
+    }
+  },
+  "budget": {
+    "max_findings": 10,
+    "max_prompt_tokens": 18000
+  },
+  "target_path": [
+    "apps/cli/src/transport/relayClient.test.ts",
+    "apps/cli/src/transport/relayClient.ts",
+    "apps/relay/cmd/relay/main.go",
+    "apps/relay/internal/api/handler/device_record_handler.go",
+    "apps/relay/internal/api/handler/mailbox_handler.go",
+    "apps/relay/internal/api/handler/mailbox_handler_test.go",
+    "apps/relay/internal/api/handler/prekey_bundle_handler.go",
+    "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go",
+    "apps/relay/internal/api/handler/signal_prekey_bundle_v2_test.go",
+    "apps/relay/internal/api/router/router.go",
+    "apps/relay/internal/api/router/signal_prekey_bundle_v2_mailbox_test.go",
+    "apps/relay/internal/api/router/signal_prekey_bundle_v2_test.go",
+    "apps/relay/internal/config/config.go",
+    "apps/relay/internal/cryptoutil/signatures.go",
+    "apps/relay/internal/logging/logger.go",
+    "apps/relay/internal/middleware/rate_limit.go",
+    "apps/relay/internal/middleware/recover.go",
+    "apps/relay/internal/middleware/request_id.go",
+    "apps/relay/internal/model/device_record.go",
+    "apps/relay/internal/model/mailbox_challenge.go",
+    "apps/relay/internal/model/mailbox_envelope.go",
+    "apps/relay/internal/model/prekey_bundle.go",
+    "apps/relay/internal/model/signal_prekey_bundle_v2.go",
+    "apps/relay/internal/service/challenge_service.go",
+    "apps/relay/internal/service/cleanup_service.go",
+    "apps/relay/internal/service/device_record_service.go",
+    "apps/relay/internal/service/mailbox_service.go",
+    "apps/relay/internal/service/prekey_bundle_service.go",
+    "apps/relay/internal/service/signal_prekey_bundle_v2.go",
+    "apps/relay/internal/storage/repository/challenge_repo.go",
+    "apps/relay/internal/storage/repository/challenge_repo_test.go",
+    "apps/relay/internal/storage/repository/device_record_repo.go",
+    "apps/relay/internal/storage/repository/mailbox_repo.go",
+    "apps/relay/internal/storage/repository/prekey_bundle_repo.go",
+    "apps/relay/internal/storage/repository/prekey_bundle_v2_test.go",
+    "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go",
+    "apps/relay/internal/storage/storage.go",
+    "apps/relay/internal/validation/signal_prekey_bundle_v2.go",
+    "apps/relay/internal/validation/signal_v2_encoding_test.go",
+    "apps/relay/internal/validation/validate.go",
+    "apps/relay/internal/validation/validate_test.go",
+    "packages/protocol/src/constants/errorCodes.ts",
+    "packages/protocol/src/constants/limits.ts",
+    "packages/protocol/src/constants/protocolVersion.ts",
+    "packages/protocol/src/index.ts",
+    "packages/protocol/src/types/chatMessage.ts",
+    "packages/protocol/src/types/deviceRecord.ts",
+    "packages/protocol/src/types/fixtures/relay-v2.json",
+    "packages/protocol/src/types/mailboxEnvelope.ts",
+    "packages/protocol/src/types/preKeyBundle.ts",
+    "packages/protocol/src/types/receipt.ts",
+    "packages/protocol/src/types/signalPreKeyBundleV2.test.ts",
+    "packages/protocol/src/types/signalPreKeyBundleV2.ts",
+    "packages/protocol/src/validators/validateDeviceRecord.test.ts",
+    "packages/protocol/src/validators/validateDeviceRecord.ts",
+    "packages/protocol/src/validators/validatePreKeyBundle.ts"
+  ],
+  "file_contents": null,
+  "round": 1,
+  "is_fix_round": false,
+  "prior_findings": [],
+  "metaproject": {
+    "memory": [],
+    "wiki": [
+      {
+        "path": ".metaproject/wiki/index.md",
+        "title": "Project Wiki (drafts, not authority)"
+      }
+    ],
+    "graph": {
+      "files": 70,
+      "edges": 104,
+      "freshness": "T27 rebuild"
+    }
+  }
+}

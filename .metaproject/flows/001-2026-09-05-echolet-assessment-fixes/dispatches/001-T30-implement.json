@@ -1,0 +1,43 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T30-implement",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {"title": "Implement the runnable Echolet CLI", "description": "Make six independent process RED scenarios green by wiring the reviewed command surface to the completed encrypted runtime with stable exits and JSON/redaction contracts.", "intent": "implement", "scope": "apps/cli command entrypoint, build/bin metadata and minimal public runtime config access"},
+  "acceptance_criteria": [
+    "Six process-level T30 tests pass unchanged.",
+    "All eight documented command forms are strict, runnable in independent child processes, and use stable 0/2/3/4/5 exits.",
+    "Exactly one JSON stdout object is emitted and secrets/plaintext remain redacted outside explicit history.",
+    "Real local HTTP publish/send/poll and offline contact/doctor/history paths pass.",
+    "Prior CLI/workspace tests and typechecks remain green."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T30-tests-result.json", "kind": "report", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T30-implement-input.json", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t25-implementation-report.md", "kind": "report", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/cli/src/commands/cli.test.ts",
+    "apps/cli/package.json",
+    "apps/cli/tsconfig.json",
+    "apps/cli/src/runtime/config.ts",
+    "apps/cli/src/runtime/profile.ts",
+    "apps/cli/src/runtime/outbound.ts",
+    "apps/cli/src/runtime/inbound.ts",
+    "apps/cli/src/transport/relayClient.ts"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; load task-implementer and validate paired input.",
+    "Confirm process suite RED before editing; do not weaken/delete tests.",
+    "Use apply_patch and keryx ctx rg; do not edit apps/relay, flow.json, acceptance-criteria.md, or commit.",
+    "Do not print underlying errors, request bodies, keys, seed, private material, ciphertext, or send plaintext; explicit history output may contain authenticated plaintext.",
+    "Do not introduce a runtime dependency/build mechanism that fails the stated Node 22.13+ clean-checkout target.",
+    "Write and validate the required subagent-result; final first line STATUS:."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T30-implement-result.json", "summary_max_tokens": 500},
+  "budget": {"max_output_tokens": 5500, "max_runtime_ms": 1500000},
+  "provenance": {"created_at": "2026-09-06T11:40:00+04:00", "created_by": "flow-orchestrator", "source_request": "Implement the approved Echolet CLI prototype through flow-orchestrator."}
+}

@@ -1,0 +1,92 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T22-implement",
+  "status": "DONE",
+  "summary": "Additive relay v2 publish/claim implemented. Tagged full race suite, untagged Go suite and protocol tests/typecheck pass. Test mutation helper corrected to preserve legacy signed object ordering.",
+  "acceptance": [
+    {
+      "criterion": "The race-enabled tagged T22 Go suite passes.",
+      "status": "met",
+      "evidence": "001-T22-implementation-report.md and captured GREEN test logs"
+    },
+    {
+      "criterion": "Raw-bundle immutability, permanent OTK reservations, concurrent allocation, and exact claim replay are durable in Badger.",
+      "status": "met",
+      "evidence": "001-T22-implementation-report.md and captured GREEN test logs"
+    },
+    {
+      "criterion": "Relay validates the fixed root/device binding required by the shared fixture and rejects malformed, expired, or forged bundles.",
+      "status": "met",
+      "evidence": "001-T22-implementation-report.md and captured GREEN test logs"
+    },
+    {
+      "criterion": "Additive /v2/prekeys/publish and /v2/prekeys/claim routes have tested deterministic errors and statuses.",
+      "status": "met",
+      "evidence": "001-T22-implementation-report.md and captured GREEN test logs"
+    },
+    {
+      "criterion": "Existing v1 Go tests and shared protocol tests remain green.",
+      "status": "met",
+      "evidence": "001-T22-implementation-report.md and captured GREEN test logs"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T22-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/relay/internal/model/signal_prekey_bundle_v2.go",
+      "change": "Additive v2 implementation or focused test"
+    },
+    {
+      "path": "apps/relay/internal/validation/signal_prekey_bundle_v2.go",
+      "change": "Additive v2 implementation or focused test"
+    },
+    {
+      "path": "apps/relay/internal/validation/signal_v2_encoding_test.go",
+      "change": "Additive v2 implementation or focused test"
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go",
+      "change": "Additive v2 implementation or focused test"
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/prekey_bundle_v2_test.go",
+      "change": "Additive v2 implementation or focused test"
+    },
+    {
+      "path": "apps/relay/internal/service/signal_prekey_bundle_v2.go",
+      "change": "Additive v2 implementation or focused test"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/prekey_bundle_handler.go",
+      "change": "Additive v2 implementation or focused test"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go",
+      "change": "Additive v2 implementation or focused test"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/signal_prekey_bundle_v2_test.go",
+      "change": "Additive v2 implementation or focused test"
+    },
+    {
+      "path": "apps/relay/internal/api/router/router.go",
+      "change": "Additive v2 implementation or focused test"
+    },
+    {
+      "path": "apps/relay/internal/api/router/signal_prekey_bundle_v2_test.go",
+      "change": "Additive v2 implementation or focused test"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {},
+  "timestamp_utc": "2026-09-06T10:58:00Z"
+}

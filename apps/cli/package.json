@@ -1,0 +1,28 @@
+{
+  "name": "@echolet/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "bin": { "echolet": "./dist/cli.js" },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:e2e": "vitest run test/e2e/two-process.test.ts"
+  },
+  "dependencies": {
+    "@echolet/client-core": "workspace:*",
+    "@echolet/crypto-core": "workspace:*",
+    "@echolet/protocol": "workspace:*",
+    "@echolet/session-node": "workspace:*",
+    "@signalapp/libsignal-client": "0.102.0",
+    "zod": "4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "esbuild": "0.25.12",
+    "typescript": "5.8.3",
+    "vitest": "3.0.8"
+  }
+}

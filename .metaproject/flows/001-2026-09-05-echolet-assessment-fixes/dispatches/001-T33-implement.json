@@ -1,0 +1,62 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T33-implement",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Fix CLI publish retry, bounded interactive confirmation, persistence error classification and concurrent same-ID send",
+    "description": "Turn the RED tests from dispatch 001-T33-tests GREEN by implementing the four confirmed T28 review findings F-001, F-002, F-003 and F-008 in apps/cli, extending packages/session-node only where a required durable state transition is missing. The tests are the contract: make them pass without weakening them.",
+    "intent": "implement",
+    "scope": "apps/cli production code, plus packages/session-node ONLY for the explicit one-time-prekey rotation capability required by F-001. Do not modify apps/relay."
+  },
+  "acceptance_criteria": [
+    "F-001 (major): the exact signed publication bundle is persisted before the first network call and reused byte-identically across retries and process restarts, so a lost publish response can be recovered instead of colliding with the relay's permanent one-time-prekey uniqueness contract. Repeating an already successful publish resubmits the same bundle_id. Allocating a fresh bundle and a fresh one-time prekey happens only through the explicit, separate `rotateBundle()` operation on the outbound messenger.",
+    "F-002 (major): the interactive contact-import confirmation reads one bounded line and settles on the newline, on EOF without a newline, or on an overlong answer. It must not wait for stdin EOF after a completed line, and the process must not stay alive because stdin is still referenced - release/unref stdin as part of the fix.",
+    "F-003 (major): a typed persistence failure is introduced at the store boundary and preserved through the runtime and contact-import catch blocks, mapping to a redacted PERSISTENCE_FAILURE with exit 5. This must hold for the post-send delivery commit, the inbound poll/history commit and the contact-import commit. Typed validation, trust and native decrypt failures must still map to exit 3 - the control test asserting this must stay green, so the fix may not be achieved by widening exit 5.",
+    "F-008 (blocker): the CLI outbox is re-read and validated INSIDE the same transaction that encrypts and writes history. If the record already exists, the persisted record is returned without regenerating the envelope or appending history; the pre-transaction lookup remains only as an optimization. Two independent runtime/store instances sending the same message_id produce exactly one outbox envelope, one envelope_id and one history entry.",
+    "Every test added by 001-T33-tests passes, unmodified: outbound.publish.test.ts, cli.processFailures.test.ts, outbound.concurrentSend.test.ts.",
+    "The full apps/cli suite, the workspace suite (`pnpm test`) and `pnpm typecheck` pass, with no pre-existing test weakened, skipped or deleted.",
+    "Anti-vacuity check for F-008: after the suite is green, temporarily revert only the outbound in-transaction recheck, confirm outbound.concurrentSend.test.ts fails again, then restore the fix. Record that evidence. A concurrency test that passes because its barrier stopped firing is not evidence."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/plan.md", "kind": "plan", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T33-tests-result.json", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-path-echolet-cli-prototype-t28/consolidated-findings.json", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/cli/src/runtime/outbound.ts",
+    "apps/cli/src/runtime/inbound.ts",
+    "apps/cli/src/runtime/profile.ts",
+    "apps/cli/src/runtime/config.ts",
+    "apps/cli/src/commands/cli.ts",
+    "apps/cli/src/transport/relayClient.ts",
+    "apps/cli/src/runtime/outbound.publish.test.ts",
+    "apps/cli/src/runtime/outbound.concurrentSend.test.ts",
+    "apps/cli/src/commands/cli.processFailures.test.ts",
+    "packages/session-node/src/EncryptedSqliteStore.ts",
+    "packages/session-node/src/SignalClient.ts",
+    "packages/session-node/src/wire.ts"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "Load and follow the project task-implementer skill (.metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md).",
+    "ORCHESTRATOR DECISION on the test author's question Q1: option (a) is adopted. `rotateBundle()` on the outbound messenger is the intended public name, and adding an explicit one-time-prekey rotation capability to packages/session-node IS in scope for F-001. Rationale: the finding's own suggested fix requires fresh-OTK allocation as a separate explicit operation, the specification states a device may publish another independently signed bundle only with a newly generated one-time prekey, and the implementation plan permits extending packages/session-node when a required durable state transition is missing. Keep that extension minimal and additive; do not change existing session-node behaviour or its persisted record formats beyond what rotation requires.",
+    "You did not write these tests and you may not weaken them. Do not edit, skip, delete or relax any test file to make the suite pass. If a test is genuinely wrong, report it as a finding and return DONE_WITH_CONCERNS instead of changing it.",
+    "The F-008 test installs a test-only barrier on EncryptedSqliteStore.prototype.transaction, anchored to the semantic stale-read event. Your fix must keep that event observable - do not restructure the code so the barrier silently stops firing and the test passes vacuously. The anti-vacuity check in the acceptance criteria is mandatory.",
+    "You do not accept your own work. An independent verifier reviews it afterwards.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Do not modify apps/relay - a parallel worker owns that scope.",
+    "Use `keryx ctx rg` for searches, never bare rg/grep. Use `keryx ctx run` for long command output.",
+    "Never log or print plaintext message bodies, ciphertext, profile store keys, private key material or HTTP request bodies. The persisted publication bundle must not be rendered into diagnostics or reports.",
+    "Do not commit: this repository has an unborn untracked baseline, so partial root commits are forbidden.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T33-implement-result.json and make the final response start with STATUS:.",
+    "Also write a short implementation report to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t33-implementation-report.md describing the change per finding, the new persisted publication-bundle record, the typed persistence error boundary, and the session-node rotation addition."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T33-implement-result.json", "summary_max_tokens": 900},
+  "budget": {"max_output_tokens": 8000, "max_runtime_ms": 3600000},
+  "provenance": {"created_at": "2026-09-06T13:30:00+04:00", "created_by": "flow-orchestrator", "source_request": "Fix T28 review findings F-001..F-012 through managed flow tasks T33-T38."}
+}

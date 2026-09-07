@@ -1,0 +1,88 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T24-tests",
+  "status": "DONE",
+  "summary": "Created nine forward-declared Vitest scenarios for a strict typed RelayClient and durable outbound messenger. Tests cover exact publish/claim/send requests, response-envelope validation, typed timeout/network/HTTP failures, verified first-send Signal bootstrap, encrypted durable outbox state, ambiguous-send restart replay with byte-identical envelopes, local message-id conflicts, delivered replay idempotency, and redaction. Focused suites are RED only because relayClient.ts and outbound.ts do not exist; all nine unchanged CLI tests and all 45 non-CLI workspace tests pass. No implementation or commits.",
+  "summary_markdown": "Implement `RelayClient` at `apps/cli/src/transport/relayClient.ts` and `openOutboundMessenger` at `apps/cli/src/runtime/outbound.ts` against the public APIs declared by these tests. The RED command is `pnpm exec vitest run src/transport/relayClient.test.ts src/runtime/outbound.test.ts` from `apps/cli`.",
+  "acceptance": [
+    {
+      "criterion": "The relay client strictly validates success/error response envelopes for publish, claim, and message send and maps timeout/network/HTTP failures to typed stable errors.",
+      "status": "met",
+      "evidence": "relayClient.test.ts covers exact endpoint bodies, valid success parsing, four malformed/contradictory success responses, timeout, network failure, and HTTP remote-error mapping."
+    },
+    {
+      "criterion": "Publishing sends the profile's complete signed bundle v2; a first send claims with a durable claim_id and rejects a relay bundle that differs from the imported contact pin.",
+      "status": "met",
+      "evidence": "outbound.test.ts inspects complete publish and exact claim requests, uses independently generated official Signal bundles, and asserts CONTACT_PIN_MISMATCH before session/outbox/send mutation."
+    },
+    {
+      "criterion": "First send establishes the official Signal session only after verified claim, persists exact ciphertext/outbox state atomically, and wraps it in a valid MailboxEnvelope.",
+      "status": "met",
+      "evidence": "The trusted-pair test uses real encrypted SQLite and official Signal objects, validates the emitted MailboxEnvelope, then verifies one durable session and one CLI outbox record."
+    },
+    {
+      "criterion": "A timeout after relay acceptance leaves the outbox pending; retry and process restart reuse the same message_id, envelope_id, claim_id where relevant, and byte-identical ciphertext/envelope.",
+      "status": "met",
+      "evidence": "The ambiguous-send test closes and reopens the messenger, forbids new ID allocation, compares exact request body bytes, and verifies retry sends without a second claim."
+    },
+    {
+      "criterion": "Reusing a message_id with changed plaintext fails locally without a network call; successful identical replay marks the durable outbox delivered idempotently.",
+      "status": "met",
+      "evidence": "The replay test freezes the fetch call count after delivery, accepts identical local replay, rejects changed plaintext with MESSAGE_ID_CONFLICT, and requires an empty pending queue."
+    },
+    {
+      "criterion": "Tests inspect relay requests but never expose store keys, device secrets, session material, or plaintext in diagnostics/errors.",
+      "status": "met",
+      "evidence": "Request inspection stays in deterministic fake fetch boundaries; dedicated tests require typed errors and diagnostics to omit plaintext/key markers and private/session/ciphertext field names."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-06-31-323Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Focused RED run: two missing implementation modules."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-03-50-221Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Unchanged CLI config/profile suites pass 9 tests."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-04-45-521Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Non-CLI workspace suites pass 45 tests."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-04-25-486Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "CLI typecheck is RED only for the two forward-declared implementation modules."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/transport/relayClient.test.ts",
+      "change": "new RED transport contract tests, 3 cases"
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.test.ts",
+      "change": "new RED real-store/Signal outbound tests, 6 cases"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "tests_written": 9,
+    "red_suites": 2,
+    "unchanged_cli_tests_passed": 9,
+    "other_workspace_tests_passed": 45,
+    "implementation_files_written": 0,
+    "retries": 1
+  },
+  "timestamp_utc": "2026-09-06T11:06:36Z"
+}

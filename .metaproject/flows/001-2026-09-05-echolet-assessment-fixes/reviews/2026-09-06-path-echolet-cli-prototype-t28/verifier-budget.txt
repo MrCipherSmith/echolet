@@ -1,0 +1,14 @@
+# review budget
+
+spend_ceiling: 3 USD
+spent: not recorded
+spend_status: not-recorded
+  `not recorded` is not `under`: nobody reported a spend, so staying inside the ceiling was never demonstrated.
+
+concurrency_cap: 3
+outstanding_declared: 2
+effective_wave_size: 1
+waves: 1
+reviewers_queued: 0
+holds_across_nesting: yes (against the declared count)
+  wave 1: review-verifier

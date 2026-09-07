@@ -1,0 +1,53 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T23-tests",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {
+    "title": "Define RED tests for CLI profiles and mutual contact trust",
+    "description": "Create failing Vitest specifications for strict CLI profile configuration, encrypted identity persistence, signed-bundle contact export/import, and mutual Signal identity pinning before messaging.",
+    "intent": "test",
+    "scope": "new apps/cli tests and fixtures only"
+  },
+  "acceptance_criteria": [
+    "A profile initializes once with stable Echolet/device/Signal identities and rejects a wrong 32-byte store key without replacement.",
+    "Configuration rejects unknown fields, malformed keys, and non-loopback plain HTTP relay URLs.",
+    "Contact export conforms to the reviewed schema and contains a complete signed Signal bundle v2.",
+    "Contact import validates root/device/native signatures, requires explicit confirmation, and pins the exact remote Signal identity.",
+    "Both peers can import and pin each other before messaging; changed identities and invalid signatures leave trust unchanged.",
+    "Secrets and plaintext are absent from normal command results and diagnostics."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/plan.md", "kind": "plan", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/schemas/client-config.schema.json", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/schemas/contact-card.schema.json", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "packages/client-core/src/identity/createIdentityProfile.ts",
+    "packages/client-core/src/identity/createSignedDeviceRecord.ts",
+    "packages/session-node/src/EncryptedSqliteStore.ts",
+    "packages/session-node/src/SignalClient.ts",
+    "packages/session-node/src/wire.ts",
+    "packages/session-node/src/SignalClient.test.ts",
+    "packages/session-node/src/wire.test.ts",
+    "packages/protocol/src/types/signalPreKeyBundleV2.ts",
+    ".metaproject/data/testing/context.md"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action.",
+    "Load and follow tests-creator and the project testing skill; preserve RED-before-GREEN evidence.",
+    "Do not write implementation code.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Do not modify apps/relay or packages/protocol; another worker owns that scope.",
+    "Use keryx ctx rg for searches and apply_patch for file edits.",
+    "Do not commit: this repository has an unborn untracked baseline, so partial root commits are forbidden.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T23-tests-result.json and make the final response start with STATUS:."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T23-tests-result.json", "summary_max_tokens": 500},
+  "budget": {"max_output_tokens": 4000, "max_runtime_ms": 1200000},
+  "provenance": {"created_at": "2026-09-06T10:31:30+04:00", "created_by": "flow-orchestrator", "source_request": "Implement the approved Echolet CLI prototype through flow-orchestrator."}
+}

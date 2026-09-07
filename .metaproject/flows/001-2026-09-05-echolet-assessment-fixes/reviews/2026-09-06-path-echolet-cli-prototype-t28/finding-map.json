@@ -1,0 +1,86 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-logic",
+    "original_id": "F-001",
+    "extra_fields": {}
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-logic",
+    "original_id": "F-002",
+    "extra_fields": {}
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-logic",
+    "original_id": "F-003",
+    "extra_fields": {}
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-backend",
+    "original_id": "F-001",
+    "extra_fields": {}
+  },
+  {
+    "id": "F-005",
+    "reviewer": "review-backend",
+    "original_id": "F-002",
+    "extra_fields": {}
+  },
+  {
+    "id": "F-006",
+    "reviewer": "review-security-code",
+    "original_id": "F-001",
+    "extra_fields": {
+      "attack_vector": "An unauthenticated caller posts to /v1/messages/send with a ciphertext field above the configured maximum while declaring size_bytes=1. Decoder and validator accept it and the mailbox repository persists it. A field above the CLI 1 MiB response budget then makes every affected poll fail; arbitrarily large bodies also allocate memory before any validation."
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "review-security-code",
+    "original_id": "F-002",
+    "extra_fields": {
+      "attack_vector": "An attacker who knows a victim public device UUID publishes a valid record signed by the attacker own root key using that UUID. Choose an attacker identity whose storage key sorts before the victim identity. Publication permits both records, then victim challenge/poll/ack selects the attacker record first and rejects the legitimate mailbox ownership match."
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "review-highload",
+    "original_id": "F-001",
+    "extra_fields": {
+      "failure_mode": "Two concurrent sends using the same profile, trusted peer, message ID and content; prior checks finish before either write transaction."
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "review-highload",
+    "original_id": "F-002",
+    "extra_fields": {
+      "failure_mode": "Ten normal maximum-size CLI sends to an offline receiver, followed by poll using default configuration; no malformed or oversize individual message needed."
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "review-highload",
+    "original_id": "F-003",
+    "extra_fields": {
+      "failure_mode": "Two simultaneous valid HTTP requests, one slow enough to exceed the second request client timeout; the second waits regardless of its own client quota."
+    }
+  },
+  {
+    "id": "F-011",
+    "reviewer": "review-highload",
+    "original_id": "F-004",
+    "extra_fields": {
+      "failure_mode": "More than RateLimitPerMinute requests in one minute from a single host using new TCP connections; each unseen host:port starts with count1."
+    }
+  },
+  {
+    "id": "F-012",
+    "reviewer": "review-testing-practices",
+    "original_id": "F-001",
+    "extra_fields": {}
+  }
+]

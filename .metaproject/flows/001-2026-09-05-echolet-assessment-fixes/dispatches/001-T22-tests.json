@@ -1,0 +1,53 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T22-tests",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {
+    "title": "Define RED tests for relay v2 publish and atomic idempotent claim",
+    "description": "Create shared TypeScript/Go fixtures and failing Go tests for immutable Signal bundle v2 publication, permanent one-time-prekey uniqueness, atomic claim, and claim-id replay.",
+    "intent": "test",
+    "scope": "packages/protocol fixtures and apps/relay v2 tests only"
+  },
+  "acceptance_criteria": [
+    "Shared fixtures are accepted/rejected consistently by TypeScript and Go validation.",
+    "Byte-identical bundle publication is idempotent and a changed body under the same bundle_id conflicts.",
+    "The same OTK cannot be republished under a new bundle/key id, after expiry, claim, or relay restart.",
+    "At least twenty concurrent claim IDs produce exactly one allocation.",
+    "Retrying the same claim_id and selector returns the exact stored bundle; changing selector conflicts.",
+    "V1 routes and tests remain unchanged and green outside the deliberate RED v2 tests."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/plan.md", "kind": "plan", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/schemas/relay-v2.schema.json", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "packages/protocol/src/types/signalPreKeyBundleV2.ts",
+    "packages/protocol/src/types/signalPreKeyBundleV2.test.ts",
+    "packages/session-node/src/wire.test.ts",
+    "apps/relay/internal/model/prekey_bundle.go",
+    "apps/relay/internal/storage/repository/prekey_bundle_repo.go",
+    "apps/relay/internal/service/prekey_bundle_service.go",
+    "apps/relay/internal/api/handler/prekey_bundle_handler.go",
+    "apps/relay/internal/api/router/router.go",
+    "apps/relay/internal/validation/validate.go",
+    ".metaproject/data/testing/context.md"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action.",
+    "Load and follow tests-creator and the project testing skill; preserve RED-before-GREEN evidence.",
+    "Do not write implementation code.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Do not modify apps/cli; another worker owns that scope.",
+    "Use keryx ctx rg for searches and apply_patch for file edits.",
+    "Do not commit: this repository has an unborn untracked baseline, so partial root commits are forbidden.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T22-tests-result.json and make the final response start with STATUS:."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T22-tests-result.json", "summary_max_tokens": 500},
+  "budget": {"max_output_tokens": 4000, "max_runtime_ms": 1200000},
+  "provenance": {"created_at": "2026-09-06T10:31:30+04:00", "created_by": "flow-orchestrator", "source_request": "Implement the approved Echolet CLI prototype through flow-orchestrator."}
+}

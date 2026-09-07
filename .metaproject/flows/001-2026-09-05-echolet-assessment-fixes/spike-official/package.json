@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "@signalapp/libsignal-client": "0.102.0"
+  },
+  "name": "echolet-official-libsignal-spike",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node spike.mjs"
+  }
+}

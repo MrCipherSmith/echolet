@@ -1,0 +1,53 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-specs",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Corrected transport, metadata and mailbox auth documentation against current client and Go handler; replay limitation recorded.",
+  "acceptance": [
+    {
+      "criterion": "AC1",
+      "status": "met",
+      "evidence": "HTTP JSON/TLS and no comparative metadata guarantee"
+    },
+    {
+      "criterion": "AC2",
+      "status": "met",
+      "evidence": "Exact client/Go signing inputs and ownership checks documented"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/specs-report.md",
+      "kind": "report",
+      "exists": true
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "docs/SEC-01_IDENTITY.md",
+      "change": "updated"
+    },
+    {
+      "path": "docs/REP-02_REPEATER_NODE.md",
+      "change": "updated"
+    },
+    {
+      "path": "docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md",
+      "change": "updated"
+    },
+    {
+      "path": "docs/API-11_JSON_SCHEMAS.md",
+      "change": "updated"
+    },
+    {
+      "path": "docs/THREAT-08_MODEL.md",
+      "change": "updated"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {},
+  "timestamp_utc": "2026-09-05T23:55:13.873178+00:00"
+}

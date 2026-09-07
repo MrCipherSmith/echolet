@@ -1,0 +1,56 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T31-tests",
+  "status": "DONE",
+  "summary": "Added one focused Go HTTP handler test requiring successful v2 publish responses to contain ok=true, stored=true, and the exact submitted signed bundle_id. The test is RED only because bundle_id is absent; the existing focused v2 publish/claim/error test remains green. No production changes or commits.",
+  "summary_markdown": "Run `go test ./internal/api/handler -run '^TestSignalV2PublishResponseIncludesValidatedBundleID$'` from `apps/relay`. It currently observes an empty `data.bundle_id` while preserving the real handler, validation, and Badger path.",
+  "acceptance": [
+    {
+      "criterion": "A valid publish response contains ok=true, data.stored=true, and data.bundle_id equal to the submitted signed bundle.",
+      "status": "met",
+      "evidence": "TestSignalV2PublishResponseIncludesValidatedBundleID decodes the real response and compares all three fields against the signed shared fixture."
+    },
+    {
+      "criterion": "The assertion runs through the real v2 HTTP handler and does not weaken existing raw-byte, status, signature, race, or v1 tests.",
+      "status": "met",
+      "evidence": "The new test constructs the production handler/service/repository/Badger stack; no existing tests or production files changed, and the existing focused v2 handler test passes."
+    },
+    {
+      "criterion": "The focused test is RED only because bundle_id is currently absent.",
+      "status": "met",
+      "evidence": "Focused failure reports OK:true, Stored:true, BundleID empty, expected f841b845-e677-4bce-b18e-d1d3bf745e67."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-10-11-982Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Focused RED evidence: exact missing bundle_id assertion."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-10-12-503Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Existing focused v2 handler test remains green."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/relay/internal/api/handler/signal_prekey_bundle_v2_test.go",
+      "change": "add one focused RED publish response bundle_id test"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "tests_written": 1,
+    "red_tests": 1,
+    "unchanged_focused_tests_passed": 1,
+    "implementation_files_written": 0,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T11:10:22Z"
+}

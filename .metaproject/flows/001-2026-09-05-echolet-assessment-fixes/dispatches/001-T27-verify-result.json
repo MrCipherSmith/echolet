@@ -1,0 +1,154 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T27-verify",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Completed all 13 independent T27 checks without early exit. Frozen install, production CLI build, seven-package TypeScript check, six CLI process tests, 82 workspace tests, three independent real E2E iterations, untagged Go tests, uncached tagged relay-v2 race tests, strict Metaproject testing, graph rebuild/cycle query and wiki links all pass. Strict Code Health exits 0 with WARN: score 92, seven P2 complexity findings, and unavailable auto-detected ESLint/TypeScript/test sources; direct TypeScript and strict test commands supply independent passing evidence. Only the verification report and required result JSON were written.",
+  "summary_markdown": "Verification report: `.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t27-verification-report.md`. Functional gate is green; the only concern is the explicitly evidenced strict-health adapter warning and seven non-blocking P2 complexity findings.",
+  "acceptance": [
+    {
+      "criterion": "Frozen dependency installation and the production CLI build succeed.",
+      "status": "met",
+      "evidence": "pnpm install --frozen-lockfile and pnpm --filter @echolet/cli build both exit 0."
+    },
+    {
+      "criterion": "All workspace tests, CLI process tests and three real two-process E2E iterations pass.",
+      "status": "met",
+      "evidence": "Workspace run passes 82 tests, focused CLI process run passes 6/6, and independent E2E run passes 3/3; the workspace suite also repeats E2E 3/3."
+    },
+    {
+      "criterion": "All workspace TypeScript packages typecheck.",
+      "status": "met",
+      "evidence": "pnpm typecheck exits 0 after all seven TypeScript workspace packages complete."
+    },
+    {
+      "criterion": "Go untagged tests and the full relayv2 race suite pass.",
+      "status": "met",
+      "evidence": "go -C apps/relay test ./... exits 0; the uncached -race -count=1 -tags=relayv2 full package run also exits 0."
+    },
+    {
+      "criterion": "Metaproject strict test and Code Health gates pass or every tool limitation is explicitly evidenced.",
+      "status": "met",
+      "evidence": "keryx test run --strict exits 0 with PASS. keryx health run --strict exits 0 with WARN, score 92 and seven P2 complexity findings; its skipped required compiler/lint sources and missing test association are recorded alongside independently passing workspace typecheck/tests and unavailable lint scripts."
+    },
+    {
+      "criterion": "The graph rebuild has no cycles, wiki links are valid, and the final result classifies every check without suppressing failures.",
+      "status": "met",
+      "evidence": "Graph rebuild reports 70 nodes/104 edges, cycle query finds none, and wiki check validates 38 internal links with zero broken. The report lists 12 PASS checks, one WARN check and zero FAIL checks."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t27-verification-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Full T27 environment, check matrix, measurements, limitations and bounded evidence paths."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T12-06-43-755Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Frozen dependency installation PASS."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T12-06-44-323Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Production CLI build PASS."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T12-07-05-184Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Workspace TypeScript packages PASS."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T12-07-11-564Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Focused CLI process tests 6/6 PASS."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T12-08-36-207Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Workspace tests 82/82 PASS, including CLI 37 and E2E 3/3."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T12-09-32-894Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Independent real two-process E2E 3/3 PASS."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T12-07-02-155Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Go untagged full package suite PASS."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T12-10-02-960Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Uncached full relay-v2 race suite PASS."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T12-11-06-911Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Metaproject strict testing PASS."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T12-11-35-120Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Strict Code Health exits 0 with WARN, score 92 and seven P2 findings."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T12-07-37-951Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Graph rebuild PASS with 70 nodes and 104 edges."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T12-07-38-303Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Graph cycle query PASS with zero cycles."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T12-06-54-254Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Wiki link check PASS with zero broken internal links."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t27-verification-report.md",
+      "change": "add bounded full-prototype verification matrix, measurements, evidence and tool limitations"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "checks_total": 13,
+    "checks_passed": 12,
+    "checks_warned": 1,
+    "checks_failed": 0,
+    "workspace_tests_passed": 82,
+    "cli_process_tests_passed": 6,
+    "independent_e2e_runs_passed": 3,
+    "workspace_e2e_runs_passed": 3,
+    "typechecked_packages": 7,
+    "go_race_pass": true,
+    "graph_cycles": 0,
+    "wiki_broken_links": 0,
+    "health_score": 92,
+    "health_p2_findings": 7,
+    "implementation_files_modified": 0,
+    "test_files_modified": 0
+  },
+  "timestamp_utc": "2026-09-06T12:12:00Z"
+}

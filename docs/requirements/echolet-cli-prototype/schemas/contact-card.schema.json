@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://echolet.local/schemas/cli-prototype/contact-card.schema.json",
+  "title": "Echolet CLI prototype contact card",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "version", "signal_bundle"],
+  "properties": {
+    "type": { "const": "echolet_contact_card" },
+    "version": { "const": 1 },
+    "display_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "signal_bundle": { "$ref": "relay-v2.schema.json#/$defs/signalBundle" }
+  }
+}

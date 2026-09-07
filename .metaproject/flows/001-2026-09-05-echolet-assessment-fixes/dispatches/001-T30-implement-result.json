@@ -1,0 +1,112 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T30-implement",
+  "status": "DONE",
+  "summary": "Implemented the runnable Echolet CLI as a strict Node ESM command boundary over the completed encrypted profile, outbound, inbound, history, and RelayClient runtimes. Added reproducible Node 22.13-targeted esbuild metadata with only the directly declared native Signal module externalized. All six unchanged process tests, all 34 CLI tests, all workspace tests, workspace typechecks, and the changed-code health gate pass. No tests, relay code, flow state, acceptance criteria, or commits were changed.",
+  "summary_markdown": "`apps/cli` now builds `dist/cli.js` and exposes it as the `echolet` bin. The entrypoint implements all eight reviewed command forms, strict argument rejection, explicit contact confirmation, offline contact/doctor/history operations, real relay publish/send/poll calls, one-object JSON stdout, redacted errors, and stable exits 0/2/3/4/5.",
+  "acceptance": [
+    {
+      "criterion": "Six process-level T30 tests pass unchanged.",
+      "status": "met",
+      "evidence": "The focused cli.test.ts run passes all 6 tests unchanged after the initial recorded 6/6 RED run."
+    },
+    {
+      "criterion": "All eight documented command forms are strict, runnable in independent child processes, and use stable 0/2/3/4/5 exits.",
+      "status": "met",
+      "evidence": "Package bin points to the generated ESM entrypoint; strict parseArgs validation rejects unknown, duplicate, extraneous, and missing options before I/O, while typed boundary classification maps input, trust/protocol, retryable relay, and persistence failures to 2/3/4/5."
+    },
+    {
+      "criterion": "Exactly one JSON stdout object is emitted and secrets/plaintext remain redacted outside explicit history.",
+      "status": "met",
+      "evidence": "The entrypoint writes one success or error envelope and never serializes exception messages or request data. All process redaction checks pass; the source scan finds no secret-field, ciphertext, console, or error.message output paths."
+    },
+    {
+      "criterion": "Real local HTTP publish/send/poll and offline contact/doctor/history paths pass.",
+      "status": "met",
+      "evidence": "The process suite observes the exact publish, claim, send, challenge, and poll HTTP sequence. Contact export/import, doctor, and history pass against an unavailable relay without network requests."
+    },
+    {
+      "criterion": "Prior CLI/workspace tests and typechecks remain green.",
+      "status": "met",
+      "evidence": "Full CLI suite passes 34/34, full pnpm workspace tests pass across all seven tested workspaces, workspace typecheck passes, and keryx changed-code health reports PASS with zero findings."
+    },
+    {
+      "criterion": "The package builds from the frozen lockfile for Node 22.13+ without source maps or unresolved bundled workspace TypeScript.",
+      "status": "met",
+      "evidence": "Frozen offline pnpm install succeeds, build.mjs targets node22.13 and bundles workspace TypeScript, @signalapp/libsignal-client is the sole external and is a direct runtime dependency, and dist/cli.js is created without a map."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-42-19-038Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "TDD RED evidence: all six process tests failed before the package bin and entrypoint existed."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-48-41-271Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Focused GREEN evidence: all six unchanged T30 process tests pass."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-49-06-137Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Full apps/cli test suite passes 34/34."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-49-02-437Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Workspace TypeScript typecheck passes."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-49-26-754Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Full pnpm workspace test suite passes."
+    },
+    {
+      "path": ".metaproject/data/health/artifacts/latest.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Changed-code health PASS, project score 97, zero findings."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/commands/cli.ts",
+      "change": "add strict eight-command executable boundary, runtime wiring, explicit confirmation, stable exit classification, and single redacted JSON result output"
+    },
+    {
+      "path": "apps/cli/build.mjs",
+      "change": "add reproducible Node 22.13 ESM bundle build with native Signal resolution and no source maps"
+    },
+    {
+      "path": "apps/cli/package.json",
+      "change": "declare echolet bin, build script, esbuild tool, and directly resolvable native Signal runtime dependency"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "change": "record the CLI importer entries for the already locked esbuild and Signal packages"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "process_tests_red_before": 6,
+    "process_tests_green_after": 6,
+    "cli_tests_passed": 34,
+    "workspace_typecheck_pass": true,
+    "workspace_tests_pass": true,
+    "health_gate": "PASS",
+    "implementation_files_written": 4,
+    "tests_modified": 0,
+    "commits": 0,
+    "self_fix_attempts": 1
+  },
+  "timestamp_utc": "2026-09-06T11:51:00Z"
+}

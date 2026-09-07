@@ -1,0 +1,29 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T23-tests",
+  "status": "DONE",
+  "summary": "Created 9 forward-declared Vitest scenarios in two new apps/cli test files. Focused run is RED because config.ts and profile.ts do not exist. No implementation or commits.",
+  "acceptance": [
+    { "criterion": "Stable encrypted profile identity and wrong-key rejection", "status": "met", "evidence": "profile.test.ts initialization/reopen and exact file preservation assertions" },
+    { "criterion": "Strict configuration, malformed keys and non-loopback HTTP", "status": "met", "evidence": "config.test.ts three scenarios and boundary/error tables" },
+    { "criterion": "Complete signed v2 contact export", "status": "met", "evidence": "Independent Signal schema and verified wire import on export" },
+    { "criterion": "Explicit confirmed import with signature validation and exact pin", "status": "met", "evidence": "Confirmation exact four identifiers, declined/missing confirmation and durable native trust records" },
+    { "criterion": "Mutual trust and failed changes preserve pin", "status": "met", "evidence": "Both profiles import, no session/prekey consumption, invalid signatures and valid changed Signal identity reject" },
+    { "criterion": "Normal diagnostics redact secrets/plaintext", "status": "met", "evidence": "Known key/history markers and private field names absent from summary, diagnostics and output" }
+  ],
+  "artifacts": [
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T10-36-32-151Z_run.log", "kind": "report", "exists": true, "summary": "Focused RED run, exit 1, two missing-module failures" },
+    { "path": "apps/cli/src/runtime/config.test.ts", "kind": "custom", "exists": true },
+    { "path": "apps/cli/src/runtime/profile.test.ts", "kind": "custom", "exists": true }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/runtime/config.test.ts", "change": "new RED tests, 3 cases" },
+    { "path": "apps/cli/src/runtime/profile.test.ts", "change": "new RED tests and synthetic fixtures, 6 cases" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": { "tests_written": 9, "red_suites": 2, "implementation_files_written": 0 },
+  "timestamp_utc": "2026-09-06T10:36:40Z"
+}

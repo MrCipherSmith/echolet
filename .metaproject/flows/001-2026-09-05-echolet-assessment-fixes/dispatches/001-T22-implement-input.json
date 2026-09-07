@@ -1,0 +1,56 @@
+{
+  "task": {
+    "task_id": "task-22",
+    "task_name": "Implement separate relay v2 publication and atomic one-time prekey claims with JS-Go fixtures",
+    "task_type": "service_api",
+    "complexity": "high",
+    "dependencies": ["task-19", "task-20", "task-21"],
+    "description": "Implement an additive Go relay v2 prekey service and HTTP routes that satisfy the independently authored shared-fixture, immutability, permanent OTK reservation, restart, replay, and concurrency tests.",
+    "target_files": [
+      "apps/relay/internal/model/signal_prekey_bundle_v2.go",
+      "apps/relay/internal/storage/repository/prekey_bundle_repo.go",
+      "apps/relay/internal/service/prekey_bundle_service.go",
+      "apps/relay/internal/validation/validate.go",
+      "apps/relay/internal/cryptoutil/signatures.go",
+      "apps/relay/internal/api/handler/prekey_bundle_handler.go",
+      "apps/relay/internal/api/router/router.go",
+      "apps/relay/internal/storage/repository/prekey_bundle_v2_test.go"
+    ],
+    "acceptance_criteria": [
+      "The shared TypeScript/Go relay-v2 fixtures have matching validation outcomes.",
+      "Publishing byte-identical raw bundle bytes is idempotent and changing bytes under the same bundle_id returns BUNDLE_ID_CONFLICT.",
+      "One-time prekey tuple and public-key reservations remain permanent across expiry, claim, and Badger restart.",
+      "Twenty concurrent distinct claim IDs allocate exactly one bundle without data races.",
+      "The same claim_id and selector replays the exact stored bytes, while a changed selector returns CLAIM_ID_CONFLICT.",
+      "POST /v2/prekeys/publish and POST /v2/prekeys/claim expose stable status/error mappings while all v1 routes remain unchanged.",
+      "Tagged relay-v2 race tests, untagged Go tests, protocol tests, and relevant typechecks pass."
+    ],
+    "context": "The v2 payload is defined by packages/protocol/src/types/signalPreKeyBundleV2.ts and the reviewed CLI specification. Preserve the exact raw bundle JSON bytes. Validate strict shape, TTL, root-signed DeviceRecord, and device signature over the fixed transcript; native Signal signatures remain a client validation responsibility. Require a non-null OTK. Use one Badger write transaction for publish indexes and one for claim allocation/replay. Keep durable tombstones/indexes. V1 must remain compatible. Repository is unborn main; do not commit.",
+    "existing_tests": [
+      "apps/relay/internal/storage/repository/prekey_bundle_v2_test.go",
+      "packages/protocol/src/types/signalPreKeyBundleV2.test.ts"
+    ],
+    "existing_stories": [],
+    "module_patterns": "Go service/repository/handler/router layering, Badger transactions, httptest route tests, typed sentinel error codes, strict JSON decoding; ESM TypeScript shared protocol fixtures.",
+    "test_case_specs": {
+      "test_files": ["apps/relay/internal/storage/repository/prekey_bundle_v2_test.go"],
+      "run_command": "cd apps/relay && go test -race -tags=relayv2 ./internal/storage/repository && go test ./..."
+    }
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/goodea/projects/echolet",
+    "branch": "main",
+    "issue_number": 1,
+    "issue_title": "Flow 001 Echolet CLI prototype"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

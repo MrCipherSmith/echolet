@@ -1,0 +1,26 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T31-implement",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {"title": "Return bundle_id from relay v2 publish", "description": "Make the focused RED handler contract green without changing stored raw bytes or service semantics.", "intent": "fix", "scope": "apps/relay v2 prekey publish handler"},
+  "acceptance_criteria": ["Focused handler/router race tests pass.", "Publish success echoes exact validated bundle_id with stored=true.", "Full tagged and untagged Go suites remain green."],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T31-tests-result.json", "kind": "report", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T31-implement-input.json", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T22-implementation-report.md", "kind": "report", "exists": true}
+  ],
+  "files_to_read": ["apps/relay/internal/api/handler/signal_prekey_bundle_v2.go", "apps/relay/internal/api/handler/signal_prekey_bundle_v2_test.go"],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action.",
+    "Load task-implementer; validate paired input; confirm supplied test RED before editing.",
+    "Use apply_patch and keryx ctx rg; do not modify tests, flow.json, acceptance-criteria.md, or commit.",
+    "Do not change service/repository storage behavior or re-encode the claimed raw bundle.",
+    "Write and validate the required subagent-result; final starts STATUS:."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T31-implement-result.json", "summary_max_tokens": 300},
+  "budget": {"max_output_tokens": 3000, "max_runtime_ms": 600000},
+  "provenance": {"created_at": "2026-09-06T11:09:00+04:00", "created_by": "flow-orchestrator", "source_request": "Resolve discovered relay/CLI publish response mismatch."}
+}

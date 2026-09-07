@@ -1,0 +1,172 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T38-review-testing-practices",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Executed a 19-mutation bounded pass over the gates this fix wave added; 13 mutants were killed, 6 survived. Every mutation was reverted and all 7 touched files verified byte-identical by SHA-256. The suite genuinely constrains the fixes: reverting F-001 (MC1, 3/3 red), F-008 (MC2, red), F-003 (MC5, 3/3 red), F-013 (MC9, 10/16 red), F-009 client wiring (MC13, red), F-009 cursor schema (MC12, red), F-004 (MG5, red), F-005 retention cap (MG1, red) and F-009 server byte budget (MG2, red) all turn the nearest suite red, and the two over-correction directions tested (MC6 blanket exit-5; MC11 boolean-option rewriting; MC14 allow-list removal) are also killed. HOOK VERDICTS: the F-003 persistence fault (second node:sqlite connection holding BEGIN IMMEDIATE at busy_timeout=0) is anchored to the SEMANTIC event - it forces exactly the condition PersistenceError names, through the compiled binary, and degrades loudly (8s process timeout) if the store's busy_timeout changes. The F-008 barrier is anchored to an IMPLEMENTATION DETAIL: it fires on the first tx.get('cli:outbox:<id>') miss, which today is the pre-read at outbound.ts:45 that the source itself labels 'Optimization only'. MC3b proves that deleting only that pre-read leaves the test GREEN while re-anchoring the barrier after the mutation transaction commits, so the two sends are fully serialised and no concurrency is exercised; MC3 (pre-read plus fix removed) then fails only by 60s timeout, with no assertion firing. Raised as T38-TP-001 (minor). This is independent of the review-highload two-process result: the barrier deliberately releases the SQLite lock and holds the JS continuation after COMMIT, so what it tests is the in-process window that BEGIN IMMEDIATE does not cover; the two results are complementary. GUARD VERDICTS: the F-003 exit-3 control CONSTRAINS (MC6 red) and is the only test separating the fix from a blanket exit-5 widening; the F-005 server-cap subtest CONSTRAINS (MG1 red) though it does not cover SetRetentionCap (MG6 survives); the six F-013 invalid-input guards CONSTRAIN the exit-2 contract (MC14 kills two) but do NOT pin strict:true, the over-correction their own header names - MC10 leaves all 16 green because parseCommand's allow-list and duplicate check independently produce exit 2; the F-009 single-maximum-size-envelope guard DOES NOT CONSTRAIN and is structurally unable to fail (MG3 survives; at MaxMessageBytes=262144 one envelope is ~256 KiB against a ~1020 KiB budget, so the starvation branch it names is unreachable). F-012 mutation evidence independently reproduced INCLUDING the control: MC7 fails with the exact recorded message 'expected INBOUND_REJECTED to be CONTACT_NOT_TRUSTED', MC8 (same mutation, pre-T36 generic rejects.toThrow restored) is 11/11 GREEN, so the mutant did survive the original assertion. Three further findings: T38-TP-002 (four added gates survive deletion, the material one being the expiry filter in GetEnvelopeBatch - the F-005(c) regression pins GetEnvelopes, which has no production caller, while the poll route uses GetEnvelopeBatch); T38-TP-003 (two assertions cannot fail: outboxKeys uses the complete key as a prefix so it can only be 0 or 1, empirically confirmed by MC2 where it alone did not fire; and the pollCapacity byte-budget assertion grades the test's own mock); T38-TP-004 (info: F-002, F-006, F-007, F-010 and F-011 were read but not mutated - a stated cap). No pre-existing test was weakened, skipped or deleted: 38 test files, zero skip/only/todo/t.Skip markers, all non-wave files carry April mtimes, and the three pre-existing files edited in the wave (cli.test.ts, two-process.test.ts, inbound.test.ts) only added assertions. next_cursor stayed a closed union on a .strict() object with no .optional(), passthrough or any, and MC12 proves it load-bearing. Caveat: the repo is on an unborn main, so a file deleted before this session leaves no detectable trace.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Every new test file added in this fix wave is assessed for whether it would still fail if its fix were reverted - not merely whether it passes today.",
+      "status": "partial",
+      "evidence": "19 mutations executed and tabulated in the report (section 1). Revert-mutations were run against F-001, F-003, F-004, F-005, F-008, F-009 (both client and server halves), F-012 and F-013. Not reached and stated as a cap: F-002 (readConfirmation), F-006 (request_body.go, validate.go), F-007 (device_record_repo.go) and F-010/F-011 (rate_limit.go); those four are assessed by reading only and reported as T38-TP-004 (info)."
+    },
+    {
+      "criterion": "The two deterministic hooks that closed the previously unverifiable findings are scrutinised, stating whether each is anchored to the semantic event or to an implementation detail that a future refactor would silently break.",
+      "status": "met",
+      "evidence": "F-003 lock hook: anchored to the semantic event. It forces the exact condition PersistenceError is defined to name, through the real second connection and the compiled binary, and its two couplings (busy_timeout=0, the client.sqlite filename) both degrade to a loud failure (8s process timeout, or an exit-code assertion), never to a silent pass. F-008 barrier: anchored to an implementation detail. MC3b - deleting only the outbound.ts:45 pre-read that the source labels 'Optimization only' - leaves the test green while re-anchoring the barrier to a point after the mutation transaction commits, so the interleaving becomes fully serialised and the test proves idempotent replay rather than concurrent-send exclusion. MC3 shows the subsequent regression then surfaces only as a 60s timeout with no assertion firing. Raised as T38-TP-001 with a concrete fix (arm the barrier inside the idFactory('envelope') callback, which is by definition the new-envelope-allocation event)."
+    },
+    {
+      "criterion": "The deliberately-green guard tests are assessed for whether they actually constrain the fix: the F-009 single-maximum-size-envelope guard, the F-003 exit-3 control, the six F-013 invalid-input guards, and the F-005 server-cap subtest.",
+      "status": "met",
+      "evidence": "F-009 single-envelope guard: does NOT constrain - MG3 (removing the first-envelope exemption it names) leaves the relay suite green, because at MaxMessageBytes=262144 a single envelope can never exceed the ~1020 KiB budget, so the branch is unreachable. F-003 exit-3 control: constrains - MC6 (blanket PersistenceError wrapping) turns it red at code 5 want 3. Six F-013 guards: constrain the exit-2 contract - MC14 (removing parseCommand's duplicate and allow-list loop) kills two of them - but do NOT pin strict:true: MC10 (strict:false) leaves all 16 green. MC15 (removing the '--' short circuit) also survives, though that branch is unreachable-by-design while no command takes positional operands. F-005 server-cap subtest: constrains - MG1 (deleting the cap clamp) turns it red; it does not cover SetRetentionCap, where MG6 (no-op) survives."
+    },
+    {
+      "criterion": "The F-012 mutation evidence is assessed, including the control showing the ORIGINAL test survived the same mutation.",
+      "status": "met",
+      "evidence": "Independently reproduced. MC7 (delete the CONTACT_NOT_TRUSTED guard at inbound.ts:50) fails inbound.test.ts with the exact message recorded in 001-T36-tests-result.json: \"expected 'INBOUND_REJECTED' to be 'CONTACT_NOT_TRUSTED'\". MC8 (same mutation plus the pre-T36 generic rejects.toThrow restored on that one test) is 11/11 GREEN - the mutant survives the original assertion, confirming T36's control. The rejectsWith helper is a genuine strengthening rather than a narrower string match: it also asserts the rejection is not a PersistenceError, so a vanished guard cannot be satisfied through the exit-5 channel."
+    },
+    {
+      "criterion": "Any test that is over-fitted to the current implementation, asserts on incidental values, or would pass vacuously is reported as a finding with its file and test name.",
+      "status": "met",
+      "evidence": "T38-TP-001 (over-fitted hook: outbound.concurrentSend.test.ts, 'creates exactly one envelope and one history entry for two runtime instances sending the same message id'). T38-TP-002 (four unpinned gates, class_scope of five sites, with the material one being that the F-005(c) regression TestGetEnvelopesFiltersExpiredBeforeApplyingBatchLimit pins GetEnvelopes, which keryx ctx rg shows has no production caller, while the poll route calls GetEnvelopeBatch). T38-TP-003 (two assertions that cannot fail: the outboxKeys soft assertion in outbound.concurrentSend.test.ts, empirically inert under MC2 while three siblings fired; and the responseBytes budget assertion in relayClient.pollCapacity.test.ts, which grades the test's own mock relay)."
+    },
+    {
+      "criterion": "Confirm no pre-existing test was weakened, skipped or deleted, independently of the orchestrator's mtime checks and T37's hash verification.",
+      "status": "met",
+      "evidence": "38 test files enumerated by find over apps/ and packages/, matching T37's count. A grep for .skip/.only/.todo/t.Skip(/xit(/xdescribe( across every test file returns zero matches. Every file outside the fix wave carries an April mtime (validate_test.go, the client-core, client-db, crypto-core suites, validateDeviceRecord.test.ts) and is unmodified. The three pre-existing files edited in the wave window were read in full: cli.test.ts and two-process.test.ts replaced a build-running beforeAll with expect(existsSync(entry)).toBe(true) - an assertion added, none removed; inbound.test.ts gained rejectsWith and split one combined test into two, both keeping expect(fake.acks()).toEqual([]) and expect(await snapshot(bob)).toEqual(before). No schema was loosened: nextCursorSchema is a closed z.union on a .strict() object with no .optional(), passthrough or any, and MC12 proves it load-bearing. Caveat stated in the report: the repository is on an unborn main with no commits, so a file deleted before this session would leave no trace."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-testing-practices-report.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full report: the 19-mutation table, per-hook and per-guard verdicts, F-012 control reproduction, the no-weakened-test verification and four findings."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "change": "Temporarily mutated six times (MG1-MG6) for the bounded mutation pass and fully reverted. SHA-256 d598cbe175d2bd33142765a10ca995bc070fa582af21142cb89d69f07fc36ef7 before and after."
+    },
+    {
+      "path": "apps/cli/src/runtime/profile.ts",
+      "change": "Temporarily mutated three times (MC1, MC5, MC6) and fully reverted. SHA-256 6d033bb8c4ae176db893fa4a7561e7a73f43e485c1965eac711b9d1d422f1793 before and after."
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.ts",
+      "change": "Temporarily mutated three times (MC2, MC3, MC3b) and fully reverted. SHA-256 3720f372cb40931fee19bad5cc4c8378815f11ba29e8200397ef37077e8bba0f before and after."
+    },
+    {
+      "path": "apps/cli/src/runtime/inbound.ts",
+      "change": "Temporarily mutated twice (MC7 guard deletion, MC13 batch_size) and fully reverted. SHA-256 487ceeff9fdaa3b534ac85969280e218e2c59987e53655d557c7a5b29a68e69d before and after."
+    },
+    {
+      "path": "apps/cli/src/commands/cli.ts",
+      "change": "Temporarily mutated four times (MC9, MC10, MC11, MC14, MC15) and fully reverted. SHA-256 40886948f89de38ffe05750c6be627a77a82d0465b1b4230a2002b4e79c5f7ef before and after."
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.ts",
+      "change": "Temporarily mutated once (MC12, nextCursorSchema back to z.null()) and fully reverted. SHA-256 d01e31c0419db732827cd0e1b51b39a25570bd90add258f21fe186a7e584e843 before and after."
+    },
+    {
+      "path": "apps/cli/src/runtime/inbound.test.ts",
+      "change": "Temporarily mutated once (MC8, the F-012 control: the strengthened assertion replaced by the pre-T36 generic rejects.toThrow) and fully reverted. SHA-256 ddc55d63e5b58de5d922385a656cef84f5aafb684f9b7b2e814b18f8678a2cba before and after."
+    },
+    {
+      "path": "apps/cli/dist/cli.js",
+      "change": "Build artifact, not a canonical source file. Rebuilt from the reverted sources at the end of the pass so no mutated bundle is left on disk."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T38-TP-001",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#T38-TP-001",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/outbound.concurrentSend.test.ts",
+      "line": 84,
+      "symbol": "holdFirstMissingOutboxRead",
+      "problem": "The F-008 concurrency barrier fires on the first store transaction that reads cli:outbox:<messageId> and misses. Today that is the pre-read at outbound.ts:45, which the source itself annotates 'Optimization only: the authoritative read is repeated inside the mutation transaction.' The barrier is therefore anchored to an implementation detail the code invites a maintainer to delete, not to the semantic event 'two runtimes are inside the same logical send'.",
+      "impact": "Deleting that pre-read - a legitimate refactor - leaves the test green while re-anchoring the barrier to the mutation transaction at outbound.ts:71, which releases only after that transaction commits. The first sender then writes its outbox record, history entry and envelope before the second sender starts, so the two sends are fully serialised: the test asserts idempotent replay (already covered by outbound.test.ts) and nothing about concurrency. A regression reintroduced in that state surfaces only as a 60s harness timeout, not as a duplicate-envelope assertion.",
+      "suggested_fix": "Arm the barrier on the semantic event rather than on a storage read. The seam already exists: Options.idFactory. Blocking inside the idFactory('envelope') callback is by definition the new-envelope-allocation event inside the mutation transaction, so no refactor of the optimization read can move it. Alternatively, add one positive assertion that the window really was concurrent - e.g. that first.send() had not yet settled when second.send() returned - so a degenerate serialisation cannot pass.",
+      "evidence": "Bounded mutation pass, all reverted. MC3b (remove only the outbound.ts:45 pre-read, keep the F-008 fix): outbound.concurrentSend.test.ts 1/1 GREEN in 244ms. MC3 (remove the pre-read AND the in-transaction re-read at outbound.ts:71): RED after 60020ms with no assertion message - the barrier never armed. MC2 (remove only the in-transaction re-read, current tree otherwise): RED with 3 of 4 soft assertions firing (history entries [2,3], two relayed envelope ids, receipt ids differ). apps/cli/src/runtime/outbound.ts and apps/cli/src/runtime/profile.ts verified byte-identical afterwards.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "testing-f008-barrier-anchoring"
+    },
+    {
+      "id": "T38-TP-002",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#T38-TP-002",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 183,
+      "symbol": "GetEnvelopeBatch",
+      "problem": "Four gates this wave added or relied on survive deletion with the nearest suite green. The material one is the expiry filter inside GetEnvelopeBatch: the F-005(c) regression TestGetEnvelopesFiltersExpiredBeforeApplyingBatchLimit pins the equivalent filter in GetEnvelopes, but GetEnvelopes has no production caller - the poll route calls GetEnvelopeBatch at mailbox_handler.go:252. The named regression therefore covers a method nothing serves polls from.",
+      "impact": "The code is correct today, so no user-visible defect follows. The cost is that the next edit to the actual poll path is unprotected, and that the F-005(c) regression reads to the next author as coverage of a path it does not touch - the shape that historically produces a second review round.",
+      "suggested_fix": "Point TestGetEnvelopesFiltersExpiredBeforeApplyingBatchLimit at GetEnvelopeBatch, or add a sibling that does, since that is the production reader. Drive TestMailboxPollAlwaysReturnsAtLeastOneMaximumSizeEnvelope through a repository-level GetEnvelopeBatch call with a byteBudget smaller than one envelope, so the first-envelope exemption is actually exercised. Add one SetRetentionCap(1 * time.Hour) case to the retention test. For the CLI, either drop the claim in cli.dashOptionValues.test.ts's header that its guards prevent the fix being obtained by disabling strict parsing, or add a case where non-strict parsing observably differs.",
+      "evidence": "Bounded mutation pass, all reverted, go test run under apps/relay and vitest under apps/cli. MG4: remove 'envelope.ExpiresAtMs <= nowMS' from GetEnvelopeBatch -> go test ./... all ok. MG3: remove the 'len(batch.Envelopes) > 0' first-envelope exemption -> ./internal/api/handler and ./internal/storage/repository both ok (unreachable at MaxMessageBytes=262144, where one envelope is ~256 KiB against the ~1020 KiB pollEnvelopeByteBudget). MG6: make SetRetentionCap a no-op -> go test ./... all ok. MC10: parseArgs strict:false -> cli.dashOptionValues.test.ts 16/16 passed. Production-caller claim established with 'keryx ctx rg \"GetEnvelopes\\(|GetEnvelopeBatch\\(\" apps/relay': GetEnvelopes appears only in mailbox_repo.go, mailbox_service.go's pass-through, and two test files.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "testing-unpinned-gates-fix-wave",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/storage/repository/mailbox_repo.go:183",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:190",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:42",
+          "apps/cli/src/commands/cli.ts:107",
+          "apps/cli/src/commands/cli.ts:93"
+        ],
+        "enumeration_method": "Every gate the fix wave added or relied on inside the four files under review was deleted one at a time and the nearest suite executed - 19 mutations in total, tabulated in section 1 of the report. The five sites listed are exactly the mutations that left their suite green; the remaining fourteen were killed. The last site (the '--' verbatim-copy short circuit, MC15) is listed for completeness and is unreachable-by-design while no command accepts positional operands."
+      }
+    },
+    {
+      "id": "T38-TP-003",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#T38-TP-003",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/outbound.concurrentSend.test.ts",
+      "line": 181,
+      "problem": "Two assertions cannot fail. (1) expect.soft(persisted.outboxKeys).toHaveLength(1) calls tx.keys() with a prefix that is the COMPLETE key cli:outbox:<messageID>, so the result can only ever be 0 or 1 and cannot detect the duplicate-envelope defect it sits beside. (2) relayClient.pollCapacity.test.ts:123 asserts Math.max(...responseBytes) <= responseByteBound, but every entry in responseBytes is pushed by the test's own mock fetch from a payload that same mock builds under a budget it applies itself - no production code contributes to the value, so the assertion grades the fixture.",
+      "impact": "Both read as coverage of the property they name - one envelope per message id, and a bounded poll response - and neither provides it. The next author reads the byte-budget line as client-side enforcement when the enforcement under test is entirely in the mock.",
+      "suggested_fix": "For (1) assert on tx.keys('cli:outbox:') - the prefix rather than the full key - or delete the assertion, since the history-entry and relayed-envelope-id assertions already carry the property. For (2) either restate it as an assertion about what the client accepted (which is what pollMailbox's 1 MiB reader bound actually enforces) or delete it and rely on TestMailboxPollHonoursAggregateResponseByteBudget, which measures a real handler response.",
+      "evidence": "Empirical for (1): under MC2 (F-008 fix reverted) three of the four soft assertions fired - history entries [2,3], two relayed envelope ids, and differing receipt ids - while expect.soft(persisted.outboxKeys).toHaveLength(1) did not, confirming it is inert under exactly the defect it accompanies. For (2), inspection of relayClient.pollCapacity.test.ts:75-100 shows responseBytes is populated only inside the mock fetch. The rest of that test is load-bearing: MC12 (nextCursorSchema back to z.null()) kills it with INVALID_RELAY_RESPONSE.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "testing-vacuous-assertions"
+    },
+    {
+      "id": "T38-TP-004",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#T38-TP-004",
+      "reviewer": "review-testing-practices",
+      "severity": "info",
+      "file": "apps/relay/internal/api/handler/request_body_limit_test.go",
+      "line": 43,
+      "problem": "Four fix areas were assessed by reading only and were not reached by the mutation pass: F-002 (readConfirmation in cli.ts), F-006 (request_body.go and validate.go), F-007 (device_record_repo.go) and F-010/F-011 (rate_limit.go). A stated cap is a result; silence would read as a clean sweep.",
+      "impact": "No claim is made that these four regressions would fail if their fix were reverted. On reading they are well anchored - request_body_limit_test.go measures bytes actually consumed via a countingBodyReader rather than trusting a status code, rate_limit_test.go is driven by channel synchronisation and an injected clock with no time.Sleep, and mailbox_device_authorization_test.go asserts its own precondition and orders the two identities deterministically so the denial is reproducible rather than lexicographically lucky - but that is inspection, not execution.",
+      "suggested_fix": "If a later round has budget, extend the pass with four mutations: remove the http.MaxBytesReader in decodeJSONRequest; remove the actual-ciphertext length check in ValidateMailboxEnvelope; revert authorizeMailboxDevice to the global GetByDeviceID scan; and move the mutex unlock back across next.ServeHTTP in the rate limiter.",
+      "evidence": "The mutation table in section 1 of the report lists all 19 executed mutations; none touches request_body.go, validate.go, device_record_repo.go, rate_limit.go or readConfirmation. Baseline for those packages was confirmed green before and after the pass (go test ./... under apps/relay: handler, router, middleware, repository and validation all ok).",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "testing-mutation-pass-cap"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "mutations_run": 19,
+    "mutations_killed": 13,
+    "mutations_survived": 6,
+    "test_files_inventoried": 38,
+    "skip_only_todo_markers_found": 0,
+    "files_mutated_and_reverted": 7,
+    "files_verified_byte_identical": 7
+  },
+  "timestamp_utc": "2026-09-06T15:55:00Z"
+}

@@ -1,0 +1,160 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T45-tests",
+  "status": "DONE",
+  "summary": "T45 RED phase for the two minor defects raised by the T44 diagnosis. Three new test files, six new tests, three of them deliberately failing and three of them green over-correction guards. No implementation code was written, no existing assertion was weakened, deleted or skipped, and apps/cli/vitest.config.ts and apps/cli/test/globalSetup.ts were not touched. T44-001 is pinned twice, once at each place the relay's diagnosis is destroyed: relayClient.prekeyUnavailable.test.ts fails on `remoteCode: undefined` where `PREKEY_BUNDLE_UNAVAILABLE` is required, and cli.relayErrorCodes.test.ts fails on `expected 'PROTOCOL_REJECTED' not to be 'PROTOCOL_REJECTED'` for a send whose claim is answered `404 PREKEY_BUNDLE_UNAVAILABLE`. Both sides are pinned in the same test: a relay `400 INVALID_SIGNATURE` publish rejection must stay a trust/protocol rejection, must not name a prekey condition, and must never share a code with the exhausted case, so renaming the generic code satisfies nothing. T44-002 is pinned end-to-end against the real relay binary in test/e2e/publication-claimability.test.ts, which fails on `expected undefined to be true` for `claimable` on the first publish; it requires a republish to report claimability truthfully in BOTH directions (still claimable while unclaimed, not claimable after the bundle has been consumed), which rules out a fix that simply declares every repeat publish unclaimable. That file also reproduces the original T44 symptom end-to-end - a second distinct sender - and asserts the identical `bundle_id` across all three publishes, so the F-001 no-implicit-rotation guarantee is now pinned at the process level as well. Reachability of every step past the first RED assertion was proved with a temporary probe copy that omitted only the claimable/prekey assertions: it is 1/1 green, which confirms Alice's send succeeds, all three of Bob's publishes exit 0 with an identical bundle_id, and Carol's second-sender send exits 3 with exactly PROTOCOL_REJECTED on today's code. The probe copy was deleted and its absence verified. Counts: apps/cli moved from 14 files / 83 tests green to 17 files / 89 tests with 3 failed and 86 passed - the 83 pre-existing tests are all still green and unmodified; the six non-CLI packages are unchanged at 11 files / 45 tests green, so the workspace is 134 tests with exactly the 3 intended RED. `pnpm --filter @echolet/cli typecheck` is green on the new files. No git commit was made; `git status --porcelain` is byte-identical to the session-start snapshot (23 untracked entries).",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "T44-001: a RED test requires the exhausted-prekey condition to be reported distinguishably",
+      "status": "met",
+      "evidence": "Two RED tests, one per flattening. (1) apps/cli/src/transport/relayClient.prekeyUnavailable.test.ts:31 `expect(error).toMatchObject({ code: 'RELAY_HTTP_ERROR', remoteCode: 'PREKEY_BUNDLE_UNAVAILABLE', httpStatus: 404, retryable: false })` fails with `remoteCode: undefined` against `remoteCode: 'PREKEY_BUNDLE_UNAVAILABLE'` - the allowlist at relayClient.ts:11 omits the code. (2) apps/cli/src/commands/cli.relayErrorCodes.test.ts:165 `expect(exhausted.errorCode).not.toBe('PROTOCOL_REJECTED')` fails with `expected 'PROTOCOL_REJECTED' not to be 'PROTOCOL_REJECTED'` for `send` against a stub relay that answers /v2/prekeys/claim with the relay's own `404 {ok:false,error:{code:'PREKEY_BUNDLE_UNAVAILABLE'}}` envelope; the following line `expect(exhausted.errorCode).toMatch(/PREKEY/)` requires the reported code to actually name the condition rather than merely differ. (3) The same requirement is asserted end-to-end against the real relay at test/e2e/publication-claimability.test.ts:152-153 for a genuine second distinct sender."
+    },
+    {
+      "criterion": "T44-001: genuine trust and protocol violations keep reporting as trust/protocol rejections - a rename of the generic code is not a fix",
+      "status": "met",
+      "evidence": "cli.relayErrorCodes.test.ts pins the other side inside the SAME test as the exhausted case, so the two cannot be satisfied by one code: `expect(violation).toMatchObject({ timedOut: false, code: 3 })` for a relay `400 INVALID_SIGNATURE` publish rejection, `expect(violation.errorCode).not.toMatch(/PREKEY/)`, and `expect(violation.errorCode).not.toBe(exhausted.errorCode)`. A second test (currently green, an over-correction guard) pins that a trust rejection raised before any relay call stays `code 3 / CONTACT_NOT_TRUSTED`, that a `409 BUNDLE_ID_CONFLICT` stays exit 3 and never names a prekey condition, that a `503` stays exit 4 / RELAY_UNAVAILABLE, and that a claimed bundle contradicting the pin stays `code 3 / CONTACT_PIN_MISMATCH`. relayClient.prekeyUnavailable.test.ts adds two further green guards: an unrecognised relay-chosen code is still discarded rather than forwarded verbatim (the allowlist must not simply be deleted - a relay-controlled string reaches the operator's machine-readable error output), and the retryable classification of a 503 is unchanged."
+    },
+    {
+      "criterion": "T44-002: a RED test requires the CLI to report honestly that a republished bundle is not available for claiming",
+      "status": "met",
+      "evidence": "apps/cli/test/e2e/publication-claimability.test.ts, against the real relay binary built from source, reproducing T44 probe step 5. The first failing assertion is line 131 `expect(firstPublish.data.claimable).toBe(true)` - `expected undefined to be true`, because `relay publish` reports only `{stored, bundleId}` today. The test then requires line 138 `expect(repeatPublish.data.claimable).toBe(true)` for a repeat publish while the bundle is still unclaimed, and line 148 `expect(afterClaim.data.claimable).toBe(false)` for the republish after Alice's send consumed it. Requiring truth in both directions is deliberate: a fix that reports every repeat publish as unclaimable would be a new lie and is rejected by line 138."
+    },
+    {
+      "criterion": "The design boundaries are respected: no ninth command, no rotateBundle entry point, publish must not implicitly rotate, F-001 tests stay green and unmodified",
+      "status": "met",
+      "evidence": "No test invokes a ninth command or `rotateBundle`; the only commands used are init, contact export, contact import, relay publish and send. The e2e file positively pins the absence of implicit rotation at the process level: `expect(repeatPublish.data.bundleId).toBe(firstPublish.data.bundleId)` and `expect(afterClaim.data.bundleId).toBe(firstPublish.data.bundleId)`, i.e. all three publishes must resubmit one and the same stored bundle. Both assertions pass today and passed in the probe run. apps/cli/src/runtime/outbound.publish.test.ts (the F-001 suite) was not opened for writing and its three tests are green in the post-change full run."
+    },
+    {
+      "criterion": "The RED demonstration is real and the rest of the suite is unaffected",
+      "status": "met",
+      "evidence": "Baseline before any change, `pnpm --filter @echolet/cli test`: 'Test Files 14 passed (14) / Tests 83 passed (83)'. After: 'Test Files 3 failed | 14 passed (17) / Tests 3 failed | 86 passed (89)' - exactly the 3 intended failures, the 83 pre-existing tests all still green, plus the 3 new green guards. Non-CLI workspace packages re-run separately and unchanged: protocol 8, session-node 24, crypto-core 4, client-core 2, client-db 1, mobile 6 = 45 tests across 11 files, all passing (baseline workspace 128 = 83 + 45; new total 134). `pnpm --filter @echolet/cli typecheck` exits 0."
+    },
+    {
+      "criterion": "Tests are deterministic and reachable beyond the first RED assertion",
+      "status": "met",
+      "evidence": "Every scenario is closed-world: the two src suites drive a loopback stub relay whose routes return fixed status/code pairs mirroring the relay's own `writeJSONError(w, status, code, code)` envelope; the e2e suite starts a private relay process on a reserved loopback port with its own temporary ECHOLET_DATA_DIR and waits on /health. To prove the e2e scenario is not merely failing early, a temporary probe copy with only the `claimable` and /PREKEY/ assertions removed (and the second sender asserted at today's `PROTOCOL_REJECTED`) ran 1/1 green in 2.6s; the probe file was then deleted and apps/cli/test/e2e listed to confirm only publication-claimability.test.ts and two-process.test.ts remain. The three RED assertions were each observed failing in both a targeted run and the full apps/cli run, with identical messages."
+    },
+    {
+      "criterion": "No implementation code, no weakened assertions, no forbidden file edited",
+      "status": "met",
+      "evidence": "Only three files were created, all of them test files; no source file, no configuration file and no existing test file was opened for writing. apps/cli/vitest.config.ts and apps/cli/test/globalSetup.ts are untouched (the new e2e suite asserts dist/cli.js already exists rather than rebuilding it, and builds only its own private relay binary; the new process-level suite builds its own private esbuild bundle into dist/ and removes it in afterAll - dist/ contains only cli.js after the run). No `.skip`, `.todo`, `.only` or `--bail` was introduced. flow.json and acceptance-criteria.md were not opened for writing."
+    },
+    {
+      "criterion": "No secret, plaintext, ciphertext, store key or HTTP request body is printed",
+      "status": "met",
+      "evidence": "All three files assert in boolean form. relayClient.prekeyUnavailable.test.ts checks `String(error).includes(secretMarker)` and `JSON.stringify(error).includes(secretMarker)` are false rather than rendering either. cli.relayErrorCodes.test.ts reduces every process result to `{code, errorCode, timedOut}` through an `outcome()` helper that only admits an `/^[A-Z_]+$/` error code, and `redacted()` asserts the store key and the synthetic body are absent from stdout+stderr. The e2e suite checks every CLI run's stdout and stderr against all three store keys and the synthetic plaintext before returning, and discards the relay's own stdout/stderr without accumulating it."
+    },
+    {
+      "criterion": "No git commit was made",
+      "status": "met",
+      "evidence": "`git status --porcelain` after all work lists the same 23 untracked entries as the session-start snapshot, with no modified, added or deleted paths. The repository is still on unborn main."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T45-tests-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This result contract.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.prekeyUnavailable.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T44-001, first flattening. One RED test requiring the relay's 404 PREKEY_BUNDLE_UNAVAILABLE to survive the transport boundary as remoteCode, plus two green guards: an unrecognised relay-chosen code is still discarded, and the retryable classification of a 503 is unchanged.",
+      "hash": "6c8cf42c411aa3118b1f818ce049f82a45ca9e2e3724ee7260fb65a15538273b"
+    },
+    {
+      "path": "apps/cli/src/commands/cli.relayErrorCodes.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T44-001, second flattening. One RED test pinning both sides at the process boundary - an exhausted recipient prekey must name the condition, a relay signature rejection must stay a trust/protocol rejection, and the two must never share a code - plus one green over-correction guard covering CONTACT_NOT_TRUSTED, BUNDLE_ID_CONFLICT, the exit-4 retryable path and CONTACT_PIN_MISMATCH.",
+      "hash": "c160eb38b796f15305e593b443f4098348cf2a363868f7ccfe950347b6b20ef9"
+    },
+    {
+      "path": "apps/cli/test/e2e/publication-claimability.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T44-002 against the real relay binary: publish, republish while unclaimed, a first sender's claim, then the recovery republish, requiring a truthful claimability report in both directions; also reproduces the original second-sender symptom end-to-end and pins an identical bundle_id across all three publishes.",
+      "hash": "90e3def460e6b8cfe119d6c6ac675e194271af8882fd5f9bcfc61da27c05dee9"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/transport/relayClient.prekeyUnavailable.test.ts",
+      "change": "New file, 3 tests (1 RED, 2 green guards). RED: a claim answered `404 {ok:false,error:{code:'PREKEY_BUNDLE_UNAVAILABLE'}}` must produce a RelayError carrying remoteCode 'PREKEY_BUNDLE_UNAVAILABLE', httpStatus 404, retryable false, without rendering the relay's message. Guards: an unrecognised relay-chosen code still yields remoteCode undefined, and a 503 stays retryable."
+    },
+    {
+      "path": "apps/cli/src/commands/cli.relayErrorCodes.test.ts",
+      "change": "New file, 2 tests (1 RED, 1 green guard), following the private-esbuild-bundle process harness already used by cli.processFailures.test.ts so it never touches the shared dist/cli.js. RED: `send` whose claim is refused with the relay's 404 PREKEY_BUNDLE_UNAVAILABLE must exit 3 with a code that is not PROTOCOL_REJECTED and that names the prekey condition, while a relay `400 INVALID_SIGNATURE` publish rejection stays exit 3, never names a prekey condition, and never shares its code with the exhausted case. Guard: CONTACT_NOT_TRUSTED, a 409 BUNDLE_ID_CONFLICT, a 503 (exit 4 RELAY_UNAVAILABLE) and CONTACT_PIN_MISMATCH keep their documented exit codes."
+    },
+    {
+      "path": "apps/cli/test/e2e/publication-claimability.test.ts",
+      "change": "New file, 1 RED test against the real relay built from source into a private temporary directory (the same pattern as test/e2e/two-process.test.ts; dist/cli.js is used as built by globalSetup and never rebuilt). Sequence: Bob publishes, Bob republishes while unclaimed, Alice claims by sending, Bob republishes again, Carol sends as a second distinct sender. Requires claimable true / true / false across the three publishes, an identical bundle_id across all three, and a second-sender failure that names the prekey condition instead of PROTOCOL_REJECTED."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T45-N-001",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/cli/test/e2e/publication-claimability.test.ts",
+      "line": 148,
+      "problem": "The truthful claimability signal the T44-002 test demands cannot be derived from client-side knowledge alone. The CLI can know that it has already published this exact bundle once, but nothing in a successful `POST /v2/prekeys/publish` response tells it whether the bundle is still unclaimed - the relay answers `{stored: true, bundle_id}` identically on the fresh-store path and on the idempotent re-store path (signal_prekey_bundle_v2.go:33-45 versus :63-73). The test was therefore written against the real relay rather than a stub, so the implementer is free to source the signal from either side.",
+      "impact": "The likely shape of the fix is a relay-side addition: SaveSignalV2 already knows `stored.Claimed` on the idempotent path, so the publish handler can report claimability alongside `stored`, and the CLI's strict publish-response schema at relayClient.ts:46 then admits and surfaces it. That crosses an app boundary, which is more than the one-line change the exhausted-code half needs. A stub-relay test would have quietly forbidden that option, which is why this one does not use a stub.",
+      "suggested_fix": "None required from this dispatch. If a relay-side field is added, note that the existing Go handler test unmarshals the publish response into a struct with only `stored` and `bundle_id` (signal_prekey_bundle_v2_test.go:127), so an additional field does not break it and no Go assertion needs weakening.",
+      "evidence": "Probe run of a copy of this file with only the claimable and /PREKEY/ assertions removed: 1 test passed in 2.6s, i.e. every publish already returns exit 0 with an identical bundle_id and Carol's send already exits 3 - the only thing missing is the truthful signal itself.",
+      "confidence": "high"
+    },
+    {
+      "id": "T45-N-002",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/cli/src/commands/cli.relayErrorCodes.test.ts",
+      "line": 166,
+      "problem": "The exhausted-prekey assertion is written as `toMatch(/PREKEY/)` rather than a literal code, so the implementer may name the condition PREKEY_BUNDLE_UNAVAILABLE (the relay's own code, and the T44 recommendation) or any other name containing PREKEY. That is deliberate freedom, but it means the tests do not by themselves fix the operator-facing vocabulary.",
+      "impact": "The CLI's documented failure vocabulary grows beyond the five codes specification.md:74 implies, and specification.md does not enumerate machine-readable error codes at all, so nothing else pins the chosen name. If the operator documentation lists CLI error codes, whichever name is chosen has to be added there as part of the same change.",
+      "suggested_fix": "Prefer the relay's own PREKEY_BUNDLE_UNAVAILABLE so one code means one thing on both sides of the wire, and record it wherever the CLI's exit codes and error codes are documented for the operator.",
+      "evidence": "specification.md:74 documents only exit codes 0/2/3/4/5 and says machine-readable mode writes one JSON result; no error-code enumeration exists in the requirements package, so the tests are the only pin.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T45-N-003",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/cli/src/transport/relayClient.ts",
+      "line": 11,
+      "problem": "The `remoteCodes` allowlist still carries the v1-era `PREKEYS_EXHAUSTED`, which no v2 relay path can emit: the v2 error set is INVALID_SCHEMA, INVALID_SIGNATURE, BUNDLE_EXPIRED, BUNDLE_ID_CONFLICT, ONE_TIME_PREKEY_REUSED, CLAIM_ID_CONFLICT and PREKEY_BUNDLE_UNAVAILABLE (model/signal_prekey_bundle_v2.go:5-13). The CLI uses only v2 bundle endpoints (specification.md:123).",
+      "impact": "Cosmetic today - a dead entry cannot mislead the operator on its own - but it is exactly what made the missing PREKEY_BUNDLE_UNAVAILABLE look intentional. Left in place next to the new entry it invites the same confusion again.",
+      "suggested_fix": "While editing line 11, consider removing PREKEYS_EXHAUSTED. It is out of scope for the RED tests, and no test in this dispatch pins its presence or absence either way, so the implementer may do it or leave it without breaking anything.",
+      "evidence": "relayClient.ts:11 lists PREKEYS_EXHAUSTED; no Go source in apps/relay defines or writes that code for a v2 endpoint.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "test_files_added": 3,
+    "test_files_modified": 0,
+    "source_files_modified": 0,
+    "tests_added": 6,
+    "tests_red": 3,
+    "tests_green_guards": 3,
+    "assertions_weakened": 0,
+    "tests_skipped": 0,
+    "cli_suite_before": "83/83 green (14 files)",
+    "cli_suite_after": "86 passed / 3 failed (89 tests, 17 files)",
+    "non_cli_workspace_before_and_after": "45/45 green (11 files)",
+    "workspace_total_after": "131 passed / 3 failed (134 tests)",
+    "typecheck": "green",
+    "git_commits": 0
+  },
+  "timestamp_utc": "2026-09-06T18:30:00Z"
+}

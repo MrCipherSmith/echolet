@@ -1,0 +1,90 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T38-review-verifier",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-verifier",
+  "task": {
+    "title": "Independently verify the T38 fix-review dispositions and open findings",
+    "description": "Adversarially verify the wave-A dispositions for F-001..F-013 and every open finding raised by the five reviewers. You did not write the fixes and did not write the reviews.",
+    "intent": "review",
+    "scope": "Read-only verification across apps/cli, apps/relay and packages, plus the T38 review artifacts."
+  },
+  "acceptance_criteria": [
+    "Each of the ten OPEN findings receives a verdict of confirmed, refuted or unverifiable, with the evidence that produced it. Open findings: HL-N-001 (major), BE-R-001, BE-R-002, SEC-R-001, HL-N-002, HL-N-003, T38-TP-001, T38-TP-002, T38-TP-003, T38-L-001 (all minor).",
+    "HL-N-001 gets the deepest scrutiny because it is the only open major and it drives a fix wave: confirm or refute that a single envelope from an unpinned sender permanently wedges a recipient mailbox, that /v1/messages/send accepts it without sender authentication, and that ackPending is unreachable once the batch throws. State whether messages queued behind it are actually lost.",
+    "The reviewers' `fixed` dispositions for the five blockers and F-001/F-002/F-003 are spot-checked adversarially: pick the claims whose failure would be most damaging and try to break them, rather than re-reading the same evidence.",
+    "The testing-practices claim that `strict:false` leaves all sixteen F-013 tests green (mutation MC10) is independently reproduced or refuted, because the orchestrator relied on those guards as the defence against an over-correction and needs to know whether that reliance was justified.",
+    "Any reviewer claim that does not survive verification is reported as refuted with the reasoning, not quietly dropped.",
+    "A short recommendation per confirmed finding: fix now in this flow, or record as a documented prototype limitation."
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/inputs/review-context.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/inputs/wave-a-findings-index.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-path-echolet-cli-prototype-t28/consolidated-findings.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/specification.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-logic-result.json",
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-backend-result.json",
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-security-code-result.json",
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-highload-result.json",
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-testing-practices-result.json",
+    "apps/cli/src/runtime/inbound.ts",
+    "apps/cli/src/runtime/outbound.ts",
+    "apps/cli/src/commands/cli.ts",
+    "apps/relay/internal/api/handler/mailbox_handler.go",
+    "apps/relay/internal/validation/validate.go",
+    "apps/relay/internal/storage/repository/mailbox_repo.go",
+    "apps/relay/internal/storage/repository/device_record_repo.go"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "Load and follow .metaproject/skills/gdskills/review/review-verifier/SKILL.md.",
+    "You are an INDEPENDENT verifier. You did not write these fixes and you did not write these reviews. Do not accept a reviewer's conclusion because it is well argued - reproduce it or refute it.",
+    "Adversarial stance: your job is to try to BREAK the claims, especially the `fixed` dispositions on the five blockers. A disposition you merely re-read is not verified.",
+    "Bounded read-only probes and temporary scratch files outside the repository are allowed. Any mutation inside the repository must be reverted and verified byte-identical, and reported explicitly. Prefer probes that need no mutation at all.",
+    "Do not permanently modify any source, test or configuration file. Do not fix anything.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Use `keryx ctx rg` for searches, never bare rg/grep. Use `keryx ctx run` for long command output.",
+    "Never print plaintext message bodies, ciphertext, profile store keys, private key material or HTTP request bodies - describe by location and mechanism only.",
+    "Do not commit and do not create a branch, PR or remote. The repository is on unborn `main` with everything untracked, so an empty `git diff` is NOT an empty change set.",
+    "Respect prototype scope: a local computer CLI prototype. Do not confirm findings that merely demand production hardening, mobile support, deployment or external audit.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-verifier-result.json and a report to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-verifier-report.md, and make the final response start with STATUS:."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-verifier-result.json",
+    "summary_max_tokens": 1200
+  },
+  "budget": {
+    "max_output_tokens": 8000,
+    "max_runtime_ms": 3600000
+  },
+  "provenance": {
+    "created_at": "2026-09-06T15:40:00+04:00",
+    "created_by": "flow-orchestrator",
+    "source_request": "T38 managed fix review: independent verification before any fix wave is committed."
+  }
+}

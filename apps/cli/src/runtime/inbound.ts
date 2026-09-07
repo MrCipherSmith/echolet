@@ -1,0 +1,208 @@
+import { createHash } from "node:crypto";
+import { z } from "zod";
+import { deriveMailboxId } from "@echolet/crypto-core";
+import { signalAddressForDevice, type MailboxEnvelope } from "@echolet/protocol";
+import { openProfile, PersistenceError, ProfileError, type Profile, type OpenProfileOptions, type ContactIdentifiers } from "./profile";
+import { appendHistory, readHistory } from "./history";
+import { RelayClient, RelayError } from "../transport/relayClient";
+
+export class InboundError extends Error {
+  constructor(readonly code: string) { super(code); this.name = "InboundError"; }
+}
+
+/**
+ * One permanently rejected envelope. Deliberately carries nothing but the relay-assigned
+ * identifier and the typed rejection code: `poll()`'s result is returned verbatim to stdout by
+ * `commands/cli.ts`, so no ciphertext, plaintext, store key or other sender-supplied string may
+ * appear here.
+ */
+export interface RejectedEnvelope {
+  readonly envelopeId: string;
+  readonly code: string;
+}
+
+/**
+ * Result of one mailbox poll.
+ *
+ * - `received`  envelopes accepted and committed by this poll, across every page it walked.
+ * - `more`      the relay's remaining-work signal (`next_cursor`) as of the last page read: true
+ *               when the relay cut that response short at its own batch or byte bound and the
+ *               caller should poll again.
+ * - `rejected`  permanently unacceptable envelopes, in the order they were read. They are neither
+ *               committed nor acknowledged, so the relay keeps them queued; they simply no longer
+ *               stop the rest of the batch, or the pages behind it, from being delivered.
+ */
+export interface PollResult {
+  readonly received: number;
+  readonly more: boolean;
+  readonly rejected: RejectedEnvelope[];
+}
+
+/**
+ * A failure that is not a verdict about the envelope that happened to be in flight.
+ *
+ * Local persistence loss, relay unavailability and a profile that cannot be read are all
+ * conditions a retry can clear, and the specification requires that such an envelope stays
+ * queued, unacknowledged and retriable. They therefore abort the whole poll instead of being
+ * isolated: nothing is acknowledged, and the transaction that was open is rolled back.
+ *
+ * Everything else - an untrusted or unpinned sender, a misaddressed envelope, malformed
+ * ciphertext or wrapper, a message-ID conflict, a decrypt that does not authenticate - is a
+ * permanent verdict about that one envelope. Retrying it can never succeed, so it is isolated
+ * and the rest of the batch proceeds.
+ */
+const isNotAnEnvelopeVerdict = (error: unknown): boolean =>
+  error instanceof PersistenceError || error instanceof RelayError || error instanceof ProfileError;
+const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
+const decode = <T>(value: Uint8Array): T => JSON.parse(new TextDecoder().decode(value)) as T;
+const base64 = z.string().min(1).max(1024 * 1024).regex(/^[A-Za-z0-9_-]+$/).refine((value) => Buffer.from(value, "base64url").toString("base64url") === value);
+const wrapperSchema = z.object({ version: z.literal(1), type: z.union([z.literal(2), z.literal(3)]), body: base64 }).strict();
+const ackKey = (id: string) => `cli:pending-ack:${id}`;
+/**
+ * How many relay pages one `poll()` will walk while every page has yielded nothing.
+ *
+ * The walk exists so permanently rejected envelopes cannot monopolise the selection window
+ * forever, but it must stay bounded: each page costs a challenge and a poll round trip, and the
+ * mailbox is attacker-fillable. Sixteen pages at the wire maximum batch size (100) consults 1600
+ * envelopes before giving up and re-raising, which is far beyond any legitimate backlog the 24h
+ * declared expiry and the relay's 7-day retention cap can produce, and bounded enough that a
+ * deliberately flooded mailbox costs a bounded number of requests rather than an unbounded one.
+ */
+const maxPollPagesPerPoll = 16;
+type Options = Pick<OpenProfileOptions, "profileDir" | "environment"> & { relay: RelayClient; now?: () => number };
+
+class InboundMessenger {
+  private queue: Promise<unknown> = Promise.resolve();
+  constructor(private readonly profile: Profile, private readonly options: Options) {}
+  private serial<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.queue.then(operation).catch((error: unknown) => {
+      if (error instanceof InboundError || error instanceof RelayError || error instanceof PersistenceError) throw error;
+      throw new InboundError("INBOUND_REJECTED");
+    });
+    this.queue = result.catch(() => {});
+    return result;
+  }
+  /** Reads one page of the mailbox, resuming at `cursor` when the previous page reported one. */
+  private async page(cursor: string | undefined) {
+    const challenge = await this.options.relay.createChallenge(await this.profile.mailboxAuthorization({ kind: "challenge" }));
+    if (challenge.expires_at_ms <= (this.options.now?.() ?? Date.now())) throw new InboundError("CHALLENGE_EXPIRED");
+    const authorization = await this.profile.mailboxAuthorization({ kind: "poll", challengeId: challenge.challenge_id, nonce: challenge.nonce });
+    // The configured batch size is forwarded so the relay bounds the batch it
+    // selects; without it the relay applies its own maximum and can return a
+    // response larger than this client will read. A challenge is single-use, so
+    // each page needs its own.
+    return this.options.relay.pollMailbox({
+      ...authorization, challenge_id: challenge.challenge_id, batch_size: this.profile.pollBatchSize,
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+  }
+  poll() {
+    return this.serial(async () => {
+      const rejected: RejectedEnvelope[] = [];
+      let received = 0;
+      let firstRejection: InboundError | undefined;
+      let more = false;
+      let cursor: string | undefined;
+      // Walk the relay's pages while every page so far has yielded nothing and the relay says more
+      // remain. A permanently rejected envelope is deliberately never acknowledged (F-012), so it
+      // stays queued and keeps occupying its place in the relay's selection order; without walking,
+      // an unauthenticated sender who fills one selection window makes every batch entirely poison
+      // and the legitimate envelopes behind it are never delivered (round-2 finding R2-001 path B).
+      // The walk stops as soon as anything is accepted, because the accepted envelopes must be
+      // acknowledged promptly and the next `poll()` resumes the remainder from a fresh cursor.
+      for (let page = 0; page < maxPollPagesPerPoll; page += 1) {
+        const batch = await this.page(cursor);
+        const accepted = await this.accept(batch.envelopes);
+        received += accepted.received;
+        rejected.push(...accepted.rejected);
+        firstRejection ??= accepted.firstRejection;
+        more = batch.next_cursor !== null;
+        cursor = batch.next_cursor ?? undefined;
+        if (accepted.received > 0 || !more) break;
+      }
+      // Nothing survived any page the walk reached: keep the historical whole-batch contract, which
+      // is also the F-012 guarantee - re-raise the first rejection, acknowledge nothing, mutate
+      // nothing. Walking further pages changes only how much of the mailbox is consulted before
+      // this answer is given, never whether it is given.
+      if (received === 0 && firstRejection) throw firstRejection;
+      await this.ackPending();
+      return { received, more, rejected } satisfies PollResult;
+    });
+  }
+  /**
+   * Per-envelope acceptance. Each envelope is admitted in its own transaction, so a permanently
+   * unacceptable one rolls back only itself and the envelopes around it are still committed and
+   * become acknowledgeable. A failure that is not a verdict about the envelope aborts the whole
+   * poll instead, leaving every envelope queued and unacknowledged.
+   */
+  private async accept(envelopes: MailboxEnvelope[]) {
+    const rejected: RejectedEnvelope[] = [];
+    let received = 0;
+    let firstRejection: InboundError | undefined;
+    for (const envelope of envelopes) {
+      try {
+        await this.acceptOne(envelope);
+        received += 1;
+      } catch (error) {
+        if (isNotAnEnvelopeVerdict(error)) throw error;
+        const rejection = error instanceof InboundError ? error : new InboundError("INBOUND_REJECTED");
+        firstRejection ??= rejection;
+        rejected.push({ envelopeId: envelope.envelope_id, code: rejection.code });
+      }
+    }
+    return { received, rejected, firstRejection };
+  }
+  private acceptOne(envelope: MailboxEnvelope) {
+    return this.profile.withRuntime(async (tx, client, local) => {
+      const now = this.options.now?.() ?? Date.now();
+      if (envelope.recipient_identity_id !== local.identity_id || envelope.recipient_device_id !== local.device_id ||
+          envelope.recipient_mailbox_id !== deriveMailboxId(local.identity_id) || envelope.size_bytes !== Buffer.byteLength(envelope.ciphertext) ||
+          !Number.isSafeInteger(envelope.created_at_ms) || !Number.isSafeInteger(envelope.expires_at_ms) || envelope.created_at_ms < 0 ||
+          envelope.created_at_ms > now || envelope.expires_at_ms <= now || envelope.expires_at_ms <= envelope.created_at_ms) throw new InboundError("INVALID_ENVELOPE");
+      const contactBytes = tx.get(`cli:contact:${envelope.sender_identity_id}`);
+      if (!contactBytes) throw new InboundError("CONTACT_NOT_TRUSTED");
+      const contact = decode<ContactIdentifiers>(contactBytes);
+      if (contact.identity_id !== envelope.sender_identity_id || contact.device_id !== envelope.sender_device_id) throw new InboundError("CONTACT_PIN_MISMATCH");
+      const remote = signalAddressForDevice(contact.identity_id, contact.device_id);
+      const addressKey = JSON.stringify([remote.name, remote.deviceId]);
+      const trusted = tx.get(`trust:${addressKey}`);
+      if (!trusted || Buffer.from(trusted).toString("base64url") !== contact.signal_identity_key) throw new InboundError("CONTACT_PIN_MISMATCH");
+      const raw = Buffer.from(base64.parse(envelope.ciphertext), "base64url");
+      const wrapper = wrapperSchema.parse(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw)));
+      const hash = createHash("sha256").update(envelope.ciphertext).digest("hex");
+      const inboxKey = `cli:inbox:${addressKey}:${envelope.message_id}`;
+      const previous = tx.get(inboxKey);
+      if (previous) {
+        if (decode<string>(previous) !== hash) throw new InboundError("MESSAGE_ID_CONFLICT");
+      } else {
+        const plaintext = await client.decrypt(remote, { messageId: envelope.message_id, type: wrapper.type, body: Buffer.from(wrapper.body, "base64url") });
+        tx.set(inboxKey, encode(hash));
+        appendHistory(tx, { contactIdentityId: contact.identity_id, messageId: envelope.message_id, direction: "inbound", plaintext, createdAtMs: envelope.created_at_ms });
+      }
+      const pending = tx.get(ackKey(envelope.envelope_id));
+      if (pending && decode<string>(pending) !== inboxKey) throw new InboundError("INVALID_ENVELOPE");
+      tx.set(ackKey(envelope.envelope_id), encode(inboxKey));
+    });
+  }
+  private async ackPending() {
+    const ids = await this.profile.withRuntime((tx) => tx.keys("cli:pending-ack:").sort().map((key) => key.slice("cli:pending-ack:".length)));
+    for (let start = 0; start < ids.length; start += 100) {
+      const envelopeIds = ids.slice(start, start + 100);
+      const authorization = await this.profile.mailboxAuthorization({ kind: "ack", envelopeIds });
+      await this.options.relay.ackMailbox({ ...authorization, envelope_ids: envelopeIds });
+      await this.profile.withRuntime((tx) => { for (const id of envelopeIds) tx.delete(ackKey(id)); });
+    }
+    return { acked: ids.length };
+  }
+  retryPendingAcks() { return this.serial(() => this.ackPending()); }
+  history(input: { contactIdentityId: string }) {
+    const id = input.contactIdentityId;
+    return this.serial(() => this.profile.withRuntime((tx) => readHistory(tx, id)));
+  }
+  diagnostics() { return this.serial(() => this.profile.diagnostics()); }
+  async close() { await this.queue; await this.profile.close(); }
+}
+export async function openInboundMessenger(options: Options) {
+  const owned = { ...options, environment: options.environment ? { ...options.environment } : undefined };
+  return new InboundMessenger(await openProfile(owned), owned);
+}

@@ -1,0 +1,56 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T27-verify",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "code-verifier",
+  "task": {
+    "title": "Run the full Echolet CLI prototype quality gate",
+    "description": "Independently verify the completed CLI, Signal session, relay v2 and real two-process E2E implementation across TypeScript, Go, Metaproject health, graph and wiki checks.",
+    "intent": "verify",
+    "scope": "full prototype workspace and Metaproject quality evidence"
+  },
+  "acceptance_criteria": [
+    "Frozen dependency installation and the production CLI build succeed.",
+    "All workspace tests, CLI process tests and three real two-process E2E iterations pass.",
+    "All workspace TypeScript packages typecheck.",
+    "Go untagged tests and the full relayv2 race suite pass.",
+    "Metaproject strict test and Code Health gates pass or every tool limitation is explicitly evidenced.",
+    "The graph rebuild has no cycles, wiki links are valid, and the final result classifies every check without suppressing failures."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T26-e2e-result.json", "kind": "report", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t26-e2e-report.md", "kind": "report", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/README.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/data/testing/context.md", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "package.json",
+    "pnpm-lock.yaml",
+    "apps/cli/package.json",
+    "apps/relay/go.mod",
+    "apps/cli/test/e2e/two-process.test.ts",
+    ".metaproject/metaproject.json",
+    ".metaproject/wiki/index.md"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action, then load the local code-verifier skill and testing context.",
+    "Use keryx ctx for commands/logs and keryx ctx rg for searches; never use bare rg or grep.",
+    "Run all checks even after a failure and report exact command labels, statuses and bounded evidence.",
+    "Do not change implementation, tests, flow.json or acceptance-criteria.md; only write the verification report and required result artifact.",
+    "Do not expose plaintext, profile keys, private key material, ciphertext or request bodies in reports.",
+    "Write and validate the required subagent-result; final first line STATUS:."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T27-verify-result.json",
+    "summary_max_tokens": 500
+  },
+  "budget": {"max_output_tokens": 6000, "max_runtime_ms": 1800000},
+  "provenance": {
+    "created_at": "2026-09-06T12:03:30+04:00",
+    "created_by": "flow-orchestrator",
+    "source_request": "Implement the approved Echolet CLI prototype through flow-orchestrator."
+  }
+}

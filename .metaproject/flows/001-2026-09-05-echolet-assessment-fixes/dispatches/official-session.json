@@ -1,0 +1,66 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-official-session",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Implement official libsignal reference runtime",
+    "description": "Implement packages/session-node SignalClient using pinned official libsignal 0.102.0. Own package.json, tsconfig.json, README, src/index.ts, src/SignalClient.ts and tests; parent owns src/store.ts and EncryptedSqliteStore.ts/test.ts. Node-only reference; no mobile import or relay wire changes. Use explicit pinned trust, official key records, atomic session/inbox/outbox updates, exact retry, opaque persistence.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "Official session bootstrap/reply/reload/out-of-order/replay/tamper and rejected inbound/outbound trust pass.",
+    "Session advancement and exact outgoing ciphertext persist in one transaction before return; retries do not re-encrypt and reject id reuse with different content.",
+    "Only explicit approved remote keys are trusted; no TOFU and no implicit replacement.",
+    "No imports into React Native; no release/device/security-audit claim."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "packages/session-node/src/store.ts",
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/official-session-spec.md",
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/official-libsignal-report.md"
+  ],
+  "constraints": [
+    "Root is /Users/Goodea/goodea/projects/echolet. Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md BEFORE searching or reading project code.",
+    "Use local skills, gdgraph first, keryx ctx searches; wiki index and testing context before respective work.",
+    "No flow state/AC edits, no git or remote writes. Other agents work disjoint scopes.",
+    "User authorizes fixes; no further approval questions for reversible edits. No tests for docs-only changes; verify actual source and links.",
+    "Write report with exact modified files and evidence; final response starts STATUS:.",
+    "The task-implementer-input schema requires a real GitHub issue_number and branch; neither exists for this description-based flow. Do not fabricate them. Use this validated generic flow-worker dispatch and apply implementation/test workflow as applicable, record schema limitation.",
+    "User already authorized implementation; skip additional approval. Do not auto-commit. Lint scripts currently absent; verify types/tests."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command",
+    "network"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/official-session-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-05T23:50:00Z",
+    "created_by": "flow-orchestrator"
+  }
+}

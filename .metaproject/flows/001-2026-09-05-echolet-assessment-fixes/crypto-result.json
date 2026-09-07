@@ -1,0 +1,46 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-crypto",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "AC5 verified via code-grounded report and isolated executable spike. Installed candidate 0.0.16 reproduces inbound identity-trust bypass; production integration remains blocked. Eight functional checks pass, Node only. No runtime changes. Report output scanner flags two plain public GitHub citations as markdown-link-exfil; reviewed as false positive, retained provenance without changing policy.",
+  "acceptance": [
+    {
+      "criterion": "AC5",
+      "status": "met",
+      "evidence": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/crypto-report.md; .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/spike/libsignal.cjs; final run 2026-09-05T23-55-24-611Z_run.md confirms VERIFIED_WITH_SECURITY_BLOCKER"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/crypto-report.md",
+      "kind": "report",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/spike/libsignal.cjs",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/crypto-report.md",
+      "change": "Added bounded feasibility report and concrete blockers"
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/spike/libsignal.cjs",
+      "change": "Added Node libsignal functional spike and trust-bypass reproducer"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "runtime": "Node v26.5.0",
+    "dependency": "@privacyresearch/libsignal-protocol-typescript@0.0.16",
+    "functional_checks": 8,
+    "security_blockers_reproduced": 1
+  },
+  "timestamp_utc": "2026-09-05T23:55:49.529397+00:00"
+}

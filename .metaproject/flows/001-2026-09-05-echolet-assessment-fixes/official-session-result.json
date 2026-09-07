@@ -1,0 +1,82 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-official-session",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Implemented official Node reference SignalClient with durable transactions and explicit trust.17 package tests and typecheck pass including actual SIGKILL recovery. Independent Unicode contentHash issue fixed with RED/GREEN regression. Mobile/relay integration and independent audit remain open.",
+  "acceptance": [
+    {
+      "criterion": "Official session bootstrap/reply/reload/out-of-order/replay/tamper and rejected inbound/outbound trust pass.",
+      "status": "met",
+      "evidence": "Official spike plus SignalClient.test.ts native+SQLite integration tests"
+    },
+    {
+      "criterion": "Session advancement and exact outgoing ciphertext persist in one transaction before return; retries do not re-encrypt and reject id reuse with different content.",
+      "status": "met",
+      "evidence": "SIGKILL precommit/postcommit recovery, collision and surrogate regression"
+    },
+    {
+      "criterion": "Only explicit approved remote keys are trusted; no TOFU and no implicit replacement.",
+      "status": "met",
+      "evidence": "Unknown/changed/revoked trust tests; approveRemote and establish refuse replacement/reset"
+    },
+    {
+      "criterion": "No imports into React Native; no release/device/security-audit claim.",
+      "status": "met",
+      "evidence": "Separate session-node reference package; README and report explicitly retain limits"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/official-libsignal-report.md",
+      "kind": "report",
+      "exists": true
+    },
+    {
+      "path": "packages/session-node/README.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "packages/session-node/package.json",
+      "change": "Created reference implementation, test or package configuration"
+    },
+    {
+      "path": "packages/session-node/tsconfig.json",
+      "change": "Created reference implementation, test or package configuration"
+    },
+    {
+      "path": "packages/session-node/src/index.ts",
+      "change": "Created reference implementation, test or package configuration"
+    },
+    {
+      "path": "packages/session-node/src/SignalClient.ts",
+      "change": "Created reference implementation, test or package configuration"
+    },
+    {
+      "path": "packages/session-node/src/SignalClient.test.ts",
+      "change": "Created reference implementation, test or package configuration"
+    },
+    {
+      "path": "packages/session-node/README.md",
+      "change": "Created reference implementation, test or package configuration"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "change": "Installed pinned official libsignal workspace dependency"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "package_tests_passed": 17,
+    "client_tests": 10,
+    "storage_tests": 7,
+    "typecheck": "PASS",
+    "runtime": "Node26.5.0 darwin arm64"
+  },
+  "timestamp_utc": "2026-09-06T08:14:51.481259+00:00"
+}

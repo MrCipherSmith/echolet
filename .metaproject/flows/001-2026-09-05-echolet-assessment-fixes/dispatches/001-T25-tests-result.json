@@ -1,0 +1,39 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T25-tests",
+  "status": "DONE",
+  "summary": "Created one forward-declared test file with10 scenarios for incoming messages and encrypted chronological history, using real T24 outbound envelopes, official Signal, encrypted SQLite and fake HTTP. RED confirmed: missing inbound module; typecheck reports only that missing module. No implementation or existing tests changed.",
+  "acceptance": [
+    {"criterion": "Signed mailbox challenge/poll and strict responses", "status": "met", "evidence": "HTTP fixture independently verifies create-challenge/poll/ack signatures against stable DeviceRecord; expiry and unknown response fields reject."},
+    {"criterion": "Imported sender identity/device/Signal pin required before mutation", "status": "met", "evidence": "Untrusted sender, changed device, wrong recipient/mailbox, and real native impostor identity scenarios compare persisted state before/after."},
+    {"criterion": "Atomic decrypt/session/inbox/history before ack", "status": "met", "evidence": "Independent encrypted-store connection reads committed session, consumed prekey, native inbox and plaintext history from HTTP ack callback."},
+    {"criterion": "Failure rollback and durable pending ack", "status": "met", "evidence": "Injected precommit failure rolls back all records; lost ack then reopen retries ack only and preserves native state/history."},
+    {"criterion": "Deduplication and malformed ciphertext fail closed", "status": "met", "evidence": "Exact redelivery under new envelope ID leaves native state/history unchanged; modified ciphertext under same message ID rejects without ack."},
+    {"criterion": "Durable chronological inbound/outbound history and redaction", "status": "met", "evidence": "Real outbound first send/reply roundtrip requires increasing history sequence, offline reopen, no private keys in history JSON, and no plaintext in diagnostics/relay/disk."},
+    {"criterion": "Outbound history is atomic with native encryption and outbox", "status": "met", "evidence": "Injected outbound failure rolls all three back before HTTP; independent reader observes all three committed before send acceptance."}
+  ],
+  "artifacts": [
+    {"path": "apps/cli/src/runtime/inbound.test.ts", "kind": "custom", "exists": true},
+    {"path": ".metaproject/data/gdctx/raw/2026-09-06T11-26-35-075Z_run.log", "kind": "report", "exists": true, "summary": "Focused RED exit1: inbound.ts absent"},
+    {"path": ".metaproject/data/gdctx/raw/2026-09-06T11-26-36-700Z_run.log", "kind": "report", "exists": true, "summary": "Typecheck only reports missing inbound.ts"}
+  ],
+  "changed_files": [{"path": "apps/cli/src/runtime/inbound.test.ts", "change": "10 forward-declared RED scenarios; no implementation"}],
+  "findings": [], "questions": [], "errors": [],
+  "metrics": {
+    "tests_written": 10,
+    "red_suites": 1,
+    "test_case_specs": {
+      "framework": "vitest",
+      "test_files": ["apps/cli/src/runtime/inbound.test.ts"],
+      "target_module": "apps/cli/src/runtime/inbound.ts",
+      "run_command": "pnpm exec vitest run apps/cli/src/runtime/inbound.test.ts",
+      "expected_result": "RED: missing inbound.ts",
+      "public_api": "openInboundMessenger({profileDir,environment,relay}); poll(); retryPendingAcks(); history({contactIdentityId}); diagnostics(); close()",
+      "history_shape": "Entries expose messageId, direction inbound|outbound, plaintext and monotonic sequence; stored records under cli:history:.",
+      "implementation_scope_note": "Outbound must add history to the same withRuntime transaction as native encrypt/outbox; current T24 outbox cannot reconstruct plaintext history later. Native changes need no mocks."
+    },
+    "routing": {"graph_used": "affected outbound (graph predates T24 additions; source read is authority)", "wiki_used": "prior index and session draft", "ctx_used": "read, rg, focused run", "raw_rg_used": false}
+  },
+  "timestamp_utc": "2026-09-06T11:27:00Z"
+}

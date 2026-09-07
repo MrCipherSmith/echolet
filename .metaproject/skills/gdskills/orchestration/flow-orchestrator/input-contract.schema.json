@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/flow-orchestrator/input-contract.schema.json",
+  "title": "FlowOrchestratorInput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request",
+    "completion_outcome"
+  ],
+  "properties": {
+    "request": {
+      "type": "string",
+      "minLength": 1,
+      "description": "User request, issue URL, feature description, or active flow instruction."
+    },
+    "flow_id": {
+      "type": "string",
+      "description": "Optional existing flow id, slug, or directory name."
+    },
+    "issue_url": {
+      "type": "string",
+      "description": "Optional GitHub issue URL used to initialize a new flow."
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "init",
+        "execute",
+        "complete",
+        "resume",
+        "auto"
+      ],
+      "default": "auto"
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Advisory scope and policy for this run, one per string. Anything that decides where the work LANDS belongs in a typed property above, not here: nothing parses this array, so a misspelled constraint is silently dropped."
+    },
+    "base_branch": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The branch the flow branch is cut from and merged back into. Typed rather than left to a constraint string because this is the field that decides WHERE the work lands: a fix aimed at a pull request's own head branch that merges to the repository default instead is a change nobody reviewed, reported as success. Absent, the orchestrator resolves the base itself and records it."
+    },
+    "completion_outcome": {
+      "type": "string",
+      "enum": [
+        "create-pr-and-merge",
+        "verified-handoff",
+        "keep-open"
+      ],
+      "description": "Answers the Phase 4 Completion Choice for a dispatched run, which has no user to ask. REQUIRED: an absent outcome used to mean 'ask', prescribed by the same section that says asking is how a dispatched run stalls on a prompt nobody reads \u2014 and it left the create-pr-and-merge conditional below unreachable by simply omitting the field. A dispatch that cannot name its outcome is BLOCKED, not questioned."
+    },
+    "operator_confirmed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "confirmed_by",
+        "confirmed_at",
+        "plan_digest"
+      ],
+      "description": "The human decision behind an outward-facing completion. Required by callers whose work merges third-party content \u2014 see review-pr-feedback --fix. What `plan_digest` is worth is stated on the field itself; do not infer a replay defence from its presence here.",
+      "properties": {
+        "confirmed_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confirmed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plan_digest": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A record of WHICH plan the human said they read \u2014 not a control. Nothing in this tree computes or verifies a digest, and the schema constrains it only to a non-empty string, so an agent composing the dispatch chooses the value and a plan mutated after approval carries the same one. `operator_confirmed`'s PRESENCE is enforced; this field's VALUE is not. Making it a control means hashing the rendered plan and having the receiver recompute over what it got."
+        }
+      }
+    }
+  },
+  "if": {
+    "required": [
+      "completion_outcome"
+    ],
+    "properties": {
+      "completion_outcome": {
+        "const": "create-pr-and-merge"
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "operator_confirmed"
+    ]
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-backend",
+  "summary": "Backend/API review found one data-loss blocker (mailbox overwrite) and one major expiry integration defect. V2 allocation, immutable reservations, selector-bound exact replay and root/device signature boundaries are addressed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "blocker",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 30,
+      "problem": "Saving an existing envelope ID silently replaces the accepted mailbox record.",
+      "impact": "Submit envelope A, then a different otherwise accepted envelope B with the same recipient mailbox and envelope ID before the receiver polls. Both sends succeed, but B overwrites A; the original accepted message is irretrievably lost. Sequential requests suffice.",
+      "suggested_fix": "Read the existing record inside the same transaction. Return success only for an identical envelope; reject changed content with a conflict error and map it to HTTP 409. Retry transaction conflicts safely.",
+      "evidence": "mailbox_repo.go:28-31 constructs mailbox:<recipient>:<envelope-id> and calls SetEntry without reading old content. mailbox_handler.go:66-79 returns success for both writes. ValidateMailboxEnvelope does not enforce envelope identity uniqueness. Unlike SaveSignalV2, no mailbox equality/conflict check exists. Source-derived reproduction; no live writes performed.",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/storage/repository/mailbox_repo.go:30",
+          "apps/relay/internal/api/handler/mailbox_handler.go:66"
+        ],
+        "enumeration_method": "keryx ctx rg ENVELOPE_ID_CONFLICT|WithTTL|ExpiresAtMs|DeleteEnvelope across apps/relay/internal plus full MailboxService read enumerates the single mailbox writer and its single send-handler path; no existing conflict branch."
+      },
+      "blocking_merge": true,
+      "reviewer": "review-backend",
+      "confidence": "high",
+      "dedupe_key": "backend-F-001"
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 30,
+      "problem": "Mailbox retention and selection ignore the envelope expiry time.",
+      "impact": "A normal CLI send expires after 24 hours, but SaveEnvelope retains it for 7 days. If the recipient returns after 24 hours, GetEnvelopes still returns the expired envelope; inbound rejects the entire batch before ack. Repeated polls remain blocked by that expired record, including new valid messages selected in the same batch, until physical TTL expiry.",
+      "suggested_fix": "Reject already-expired envelopes, retain each envelope no longer than its remaining declared lifetime (and configured server cap), and filter expiry during retrieval before applying the batch limit. Do not extend expiry on identical retries.",
+      "evidence": "outbound.ts:79 sets expires_at_ms to created+86400000; mailbox_repo.go:30 assigns fixed WithTTL(7*24*time.Hour), and :47-55 appends stored records without checking ExpiresAtMs. cleanup_service.go:43-45 relies solely on Badger TTL. inbound.ts:46 rejects expires_at_ms<=now before any pending ack is recorded. This is a normal delayed-receiver scenario, not a malicious-input claim.",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/storage/repository/mailbox_repo.go:30",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:53",
+          "apps/relay/internal/service/cleanup_service.go:43",
+          "apps/relay/internal/validation/validate.go:85"
+        ],
+        "enumeration_method": "keryx ctx rg WithTTL|ExpiresAtMs|DeleteEnvelope across relay internal code enumerates the only mailbox writer, reader, cleanup and lifetime validation boundaries; none uses current time to enforce envelope lifetime."
+      },
+      "blocking_merge": false,
+      "reviewer": "review-backend",
+      "confidence": "high",
+      "dedupe_key": "backend-F-002"
+    }
+  ],
+  "stats": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0,
+    "info": 0
+  },
+  "stage1": {
+    "status": "PASS",
+    "scope": "API/storage AC coverage exists; T27 prior evidence covers fixtures, atomic claim, OTK reservation/replay, integration and mailbox signature negatives. Findings identify defects in existing paths, not wholly missing implementation."
+  },
+  "checked_and_cleared": [
+    {
+      "hypothesis": "Concurrent v2 claims can allocate the same OTK twice.",
+      "evidence": "ClaimSignalV2 reads bundle state, marks claimed, removes availability and stores claim replay in one conflict-retried Badger transaction; T27 records the 20-contender race proof."
+    },
+    {
+      "hypothesis": "OTK tombstones are released after claim or expiry.",
+      "evidence": "SaveSignalV2 reserves tuple and public-key indexes in the publication transaction; claim only deletes availability. No TTL or delete exists for reservation keys."
+    },
+    {
+      "hypothesis": "Claim replay changes bytes or accepts a changed selector.",
+      "evidence": "Persisted claim stores Bundle as bytes and exact selector; replay compares identity/device before returning. Handler writes original raw bytes directly without re-encoding."
+    },
+    {
+      "hypothesis": "V2 validation skips the root/device binding or accepts duplicate signed fields.",
+      "evidence": "Ordered decoder rejects duplicates and unknown fields; validation verifies root-signed DeviceRecord and complete device-signed transcript before repository writes. Native SPK/Kyber verification remains intentionally client-side."
+    },
+    {
+      "hypothesis": "Mailbox poll consumes a challenge before authenticating the caller.",
+      "evidence": "PollMailbox verifies mailbox/device matching and signature before atomic Invalidate; repository treats racing consumption as invalid challenge."
+    },
+    {
+      "hypothesis": "Ack retry of already-deleted envelopes fails its expected count.",
+      "evidence": "DeleteEnvelope is idempotent and handler returns requested count only after all deletions succeed; partial failures remain safely retryable."
+    }
+  ],
+  "limitations": [
+    "Path-mode source review; T27 tests were not rerun. Reproduction scenarios are source-derived pending independent verifier.",
+    "NestJS/Prisma-specific rules do not apply to this Go/Badger backend.",
+    "CLI publication retry, stdin and error-classification findings are owned by logic and not repeated.",
+    "Resource limits, device-ID collision abuse and poll-response byte budget are deferred to security/highload roles."
+  ],
+  "routing_audit": {
+    "graph_used": "gdgraph find relay; graph only indexes TS so Go scope came from validated input paths",
+    "wiki_used": "previously read wiki index; no accepted relay/domain pages",
+    "ctx_used": "compact reads and targeted searches",
+    "raw_rg_used": "no"
+  }
+}

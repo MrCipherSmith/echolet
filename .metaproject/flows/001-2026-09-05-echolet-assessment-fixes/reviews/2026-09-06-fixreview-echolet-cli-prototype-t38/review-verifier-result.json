@@ -1,0 +1,352 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T38-review-verifier",
+  "status": "DONE",
+  "summary": "Independent adversarial verification of the T38 fix review. All ten OPEN findings are CONFIRMED - eight by execution, two by site-check, none refuted, none left unchecked. HL-N-001 (the only open major) reproduces end to end: a temporary vitest probe showed three consecutive polls rejecting with CONTACT_NOT_TRUSTED, zero /v1/mailbox/ack requests issued, an empty history and both envelopes still queued, while the same mailbox without the poison envelope drained on the first poll; /v1/messages/send has no sender authentication of any kind (router.go:24-26, 76; validate.go:72-99); and a Go probe with an injected clock showed the legitimate envelope aging out of selection undelivered at T+25h while the poison still blocked the mailbox - so queued messages ARE lost. Two of HL-N-001's wording claims are partially refuted: the wedge is bounded by the poison envelope's own lifetime (at most the retention cap) and is re-armed by one more unauthenticated POST rather than being literally permanent, and the loss deadline is the CLI's own 24h declared expiry rather than the 7-day cap the finding cites. Neither weakens the harm. MC10 is reproduced and is worse than reported: with strict:false the sixteen F-013 tests stay green AND so does the entire apps/cli suite (13 files, 69 tests), so the six guard tests do not defend against that over-correction. Every `fixed` disposition survived an attempt to break it: F-004 (32 concurrent same-key writers -> 1 accepted, 31 conflicts, 1 stored record), F-007 (cross-identity device-UUID squat in both orders plus a direct attack on the binding writer), F-008 (reverting the in-transaction re-read reintroduces the duplicates), F-006 (seven attack shapes), F-013, F-001 (two separate publish processes submitted byte-identical bundles), F-002 (stdin held open, settles on the line) and F-003 (the store rethrows the same error object, so the domain type survives). Five source mutations and three probe files were applied and reverted; all four touched files verified byte-identical by sha256 and both suites re-run green on the restored tree.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Each of the ten OPEN findings receives a verdict of confirmed, refuted or unverifiable, with the evidence that produced it.",
+      "status": "met",
+      "evidence": "Ten verification objects in `findings`, one per open finding. All ten confirmed: eight by execution (HL-N-001, BE-R-001, BE-R-002, SEC-R-001, HL-N-003, T38-TP-001, T38-TP-002, T38-TP-003) and two by site-check (HL-N-002, T38-L-001). No open finding was left unchecked."
+    },
+    {
+      "criterion": "HL-N-001 gets the deepest scrutiny: confirm or refute the wedge, the missing sender authentication and the unreachable ackPending, and state whether queued messages are lost.",
+      "status": "met",
+      "evidence": "All three links reproduced by a temporary vitest probe plus a temporary Go repository probe with an injected clock; queued messages ARE lost (a legitimate envelope aged out of selection undelivered at T+25h while the poison still blocked the mailbox). Two wording claims partially refuted and recorded: the wedge is bounded by the poison envelope's own lifetime (<= the retention cap) and is renewable by one more unauthenticated POST rather than literally permanent, and the loss deadline is the CLI's own 24h declared expiry rather than the 7-day retention cap."
+    },
+    {
+      "criterion": "The `fixed` dispositions for the five blockers and F-001/F-002/F-003 are spot-checked adversarially.",
+      "status": "met",
+      "evidence": "F-004 (32 concurrent same-key writers: 1 accepted, 31 ErrEnvelopeIDConflict, 1 stored record), F-007 (cross-identity device-UUID squat in both publication orders, plus a direct attack on the binding writer), F-008 (MC2 reverts the fix and the defect returns: 3 of 4 soft assertions fire), F-006 (seven attack shapes on the body bound and the size_bytes authority, all correct), F-013 (baseline 16/16 green plus a live dash-leading probe), F-001 (two separate `relay publish` processes submitted byte-identical bundles, 1 distinct payload), F-002 (stdin deliberately held open: 'y' -> exit 0 trusted, 'n' -> exit 3 CONTACT_NOT_CONFIRMED, neither waited for EOF), F-003 (EncryptedSqliteStore.perform rethrows the SAME error object, so Profile.transact's Object.is guard preserves the domain type; observed live when CONTACT_NOT_TRUSTED propagated out of poll()). No `fixed` disposition broke. F-005, F-009, F-010 and F-011 were outside the requested spot-check set and were not adversarially attacked."
+    },
+    {
+      "criterion": "The testing-practices claim that `strict:false` leaves all sixteen F-013 tests green (MC10) is independently reproduced or refuted.",
+      "status": "met",
+      "evidence": "Reproduced, and stronger than claimed. Baseline `vitest run src/commands/cli.dashOptionValues.test.ts` -> 16 passed. With cli.ts:107 changed to strict:false the same file -> 16 passed, and the FULL apps/cli suite -> 13 files, 69 tests, all passed. The orchestrator's reliance on the six guard tests as the defence against that over-correction was NOT justified."
+    },
+    {
+      "criterion": "Any reviewer claim that does not survive verification is reported as refuted with the reasoning, not quietly dropped.",
+      "status": "met",
+      "evidence": "Four sub-claim corrections recorded in the verification evidence and in section 5 of the report: HL-N-001's 'permanently' and its 7-day loss deadline, HL-N-001's 'identical batch returned forever' mechanism, BE-R-001's understated enumeration (envelope_id has the same defect), and T38-TP-002's MG4 mutation not compiling as literally described. None overturns a finding."
+    },
+    {
+      "criterion": "A short recommendation per confirmed finding: fix now in this flow, or record as a documented prototype limitation.",
+      "status": "met",
+      "evidence": "Section 6 of review-verifier-report.md carries one recommendation per confirmed finding: fix now for HL-N-001, BE-R-001, SEC-R-001, HL-N-002, T38-TP-001, T38-TP-002 and T38-TP-003; documented prototype limitation for BE-R-002, HL-N-003 and T38-L-001."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-verifier-report.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Independent verification report: ten open-finding verdicts, eight adversarial spot-checks, the MC10 reproduction and the mutation ledger."
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-verifier-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This result."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-verifier-report.md",
+      "change": "created"
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-verifier-result.json",
+      "change": "created"
+    },
+    {
+      "path": "apps/cli/src/commands/cli.ts",
+      "change": "temporarily mutated for MC10 (strict:true -> strict:false at line 107), reverted; sha256 40886948f89de38ffe05750c6be627a77a82d0465b1b4230a2002b4e79c5f7ef matches the pre-probe baseline"
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.ts",
+      "change": "temporarily mutated for MC3b (lines 44-46 deleted) and then MC2 (lines 70-72 deleted), reverted; sha256 3720f372cb40931fee19bad5cc4c8378815f11ba29e8200397ef37077e8bba0f matches the pre-probe baseline"
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.ts",
+      "change": "temporarily mutated for the T38-TP-003(2) probe (reader bound at line 96 widened to 1 GiB), reverted; sha256 d01e31c0419db732827cd0e1b51b39a25570bd90add258f21fe186a7e584e843 matches the pre-probe baseline"
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "change": "temporarily mutated for MG4 (expiry filter removed from GetEnvelopeBatch at line 183, plus a compensating `_ = nowMS`), reverted; sha256 d598cbe175d2bd33142765a10ca995bc070fa582af21142cb89d69f07fc36ef7 matches the pre-probe baseline"
+    },
+    {
+      "path": "apps/cli/src/runtime/zzverifierprobe.test.ts",
+      "change": "temporary HL-N-001 probe, created and deleted"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/zzverifier_probe_test.go",
+      "change": "temporary BE-R-001, HL-N-003 and F-006 probes, created and deleted"
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/zzverifier_probe_test.go",
+      "change": "temporary F-004, F-007, BE-R-002 and HL-N-001-loss probes, created and deleted"
+    },
+    {
+      "path": "apps/cli/dist/cli.js",
+      "change": "build artifact, rebuilt several times by the vitest globalSetup during the probes and finally rebuilt from the restored sources"
+    }
+  ],
+  "findings": [
+    {
+      "id": "N-001",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#N-001",
+      "reviewer": "review-highload",
+      "severity": "major",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "line": 47,
+      "problem": "One unacceptable envelope aborts the entire poll batch inside a single transaction, so nothing is acked and the mailbox wedges permanently. Pre-existing; NOT introduced by the T33/T35 fixes, but reported because it is a live mailbox-wedge in the same class as F-009 and sits in a file this wave changed.",
+      "impact": "/v1/messages/send performs no sender authentication (mailbox_handler.go:75-114 validates shape and expiry only), so anyone who knows a recipient's identity_id - published in the contact card - can post one envelope from an unpinned sender. From then on every `echolet poll` throws before ackPending() and exits 3, and no legitimate message is ever delivered to that mailbox again. Envelopes queued behind the blocking one are permanently lost once they age past the 7-day retention cap (mailbox_repo.go:19). Trigger is one unauthenticated request, not a load level.",
+      "suggested_fix": "Skip-and-continue instead of abort: record the offending envelope_id under a local quarantine key and include it in the ack set so the mailbox drains, or process each envelope in its own transaction and aggregate rejections into the poll result. The CONTACT_NOT_TRUSTED guarantee is preserved either way - the point is not to decrypt the envelope, it is not to let it block the queue.",
+      "evidence": "accept() processes the whole batch inside one profile.withRuntime transaction (inbound.ts:47-78). Every throw inside the loop - :53 INVALID_ENVELOPE, :55 CONTACT_NOT_TRUSTED, :57 and :61 CONTACT_PIN_MISMATCH, :62-63 the base64/wrapper zod and fatal-UTF-8 throws, :68 MESSAGE_ID_CONFLICT, :75 INVALID_ENVELOPE - propagates out of the transaction, which Profile.transact (profile.ts:76-85) rolls back, so ackPending() at inbound.ts:42 is never reached and no envelope in the batch is acked. Because the relay resumes from the head of the mailbox on every poll (mailbox_repo.go:169 seeks the prefix) and next_cursor carries no position, the identical batch is returned forever.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/inbound.ts:47",
+          "apps/cli/src/runtime/inbound.ts:53",
+          "apps/cli/src/runtime/inbound.ts:55",
+          "apps/cli/src/runtime/inbound.ts:57",
+          "apps/cli/src/runtime/inbound.ts:61",
+          "apps/cli/src/runtime/inbound.ts:62",
+          "apps/cli/src/runtime/inbound.ts:63",
+          "apps/cli/src/runtime/inbound.ts:68",
+          "apps/cli/src/runtime/inbound.ts:75"
+        ],
+        "enumeration_method": "keryx ctx rg 'throw new InboundError|\\.parse\\(' apps/cli/src/runtime/inbound.ts enumerated every throw site; all nine sit inside the single for-loop of the one withRuntime transaction opened at :47, and accept() is the only consumer of a poll batch (inbound.ts:41 is its sole caller)."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "verifier": "review-verifier",
+        "evidence": "Every link reproduced. (1) Batch-abort: temporary vitest probe (apps/cli/src/runtime/zzverifierprobe.test.ts, created then deleted) built alice (pinned by bob), mallory (unpinned) and a mailbox holding [poison, legit] and [legit, poison]; `vitest run src/runtime/zzverifierprobe.test.ts` -> 1 passed, and inside it three consecutive receiver.poll() calls rejected with code CONTACT_NOT_TRUSTED, fake.acks() === [] (ackPending never issued a single /v1/mailbox/ack), history for alice stayed [] and both envelopes stayed in the mailbox; the control mailbox holding only the legitimate envelope drained on the first poll with one ack and one history entry. Order of the poison inside the batch is irrelevant. (2) No sender authentication: router.go:24-26 registers only Recover, RequestID and the rate limiter; router.go:76 wires /v1/messages/send straight to SendEnvelope; mailbox_handler.go:75-114 and validation/validate.go:72-99 check shape, size_bytes==len(ciphertext) and expiry only - no signature, no challenge, no device record for the sender, nothing tying sender_identity_id to anything. recipient_mailbox_id = SHA-256(identity_id + ':mailbox:v1') (cryptoutil/signatures.go:14-17) is computable from the published contact card. (3) Loss: temporary Go probe under apps/relay/internal/storage/repository with an injected clock -> at T+0h GetEnvelopeBatch returns 2 envelopes; at T+25h it returns only [0000-poison] - the legitimate envelope aged out of selection undelivered. PARTIAL REFUTATION OF THE WORDING, not of the harm: the loss deadline is the CLI's own 24h declared expiry (outbound.ts:83, created + 86400000), not the 7-day retention cap the finding cites; and the wedge is not literally permanent - at T+31d the same probe returned 0 envelopes, because GetEnvelopeBatch skips the poison once its declared expiry passes and retentionDeadlineSeconds caps the physical badger TTL at the 7-day cap. The wedge therefore lasts as long as the poison envelope survives (up to the retention cap) and is re-armed indefinitely by one more unauthenticated POST. Likewise the sub-claim that the relay 'returns the identical batch forever' is imprecise: mailbox_repo.go:169 iterates lexicographically by envelope_id under a batch_size bound, so the identical batch is returned only while the poison sits inside the selection window - which it always does once the envelopes ahead of it drain or expire. Conclusion unchanged."
+      }
+    },
+    {
+      "id": "R-001",
+      "reviewer": "review-backend",
+      "severity": "minor",
+      "file": "apps/relay/internal/validation/validate.go",
+      "line": 72,
+      "symbol": "ValidateMailboxEnvelope",
+      "problem": "The envelope's variable-length STRING fields (envelope_id, recipient_mailbox_id, sender_identity_id, message_id, the device ids) carry no length bound. F-006's suggested_fix asked for other variable-length request fields to be bounded in the same decoder contract; the arrays were bounded, these were not.",
+      "impact": "The store key is mailbox:<recipient_mailbox_id>:<envelope_id> (mailbox_repo.go:262). Badger rejects a key over 65000 bytes (badger/v4@v4.9.1/txn.go:352, 363-367), so a send whose recipient_mailbox_id exceeds that - comfortably inside the 327680-byte body bound - fails inside SaveEnvelope and surfaces as HTTP 500 / INTERNAL_ERROR (mailbox_handler.go:112) on purely attacker-controlled input, where a 4xx is correct. No content leaks, because the handler writes a fixed message, and the body cap prevents amplification. Does not block acceptance of the fix wave.",
+      "suggested_fix": "Bound the identifier fields in ValidateMailboxEnvelope alongside the existing emptiness checks - e.g. reject any of them longer than 256 bytes with INVALID_SCHEMA.",
+      "evidence": "validate.go:72-99 validates type, version, ciphertext presence, the two size comparisons and the expiry ordering, and never inspects the length of any identifier. mailbox_repo.go:261-263 concatenates recipient_mailbox_id and envelope_id into the badger key. badger/v4@v4.9.1/txn.go:352 const maxKeySize = 65000, enforced at :363-367. mailbox_handler.go:102-113 maps every non-conflict storage error to 500.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "verifier": "review-verifier",
+        "evidence": "Temporary Go probe in package handler (created then deleted) posting to SendEnvelope through the existing newMailboxHandlerTestHarness (maxMessageBytes 262144): a 70000-byte recipient_mailbox_id -> HTTP 500; the identical envelope with a short mailbox id -> HTTP 200; a 70000-byte envelope_id -> HTTP 500. `go test ./internal/api/handler/ -run TestZZVerifierProbe -v` -> PASS with those three logged statuses. Confirms the finding and shows it is UNDERSTATED: the reviewer named recipient_mailbox_id, and envelope_id - the other half of the badger key at mailbox_repo.go:261-263 - has the same defect. validate.go:72-99 inspects no identifier length."
+      }
+    },
+    {
+      "id": "R-002",
+      "reviewer": "review-backend",
+      "severity": "minor",
+      "file": "apps/relay/internal/storage/repository/device_record_repo.go",
+      "line": 156,
+      "symbol": "BackfillDeviceMailboxBindings",
+      "problem": "The backfill's per-record r.db.Update is the one writer of the device_mailbox key space that is not wrapped in a bounded conflict retry, and it returns on the first error, abandoning every record after it.",
+      "impact": "Unreachable today, because the backfill runs before ListenAndServe (main.go:31, 34) and badger's directory lock excludes a second writer - which is why this is minor rather than major. It is reported as a class divergence: the invariant 'every writer of the device_mailbox key space retries a conflict' now has exactly one exception, and the next change that moves the backfill off the pre-serve path would make it real. Does not block acceptance of the fix wave.",
+      "suggested_fix": "Route the backfill's write through the same bounded-retry shape Save uses (device_record_repo.go:48-58), or continue past a per-record failure instead of returning, so one bad record cannot abandon the rest.",
+      "evidence": "device_record_repo.go:156-161 calls r.db.Update once with no retry and returns err. Compare Save at :48-58 (64 attempts on badger.ErrConflict) and MailboxRepository.update at mailbox_repo.go:250-259 (the same shape). router.go:39-41 logs the returned error and continues.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "verifier": "review-verifier",
+        "evidence": "Site-check of every writer of the device_mailbox key space: `keryx ctx rg 'SaveDeviceMailboxBinding' apps packages` returns four call sites - device_record_repo.go:53 (inside Save's 64-attempt badger.ErrConflict loop at :48-58), device_record_repo.go:157 (the backfill, a bare r.db.Update with no retry), and signal_prekey_bundle_v2.go:91 and :103, both reached through SaveSignalV2 which runs inside updateV2 (signal_prekey_bundle_v2.go:13-21, the same 64-attempt shape). The enumeration is exactly right: the backfill is the one unretried writer. Abort leg reproduced by a temporary Go probe that seeded two healthy device_record entries plus one undecodable value: BackfillDeviceMailboxBindings() returned `invalid character 'n' looking for beginning of object key string` and 0 of 2 healthy records were bound afterwards. Stronger than reported - one bad record can abort in the read scan before any binding is written at all."
+      }
+    },
+    {
+      "id": "R-001",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#R-001",
+      "reviewer": "review-security-code",
+      "severity": "minor",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 89,
+      "symbol": "inlineStringOptionValues",
+      "problem": "The F-013 fix rewrites `--<declared string option> <next token>` into the inline form unconditionally whenever a next token exists and is not `--`, so a following flag is consumed as the option's value. `echolet send --profile p --to X --text --json` previously exited 2 INVALID_ARGUMENTS and now exits 0, having silently taken the user's `--json` flag as the message body. The docstring at cli.ts:77-84 claims that everything parseArgs and parseCommand reject today keeps reaching them unchanged, which is not accurate for this class.",
+      "impact": "A mistyped invocation succeeds and sends unintended content instead of failing closed, narrowing the exit-2 surface. Bounded in practice: values.json is never read so output is unaffected, a missing value at the end of the argument list still fails closed, and the behaviour is the standard GNU/POSIX option-argument convention and the unavoidable cost of supporting base64url values that begin with '-'. Not attacker-reachable: the CLI is local and the argument vector is the user's own.",
+      "suggested_fix": "No code change required; the behaviour is deliberate and pinned by cli.dashOptionValues.test.ts:286. Correct the docstring at cli.ts:77-84 to state the trade-off explicitly: a declared string option consumes the next token unconditionally, so `--<string option> --<flag>` is a value, not an error.",
+      "evidence": "cli.ts:95-99 makes rewritability depend only on the option being a declared string option and the next token existing and not being `--`. Bounded read-only probe against node:util.parseArgs (node v26.5.0): [\"--text\",\"--json\"] raises ERR_PARSE_ARGS_INVALID_OPTION_VALUE, while [\"--text=--json\"] yields text: \"--json\". Tracing the rewrite over [\"send\",\"--to\",\"X\",\"--text\",\"--json\",\"--profile\",\"p\"] leaves positionals [\"send\"] and a values object that parseCommand:110-121 accepts, so execute() reaches the send path. cli.dashOptionValues.test.ts:286 pins the same shape deliberately with --text \"--profile\".",
+      "confidence": "high",
+      "dedupe_key": "t38-security-exitcode-argrewrite",
+      "blocking_merge": false,
+      "source": "internal",
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "verifier": "review-verifier",
+        "evidence": "Both halves executed. Previous behaviour: `node -e` probe against node:util.parseArgs on node v26.5.0 - parseArgs(['send','--to','X','--text','--json','--profile','p'], {strict:true}) throws ERR_PARSE_ARGS_INVALID_OPTION_VALUE, while the inline form ['--text=--json'] is accepted and yields text === '--json' with no json key in values. Current behaviour: the built dist/cli.js run as `send --profile <dir> --to <untrusted> --text --json` exited 3 with error code CONTACT_NOT_TRUSTED - the parser accepted the invocation and the --json flag was consumed as the body, so the exit-2 surface really did narrow. The exit-0 form the finding states is already pinned green in the tree by cli.dashOptionValues.test.ts:286 (`--text` followed by the separate token `--profile`), which asserts code 0 and that the flag-shaped value appears verbatim in history; that suite ran 16/16 passed on the unmodified tree. One precision note: the exit code becomes whatever the downstream path yields (0 on a successful send, 3 on an untrusted recipient), not unconditionally 0. The docstring claim at cli.ts:77-84 is contradicted by cli.ts:95-96, which gates rewriting on nothing but 'declared string option' and 'next token exists and is not --'."
+      }
+    },
+    {
+      "id": "N-002",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#N-002",
+      "reviewer": "review-highload",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "line": 41,
+      "problem": "The CLI discards the next_cursor remaining-work signal that the F-009 fix added to the wire. Introduced by this fix wave.",
+      "impact": "An operator polling a mailbox holding eight maximum-size envelopes sees {\"received\":3} with nothing to distinguish 'drained' from 'five still queued'. The mailbox is not wedged - successive poll invocations do drain it - but the drain loop exists only in relayClient.pollCapacity.test.ts:106-119, not in the runtime.",
+      "suggested_fix": "Either surface it, e.g. return { received, more: batch.next_cursor !== null } from InboundMessenger.poll, or loop while next_cursor !== null under a bounded iteration cap. Surfacing it is the smaller change and preserves one poll per invocation.",
+      "evidence": "inbound.ts:38-43 destructures the poll result, awaits accept(batch.envelopes) and returns { received: batch.envelopes.length }; batch.next_cursor is never read. cli.ts:299-305 prints only that object, so the signal reaches no operator. The field is validated and available (relayClient.ts:24,66).",
+      "confidence": "high",
+      "blocking_merge": false,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "site-check",
+        "verifier": "review-verifier",
+        "evidence": "`keryx ctx rg 'next_cursor|nextCursor' apps/cli/src packages` returns 14 matches across 6 files. Outside relayClient.ts's schema declaration (:21-24, :66) every single one is a test fixture, and the only READ of the field anywhere is relayClient.pollCapacity.test.ts:118 (`if (batch.next_cursor === null) break;`). inbound.ts:38-43 awaits pollMailbox, passes batch.envelopes to accept() and returns { received: batch.envelopes.length }; cli.ts:299-305 prints exactly that object. No production code path reads next_cursor, so the drain loop does exist only in that test, as reported."
+      }
+    },
+    {
+      "id": "N-003",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#N-003",
+      "reviewer": "review-highload",
+      "severity": "minor",
+      "file": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "line": 52,
+      "problem": "Concern T35-I-001, verified and judged: nothing enforces a relationship between ECHOLET_MAX_MESSAGE_BYTES and the compile-time poll byte budget, and the coupling regressed from accidentally-enforced to unenforced when T34-I-003 derived the send body limit from MaxMessageBytes.",
+      "impact": "At ECHOLET_MAX_MESSAGE_BYTES around 1 MiB or above, the always-deliver-the-first-envelope rule correctly refuses to starve a large envelope and therefore returns it in a response above the client's 1 MiB bound; relayClient.ts:96 throws the non-retryable INVALID_RELAY_RESPONSE (exit 3), nothing is acked, and F-009's wedge returns in a new form for that mailbox. Unreachable at the shipped default of 262144. Judged acceptable for this prototype: reachable only by an operator deliberately raising an env var on a loopback relay they run themselves, no corruption or in-window loss, and the derived body limit is the correct design - the missing piece is a guard, not a redesign.",
+      "suggested_fix": "Add one startup guard: reject, or clamp with a logged warning, a MaxMessageBytes above pollEnvelopeByteBudget - envelopeJSONOverheadBytes, in config.Load or NewMailboxHandler. A named constant shared by both sites documents the relationship that currently lives only in a comment.",
+      "evidence": "pollEnvelopeByteBudget is a compile-time constant at mailbox_handler.go:52 derived from the client's 1 MiB bound, while config.go:21-27 parses ECHOLET_MAX_MESSAGE_BYTES with no validation at all. envelopeBodyLimit() at mailbox_handler.go:67-73 now follows MaxMessageBytes upward, so a large configured value produces stored envelopes the exemption at mailbox_repo.go:190 must deliver over-bound. The storage half is already demonstrated in the tree: TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes stores a 2 MiB-ciphertext envelope with 200 OK at mailbox_poll_capacity_test.go:202-214.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "verifier": "review-verifier",
+        "evidence": "Unenforced-coupling leg: config.go parses ECHOLET_MAX_MESSAGE_BYTES via env.Parse with no validation of any kind and Load() adds none; NewMailboxHandler stores the value unchecked; pollEnvelopeByteBudget is a compile-time constant at mailbox_handler.go:52. Harm leg reproduced: temporary Go probe in package handler constructing NewMailboxHandler(..., maxMessageBytes = 2 MiB), sending a 2097152-byte ciphertext (accepted, HTTP 200 - the derived body limit followed the raised value), then completing a real signed challenge and poll -> HTTP 200 with a response body of 2097781 bytes, exactly 2x the client's 1 MiB reader bound at relayClient.ts:96, which throws the non-retryable INVALID_RELAY_RESPONSE so nothing is acked. Regression leg confirmed from the change record: t35-implementation-report.md:145-165 states request_body.go:18 previously pinned the send route to a hand-chosen 1 MiB constant and that envelopeBodyLimit() now derives it from MaxMessageBytes - so the bound that accidentally kept stored ciphertext under the client's response limit was removed by T34-I-003, as claimed. Unreachable at the shipped default of 262144, matching the reviewer's own scoping."
+      }
+    },
+    {
+      "id": "T38-TP-001",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#T38-TP-001",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/outbound.concurrentSend.test.ts",
+      "line": 84,
+      "symbol": "holdFirstMissingOutboxRead",
+      "problem": "The F-008 concurrency barrier fires on the first store transaction that reads cli:outbox:<messageId> and misses. Today that is the pre-read at outbound.ts:45, which the source itself annotates 'Optimization only: the authoritative read is repeated inside the mutation transaction.' The barrier is therefore anchored to an implementation detail the code invites a maintainer to delete, not to the semantic event 'two runtimes are inside the same logical send'.",
+      "impact": "Deleting that pre-read - a legitimate refactor - leaves the test green while re-anchoring the barrier to the mutation transaction at outbound.ts:71, which releases only after that transaction commits. The first sender then writes its outbox record, history entry and envelope before the second sender starts, so the two sends are fully serialised: the test asserts idempotent replay (already covered by outbound.test.ts) and nothing about concurrency. A regression reintroduced in that state surfaces only as a 60s harness timeout, not as a duplicate-envelope assertion.",
+      "suggested_fix": "Arm the barrier on the semantic event rather than on a storage read. The seam already exists: Options.idFactory. Blocking inside the idFactory('envelope') callback is by definition the new-envelope-allocation event inside the mutation transaction, so no refactor of the optimization read can move it. Alternatively, add one positive assertion that the window really was concurrent - e.g. that first.send() had not yet settled when second.send() returned - so a degenerate serialisation cannot pass.",
+      "evidence": "Bounded mutation pass, all reverted. MC3b (remove only the outbound.ts:45 pre-read, keep the F-008 fix): outbound.concurrentSend.test.ts 1/1 GREEN in 244ms. MC3 (remove the pre-read AND the in-transaction re-read at outbound.ts:71): RED after 60020ms with no assertion message - the barrier never armed. MC2 (remove only the in-transaction re-read, current tree otherwise): RED with 3 of 4 soft assertions firing (history entries [2,3], two relayed envelope ids, receipt ids differ). apps/cli/src/runtime/outbound.ts and apps/cli/src/runtime/profile.ts verified byte-identical afterwards.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "testing-f008-barrier-anchoring",
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "verifier": "review-verifier",
+        "evidence": "MC3b independently reproduced. Deleted outbound.ts:44-46 (the 'Optimization only' comment, the pre-read and the `if (prior) return this.settle(...)` line), leaving the F-008 in-transaction re-read at :71-72 intact; `vitest run src/runtime/outbound.concurrentSend.test.ts` -> 1 passed in 215ms. The test stays green and does not time out, so the barrier still arms - on the mutation transaction, whose hold in holdFirstMissingOutboxRead fires only after original.call(this, wrapped) resolves, i.e. after that transaction has committed the outbox record, the history entry and the envelope. The window the test then measures is a sequential replay, not a concurrent one. Counter-mutation MC2 (delete only the in-transaction re-read at :70-72, tree otherwise clean) went RED with exactly 3 of the 4 soft assertions firing - entries [2,3], two relayed envelope ids, receipt ids differing - confirming the barrier is load-bearing only while the pre-read exists. outbound.ts restored and verified byte-identical (sha256 3720f372cb40931fee19bad5cc4c8378815f11ba29e8200397ef37077e8bba0f)."
+      }
+    },
+    {
+      "id": "T38-TP-002",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#T38-TP-002",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 183,
+      "symbol": "GetEnvelopeBatch",
+      "problem": "Four gates this wave added or relied on survive deletion with the nearest suite green. The material one is the expiry filter inside GetEnvelopeBatch: the F-005(c) regression TestGetEnvelopesFiltersExpiredBeforeApplyingBatchLimit pins the equivalent filter in GetEnvelopes, but GetEnvelopes has no production caller - the poll route calls GetEnvelopeBatch at mailbox_handler.go:252. The named regression therefore covers a method nothing serves polls from.",
+      "impact": "The code is correct today, so no user-visible defect follows. The cost is that the next edit to the actual poll path is unprotected, and that the F-005(c) regression reads to the next author as coverage of a path it does not touch - the shape that historically produces a second review round.",
+      "suggested_fix": "Point TestGetEnvelopesFiltersExpiredBeforeApplyingBatchLimit at GetEnvelopeBatch, or add a sibling that does, since that is the production reader. Drive TestMailboxPollAlwaysReturnsAtLeastOneMaximumSizeEnvelope through a repository-level GetEnvelopeBatch call with a byteBudget smaller than one envelope, so the first-envelope exemption is actually exercised. Add one SetRetentionCap(1 * time.Hour) case to the retention test. For the CLI, either drop the claim in cli.dashOptionValues.test.ts's header that its guards prevent the fix being obtained by disabling strict parsing, or add a case where non-strict parsing observably differs.",
+      "evidence": "Bounded mutation pass, all reverted, go test run under apps/relay and vitest under apps/cli. MG4: remove 'envelope.ExpiresAtMs <= nowMS' from GetEnvelopeBatch -> go test ./... all ok. MG3: remove the 'len(batch.Envelopes) > 0' first-envelope exemption -> ./internal/api/handler and ./internal/storage/repository both ok (unreachable at MaxMessageBytes=262144, where one envelope is ~256 KiB against the ~1020 KiB pollEnvelopeByteBudget). MG6: make SetRetentionCap a no-op -> go test ./... all ok. MC10: parseArgs strict:false -> cli.dashOptionValues.test.ts 16/16 passed. Production-caller claim established with 'keryx ctx rg \"GetEnvelopes\\(|GetEnvelopeBatch\\(\" apps/relay': GetEnvelopes appears only in mailbox_repo.go, mailbox_service.go's pass-through, and two test files.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "testing-unpinned-gates-fix-wave",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/storage/repository/mailbox_repo.go:183",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:190",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:42",
+          "apps/cli/src/commands/cli.ts:107",
+          "apps/cli/src/commands/cli.ts:93"
+        ],
+        "enumeration_method": "Every gate the fix wave added or relied on inside the four files under review was deleted one at a time and the nearest suite executed - 19 mutations in total, tabulated in section 1 of the report. The five sites listed are exactly the mutations that left their suite green; the remaining fourteen were killed. The last site (the '--' verbatim-copy short circuit, MC15) is listed for completeness and is unreachable-by-design while no command accepts positional operands."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "verifier": "review-verifier",
+        "evidence": "MG4 independently reproduced: removed `|| envelope.ExpiresAtMs <= nowMS` from GetEnvelopeBatch (mailbox_repo.go:183); `go test ./...` under apps/relay -> handler, router, middleware, repository and validation all ok, cmd/relay no test files. Nothing in the tree kills the mutation. One procedural correction that does not touch the conclusion: the deletion as literally described does not compile, because nowMS becomes unused (`vet: declared and not used: nowMS`); the run above needed a compensating `_ = nowMS`. Production-caller claim independently re-enumerated with `keryx ctx rg 'GetEnvelopes\\(' apps/relay packages apps/cli`: 15 matches over 4 files - the definition at mailbox_repo.go:94, the MailboxService pass-through at mailbox_service.go:20-21, and mailbox_repo_test.go plus mailbox_envelope_lifecycle_test.go. No production caller; the poll route calls GetEnvelopeBatch at mailbox_handler.go:252. MC10 also reproduced - see the MC10 section of the report. mailbox_repo.go restored and verified byte-identical (sha256 d598cbe175d2bd33142765a10ca995bc070fa582af21142cb89d69f07fc36ef7)."
+      }
+    },
+    {
+      "id": "T38-TP-003",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#T38-TP-003",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/outbound.concurrentSend.test.ts",
+      "line": 181,
+      "problem": "Two assertions cannot fail. (1) expect.soft(persisted.outboxKeys).toHaveLength(1) calls tx.keys() with a prefix that is the COMPLETE key cli:outbox:<messageID>, so the result can only ever be 0 or 1 and cannot detect the duplicate-envelope defect it sits beside. (2) relayClient.pollCapacity.test.ts:123 asserts Math.max(...responseBytes) <= responseByteBound, but every entry in responseBytes is pushed by the test's own mock fetch from a payload that same mock builds under a budget it applies itself - no production code contributes to the value, so the assertion grades the fixture.",
+      "impact": "Both read as coverage of the property they name - one envelope per message id, and a bounded poll response - and neither provides it. The next author reads the byte-budget line as client-side enforcement when the enforcement under test is entirely in the mock.",
+      "suggested_fix": "For (1) assert on tx.keys('cli:outbox:') - the prefix rather than the full key - or delete the assertion, since the history-entry and relayed-envelope-id assertions already carry the property. For (2) either restate it as an assertion about what the client accepted (which is what pollMailbox's 1 MiB reader bound actually enforces) or delete it and rely on TestMailboxPollHonoursAggregateResponseByteBudget, which measures a real handler response.",
+      "evidence": "Empirical for (1): under MC2 (F-008 fix reverted) three of the four soft assertions fired - history entries [2,3], two relayed envelope ids, and differing receipt ids - while expect.soft(persisted.outboxKeys).toHaveLength(1) did not, confirming it is inert under exactly the defect it accompanies. For (2), inspection of relayClient.pollCapacity.test.ts:75-100 shows responseBytes is populated only inside the mock fetch. The rest of that test is load-bearing: MC12 (nextCursorSchema back to z.null()) kills it with INVALID_RELAY_RESPONSE.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "testing-vacuous-assertions",
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "verifier": "review-verifier",
+        "evidence": "Assertion (1) reproduced: under MC2 (delete the F-008 in-transaction re-read at outbound.ts:70-72) outbound.concurrentSend.test.ts went RED with entries [2,3], two relayed envelope ids and differing receipt ids - and expect.soft(persisted.outboxKeys).toHaveLength(1) did NOT fire, under exactly the duplicate-envelope defect it sits beside. The reason is structural: keyFor is `cli:outbox:${messageId}` (outbound.ts:18) and the test passes that COMPLETE key to tx.keys() at line 171, so the result is 0 or 1 by construction and the preceding expect(firstResult.status).toBe('fulfilled') rules out 0. Assertion (2) reproduced by mutating PRODUCTION code rather than the fixture: widened the client's reader bound at relayClient.ts:96 from 1 MiB to 1 GiB and re-ran relayClient.pollCapacity.test.ts -> 2 passed. The assertion at :123 is unaffected by a 1024x change to the only production bound it names, because responseBytes is pushed solely at line 98 inside the mock from a payload the same mock builds under its own budget check at line 93. relayClient.ts restored and verified byte-identical (sha256 d01e31c0419db732827cd0e1b51b39a25570bd90add258f21fe186a7e584e843)."
+      }
+    },
+    {
+      "id": "T38-L-001",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#T38-L-001",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/outbound.ts",
+      "line": 36,
+      "problem": "OutboundMessenger.rotateBundle() - the explicit fresh-allocation operation F-001's suggested fix asked for - has no CLI entry point, and neither does the pre-existing retryPending().",
+      "impact": "Once cli:publication is written, the CLI can only ever resubmit that one bundle, so after its single one-time prekey is claimed a second peer's claim cannot succeed. This is not a regression: before the fix a second publish was rejected anyway by the relay's permanent one-time-prekey uniqueness contract (specification.md:88). The cost is that a capability now exists in the code with no user-reachable path to it.",
+      "suggested_fix": "Either wire rotateBundle() and retryPending() to commands in a later, explicitly scoped decision, or record in the flow that both are deliberately library-only for the prototype. Adding a command now would exceed the documented command surface at specification.md:63-72, which is why this does not block the fix wave.",
+      "evidence": "keryx ctx rg over rotateBundle|rotatePublicationBundle|rotateOneTimePreKey|retryPending|publicationBundle returned 13 matches across 7 files. rotateBundle is referenced only at its definition (outbound.ts:36) and in a test (outbound.publish.test.ts:131); retryPending only at its definition (outbound.ts:110) and in outbound.test.ts:191, :212. No branch of execute() (cli.ts:231-321) reaches either, and specification.md:63-72 lists no rotate or retry command.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "T38-logic-unwired-rotate",
+      "verification": {
+        "verdict": "confirmed",
+        "method": "site-check",
+        "verifier": "review-verifier",
+        "evidence": "`keryx ctx rg 'rotateBundle|retryPending|retryPendingAcks|rotatePublicationBundle' apps packages` -> rotateBundle appears only at its definition (outbound.ts:36) and at outbound.publish.test.ts:131; retryPending only at its definition (outbound.ts:110) and at outbound.test.ts:191 and :212; retryPendingAcks only at inbound.ts:90 and inbound.test.ts:256, :261. Neither name occurs anywhere in apps/cli/src/commands/cli.ts, and reading execute() (cli.ts:231-321) confirms its eight branches reach only publish(), send(), poll(), history(), summary(), diagnostics(), exportContact() and importContact(). Both named operations are unreachable from the CLI surface, as reported."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "open_findings_checked": 10,
+    "confirmed": 10,
+    "refuted": 0,
+    "unverifiable": 0,
+    "not_checked": 0,
+    "method_execution": 8,
+    "method_site_check": 2,
+    "method_reasoning": 0,
+    "spot_checks_attempted": 8,
+    "spot_checks_broken": 0,
+    "mutations_applied_and_reverted": 5,
+    "probe_files_created_and_deleted": 3
+  },
+  "timestamp_utc": "2026-09-06T16:16:48Z"
+}

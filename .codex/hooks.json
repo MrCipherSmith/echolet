@@ -1,0 +1,31 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "keryx orient codex"
+          }
+        ],
+        "_keryxManaged": "ctx-orient-hooks"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "keryx ctx hook codex"
+          }
+        ],
+        "_keryxManaged": "ctx-agent-hooks"
+      }
+    ]
+  },
+  "_keryxManaged": [
+    "ctx-orient-hooks",
+    "ctx-agent-hooks"
+  ]
+}

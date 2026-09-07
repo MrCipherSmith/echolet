@@ -1,0 +1,99 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T39-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "RED phase for F-013 complete. Added apps/cli/src/commands/cli.dashOptionValues.test.ts with 16 process-level tests. 10 fail today (the intended-behaviour tests) and 6 pass (the fail-closed guards and the '--' separator pins). All 9 string-valued options declared by cliOptions in cli.ts are enumerated with fixed literal dash-leading values: --profile, --relay-url, --store-key-env, --out, --from, --to, --text, --message-id, --with. No implementation code was written; no existing assertion was weakened; the T36-owned vitest.config.ts and test/globalSetup.ts were read only. Full apps/cli suite: 13 files, 69 tests, 10 failed / 59 passed - every pre-existing test stays green.",
+  "summary_markdown": "## RED evidence (F-013)\n\n**New suite:** `apps/cli/src/commands/cli.dashOptionValues.test.ts` (16 tests, process-level, spawns the shared `dist/cli.js` built once by the T36 globalSetup).\n\n### Failing now (intended behaviour, 10)\n\n| # | Test | Expected | Actual today |\n|---|------|----------|--------------|\n| 1 | accepts a `--profile` value that begins with '-' | exit 0 / `ok` | exit 2 / `INVALID_ARGUMENTS` |\n| 2 | accepts a `--relay-url` value that begins with '-' ... | exit 2 / `INVALID_CONFIGURATION` | exit 2 / `INVALID_ARGUMENTS` |\n| 3 | accepts a `--store-key-env` value that begins with '-' ... | exit 2 / `INVALID_CONFIGURATION` | exit 2 / `INVALID_ARGUMENTS` |\n| 4 | accepts an `--out` value that begins with '-' | exit 0 / `ok` | exit 2 / `INVALID_ARGUMENTS` |\n| 5 | accepts a `--from` value that begins with '-' | exit 0 / `ok` | exit 2 / `INVALID_ARGUMENTS` |\n| 6 | accepts a `--to` value that begins with '-' and carries it verbatim into the trust layer | exit 3 / `CONTACT_NOT_TRUSTED`, identical to the same run without the leading '-' | exit 2 / `INVALID_ARGUMENTS` |\n| 7 | accepts a `--text` value that begins with '-' | exit 3 / `CONTACT_NOT_TRUSTED` (trust, not parsing, is what stops it) | exit 2 / `INVALID_ARGUMENTS` |\n| 8 | accepts a `--message-id` value that begins with '-' ... | exit 2 / `INVALID_MESSAGE_ID` | exit 2 / `INVALID_ARGUMENTS` |\n| 9 | accepts a `--with` value that begins with '-' | exit 0 / `ok`, `data.entries == []` | exit 2 / `INVALID_ARGUMENTS` |\n| 10 | delivers dash-leading bodies, including one spelled exactly like a known flag | both sends exit 0, both bodies readable verbatim through `history` | exit 2 / `INVALID_ARGUMENTS` |\n\nExact headline failing assertion (test 6, the F-013 blocker):\n\n```\nexpect(outcome(dashed)).toMatchObject({ code: 3, errorCode: \"CONTACT_NOT_TRUSTED\" });\n// AssertionError: expected { code: 2, errorCode: 'INVALID_ARGUMENTS', timedOut: false }\n//                 to match object { code: 3, errorCode: 'CONTACT_NOT_TRUSTED' }\n```\n\n### Passing now (fail-closed guards + separator pins, 6)\n\n- still rejects an unknown flag, with or without a dash-leading value -> exit 2 / `INVALID_ARGUMENTS`\n- still rejects an option whose value is missing at the end of the argument list (`--text`, `--with`, `--profile` trailing) -> exit 2 / `INVALID_ARGUMENTS`\n- still rejects a repeated option, including when the repeat carries a dash-leading value -> exit 2 / `INVALID_ARGUMENTS`\n- still rejects an option the command does not accept, an unknown command, and a stray positional -> exit 2 / `INVALID_ARGUMENTS`\n- treats a bare trailing `--` as a no-op -> exit 0 / `ok`\n- fails closed on any operand after `--` (no command takes positional operands) -> exit 2 / `INVALID_ARGUMENTS`\n\nThese six are what stop the fix from being obtained by simply turning `strict: true` off: Node's `parseArgs` raises the SAME `ERR_PARSE_ARGS_INVALID_OPTION_VALUE` for a dash-leading value and for an option whose value is missing at the end of argv, so the fix has to separate those two cases rather than suppress the error class.\n\n### Determinism\n\nEvery dash-leading value is a fixed literal in the `dash` constant table (e.g. `--to \"-DashRecipientIdentity000000000000000000000A\"`). Nothing waits for a randomly generated base64url identity to start with '-', which is what made `pnpm test` look intermittently red.\n\n### Contract preservation\n\nThe local `outcome()` helper asserts, on every single run in the suite, that stdout holds exactly one line parsing to one JSON object with the documented `ok`/`error.code` shape; `redacted()` asserts by boolean that no store key, private-key field name, `ciphertext` or message body ever appears in stdout+stderr. No plaintext body, ciphertext, store key or HTTP request body is printed anywhere in the suite or in this report.\n\n### Routing audit\n\n`graph_used: no (not-relevant - target files were named in the dispatch)`, `wiki_used: no (not-relevant - defect and contract fully specified by the dispatch and docs/requirements/echolet-cli-prototype/specification.md)`, `ctx_used: yes (keryx ctx read / keryx ctx rg / keryx ctx run)`, `raw_rg_used: no`.",
+  "acceptance": [
+    {
+      "criterion": "F-013 (blocker): a deterministic test proves that `send --to <identity>` succeeds when the identity_id begins with '-'. The test must currently FAIL.",
+      "status": "partial",
+      "evidence": "Two tests pin it and both fail today with exit 2 / INVALID_ARGUMENTS: 'accepts a --to value that begins with '-' and carries it verbatim into the trust layer' (expects exit 3 / CONTACT_NOT_TRUSTED, and expects the outcome to be byte-identical to the same send with the leading '-' stripped) and 'delivers dash-leading bodies, including one spelled exactly like a known flag' (a full trusted send through a relay stub, expecting exit 0). Deliberate deviation: a fully successful `send --to` against a REAL identity whose base64url encoding begins with '-' cannot be built deterministically, because identity_id is derived from a generated public key and cannot be chosen. Forcing it would mean regenerating identities until one starts with '-' - exactly the 1-in-64 sampling the dispatch forbids. Instead the dash-leading recipient is proven to reach the trust layer verbatim (CONTACT_NOT_TRUSTED, identical to the non-dash control), and end-to-end success for the same command shape is proven separately by the trusted send test. Flagged for reviewer judgement."
+    },
+    {
+      "criterion": "The test class is enumerated, not sampled: every string-valued option is covered with a fixed literal value beginning with '-'.",
+      "status": "met",
+      "evidence": "All 9 string-valued options in cliOptions (cli.ts:24-36) have their own named test: --profile, --relay-url, --store-key-env, --out, --from, --to, --text, --message-id, --with. --json and --yes are boolean and take no value. Values come from the fixed `dash` literal table; nothing is randomly generated. The documented surface in docs/requirements/echolet-cli-prototype/specification.md adds no further string option."
+    },
+    {
+      "criterion": "A `--text` value beginning with '-' is accepted as message content, including a value that looks like a known flag, and is not reinterpreted as an option.",
+      "status": "met",
+      "evidence": "'delivers dash-leading bodies, including one spelled exactly like a known flag' sends both `--text \"-SYNTHETIC_DASH_TEXT\"` and `--text \"--profile\"` over a relay stub to a trusted contact, expects exit 0 for both, then reads them back through `history` and asserts (by boolean containment, never by printing) that both bodies survive verbatim. The `--profile` case is argv-adjacent to a real later `--profile <dir>`, so a fix that swallows the flag instead of the value fails this test."
+    },
+    {
+      "criterion": "Genuinely invalid input still fails closed with exit 2: unknown flag, missing required value, repeated option keep INVALID_ARGUMENTS.",
+      "status": "met",
+      "evidence": "Four guard tests, all passing today and required to stay passing: unknown flag (bare and with a dash-leading value), missing value at end of argv for --text/--with/--profile, repeated option (including a repeat whose second value is dash-leading), and option-not-allowed-for-command / unknown command / stray positional. Node's parseArgs raises the same ERR_PARSE_ARGS_INVALID_OPTION_VALUE for a dash value and for a trailing option with no value, so disabling strict parsing cannot satisfy both the RED tests and these guards."
+    },
+    {
+      "criterion": "`--` end-of-options handling, if the fix introduces it, is pinned by a test rather than left implicit.",
+      "status": "met",
+      "evidence": "Two tests in describe('end-of-options separator (F-013)'): a bare trailing `--` is a no-op (exit 0 / ok), and any operand after `--` fails closed with exit 2 / INVALID_ARGUMENTS because no command on the surface takes positional operands (covers `-- extra`, `-- --json`, and `-- --to other`). Both pass today, so the fix cannot silently start ignoring post-separator operands."
+    },
+    {
+      "criterion": "The existing exit-code contract is unchanged for every other case, and one JSON object on stdout / redacted diagnostics on stderr still holds.",
+      "status": "met",
+      "evidence": "The suite's outcome() helper asserts on every run that stdout is exactly one line parsing to a single non-array JSON object with ok true or an /^[A-Z_]+$/ error.code, and that the child did not time out. redacted() asserts by boolean that the store key, identitySecretKey/deviceSecretKey/sessionSecretKey/\"seed\"/ciphertext and the message body never appear in stdout+stderr."
+    },
+    {
+      "criterion": "All currently-passing tests stay green; no existing assertion is weakened or deleted.",
+      "status": "met",
+      "evidence": "`npx vitest run` in apps/cli: 13 test files, 69 tests, 10 failed / 59 passed. The only failing file is the new cli.dashOptionValues.test.ts. cli.test.ts, cli.processFailures.test.ts, test/e2e/two-process.test.ts and all runtime/transport suites pass. No existing file was edited; vitest.config.ts and test/globalSetup.ts were read only. `pnpm typecheck` in apps/cli exits 0."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/src/commands/cli.dashOptionValues.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New RED suite: 16 process-level tests pinning dash-leading option values, fail-closed guards, and '--' separator behaviour."
+    },
+    {
+      "path": ".metaproject/data/gdctx/artifacts/2026-09-06T14-46-05-746Z_run.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Bounded RED run of the new suite alone: 16 tests, 10 failed / 6 passed."
+    },
+    {
+      "path": ".metaproject/data/gdctx/artifacts/2026-09-06T14-45-46-251Z_run.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "apps/cli typecheck, exit 0."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/commands/cli.dashOptionValues.test.ts",
+      "change": "added"
+    }
+  ],
+  "findings": [],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Is a dash-leading `--to` value that reaches the trust layer (exit 3 CONTACT_NOT_TRUSTED, identical to the non-dash control) accepted as proof for the F-013 headline criterion, given that a real identity_id beginning with '-' cannot be chosen deterministically?",
+      "why": "identity_id is encodeBase64Url(publicKey) and cannot be steered; the only way to obtain a genuine dash-leading identity is to regenerate identities until one appears, which reintroduces exactly the 1-in-64 sampling the dispatch forbids. The suite therefore proves (a) the dash-leading recipient reaches the trust layer verbatim and (b) an end-to-end trusted send with dash-leading content succeeds.",
+      "options": [
+        { "id": "accept", "label": "Accept the trust-layer + trusted-send pair as the deterministic proof", "recommended": true },
+        { "id": "search", "label": "Add a bounded identity-regeneration search for a real dash-leading identity (non-deterministic cost, ~64 profile inits)" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_added": 16,
+    "tests_failing_red": 10,
+    "tests_passing_guards": 6,
+    "suite_files": 13,
+    "suite_tests": 69,
+    "suite_failed": 10,
+    "suite_passed": 59
+  },
+  "timestamp_utc": "2026-09-06T14:50:00Z"
+}

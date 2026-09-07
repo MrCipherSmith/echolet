@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "keryx orient cursor",
+        "_keryxManaged": "ctx-orient-hooks"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "keryx ctx hook cursor",
+        "_keryxManaged": "ctx-agent-hooks"
+      }
+    ]
+  },
+  "_keryxManaged": [
+    "ctx-orient-hooks",
+    "ctx-agent-hooks"
+  ]
+}

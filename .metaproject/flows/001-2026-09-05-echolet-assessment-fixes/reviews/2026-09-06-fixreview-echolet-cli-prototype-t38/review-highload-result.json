@@ -1,0 +1,266 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T38-review-highload",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "F-008 fixed: the outbox recheck moved inside the mutation transaction, and the serialisation is genuinely cross-process (BEGIN IMMEDIATE + busy_timeout=0 + an in-transaction read), confirmed by a two-process SQLite probe. F-009 fixed-with-new-risk: the poll byte budget is computed from the exact stored Badger value, a single maximum-size envelope is always delivered and cannot exceed the client bound at the default config, and next_cursor is a fixed server constant never derived from envelope_id - but the sole client discards next_cursor (N-002) and the budget has no enforced relationship to ECHOLET_MAX_MESSAGE_BYTES (N-003). F-010 fixed: the quota decision is a self-contained allow() doing no I/O, and next.ServeHTTP runs after the lock is released; the prune is amortised to one sweep per minute. F-011 fixed: quota key is the normalized, canonicalised host, forwarding headers are never read, and pruning deletes only expired buckets. T35-I-001 judged acceptable for the prototype (minor, N-003): unreachable at the default 262144 and remediable with a one-line startup guard, though the coupling regressed from accidentally-enforced to unenforced when T34-I-003 derived the body limit from MaxMessageBytes. One pre-existing major (N-001) found in changed code: a single unauthenticated envelope from an unpinned sender aborts the whole poll batch inside one transaction, so nothing is acked and the mailbox wedges permanently. Nothing found blocks acceptance of the fix wave. All five non-negotiable criteria hold for the reviewed code.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Every finding in the assigned set (F-008, F-009, F-010, F-011 and concern T35-I-001) receives an explicit disposition with concrete evidence.",
+      "status": "met",
+      "evidence": "F-008 fixed, F-009 fixed-with-new-risk, F-010 fixed, F-011 fixed, T35-I-001 judged acceptable for the prototype and recorded as minor N-003. Each carries file:line evidence plus, for F-008, a two-process SQLite locking probe and, for F-010/F-011, a bounded targeted `go test -race -run` pass."
+    },
+    {
+      "criterion": "Any new defect introduced by a fix is reported with severity, file:line and a concrete failure scenario, including defects outside the assigned set encountered in the changed code.",
+      "status": "met",
+      "evidence": "N-001 (major, pre-existing, apps/cli/src/runtime/inbound.ts:47), N-002 (minor, introduced, inbound.ts:41), N-003 (minor, introduced, mailbox_handler.go:52), N-004 and N-005 (info). Each states its mechanism and failure scenario."
+    },
+    {
+      "criterion": "The five non-negotiable criteria are checked and reported on.",
+      "status": "met",
+      "evidence": "review-highload-report.md, section 'Non-negotiable criteria': test mtimes verified per file pair, zero skip/only/todo markers, closed-union schema confirmed on a .strict() object, error strings audited for payload interpolation, and classify() exit mapping re-derived."
+    },
+    {
+      "criterion": "Findings are ranked by severity and each states whether it blocks acceptance of the fix wave.",
+      "status": "met",
+      "evidence": "The report's 'New findings' section is ordered major -> minor -> info and opens with an explicit statement that none of them blocks the wave; the verdict table repeats the per-item blocking answer."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-highload-report.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full high-load fix review: per-finding dispositions with evidence, five new findings, the five non-negotiable criteria and the routing audit."
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-highload-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This subagent-result."
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-008",
+      "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-008",
+      "reviewer": "review-highload",
+      "severity": "blocker",
+      "file": "apps/cli/src/runtime/outbound.ts",
+      "line": 71,
+      "problem": "Fix-review disposition: fixed. Concurrent same-id sends can no longer create duplicate outbound history or a second envelope, and the guarantee holds across two independent OS processes rather than only within one runtime.",
+      "impact": "The interleaving described by the original finding is unreachable. Two processes can never both be inside the mutation transaction; the second to run reads the first one's committed cli:outbox record and short-circuits to settle().",
+      "suggested_fix": "No change required. Optional follow-up: the losing process of a genuine overlap fails with exit 5 (PersistenceError from SQLITE_BUSY) rather than returning the idempotent receipt, which is the pre-existing tested contract and resolves on retry.",
+      "evidence": "outbound.ts:45 is now labelled optimization-only; the authoritative re-read is inside the mutation transaction at outbound.ts:71-72 and returns existed:true, so client.encrypt, the envelope_id mint at :80 and appendHistory at :87 are all skipped. Cross-process serialisation comes from EncryptedSqliteStore.ts:25 (busy_timeout=0), :61 (BEGIN IMMEDIATE, a cross-process RESERVED file lock in rollback-journal mode) and :64 (this.read() runs after the lock, so the recheck sees the latest committed state). Bounded scratchpad probe with two real OS processes on one DB file: holder printed HOLDER_IN_TXN, an independent contender's BEGIN IMMEDIATE returned 'database is locked', and a third process reading inside BEGIN IMMEDIATE after the commit saw the committed row. Test integrity: outbound.concurrentSend.test.ts mtime 17:22:06 precedes outbound.ts 17:41:42 and was not edited afterwards; expect.soft still fails the test.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "highload-F-001",
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "Fix verified at apps/cli/src/runtime/outbound.ts:71-72 plus the cross-process locking mechanism at packages/session-node/src/EncryptedSqliteStore.ts:25,61,64, confirmed by a two-process SQLite probe."
+      },
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/outbound.ts:45",
+          "apps/cli/src/runtime/outbound.ts:71",
+          "apps/cli/src/runtime/outbound.ts:80",
+          "apps/cli/src/runtime/outbound.ts:87",
+          "packages/session-node/src/EncryptedSqliteStore.ts:61",
+          "packages/session-node/src/EncryptedSqliteStore.ts:64"
+        ],
+        "enumeration_method": "Re-walked the four sites named by the original finding's class_scope in the current working tree, then followed profile.withRuntime -> Profile.transact (profile.ts:76-85,104-110) -> EncryptedSqliteStore.transaction/perform to enumerate every point at which the transaction boundary is established. sendOwned is still the only outbound producer; inbound's duplicate check is already inside its own mutation transaction."
+      }
+    },
+    {
+      "id": "F-009",
+      "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-009",
+      "reviewer": "review-highload",
+      "severity": "major",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 189,
+      "problem": "Fix-review disposition: fixed-with-new-risk. The undrainable poll batch is fixed at the root cause, but the fix leaves the new next_cursor signal unread by the only client (N-002) and ties the byte budget to a compile-time constant with no enforced relationship to ECHOLET_MAX_MESSAGE_BYTES (N-003).",
+      "impact": "At the shipped configuration the mailbox always drains: no poll response can exceed the client's 1 MiB bound, and the single-envelope exemption cannot re-create the wedge because a stored envelope is itself capped at MaxMessageBytes + 64 KiB = 327680 bytes by the send-route body limit.",
+      "suggested_fix": "No change required for the reported defect. Address the two follow-ups separately: surface or loop on next_cursor in InboundMessenger.poll (N-002), and add a startup guard so ECHOLET_MAX_MESSAGE_BYTES cannot be configured above the poll byte budget minus the envelope JSON overhead (N-003).",
+      "evidence": "Byte budget from actual stored bytes, not an estimate: mailbox_repo.go:189 uses len(val) of the Badger value, which SaveEnvelope wrote as json.Marshal of the same model.MailboxEnvelope at :57 and which the handler re-marshals through the same encoder at mailbox_handler.go:274; both bounds are applied during iteration at :169-205 so an over-budget batch is never materialised. mailbox_poll_capacity_test.go:85-91 asserts the measured recorder body length, not an estimate. Always-one-envelope: mailbox_repo.go:190 guards the byte check with len(batch.Envelopes) > 0, and request_body.go:43 plus mailbox_handler.go:67-73 cap a single stored envelope at 327680 bytes, below relayClient.ts:96's 1 MiB rejection. Cursor is server-controlled: mailbox_handler.go:62 defines the constant 'more' and :266-270 is its only writer; no stored envelope field reaches next_cursor, and relayClient.ts:24 additionally bounds it to 256 chars. Schema held closed: relayClient.ts:24 union of z.string().min(1).max(256) and z.null() on a .strict() object at :66-67, request schema extends the .strict() authorizationSchema, and inbound.test.ts:163's unknown-poll rejection still applies. Targeted probe: go test -race -run 'TestMailboxPoll|TestSendEnvelopeBodyLimit' ./internal/api/handler/... -> ok.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "highload-F-002",
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "Fix verified at apps/relay/internal/storage/repository/mailbox_repo.go:169-205 and apps/relay/internal/api/handler/mailbox_handler.go:52,62,252-280, with the client half at apps/cli/src/transport/relayClient.ts:19,24,64-68 and apps/cli/src/runtime/inbound.ts:38-40. New risks recorded as N-002 and N-003."
+      },
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/storage/repository/mailbox_repo.go:153",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:189",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:190",
+          "apps/relay/internal/api/handler/mailbox_handler.go:52",
+          "apps/relay/internal/api/handler/mailbox_handler.go:62",
+          "apps/relay/internal/api/handler/mailbox_handler.go:252",
+          "apps/relay/internal/api/handler/mailbox_handler.go:286",
+          "apps/cli/src/transport/relayClient.ts:19",
+          "apps/cli/src/transport/relayClient.ts:24",
+          "apps/cli/src/transport/relayClient.ts:66",
+          "apps/cli/src/transport/relayClient.ts:96",
+          "apps/cli/src/runtime/inbound.ts:38",
+          "apps/cli/src/runtime/config.ts:14",
+          "docs/requirements/echolet-cli-prototype/schemas/client-config.schema.json:23"
+        ],
+        "enumeration_method": "keryx ctx rg 'GetEnvelopes|GetEnvelopeBatch' confirmed GetEnvelopeBatch is reached from exactly one production caller (mailbox_handler.go:252) and that the unbounded GetEnvelopes survives only in tests; keryx ctx rg 'next_cursor|batch_size' enumerated every producer, consumer, schema and doc site of the widened contract across Go, TypeScript and the JSON schema."
+      }
+    },
+    {
+      "id": "F-010",
+      "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-010",
+      "reviewer": "review-highload",
+      "severity": "major",
+      "file": "apps/relay/internal/middleware/rate_limit.go",
+      "line": 86,
+      "problem": "Fix-review disposition: fixed. The shared limiter mutex is no longer held across the downstream handler, and the prune step now performed inside the lock is amortised rather than unbounded.",
+      "impact": "One slow request can no longer serialize every route and client. Independent requests progress concurrently, including /health.",
+      "suggested_fix": "No change required. See N-004 for an info-level note on the absence of a max-entry cap between prune sweeps.",
+      "evidence": "The decision is the whole of allow() at rate_limit.go:86-101: Lock at :87, defer Unlock at :88, and a body consisting only of rl.now(), pruneLocked, one map read, one map write and one integer compare - no I/O and no handler call. Middleware calls it as a boolean at :72; next.ServeHTTP at :73 and the 429 write at :77-79 both run after the lock is released with the function. keryx ctx rg over the middleware package finds no other mu.Lock on a request path (SetClock at :50 and TrackedClients at :60 are the test seam). router.go:24-26 confirms one global limiter installed ahead of all routes, and request_id.go/recover.go take no shared lock. Prune bounded: pruneLocked:105-108 returns unless a full idleBucketPruneInterval (1 minute of limiter time) has elapsed, so the O(len(clients)) sweep is amortised to about one pass per minute and its size is bounded by distinct hosts seen in that interval. Targeted probe: go test -race -run TestRateLimiter ./internal/middleware/... -> ok.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "highload-F-003",
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "Fix verified at apps/relay/internal/middleware/rate_limit.go:66-115; both downstream paths now execute outside the critical section."
+      },
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/middleware/rate_limit.go:72",
+          "apps/relay/internal/middleware/rate_limit.go:73",
+          "apps/relay/internal/middleware/rate_limit.go:77",
+          "apps/relay/internal/middleware/rate_limit.go:87",
+          "apps/relay/internal/middleware/rate_limit.go:104"
+        ],
+        "enumeration_method": "Full read of rate_limit.go plus keryx ctx rg for mu.Lock / next.ServeHTTP across apps/relay: the limiter holds the only shared request-path lock, and both former under-lock downstream calls named by the original finding now sit after allow() returns. router.go was read to confirm middleware ordering and that no other handler wraps the chain."
+      }
+    },
+    {
+      "id": "F-011",
+      "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-011",
+      "reviewer": "review-highload",
+      "severity": "major",
+      "file": "apps/relay/internal/middleware/rate_limit.go",
+      "line": 121,
+      "problem": "Fix-review disposition: fixed. The quota key is the normalized transport peer host, untrusted forwarding headers cannot mint a bucket, and expired buckets are reclaimed without ever dropping an active one.",
+      "impact": "A host opening a fresh connection per request - the one-command-per-process CLI - now shares one quota bucket, so the configured per-minute limit is actually enforced, and buckets no longer accumulate for every host and port ever observed.",
+      "suggested_fix": "No change required. N-004 records, at info level, that there is no max-entry cap between sweeps; that is production hardening and out of prototype scope.",
+      "evidence": "Keying: quotaKey at rate_limit.go:121-134 strips the port via net.SplitHostPort and canonicalises IP literals through net.ParseIP().String(), with rate_limit.go:72 as the single call site. Forwarding headers: X-Forwarded-For and X-Real-IP appear nowhere in the file except the policy comment at :20-26, and no middleware rewrites r.RemoteAddr (request_id.go only sets a response header; router.go:24-26 installs nothing else ahead of the limiter). Pruning cannot drop an active bucket: pruneLocked:111 deletes only when now.After(record.resetAt), and an in-window bucket has resetAt in the future. Growth is bounded by distinct hosts per prune interval plus the active window, not by lifetime traffic. Counting semantics unchanged: :94-97 sets count=1 on a fresh or expired bucket, :99-100 refuses once count > limit. Targeted probe: go test -race -run TestRateLimiter ./internal/middleware/... -> ok, covering the normalized-host, forwarded-header and idle-prune tests.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "highload-F-004",
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "Fix verified at apps/relay/internal/middleware/rate_limit.go:72,104-115,121-134."
+      },
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/middleware/rate_limit.go:72",
+          "apps/relay/internal/middleware/rate_limit.go:93",
+          "apps/relay/internal/middleware/rate_limit.go:95",
+          "apps/relay/internal/middleware/rate_limit.go:104",
+          "apps/relay/internal/middleware/rate_limit.go:121"
+        ],
+        "enumeration_method": "keryx ctx rg 'RemoteAddr|NewRateLimiter' across the repository returns exactly one production key derivation (rate_limit.go:72 via quotaKey) and one limiter construction (router.go:22); the remaining hits are the tests. Full read of rate_limit.go enumerates every map access and the single deletion path."
+      }
+    },
+    {
+      "id": "N-001",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#N-001",
+      "reviewer": "review-highload",
+      "severity": "major",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "line": 47,
+      "problem": "One unacceptable envelope aborts the entire poll batch inside a single transaction, so nothing is acked and the mailbox wedges permanently. Pre-existing; NOT introduced by the T33/T35 fixes, but reported because it is a live mailbox-wedge in the same class as F-009 and sits in a file this wave changed.",
+      "impact": "/v1/messages/send performs no sender authentication (mailbox_handler.go:75-114 validates shape and expiry only), so anyone who knows a recipient's identity_id - published in the contact card - can post one envelope from an unpinned sender. From then on every `echolet poll` throws before ackPending() and exits 3, and no legitimate message is ever delivered to that mailbox again. Envelopes queued behind the blocking one are permanently lost once they age past the 7-day retention cap (mailbox_repo.go:19). Trigger is one unauthenticated request, not a load level.",
+      "suggested_fix": "Skip-and-continue instead of abort: record the offending envelope_id under a local quarantine key and include it in the ack set so the mailbox drains, or process each envelope in its own transaction and aggregate rejections into the poll result. The CONTACT_NOT_TRUSTED guarantee is preserved either way - the point is not to decrypt the envelope, it is not to let it block the queue.",
+      "evidence": "accept() processes the whole batch inside one profile.withRuntime transaction (inbound.ts:47-78). Every throw inside the loop - :53 INVALID_ENVELOPE, :55 CONTACT_NOT_TRUSTED, :57 and :61 CONTACT_PIN_MISMATCH, :62-63 the base64/wrapper zod and fatal-UTF-8 throws, :68 MESSAGE_ID_CONFLICT, :75 INVALID_ENVELOPE - propagates out of the transaction, which Profile.transact (profile.ts:76-85) rolls back, so ackPending() at inbound.ts:42 is never reached and no envelope in the batch is acked. Because the relay resumes from the head of the mailbox on every poll (mailbox_repo.go:169 seeks the prefix) and next_cursor carries no position, the identical batch is returned forever.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/inbound.ts:47",
+          "apps/cli/src/runtime/inbound.ts:53",
+          "apps/cli/src/runtime/inbound.ts:55",
+          "apps/cli/src/runtime/inbound.ts:57",
+          "apps/cli/src/runtime/inbound.ts:61",
+          "apps/cli/src/runtime/inbound.ts:62",
+          "apps/cli/src/runtime/inbound.ts:63",
+          "apps/cli/src/runtime/inbound.ts:68",
+          "apps/cli/src/runtime/inbound.ts:75"
+        ],
+        "enumeration_method": "keryx ctx rg 'throw new InboundError|\\.parse\\(' apps/cli/src/runtime/inbound.ts enumerated every throw site; all nine sit inside the single for-loop of the one withRuntime transaction opened at :47, and accept() is the only consumer of a poll batch (inbound.ts:41 is its sole caller)."
+      }
+    },
+    {
+      "id": "N-002",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#N-002",
+      "reviewer": "review-highload",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "line": 41,
+      "problem": "The CLI discards the next_cursor remaining-work signal that the F-009 fix added to the wire. Introduced by this fix wave.",
+      "impact": "An operator polling a mailbox holding eight maximum-size envelopes sees {\"received\":3} with nothing to distinguish 'drained' from 'five still queued'. The mailbox is not wedged - successive poll invocations do drain it - but the drain loop exists only in relayClient.pollCapacity.test.ts:106-119, not in the runtime.",
+      "suggested_fix": "Either surface it, e.g. return { received, more: batch.next_cursor !== null } from InboundMessenger.poll, or loop while next_cursor !== null under a bounded iteration cap. Surfacing it is the smaller change and preserves one poll per invocation.",
+      "evidence": "inbound.ts:38-43 destructures the poll result, awaits accept(batch.envelopes) and returns { received: batch.envelopes.length }; batch.next_cursor is never read. cli.ts:299-305 prints only that object, so the signal reaches no operator. The field is validated and available (relayClient.ts:24,66).",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "N-003",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#N-003",
+      "reviewer": "review-highload",
+      "severity": "minor",
+      "file": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "line": 52,
+      "problem": "Concern T35-I-001, verified and judged: nothing enforces a relationship between ECHOLET_MAX_MESSAGE_BYTES and the compile-time poll byte budget, and the coupling regressed from accidentally-enforced to unenforced when T34-I-003 derived the send body limit from MaxMessageBytes.",
+      "impact": "At ECHOLET_MAX_MESSAGE_BYTES around 1 MiB or above, the always-deliver-the-first-envelope rule correctly refuses to starve a large envelope and therefore returns it in a response above the client's 1 MiB bound; relayClient.ts:96 throws the non-retryable INVALID_RELAY_RESPONSE (exit 3), nothing is acked, and F-009's wedge returns in a new form for that mailbox. Unreachable at the shipped default of 262144. Judged acceptable for this prototype: reachable only by an operator deliberately raising an env var on a loopback relay they run themselves, no corruption or in-window loss, and the derived body limit is the correct design - the missing piece is a guard, not a redesign.",
+      "suggested_fix": "Add one startup guard: reject, or clamp with a logged warning, a MaxMessageBytes above pollEnvelopeByteBudget - envelopeJSONOverheadBytes, in config.Load or NewMailboxHandler. A named constant shared by both sites documents the relationship that currently lives only in a comment.",
+      "evidence": "pollEnvelopeByteBudget is a compile-time constant at mailbox_handler.go:52 derived from the client's 1 MiB bound, while config.go:21-27 parses ECHOLET_MAX_MESSAGE_BYTES with no validation at all. envelopeBodyLimit() at mailbox_handler.go:67-73 now follows MaxMessageBytes upward, so a large configured value produces stored envelopes the exemption at mailbox_repo.go:190 must deliver over-bound. The storage half is already demonstrated in the tree: TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes stores a 2 MiB-ciphertext envelope with 200 OK at mailbox_poll_capacity_test.go:202-214.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "N-004",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#N-004",
+      "reviewer": "review-highload",
+      "severity": "info",
+      "file": "apps/relay/internal/middleware/rate_limit.go",
+      "line": 105,
+      "problem": "The rate-limiter bucket map has no max-entry cap between prune sweeps, and the sweep itself is a single O(len(clients)) pass taken under the shared lock.",
+      "impact": "Between sweeps the map accepts one entry per distinct remote host with no upper bound; growth is bounded by distinct hosts per minute rather than by lifetime traffic, and source addresses cannot be spoofed over a completed TCP handshake. On the documented deployment - a loopback relay for a local CLI prototype - the reachable host count is one, so no failure mode is reachable here. Related and equally benign: with the quota now genuinely per host, draining a large mailbox costs three requests per poll against ECHOLET_RATE_LIMIT_PER_MINUTE=120, about 40 polls per minute from one host, and a 429 is classified retryable so the exit contract degrades to 4 correctly.",
+      "suggested_fix": "None for the prototype. Recording the mechanism only: raising it to a bounded LRU or a background sweep would be production hardening, which is out of scope for this review.",
+      "evidence": "pruneLocked at rate_limit.go:105-108 self-throttles to one sweep per idleBucketPruneInterval of limiter time, and :110-114 is a full map range executed while rl.mu is held by allow(). No max-size check exists anywhere in the file.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "N-005",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#N-005",
+      "reviewer": "review-highload",
+      "severity": "info",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 170,
+      "problem": "HasMore can be a false positive when every remaining item in the mailbox is expired.",
+      "impact": "One extra poll that returns zero envelopes and next_cursor null. Benign: it cannot wedge and cannot loop, because the false positive clears on the very next poll. Recorded so the next reviewer does not re-derive it.",
+      "suggested_fix": "None required. If cosmetic accuracy is wanted, set HasMore only after confirming the next item is non-expired.",
+      "evidence": "mailbox_repo.go:170-173 sets batch.HasMore = true on len(batch.Envelopes) >= limit before the item at the iterator is examined, and the expiry check that would have skipped it lives inside the value callback at :183.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T15:45:00Z"
+}

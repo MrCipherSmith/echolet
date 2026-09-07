@@ -1,0 +1,124 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T55-verify",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Full matrix PASS on the T54 tree (17/17 checks: frozen install, CLI build, typecheck, cli_process 2/24, workspace tests 162 across 4 full executions incl. one under 24-worker CPU load, cli suite 22/101, E2E 3/3, Go untagged + race + relayv2 race with 0 data races, keryx test --strict PASS, health --strict PASS score 95 gate PASS, graph 89/139 no cycles, wiki 19 pages 0 broken, integrity 59/59 OK by SHA-256, all metrics-and-validation measurements met). Test count is exactly the orchestrator's 162 (cli 101, session-node 24, crypto-core 16, protocol 12, mobile 6, client-core 2, client-db 1) and reconciles against T52's 158 as +4 cli (the two T53 client-side quota test files); no test skipped/weakened/renamed; no source, test, config or flow file modified. RE-MEASUREMENT OF THE WEDGE (Part 1, real relay binary + real dist/cli.js at default config): the T54 per-sender quota is real and correct. One sender is hard-bounded at 16 live unacked envelopes per recipient; the 17th is refused 403 SENDER_QUOTA_EXCEEDED BEFORE storage; ack frees a slot; expiry frees a slot; a byte-identical idempotent replay at the bound still returns 200 and costs no slot; the legitimate two-party flow is untouched. The multi-identity flood still wedges because device-record publication is still unauthenticated (T52-F-001 OPEN). NUMERIC CORRECTION TO T54, PROVEN BY EXECUTION: the byte-bounded wedge boundary is 48 max-size poison deliver / 49 wedge (unchanged from T52), and 3 identities place only 3x16=48 which STILL DELIVERS, so wedging needs a 4TH identity (49 poison). Measured directly: 48 poison (3 identities) delivered, 49 poison (4 identities) wedged, 64 (4) and 80 (5) wedged; a direct raw poll returns exactly 3 max-size envelopes per page. Cost moves from 1 identity + 49 POSTs (T52) to 4 identities + 49 POSTs (~12.85 MB) byte-bounded, and 50 identities + 800 POSTs count-bounded; same ~49 POSTs / same data / up to 168 h. The T54 report and defaultSenderUnackedQuota comment say 3 identities + 48 POSTs; the real binary requires 4. The residue test TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk stays green because it simulates with page size 2 (capacity 32), not the real 1 MiB byte budget.",
+  "summary_markdown": "## Re-measurement: the per-sender quota (T54)\n\n**The quota is real and correct, and it closes nothing — exactly as promised.**\n\n| Obligation | Observed (real relay binary + real dist/cli.js, default config) |\n|---|---|\n| single sender bounded at 16 | first 16 `200`, **17th `403 SENDER_QUOTA_EXCEEDED` before storage** |\n| legit message behind 16 | delivered (poll exit 0, history 1) |\n| ack frees a slot | 16 unacked -> 17th blocked -> Bob polls/acks -> send `200` |\n| expiry frees a slot | 16 poison @2 s TTL -> 17th `403` -> after expiry send `200` |\n| idempotent replay at bound | byte-identical 16th re-sent -> `200`; fresh 17th -> `403` |\n| legit two-party round trip | Bob delivered, Alice delivered reply |\n\n## The multi-identity wedge, re-measured\n\n| | Previous (T52, no quota) | Now (T54 quota, this tree) |\n|---|---|---|\n| byte-bounded wedge | **1** identity + **49** max-size POSTs (~12.85 MB) | **4** identities + **49** max-size POSTs (~12.85 MB) |\n| count-bounded wedge | **1** identity + **800** POSTs | **50** identities + **800** POSTs |\n| poison boundary | 48 deliver / 49 wedge | 48 deliver / 49 wedge (**unchanged**) |\n| identity price | 1 unauthenticated publish | 1 unauthenticated publish *each* |\n| duration held | up to 168 h | up to 168 h |\n\nDirect measurements: `boundary_48poison {identities:3, delivered:true}`; `boundary_49poison {identities:4, wedged:true}`; `threshold_N4 {poison:64, wedged:true}`; raw poll `page1 {envelopes:3}` at 262 853 bytes each vs a `(1<<20)-4096` budget. **Correction to T54: the byte-bounded residue is 4 identities + 49 POSTs, not the 3 + 48 the report and the `defaultSenderUnackedQuota` comment state** — 3x16=48 lands on the deliver side of the 48/49 boundary because the small legit message rides along on the 16th page after the last 3 max-size poison; reaching 49 needs a 4th identity. The quota is thus marginally *more* effective than claimed. The flood (T52-F-001) is still OPEN.\n\n## Matrix: PASS\n\n162 workspace tests x4 executions (one under 24-worker load), 0 red, no `onTaskUpdate`/timeout/ELIFECYCLE; Go 5 packages ok untagged + `-race` + `-race -tags=relayv2` (0 data races); E2E 3/3; typecheck clean; `keryx test --strict` PASS; `keryx health --strict` PASS (score 95, gate PASS); graph 89/139 no cycles; wiki 19 pages 0 broken; integrity 59/59 OK by SHA-256; every metrics-and-validation measurement met. Count reconciles to 162 exactly (+4 vs T52's 158 = the T53 client-side quota test files)."
+  ,
+  "acceptance": [
+    {
+      "criterion": "A single sender's flood is bounded at 16; the 17th is refused 403 SENDER_QUOTA_EXCEEDED before storage; a legitimate message behind it is still delivered",
+      "status": "met",
+      "evidence": "Real relay binary + real dist/cli.js at default config. Self-published attacker: first 16 sends all 200, 17th -> 403 SENDER_QUOTA_EXCEEDED (scenarioA_first16 {all200:true,count:16}, scenarioA_17th {status:403,code:SENDER_QUOTA_EXCEEDED}); legit message queued behind the 16 delivered (scenarioA_legit_behind_16 {poll_exit:0,history_len:1}). Confirmed a second way with a real published sender: scenarioB Alice's first 16 exit 0, 17th exit 3 code SENDER_QUOTA_EXCEEDED. 'Before storage' shown by the mailbox holding exactly 16 from that sender and the legit still delivered."
+    },
+    {
+      "criterion": "Ack frees a slot and expiry frees a slot",
+      "status": "met",
+      "evidence": "Ack: scenarioB — 16 unacked from Alice, 17th blocked (403), Bob polls/acks (poll_exit 0), Alice can send again (scenarioB_alice_send_after_ack {exit:0,ok:true}). Expiry: scenarioC — 16 poison at 2 s TTL, 17th blocked (403 SENDER_QUOTA_EXCEEDED), after 2.6 s the 16 expire and a fresh send returns 200 (scenarioC_send_after_expiry {status:200}). Confirms the count is a live scan, not a send/ack counter."
+    },
+    {
+      "criterion": "An idempotent byte-identical replay at the quota still succeeds and consumes no slot",
+      "status": "met",
+      "evidence": "scenarioD — sender fills 16, then re-sends the byte-identical 16th envelope: 200 (scenarioD_replay_at_quota {status:200}); a genuinely new 17th is still refused (scenarioD_fresh_17th_still_blocked {status:403,code:SENDER_QUOTA_EXCEEDED}). F-004's exact retry is preserved at the boundary."
+    },
+    {
+      "criterion": "Determine the new multi-identity wedge threshold and cost, compared to the previous 1 identity + 49 POSTs",
+      "status": "met",
+      "evidence": "Byte-bounded regime, real CLI drain walk: 48 max-size poison (3 self-published identities) DELIVERS the legit message (boundary_48poison {identities:3,delivered:true}); 49 poison (4 identities) WEDGES (boundary_49poison {identities:4,wedged:true,poll1_exit:3}); 64 (4) and 80 (5) also wedge; wedge holds across re-polls (poll1:0 delivering the ride-along legit then poll2:3 poll3:3). New cost = 4 self-published identities + 49 max-size POSTs (~12.85 MB), vs the previous 1 identity + 49 POSTs; count-bounded = 50 identities + 800 POSTs. The POST count and data are essentially unchanged; the quota raised the IDENTITY count 1->4 (byte) / 1->50 (count). Each identity is still one unauthenticated POST /v1/device-records/publish. Mechanism confirmed by a direct raw poll returning exactly 3 max-size envelopes per page (262 853 bytes each vs a 1044480-byte budget), 16 pages = 48 slots, and the small legit riding along on page 16 after the last 3 poison — which is why 48 delivers and 49 wedges. NOTE the T54 report / defaultSenderUnackedQuota comment state 3 identities + 48; the real binary requires 4 (3x16=48 lands on the deliver side)."
+    },
+    {
+      "criterion": "The legitimate two-party flow still works end to end",
+      "status": "met",
+      "evidence": "legit_roundtrip {bob_poll_exit:0, bob_history_len:1, alice_poll_exit:0, alice_history_len:2}: Alice->Bob delivered, Bob->Alice reply delivered, through the real CLI. Corroborated by 3/3 unfiltered real two-process E2E iterations (offline/restart/exact-retry/ack-recovery) in the matrix."
+    },
+    {
+      "criterion": "Full matrix: frozen install, CLI build, workspace typecheck, cli_process tests, full workspace tests (>=3x incl. one under CPU load), 3-iteration unfiltered E2E, Go untagged, Go untagged race, uncached relayv2 race, keryx test --strict, keryx health --strict, graph rebuild, graph cycles, wiki link check, metrics-and-validation measurements",
+      "status": "met",
+      "evidence": "All PASS. Workspace 162/162 across 4 executions (run#2 under 24 CPU workers) with 0 onTaskUpdate/timeout/ELIFECYCLE anomalies; cli_process 2/24; cli suite 22/101 unfiltered; E2E 3/3; Go 5 packages ok untagged + race + relayv2 race, 0 data races; keryx test --strict PASS (3/0); health --strict PASS score 95 gate PASS (7 advisory findings, 0 gate-triggering); graph 89 nodes/139 edges, no cycles; wiki 19 pages/38 links/0 broken. Every required metrics-and-validation measurement (3/3 E2E, single claim winner, lost-response retry, OTK reuse rejection, offline delivery, exact retry, 0 duplicate history, 0 plaintext markers, 100% invalid-contract rejection, 100% markdown links) is satisfied by the passing suites on this one revision."
+    },
+    {
+      "criterion": "Test count reconciled against the orchestrator's 162, every difference accounted for; integrity verified by SHA-256 not mtime",
+      "status": "met",
+      "evidence": "162 observed every run = cli 101 + session-node 24 + crypto-core 16 + protocol 12 + mobile 6 + client-core 2 + client-db 1, matching the orchestrator's stated split exactly. Delta vs T52's 158 is +4, entirely in cli (97->101), from the two T53 client-side quota test files src/transport/relayClient.senderQuota.test.ts and src/commands/cli.senderQuota.test.ts (both present). Go gained mailbox_sender_quota_test.go (in the Go suites, not the vitest total). shasum -a 256 -c over a 59-file baseline (34 TS test + 23 Go test + 2 vitest config/globalSetup): 59/59 OK, 0 modified; file set byte-for-byte identical before and after; 0 skip/only/todo/xit/xdescribe/t.Skip markers repo-wide."
+    },
+    {
+      "criterion": "No source/test/config/flow file modified; probes live outside the repository",
+      "status": "met",
+      "evidence": "All probes live in the scratchpad (esbuild-bundled standalone Node scripts driving the real relay binary built to a temp path and the real dist/cli.js) and touched no repository file. The 59-file SHA-256 baseline verifies identical before and after. flow.json and acceptance-criteria.md were not written. Only counts, HTTP statuses, typed error codes and exit codes were printed; no plaintext, ciphertext or key material."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t55-final-verification.md",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "Part 1 (per-sender quota re-measurement: bound at 16, 17th 403 before storage, ack/expiry release, replay exemption, and the multi-identity wedge boundary 48 deliver/49 wedge requiring 4 identities — a numeric correction to T54's 3) then Part 2 (full matrix, run table, 162 reconciliation, metrics-and-validation, integrity, verdict).",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T55-verify-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "T55-F-001",
+      "global_id": "001-T55-verify#T55-F-001",
+      "reviewer": "code-verifier",
+      "severity": "info",
+      "file": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "line": 269,
+      "problem": "The T54 report and the defaultSenderUnackedQuota comment (mailbox_handler.go:262-269) state the byte-bounded residue as '3 identities + 48 maximum-size POSTs' (ceil(48/16)=3). Measured against the real relay binary at default configuration, 48 max-size poison (exactly what 3 self-published identities can place at 16/sender) does NOT wedge — the victim's real CLI poll delivers the legitimate message. The true byte-bounded wedge threshold is 49 poison, which requires a 4TH identity. The report's reasoning conflated 'max poison that still delivers' (48, per T52's 48-deliver/49-wedge boundary) with 'min poison that wedges' (49); ceil(49/16)=4.",
+      "impact": "Quantitative only, and in the DEFENDER's favour: the quota is marginally more effective than the report claims (4 self-published identities to wedge byte-bounded, not 3). It does not change the class verdict — the flood (T52-F-001) is still OPEN, identities are still free (one unauthenticated POST /v1/device-records/publish each), and the wedge still holds up to 168 h. The count-bounded figure (50 identities + 800 POSTs) is correct because 800 is divisible by 16. No gate check is affected.",
+      "suggested_fix": "Optionally correct the T54 report and the defaultSenderUnackedQuota comment to say 4 identities / 49 max-size POSTs for the byte-bounded residue. The residue test TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk (3 identities, page size 2, simulated capacity 32) remains valid as a CLASS statement and correctly stays green; if it is ever made to model the real 1 MiB byte budget with max-size envelopes it would need 4 identities. No code change is required for the gate; recorded for reconciliation.",
+      "evidence": "Standalone scratchpad probes (outside the repo, no repo file touched) built apps/relay/cmd/relay, ran it at default config (only ECHOLET_RATE_LIMIT_PER_MINUTE raised, the single deviation T49/T52 declared), drove the real dist/cli.js for the two legitimate parties, and modelled attackers as fresh self-published ed25519 identities. Persisted records: scenarioA_17th {status:403,code:SENDER_QUOTA_EXCEEDED}; boundary_48poison {poison:48,identities:3,poll1_exit:0,delivered:true,wedged:false}; boundary_49poison {poison:49,identities:4,poll1_exit:3,delivered:false,wedged:true}; threshold_N3 {poison:48,delivered:true}; threshold_N4 {poison:64,wedged:true}; threshold_N5 {poison:80,wedged:true}; direct raw poll page1 {status:200,envelopes:3,has_more:true} at encoded_envelope_len 262853 vs pollEnvelopeByteBudget (1<<20)-4096=1044480; wedge_persistence_3_polls {poll1:0,poll2:3,poll3:3,history_len:1}. Mechanism: the ~1 MiB byte budget admits 3 max-size envelopes per page, 16 pages = 48 slots, and the small legit message fits after the last 3 poison on the 16th page, so 48 delivers and 49 wedges.",
+      "confidence": "high"
+    },
+    {
+      "id": "T52-F-001",
+      "global_id": "001-T55-verify#T52-F-001",
+      "reviewer": "code-verifier",
+      "severity": "major",
+      "file": "apps/relay/internal/api/handler/device_record_handler.go",
+      "line": 36,
+      "problem": "Carried forward and still OPEN after T54. The per-sender quota bounds one SENDER's unacked occupancy but nothing bounds total mailbox occupancy, and POST /v1/device-records/publish (and the record embedded in /v2/prekeys/publish) is still unauthenticated: a fresh self-signed DeviceRecord is accepted with HTTP 200 (re-confirmed against the real binary this run), so an attacker mints another identity for the cost of one request. The mailbox-flooding class T49-F-001/T52-F-001 identified is therefore bounded further but not closed.",
+      "impact": "The wedge still occurs. Byte-bounded regime at default config: 4 self-published identities + 49 maximum-size POSTs (~12.85 MB) wedge a victim's mailbox permanently for up to the 168 h retention cap (48 poison, i.e. 3 identities, still delivers). Count-bounded: 50 identities + 800 POSTs. Each identity is one unauthenticated POST /v1/device-records/publish, one-time and reusable across victims; under the default 120/min rate limit the whole byte-bounded attack is 4+49=53 requests in well under a minute. The quota raised the attacker's identity count linearly (1->4 byte-bounded, 1->50 count-bounded) while leaving the per-identity price at one HTTP request and the data volume, POST count and duration unchanged.",
+      "suggested_fix": "Unchanged from T52: bind mailbox occupancy or send-rate to something the attacker cannot self-mint (an authenticated or rate-limited publication path, a recipient-issued sending capability, or per-recipient total-occupancy limits), or let a recipient drain permanently-unacceptable envelopes without the client's 16-page cap. This is a design decision for a follow-up task, not a gate fix; recorded OPEN.",
+      "evidence": "Re-confirmed this run: scenarioA_attacker_publish_status 200 (fresh self-signed DeviceRecord accepted with no credential); the immediately-following authenticated envelope stored; multi-identity floods wedge at boundary_49poison/threshold_N4 as above. The quota refuses only a sender already at 16 in one mailbox (403 SENDER_QUOTA_EXCEEDED before storage), which the attacker sidesteps by publishing another free identity.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/api/handler/device_record_handler.go:36 (PublishDeviceRecord — stores a DeviceRecord, self-signature only)",
+          "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go (PublishSignalPreKeyBundleV2 — embeds and stores the DeviceRecord, same self-signature trust)",
+          "apps/relay/internal/validation/validate.go:10-49 (ValidateDeviceRecord — verifies the record only against its own identity_id; validate.go:23-29 documents both key halves as caller-chosen)"
+        ],
+        "enumeration_method": "keryx ctx rg over apps/relay/internal/api/router/router.go: the two ingress points that store a DeviceRecord are r.Post /v1/device-records/publish (router.go:65) and r.Post /v2/prekeys/publish (router.go:69), both resolving trust through ValidateDeviceRecord / VerifyCanonicalJSONSignature against the record's own identity_id with no external authorization. The quota (enforceSenderQuota, mailbox_handler.go:294) sits on the send route and bounds one sender, not total occupancy, so it does not intersect this ingress."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "matrix_checks_pass": 17,
+    "matrix_checks_fail": 0,
+    "workspace_test_count": 162,
+    "workspace_full_executions": 4,
+    "go_data_races": 0,
+    "integrity_files_ok": 59,
+    "integrity_files_modified": 0,
+    "wedge_identities_byte_bounded": 4,
+    "wedge_identities_count_bounded": 50,
+    "wedge_poison_boundary_deliver": 48,
+    "wedge_poison_boundary_wedge": 49
+  },
+  "timestamp_utc": "2026-09-07T04:30:00Z"
+}

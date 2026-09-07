@@ -1,0 +1,185 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T54-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "GREEN phase for T53 / finding T52-F-001. Implemented the pinned per-sender unacked-envelope quota: 16 live envelopes per (recipient_mailbox_id, sender_identity_id), enforced in MailboxHandler.SendEnvelope between authenticateSender and StoreEnvelope, refused with 403 SENDER_QUOTA_EXCEEDED (non-retryable, exit 3, deliberately NOT 429), counted by scanning live non-expired envelopes rather than a send/ack counter, and exempting an envelope_id already stored so F-004's byte-identical replay stays 200 and consumes no slot. All 6 RED Go tests and both RED TypeScript cases now pass, with no test file edited: apps/cli 22 files / 101 tests, workspace 162, pnpm typecheck Done on 7 projects, go test ./... and go test -race -tags=relayv2 all ok with 0 data races. The concern is the one the task was dispatched with and is not hidden: the quota does NOT close the flooding class. Device-record publication is still unauthenticated, so the attacker's cost rises from 1 identity to about 3 (byte-bounded) or 50 (count-bounded) and no further. TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk is untouched, still present and still green, recording exactly that.",
+  "summary_markdown": "## What landed\n\n**Quota: 16 unacked envelopes per `(recipient_mailbox_id, sender_identity_id)`**, configurable as `ECHOLET_MAX_UNACKED_ENVELOPES_PER_SENDER` with the default at 16. A non-positive configured value keeps the default, following `MailboxRepository.SetRetentionCap`. `NewMailboxHandler`'s signature is unchanged, so every existing handler test still constructs a handler at the default the T53 suite pins.\n\n**Enforcement point.** `MailboxHandler.SendEnvelope`: decode → envelope required → `ValidateMailboxEnvelope` → expiry → `authenticateSender` → **`enforceSenderQuota`** → `StoreEnvelope`. After authentication, so an unauthenticated caller cannot consume a real sender's allowance by claiming their identity id; before the store, so a refused envelope never occupies a byte of the victim's mailbox. Not in `validation.ValidateMailboxEnvelope`, which three `internal/validation` tests call directly with unsigned envelopes and which cannot see mailbox contents (the T50-I-001 trap).\n\n**Replay exemption.** `enforceSenderQuota` returns before the count check when `(recipient_mailbox_id, envelope_id)` is already stored. The invariant is exact: storing under an existing pair is either an idempotent replay (`SaveEnvelope` no-ops on identical bytes) or an `ENVELOPE_ID_CONFLICT` (refused, 409) — neither can increase occupancy, so neither may be charged. Without it, F-004's exact retry fails with a condition the sender cannot clear, at exactly the boundary where a lost response makes that retry necessary.\n\n**Live count, not a counter.** `MailboxRepository.SenderOccupancy` scans the mailbox prefix and counts envelopes whose `sender_identity_id` matches and whose `expires_at_ms` has not passed — the same predicate `GetEnvelopes` and `GetEnvelopeBatchFrom` apply. A send/ack counter never learns about expiry, which is how an offline recipient would permanently silence a legitimate sender. The scan is bounded twice (T53-I-003): an already-stored `envelope_id` returns without scanning at all, and counting stops the moment the quota is reached, so the work per send is O(quota) plus the expired/other-sender records walked past.\n\n**Wire.** `403 SENDER_QUOTA_EXCEEDED`, non-retryable, exit 3, allowlisted in `relayClient.ts` `remoteCodes` and `cli.ts` `reportedRelayCodes` — the `UNAUTHORIZED_MAILBOX_ACCESS` / `PREKEY_BUNDLE_UNAVAILABLE` precedent. Not 429: `relayClient.ts:133` marks 429 retryable and `classify()` maps retryable errors to `RELAY_UNAVAILABLE` / exit 4 without reading `remoteCode`, which would discard the diagnosis and start a retry loop against a condition only the recipient can clear.\n\n**Documented** in `docs/API-11_JSON_SCHEMAS.md` (send route + standard error codes), `docs/requirements/echolet-cli-prototype/specification.md` (failure-behavior table) and `docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md` — each stating the residue as well as the rule.\n\n## Verification\n\n| Check | Result |\n|---|---|\n| `apps/cli` vitest | 22 files / **101 tests passed**, both E2E suites, 3/3 real two-process runs |\n| Workspace vitest | **162 passed** (cli 101, session-node 24, crypto-core 16, protocol 12, mobile 6, client-core 2, client-db 1) |\n| `pnpm typecheck` | Done on all 7 projects |\n| `go test ./...` | all packages ok |\n| `go test -race -count=1 -tags=relayv2 -timeout=300s ./...` | all ok, **0 data races** |\n| `gofmt -l ./internal` | only the two files already unformatted before this task; none this task touched |\n| `go vet ./...` | clean |\n\nRED→GREEN confirmed by execution: before the change 6 Go tests failed (`status = 200 (code \"\")`; *\"the legitimate message was NOT reached within the recipient's 16-page drain walk after one identity placed 36 of 36 attempted envelopes\"*) and 2 TypeScript cases failed. **No test file was edited** — the three T53 files, `vitest.config.ts` and `globalSetup.ts` all verify byte-identical by SHA-256 against the recorded hashes. Nothing skipped, `.only`-ed or deleted repo-wide.\n\n## What this does not close\n\n`POST /v1/device-records/publish` is still unauthenticated, so identities are still free. The quota bounds one **sender**; nothing bounds total mailbox occupancy. The attacker's cost moves from 1 identity + 49 max-size POSTs to **3 identities + 48**, or from 1 identity + 800 POSTs to **50 identities + 800**. Linear, not structural, and once achieved the wedge still holds up to the 168 h retention cap. `TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk` is present, unmodified and green — it publishes 3 identities, fills 3 × 16 slots, and still watches the real 16-page walk fail to reach the message behind them.",
+  "acceptance": [
+    {
+      "criterion": "A single sender_identity_id cannot hold more than the configured number of unacked envelopes in one recipient mailbox",
+      "status": "met",
+      "evidence": "TestSendEnvelopeEnforcesAPerSenderUnackedQuota PASS. 16 authenticated sends accepted, the 17th refused, mailbox holds exactly 16 and the refused envelope_id is absent. Quota is defaultSenderUnackedQuota = 16 in mailbox_handler.go, configurable as ECHOLET_MAX_UNACKED_ENVELOPES_PER_SENDER with the default unchanged."
+    },
+    {
+      "criterion": "Exceeding the quota is refused with a bounded 4xx and a distinguishable error code, before storage",
+      "status": "met",
+      "evidence": "enforceSenderQuota answers 403 SENDER_QUOTA_EXCEEDED and returns false, so StoreEnvelope is never reached. assertQuotaRejection (which rejects 429 explicitly, rejects any non-4xx and requires the exact code) passes in all five tests that call it."
+    },
+    {
+      "criterion": "Acking or expiring an envelope frees quota again, so the quota is not a permanent lockout of a legitimate contact",
+      "status": "met",
+      "evidence": "TestAckingAnEnvelopeFreesSenderQuota PASS and TestExpiredEnvelopesDoNotConsumeSenderQuota PASS (2.44s, i.e. it genuinely waited out the declared expiry plus retention-deadline slack). Both are satisfied because SenderOccupancy counts live, non-expired envelopes by scanning actual state rather than tracking a send/ack counter."
+    },
+    {
+      "criterion": "F-004 idempotent replay does not consume additional quota",
+      "status": "met",
+      "evidence": "TestIdempotentReplayDoesNotConsumeSenderQuota PASS: 15 distinct sends, the 16th sent then replayed byte-identically 3 times (all 200 while the sender sits exactly at quota), mailbox still holds exactly 16, and a genuinely new envelope is still refused. SenderOccupancy.EnvelopeAlreadyStored short-circuits the count check. TestAuthenticatedSendKeepsEnvelopeIDReplaySemantics (T50) also PASS, so the 409 conflict path is not swallowed."
+    },
+    {
+      "criterion": "The quota is per recipient mailbox, so one hostile recipient cannot silence a sender everywhere",
+      "status": "met",
+      "evidence": "TestSenderQuotaIsScopedToOneRecipientMailbox PASS. SenderOccupancy is keyed on the mailbox prefix, so a sender at quota with bob still writes to carol."
+    },
+    {
+      "criterion": "Legitimate use is unaffected: normal conversation, existing E2E flows, offline delivery and the exact-retry path still work",
+      "status": "met",
+      "evidence": "apps/cli 22 files / 101 tests passed including both E2E suites and 3/3 real two-process runs (offline, restart, exact retry, ack recovery); 162 tests workspace-wide; go test ./... and go test -race -tags=relayv2 all ok with 0 data races; pnpm typecheck Done on 7 projects."
+    },
+    {
+      "criterion": "The measurable improvement: one identity alone can no longer wedge a mailbox, and a legitimate message behind its envelopes is still delivered",
+      "status": "met",
+      "evidence": "TestASingleIdentityCannotWedgeTheBoundedDrainWalk PASS. It drives the REAL poll route through the recipient's real bounded walk (16 pages, cursor resumption, nothing acknowledged) after one identity attempts 36 envelopes; before the change it failed with 'the legitimate message was NOT reached ... (walk stopped at page 16)'. Its own preconditions also guarantee it cannot pass vacuously: the quota must be strictly below both the simulated walk and the 48 maximum-size envelopes T52 measured."
+    },
+    {
+      "criterion": "Any new error code is surfaced distinguishably rather than collapsed into the generic protocol rejection",
+      "status": "met",
+      "evidence": "SENDER_QUOTA_EXCEEDED added to remoteCodes (relayClient.ts) and reportedRelayCodes (cli.ts). relayClient.senderQuota.test.ts (3 cases) and cli.senderQuota.test.ts (1 process-level case) both pass: exit 3 under the code's own name, a 403 INVALID_SIGNATURE on the same route keeps a distinct code, a 429 RATE_LIMITED still exits 4 RELAY_UNAVAILABLE, unrecognised codes are still discarded, and no relay-supplied message text leaks."
+    },
+    {
+      "criterion": "The residue test is neither weakened nor removed",
+      "status": "met",
+      "evidence": "TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk PASS, in the unmodified file. apps/relay/internal/api/handler/mailbox_sender_quota_test.go still hashes to 60f806f55babb036d43dca40093a55b00ba04b3c33194120e23cec95dbaa9b66, the value the T53 result recorded."
+    },
+    {
+      "criterion": "Nothing landed was weakened: F-004, F-005, F-006, T48 shape parity and cursor resumption, `claimable`, sender authentication, inbound.test.ts:177-183, the 0/2/3/4/5 exit-code contract, and every .strict() schema",
+      "status": "met",
+      "evidence": "No test file, config file or schema was edited. The three T53 test files plus apps/cli/vitest.config.ts (da0c9db0...) and apps/cli/test/globalSetup.ts (a27ae897...) verify byte-identical by SHA-256 against the T53-recorded hashes after all work. The quota adds no envelope field, so no .strict() schema is touched on either side. 0 matches repo-wide for .skip( / .only( / .todo( / xdescribe( / t.Skip( / t.Skipf(. The new code answers 403 and is reported at exit 3, leaving the 0/2/3/4/5 contract untouched."
+    },
+    {
+      "criterion": "The bound and the new error code are documented",
+      "status": "met",
+      "evidence": "docs/API-11_JSON_SCHEMAS.md (/v1/messages/send section plus the standard error-code list), docs/requirements/echolet-cli-prototype/specification.md (failure-behavior table row) and docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md (send-route checks). Each states the residue as well as the rule. The config declaration also records that the default of 16 was sized against the drain-walk capacity ECHOLET_MAX_MAILBOX_BATCH and ECHOLET_MAX_MESSAGE_BYTES produce."
+    },
+    {
+      "criterion": "The per-sender quota closes the T52-F-001 flooding class",
+      "status": "not_met",
+      "evidence": "It does not, and nothing in this change claims otherwise. POST /v1/device-records/publish is still unauthenticated, so identity creation stays free and each identity gets its own full allowance. Cost rises from 1 identity to about 3 (byte-bounded) or 50 (count-bounded) and no further; the wedge, once achieved, still holds up to the 168 h retention cap. Carried forward as finding T54-F-001 and pinned by the still-green TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T54-implement-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t54-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "The quota and its justification, the enforcement point and its ordering constraints, the replay exemption and why it is exact, the live-count method and its bounding, the new error code and why it is not 429, the documentation touched, the verification matrix, and a plainly stated section on what the fix does not close.",
+      "hash": "17b494495f1e795c699cdb7bb5ac6932f9e06092241986633fde30e4ca730c7f"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "senderUnackedQuota field, defaultSenderUnackedQuota = 16, SetSenderUnackedQuota, enforceSenderQuota, and the call site between authenticateSender and StoreEnvelope.",
+      "hash": "49e07accef49de28a1f3a2deae3889f82903caa5beb10dafe7e1068b7acccdf7"
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "SenderMailboxOccupancy and SenderOccupancy: bounded live-envelope count per (mailbox, sender) plus the already-stored envelope_id check.",
+      "hash": "968232f2d1beb276f15580052a9670b7848a303f9cdcee1365ed3f96f56159b6"
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "SENDER_QUOTA_EXCEEDED added to the remoteCodes allowlist, with the reason the code must arrive on a non-retryable status.",
+      "hash": "a29090193b272ab7367fe69e5ecef0be1a7ed38892079909ec745728cb0e38c9"
+    },
+    {
+      "path": "apps/cli/src/commands/cli.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "SENDER_QUOTA_EXCEEDED added to reportedRelayCodes, so the condition is reported under its own name at exit 3 instead of PROTOCOL_REJECTED.",
+      "hash": "476d4f20c7503237bdffaf697ff9296f78bd0efec3481cba9b6b467b4ce491de"
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/relay/internal/api/handler/mailbox_handler.go", "change": "modified" },
+    { "path": "apps/relay/internal/service/mailbox_service.go", "change": "modified" },
+    { "path": "apps/relay/internal/storage/repository/mailbox_repo.go", "change": "modified" },
+    { "path": "apps/relay/internal/config/config.go", "change": "modified" },
+    { "path": "apps/relay/internal/api/router/router.go", "change": "modified" },
+    { "path": "apps/cli/src/transport/relayClient.ts", "change": "modified" },
+    { "path": "apps/cli/src/commands/cli.ts", "change": "modified" },
+    { "path": "docs/API-11_JSON_SCHEMAS.md", "change": "modified" },
+    { "path": "docs/requirements/echolet-cli-prototype/specification.md", "change": "modified" },
+    { "path": "docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md", "change": "modified" },
+    { "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t54-implementation-report.md", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "T54-F-001",
+      "global_id": "001-T54-implement#T54-F-001",
+      "reviewer": "task-implementer",
+      "severity": "major",
+      "file": "apps/relay/internal/api/handler/device_record_handler.go",
+      "line": null,
+      "problem": "The per-sender quota now shipped bounds one SENDER; it does not bound total mailbox occupancy, and identity creation remains free. POST /v1/device-records/publish accepts a fresh self-signed device record with no credential, so an attacker mints as many identities as they need for the cost of one unauthenticated request each, and each identity receives its own full 16-envelope allowance in the victim's mailbox.",
+      "impact": "T52-F-001 is bounded, not closed. The attacker's cost moves from 1 identity + 49 maximum-size POSTs to 3 identities + 48 in the byte-bounded regime, and from 1 identity + 800 POSTs to 50 identities + 800 in the count-bounded regime. Once achieved the wedge still holds for up to the 168 h retention cap. This is a linear price increase on an attacker whose per-identity price is one HTTP request, and it is exactly what the user was told to expect.",
+      "suggested_fix": "Do not present the quota as a fix for the class. Closing it needs a control the relay does not have: binding send rate or mailbox occupancy to something the attacker cannot self-mint (an authenticated or rate-limited publication path, or a recipient-issued sending capability), or letting a recipient drain permanently-unacceptable envelopes without the client's 16-page cap. Keep TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk in place; if it ever starts failing, re-measure the new threshold and update it rather than deleting it.",
+      "evidence": "TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk passes with the quota enforced: 3 published identities each fill their own 16-envelope allowance, all 48 sends are accepted, and the recipient's real 16-page poll walk still fails to reach the legitimate message behind them. It passed before this change and passes after it — the quota changes nothing about this case.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/api/handler/device_record_handler.go (POST /v1/device-records/publish - self-signed record accepted with no credential)",
+          "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go (POST /v2/prekeys/publish - embeds and stores the same DeviceRecord)",
+          "apps/relay/internal/validation/validate.go:23-29 (ValidateDeviceRecord verifies only against the record's own identity key)"
+        ],
+        "enumeration_method": "Inherited unchanged from T53-F-001, which enumerated the sites through keryx ctx rg over apps/relay and cross-checked them against T52's execution-based observation that /v1/device-records/publish returns HTTP 200 for a fresh self-signed record with no credential. No code at any of those three sites was touched by this task."
+      }
+    },
+    {
+      "id": "T54-F-002",
+      "global_id": "001-T54-implement#T54-F-002",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": null,
+      "problem": "SenderOccupancy counts by walking the mailbox key prefix. The count itself stops at the quota (16) and an already-stored envelope_id returns without scanning at all, but the iterator still walks past expired records and records belonging to other senders before it reaches 16 matches, so the per-send cost is O(quota) plus that residual term rather than O(quota) outright.",
+      "impact": "On a mailbox holding thousands of envelopes under the 168 h retention cap, a send from a sender with few live envelopes there can walk a long prefix before the count can terminate. This is a cost an attacker filling the mailbox partly controls. It is bounded work per request, not unbounded growth, and no measurement was taken - it is recorded as a known shape, not as an observed problem.",
+      "suggested_fix": "If it ever matters, key a per-(mailbox, sender) counter reconciled against the same expiry predicate the poll walk uses, rather than dropping the expiry filter - a counter that cannot observe expiry is precisely what TestExpiredEnvelopesDoNotConsumeSenderQuota refuses. Measure before changing: the same prefix scan already backs GetEnvelopes and GetEnvelopeBatchFrom on every poll.",
+      "evidence": "Read from the implementation. SenderOccupancy returns early on EnvelopeAlreadyStored and breaks once LiveEnvelopes reaches countLimit, but the iterator has no way to seek directly to a given sender's records because the key is mailbox:<mailbox_id>:<envelope_id>. Carried forward from T53-I-003, which raised the same observation about the satisfiability probe.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T54-F-003",
+      "global_id": "001-T54-implement#T54-F-003",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/relay/internal/config/config.go",
+      "line": null,
+      "problem": "The quota is now configurable as ECHOLET_MAX_UNACKED_ENVELOPES_PER_SENDER (default 16), but its correct value is coupled to ECHOLET_MAX_MAILBOX_BATCH and ECHOLET_MAX_MESSAGE_BYTES, and nothing enforces that coupling. 16 was chosen because the client's 16-page walk covers 48 maximum-size envelopes at the current defaults.",
+      "impact": "An operator who raises ECHOLET_MAX_MESSAGE_BYTES or ECHOLET_MAX_MAILBOX_BATCH changes the drain-walk arithmetic the quota was sized against, without any signal that the quota should move with it. The failure mode is silent: the quota keeps working and keeps meaning less.",
+      "suggested_fix": "Leave the default alone. If the relay ever validates its own configuration, this is a natural cross-field check. In the meantime the coupling is recorded at the declaration site in config.go, in defaultSenderUnackedQuota's own comment, and in docs/API-11_JSON_SCHEMAS.md.",
+      "evidence": "config.go now declares 11 tunables; the 48-envelope walk capacity the quota is justified against is derived from two of them. The T53 suite never constructs a handler with a non-default quota, so the configurable knob is compatible with every test in it - confirmed by the full Go suite passing untagged and under -race -tags=relayv2.",
+      "confidence": "medium"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-07T03:55:00Z"
+}

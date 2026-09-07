@@ -1,0 +1,68 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T34-implement",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Fix relay mailbox immutability, envelope expiry, request bounds and identity-scoped mailbox authorization",
+    "description": "Turn the RED tests from dispatch 001-T34-tests GREEN by implementing the four confirmed T28 review findings F-004, F-005, F-006 and F-007 in apps/relay. The tests are the contract: make them pass without weakening them.",
+    "intent": "implement",
+    "scope": "apps/relay production code. Do not modify apps/cli or packages/**."
+  },
+  "acceptance_criteria": [
+    "F-004 (blocker): the mailbox writer reads the existing record inside the same transaction. A byte-identical envelope replay succeeds idempotently; a changed body under an already-used (recipient mailbox, envelope_id) pair returns a conflict mapped to HTTP 409 with code ENVELOPE_ID_CONFLICT (the code apps/cli/src/transport/relayClient.ts already expects) and never replaces the stored envelope. Transaction conflicts are retried safely.",
+    "F-005 (major): already-expired envelopes are rejected at submission; physical retention never exceeds the envelope's remaining declared lifetime, and never exceeds the configured server cap either; GetEnvelopes filters expired records BEFORE applying the batch limit; an identical retry does not extend expiry.",
+    "F-006 (blocker): every v1 JSON decoder site listed in the finding bounds the request body with http.MaxBytesReader before decoding and answers with a bounded error; ValidateMailboxEnvelope verifies the ACTUAL decoded ciphertext byte length against both the declared size_bytes and the configured maximum. Other variable-length request fields/arrays are bounded as part of the same decoder contract.",
+    "F-007 (blocker): mailbox device authorization resolves the device by an immutable (mailbox identity, device UUID) binding populated by both v1 and v2 publication, never by a global first-UUID-match scan followed by an ownership comparison. A device UUID registered under an unrelated identity cannot deny service to the legitimate recipient on challenge, poll or ack.",
+    "Every test added by 001-T34-tests passes, unmodified: mailbox_envelope_lifecycle_test.go, mailbox_device_authorization_test.go, request_body_limit_test.go, mailbox_repo_test.go, mailbox_envelope_size_test.go.",
+    "`go -C apps/relay test -race -count=1 ./...` and the `-tags relayv2` variant both pass, with no pre-existing test weakened, skipped or deleted.",
+    "Existing v1 route behaviour outside these four findings is unchanged."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/plan.md", "kind": "plan", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T34-tests-result.json", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-path-echolet-cli-prototype-t28/consolidated-findings.json", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/relay/internal/storage/repository/mailbox_repo.go",
+    "apps/relay/internal/storage/repository/device_record_repo.go",
+    "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go",
+    "apps/relay/internal/api/handler/mailbox_handler.go",
+    "apps/relay/internal/api/handler/device_record_handler.go",
+    "apps/relay/internal/api/handler/prekey_bundle_handler.go",
+    "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go",
+    "apps/relay/internal/validation/validate.go",
+    "apps/relay/internal/service/cleanup_service.go",
+    "apps/relay/internal/config/config.go",
+    "apps/relay/internal/api/handler/mailbox_envelope_lifecycle_test.go",
+    "apps/relay/internal/api/handler/mailbox_device_authorization_test.go",
+    "apps/relay/internal/api/handler/request_body_limit_test.go",
+    "apps/relay/internal/storage/repository/mailbox_repo_test.go",
+    "apps/relay/internal/validation/mailbox_envelope_size_test.go",
+    "apps/cli/src/transport/relayClient.ts"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "Load and follow the project task-implementer skill (.metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md).",
+    "You did not write these tests and you may not weaken them. Do not edit, skip, delete or relax any test file to make the suite pass. If a test is genuinely wrong, report it as a finding and return DONE_WITH_CONCERNS instead of changing it.",
+    "You do not accept your own work. An independent verifier reviews it afterwards.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Do not modify apps/cli or packages/** - a parallel worker owns the CLI scope.",
+    "Implementer note from the test author (1): the F-005 retrieval test seeds Badger directly under the current key layout mailbox:<mailbox>:<envelope_id>; if you change that layout, update seedStoredEnvelope/mailboxEnvelopeKeyForTest accordingly - that is the one permitted kind of test edit, and it must be reported.",
+    "Implementer note (2): the F-006(b) test pins the current two-arg ValidateMailboxEnvelope(envelope, maxBytes) signature and reads 'actual decoded ciphertext byte length' as the JSON-decoded string length, matching the CLI contract size_bytes = Buffer.byteLength(ciphertext). Put the expiry check in the handler, not in that signature.",
+    "Implementer note (3): F-006(a) asserts boundedness, not an exact limit. The /v1/messages/send body limit must stay ABOVE MaxMessageBytes (262144); the v2 sibling's 64 KiB limit is too small for that route.",
+    "Implementer note (4): for F-005(a) prefer the INVALID_SCHEMA rejection code, since packages/** is owned by a parallel worker and carries no expiry code.",
+    "Use `keryx ctx rg` for searches, never bare rg/grep. Use `keryx ctx run` for long command output.",
+    "Never print ciphertext, plaintext, key material or HTTP request bodies into reports or logs.",
+    "Do not commit: this repository has an unborn untracked baseline, so partial root commits are forbidden.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T34-implement-result.json and make the final response start with STATUS:.",
+    "Also write a short implementation report to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t34-implementation-report.md describing the change per finding and the storage/compatibility implications."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T34-implement-result.json", "summary_max_tokens": 900},
+  "budget": {"max_output_tokens": 8000, "max_runtime_ms": 3000000},
+  "provenance": {"created_at": "2026-09-06T13:22:00+04:00", "created_by": "flow-orchestrator", "source_request": "Fix T28 review findings F-001..F-012 through managed flow tasks T33-T38."}
+}

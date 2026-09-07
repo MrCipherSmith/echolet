@@ -1,0 +1,52 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T22-implement",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Implement additive relay v2 publication and atomic claims",
+    "description": "Make the independent relay-v2 RED suite green and expose additive v2 publish/claim HTTP routes while preserving all v1 behavior.",
+    "intent": "implement",
+    "scope": "apps/relay v2 prekey model, validation, storage, service, handler, and routing"
+  },
+  "acceptance_criteria": [
+    "The race-enabled tagged T22 Go suite passes.",
+    "Raw-bundle immutability, permanent OTK reservations, concurrent allocation, and exact claim replay are durable in Badger.",
+    "Relay validates the fixed root/device binding required by the shared fixture and rejects malformed, expired, or forged bundles.",
+    "Additive /v2/prekeys/publish and /v2/prekeys/claim routes have tested deterministic errors and statuses.",
+    "Existing v1 Go tests and shared protocol tests remain green."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T22-tests-result.json", "kind": "report", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T22-implement-input.json", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/relay/internal/storage/repository/prekey_bundle_v2_test.go",
+    "packages/protocol/src/types/fixtures/relay-v2.json",
+    "packages/protocol/src/types/signalPreKeyBundleV2.ts",
+    "apps/relay/internal/storage/repository/prekey_bundle_repo.go",
+    "apps/relay/internal/service/prekey_bundle_service.go",
+    "apps/relay/internal/api/handler/prekey_bundle_handler.go",
+    "apps/relay/internal/api/router/router.go",
+    "apps/relay/internal/validation/validate.go",
+    "apps/relay/internal/cryptoutil/signatures.go"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action.",
+    "Load task-implementer and validate the paired task-implementer input before editing.",
+    "Confirm the supplied tagged test is RED, then make it GREEN without weakening or deleting tests.",
+    "Use apply_patch for edits and keryx ctx rg for every search.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Do not modify apps/cli or existing protocol contracts/fixtures except adding a necessary test correction with explicit evidence.",
+    "Do not commit because the repository has an unborn untracked baseline.",
+    "Add focused handler/router tests for both v2 endpoints and error mappings.",
+    "Write and validate a subagent-result at the output artifact path; final response starts STATUS:."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T22-implement-result.json", "summary_max_tokens": 500},
+  "budget": {"max_output_tokens": 5000, "max_runtime_ms": 1200000},
+  "provenance": {"created_at": "2026-09-06T10:48:30+04:00", "created_by": "flow-orchestrator", "source_request": "Implement the approved Echolet CLI prototype through flow-orchestrator."}
+}

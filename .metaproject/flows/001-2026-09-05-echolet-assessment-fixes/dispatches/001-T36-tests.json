@@ -1,0 +1,52 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T36-tests",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {
+    "title": "Pin the typed unknown-sender rejection regression",
+    "description": "Strengthen the unknown-sender inbound regression so it pins the explicit CONTACT_NOT_TRUSTED trust guard instead of accepting any throw (review finding F-012), and prove by bounded mutation that deleting the guard now fails the suite.",
+    "intent": "test",
+    "scope": "apps/cli inbound tests only. No implementation changes unless the strengthened assertion exposes a real code gap, which must be reported rather than silently fixed."
+  },
+  "acceptance_criteria": [
+    "F-012 (minor): the unknown-sender fixture test asserts the public rejection code CONTACT_NOT_TRUSTED specifically, not a generic rejects.toThrow.",
+    "The same test still asserts that persisted state is unchanged and that no acknowledgement is sent for the rejected envelope.",
+    "The changed-device case and the malformed-ciphertext case remain distinct tests, each asserting its own intended typed failure, so one guard cannot mask another.",
+    "Bounded mutation evidence: with the dedicated missing-contact guard removed, the inbound suite now FAILS on the CONTACT_NOT_TRUSTED assertion (previously it stayed green). The mutation is reverted afterwards and no canonical source file is left modified.",
+    "The full CLI test suite and the workspace suite are green with the strengthened test in place.",
+    "Carried from the completed T33 fix (finding T33-I1): remove the test-harness build race. apps/cli/src/commands/cli.test.ts runs `pnpm run build` while apps/cli/test/e2e/two-process.test.ts runs `pnpm --filter @echolet/cli build`, so two suites rebuild the same apps/cli/dist/cli.js concurrently while both spawn it; one observed run failed with `CLI send exit (INVALID_ARGUMENTS): expected 2 to be 4`. Build the CLI binary exactly once before any suite spawns it (for example a vitest globalSetup, or a single build step the suites depend on) so no suite rebuilds a binary another suite is executing. This is a harness fix, not a product change - do not alter CLI behaviour or the exit-code contract to achieve it.",
+    "Anti-flake evidence: after the harness fix, `pnpm --filter @echolet/cli test` passes on three consecutive independent invocations, with the two-process E2E green in each. Report the three results explicitly; T37 depends on this being trustworthy."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-path-echolet-cli-prototype-t28/consolidated-findings.json", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/data/testing/context.md", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/cli/src/runtime/inbound.ts",
+    "apps/cli/src/runtime/inbound.test.ts",
+    "apps/cli/src/runtime/outbound.ts",
+    "apps/cli/src/commands/cli.ts"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "Load and follow the project tests-creator skill and the project testing skill.",
+    "Flow task T33 has already landed and is green: a typed PersistenceError now flows through a single private Profile.transact() boundary into a redacted PERSISTENCE_FAILURE / exit 5, discriminated by ORIGIN (the operation's own rejection keeps its type via an Object.is identity check; only store-machinery failures become PersistenceError). Trust, validation and native decrypt failures deliberately remain exit 3. Read the current code; do not restore earlier behaviour or contradict those fixes, and make sure your CONTACT_NOT_TRUSTED assertion pins the exit-3 trust path rather than the new persistence path.",
+    "Flow task T35 may be running in parallel on apps/cli/src/transport/relayClient.ts and apps/cli/src/runtime/config.ts and on apps/relay. Do not modify those files; confine yourself to the inbound regression and the test-harness build sequencing.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Any temporary mutation used for the kill-the-mutant check must be reverted; leave no canonical file modified by the mutation pass.",
+    "Do not weaken or delete existing assertions.",
+    "Use `keryx ctx rg` for searches, never bare rg/grep. Use `keryx ctx run` for long command output.",
+    "Never print ciphertext, plaintext, key material or HTTP request bodies into reports or logs.",
+    "Do not commit: this repository has an unborn untracked baseline, so partial root commits are forbidden.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T36-tests-result.json and make the final response start with STATUS:.",
+    "In the result, record the mutation evidence explicitly: baseline pass count, mutated failure, and confirmation the mutation was reverted."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T36-tests-result.json", "summary_max_tokens": 700},
+  "budget": {"max_output_tokens": 4000, "max_runtime_ms": 1800000},
+  "provenance": {"created_at": "2026-09-06T13:20:00+04:00", "created_by": "flow-orchestrator", "source_request": "Fix T28 review findings F-001..F-012 through managed flow tasks T33-T38."}
+}

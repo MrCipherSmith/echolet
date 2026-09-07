@@ -1,0 +1,252 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T38-review-logic",
+  "status": "DONE",
+  "summary": "T38 fix review of F-001, F-002, F-003, F-008 and F-013 in apps/cli. All five are fixed. F-001: the signed bundle is committed to cli:publication before any network call (profile.ts:137-145, EncryptedSqliteStore.ts:74-76) and reused byte-identically across retries and restarts because both publicationSchema.bundle and SignalPreKeyBundleV2Schema.device_record are z.custom pass-throughs and RelayClient.validate normalises deterministically; rotateBundle() has exactly one caller path (outbound.ts:36 -> profile.ts:151) that no CLI command reaches. F-002: readConfirmation settles on the first \\r/\\n, on EOF, or on an overlong answer, then detaches, pauses and unrefs stdin (cli.ts:191-220). F-003: Profile.transact discriminates by origin; perform() rethrows the identical error object (EncryptedSqliteStore.ts:77-79) so Object.is holds for every callback rejection, and BEGIN IMMEDIATE fails before perform's try so SQLITE_BUSY becomes PersistenceError -> exit 5, while OutboundError raised inside the mutation transaction (outbound.ts:74) and native decrypt failures (inbound.ts:70) still reach exit 3. F-008: the outbox recheck is the first statement of the same transaction that encrypts, builds the envelope and appends history (outbound.ts:69-90), and the existed branch returns through settle()/deliver(), which still performs the pending->delivered transition. F-013: inlineStringOptionValues (cli.ts:89-102) rewrites only declared string options, never a boolean, never an already-inline option, never at end of argv, and stops at the bare --; a bounded parseArgs probe confirmed every assumption the fix rests on. No blocker and no major defect introduced. Recorded: one minor (rotateBundle()/retryPending() have no CLI entry point, so the prototype can still publish only one bundle - not a regression) and three info observations. All five non-negotiable criteria hold: no test weakened (test mtimes precede their production files, no skip/only/todo, expect.soft is a reporting aid not a loosened assertion), no strict schema loosened in this scope, no secret leakage (stdout carries only {ok,data} or {ok:false,error:{code}}; the publication bundle travels only to relay.publishBundle), exit-code contract intact, prototype scope respected.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Every finding in the assigned set (F-001, F-002, F-003, F-008, F-013) receives an explicit disposition of fixed, partially-fixed, not-fixed or fixed-with-new-risk, each with concrete evidence.",
+      "status": "met",
+      "evidence": "All five returned `fixed`, each with file:line and a control-flow argument; see review-logic-report.md sections F-001..F-013. A bounded read-only Node parseArgs probe backs F-013; no repository file was created or modified by the probe."
+    },
+    {
+      "criterion": "Any new defect introduced by a fix is reported with severity, file:line and a concrete failure scenario, including defects outside the assigned set that are encountered in the changed code.",
+      "status": "met",
+      "evidence": "No blocker or major defect was introduced. Reported: T38-L-001 (minor, outbound.ts:36), T38-L-002 (info, cli.ts:95-99), T38-L-003 (info, profile.ts:140), T38-L-004 (info, cli.ts:39)."
+    },
+    {
+      "criterion": "The five non-negotiable criteria in the shared review context are checked and reported on: no test weakened, no strict schema loosened, no secret leakage, exit-code contract intact, prototype scope respected.",
+      "status": "met",
+      "evidence": "review-logic-report.md section 'The five non-negotiable criteria'. Criterion 2 is reported for the TypeScript side only (nextCursorSchema at relayClient.ts:24 is a closed union on a .strict() object); the Go contract belongs to another reviewer's scope."
+    },
+    {
+      "criterion": "Findings are ranked by severity and each states whether it blocks acceptance of the fix wave.",
+      "status": "met",
+      "evidence": "Stats line and 'New observations' section: 0 blocker, 0 major, 1 minor, 3 info; T38-L-001 explicitly marked non-blocking and the rest are info."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-logic-report.md",
+      "kind": "report",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-logic-result.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-001",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "apps/cli/src/runtime/outbound.ts",
+      "line": 34,
+      "problem": "T38 disposition: FIXED. Repeated relay publication no longer creates a different signed bundle for the same reserved one-time prekey.",
+      "impact": "A retry after a lost publish response, and a retry after a full process restart, now resubmit the identical bundle_id around the identical reserved one-time prekey, so the relay's permanent OTK uniqueness contract no longer makes recovery impossible.",
+      "suggested_fix": "No change required. Optional follow-up recorded separately as T38-L-001: rotateBundle() has no CLI entry point.",
+      "evidence": "profile.ts:137-145 returns the stored cli:publication record or signs one and tx.set()s it in the same transaction; EncryptedSqliteStore.ts:74-76 executes write()+COMMIT synchronously before the promise resolves (PRAGMA synchronous = FULL at :25), and outbound.ts:34 awaits that before relay.publishBundle, so the record is durable before the first HTTP request. Byte-identity: publicationSchema.bundle (profile.ts:47) and SignalPreKeyBundleV2Schema.device_record (packages/protocol/src/types/signalPreKeyBundleV2.ts:38-50) are z.custom pass-throughs, so nothing is reconstructed or reordered across the JSON round-trip a restart forces, and RelayClient.validate (relayClient.ts:73-77) applies the same deterministic normalisation on every attempt. rotateBundle() cannot be reached implicitly: publish() calls only publicationBundle(), and rotatePublicationBundle() (profile.ts:151-160) has exactly one caller, outbound.ts:36, which no execute() branch in cli.ts:231-321 reaches - enumerated by `keryx ctx rg \"rotateBundle|rotatePublicationBundle|rotateOneTimePreKey|publicationBundle\"`, 13 matches over 7 files, complete. Test outbound.publish.test.ts:77-103 pins lost-response + restart with a boolean bodyText equality assertion; :105-119 pins repeat-of-success.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "F-001-logic",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/outbound.ts:34",
+          "apps/cli/src/runtime/profile.ts:137",
+          "apps/cli/src/runtime/profile.ts:151",
+          "packages/session-node/src/SignalClient.ts:245"
+        ],
+        "enumeration_method": "keryx ctx rg over rotateBundle|rotatePublicationBundle|rotateOneTimePreKey|publicationBundle across the workspace (13 matches, 7 files): the complete set of bundle producers and consumers is publish() at outbound.ts:34, the durable read/sign at profile.ts:137, the explicit rotation at profile.ts:151, and publicBundle()'s pointer read at SignalClient.ts:245. No other site allocates or submits a publication bundle."
+      },
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "T38 fix review: fixed. Durable cli:publication record committed before the first network call (profile.ts:137-145 + EncryptedSqliteStore.ts:74-76); byte-identical resubmission across retries and restarts; rotation unreachable implicitly (enumerated grep, 13 matches). Pinned by apps/cli/src/runtime/outbound.publish.test.ts:77-119."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-002",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 191,
+      "problem": "T38 disposition: FIXED. The interactive contact confirmation no longer waits for stdin EOF; it settles on a completed input line.",
+      "impact": "A user typing y/yes or n followed by Enter at the [y/N] prompt in a terminal is now released immediately, and the process is free to exit while the terminal still holds the write end of stdin open.",
+      "suggested_fix": "No change required.",
+      "evidence": "cli.ts:191-220. release() is idempotent via `done` (:198), detaches the data/end/error listeners, pauses stdin and unref()s the handle when it supports one (:200-206). onData settles on the first \\r or \\n via answer.search(/[\\r\\n]/) (:210-211) and on an answer longer than answerLimit = 16 (:212); onEnd still settles on EOF without a terminator (:214). The accept predicate /^(?:y|yes)$/i on the trimmed answer (:183) is unchanged from the pre-fix code, so no assertion could have been loosened to make it pass. cli.processFailures.test.ts:163-203 exercises affirmative line, negative line, EOF-without-newline and overlong answer at the process level with keepStdinOpen: true and asserts timedOut: false in each.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "F-002-logic",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/commands/cli.ts:191"
+        ],
+        "enumeration_method": "readConfirmation has one definition (cli.ts:191) and one caller, the contact-import confirm callback at cli.ts:268-271. process.stdin is read nowhere else in apps/cli/src: `keryx ctx rg` over process.stderr.write/process.stdout.write/console.* across apps/cli/src returned 3 matches, all in cli.ts (:192, :223, :334), and no other interactive reader exists. Single-member class, claimed deliberately."
+      },
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "T38 fix review: fixed. Bounded reader settling on first terminator / EOF / overlong answer at apps/cli/src/commands/cli.ts:191-220, pinned by apps/cli/src/commands/cli.processFailures.test.ts:163-203 with the parent end of stdin deliberately left open."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-003",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "apps/cli/src/runtime/profile.ts",
+      "line": 76,
+      "problem": "T38 disposition: FIXED. Runtime database failures are no longer converted into trust/protocol errors and exit code 3; classification is by origin and a domain error cannot be swallowed as PERSISTENCE_FAILURE.",
+      "impact": "A post-open SQLite failure (the named SQLITE_BUSY-under-BEGIN-IMMEDIATE scenario, a failed commit, a failed snapshot read) now reports PERSISTENCE_FAILURE / exit 5 on the send, poll and contact-import paths, while typed validation, trust and native decrypt failures keep exit 3. Exit 5 was not widened and exits 2/3/4 were not narrowed.",
+      "suggested_fix": "No change required for the reported class. Recorded separately as T38-L-003 (info): corruption of an already-read persisted record still classifies as exit 3 because it originates inside the operation callback.",
+      "evidence": "Store-machinery direction: with busy_timeout = 0 (EncryptedSqliteStore.ts:25), db.exec(\"BEGIN IMMEDIATE\") at :61 throws BEFORE perform's try block, so Profile.transact's `raised` is undefined and the rejection becomes PersistenceError (profile.ts:76-85). It then passes through outbound.ts:27 and inbound.ts:24 untouched, is re-raised rather than turned into a trust verdict at cli.ts:274, and classify maps it at cli.ts:325 ahead of the OutboundError/InboundError/ProfileError branches at :328-329. Domain direction (the one that matters): perform rethrows the IDENTICAL error object it caught (EncryptedSqliteStore.ts:77-79), so Object.is(raised.error, error) is true for every callback rejection and transact rethrows the original type - OutboundError(\"CONTACT_PIN_MISMATCH\") raised inside the mutation transaction at outbound.ts:74 still reaches exit 3, and a native libsignal decrypt failure inside accept() at inbound.ts:70 still reaches INBOUND_REJECTED / exit 3. Tests: cli.processFailures.test.ts:205-261 covers three exit-5 scenarios using a real second SQLite connection holding BEGIN IMMEDIATE; :263-302 is the control and asserts forged-signature, unpinned-recipient and native-decrypt failures all stay on exit 3, with an explicit expect(polled.code).not.toBe(5) at :301. The only replacement path I looked for - perform's catch running db.exec(\"ROLLBACK\") before rethrowing (:78) - requires ROLLBACK itself to throw, which cannot follow a pure domain throw (no SQL statement failed, the transaction is still active, ROLLBACK needs no lock at busy_timeout = 0); no reaching input could be named, so it is recorded as an observation and not a finding.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "F-003-logic",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/profile.ts:76",
+          "apps/cli/src/runtime/outbound.ts:27",
+          "apps/cli/src/runtime/inbound.ts:24",
+          "apps/cli/src/commands/cli.ts:274",
+          "apps/cli/src/commands/cli.ts:325"
+        ],
+        "enumeration_method": "Followed every catch boundary named in the original F-003 class_scope into the new code: the four erasing sites (outbound.ts:28, inbound.ts:25, cli.ts:201, cli.ts:252 in T28 numbering) are now outbound.ts:27, inbound.ts:24, cli.ts:274 and the classify chain at cli.ts:323-331, and all four preserve PersistenceError. Every Profile store access now routes through the single transact() helper at profile.ts:76 - verified by reading profile.ts in full: mailboxAuthorization (:90), withRuntime (:105), exportContact (:129), publicationBundle (:138), rotatePublicationBundle (:152), importContact (:173), listContacts (:188) and summary (:192) each call this.transact, and this.store.transaction appears nowhere else in the class."
+      },
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "T38 fix review: fixed. Origin-based discrimination in Profile.transact (apps/cli/src/runtime/profile.ts:76-85) rests on EncryptedSqliteStore.perform rethrowing the identical error object (packages/session-node/src/EncryptedSqliteStore.ts:77-79); exit-5 scenarios and the exit-3 control are pinned by apps/cli/src/commands/cli.processFailures.test.ts:205-302."
+      }
+    },
+    {
+      "id": "F-008",
+      "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-008",
+      "reviewer": "review-logic",
+      "severity": "blocker",
+      "file": "apps/cli/src/runtime/outbound.ts",
+      "line": 71,
+      "problem": "T38 disposition: FIXED. Concurrent same-id sends can no longer create duplicate outbound history or replace the CLI outbox envelope; the outbox recheck is inside the mutation transaction and the persisted record is returned without regenerating anything.",
+      "impact": "One logical message now yields one outbox record, one envelope id and one history entry regardless of interleaving, and the returned record still completes the pending -> delivered transition rather than short-circuiting it.",
+      "suggested_fix": "No change required.",
+      "evidence": "The mutation transaction opens at outbound.ts:69 (profile.withRuntime) and tx.get(keyFor(input.messageId)) is its FIRST statement at :71, ahead of the pin check (:73), client.encrypt (:76), envelope construction (:79), tx.set of the outbox record (:86) and appendHistory (:87) - so the recheck, the encryption and the history write are one transaction. EncryptedSqliteStore.perform snapshots state with this.read() after BEGIN IMMEDIATE (:61-64), so the recheck observes any commit that landed while the claim was in flight. No state transition is skipped: the existed branch returns through settle() (:91, :94-97), which raises MESSAGE_ID_CONFLICT on a contentHash mismatch and otherwise enters deliver() (:98-109); deliver short-circuits only on status === \"delivered\", so a pending record still runs client.retry, the ciphertext equality check, relay.sendEnvelope and the pending -> delivered write. History sequence allocation stays inside the same transaction (history.ts:10-17). The pre-transaction lookup at :45 is now used only as an optimisation and also delegates to settle(). Test outbound.concurrentSend.test.ts:84-112 uses a deterministic barrier (no sleeps) that holds the first transaction reading a missing cli:outbox:<id>; assertions at :180-183 check one history entry, one outbox key, one relayed envelope id and receipt equality - expect.soft is a multi-failure reporting aid, not a weakened assertion. No claim-key leak follows from the early return: the instance that committed performed tx.delete(claimKey) in the same transaction (:88) and the losing instance's claim lookup short-circuits on the now-present sessionKey (:52-59).",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "highload-F-001",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/outbound.ts:45",
+          "apps/cli/src/runtime/outbound.ts:71",
+          "apps/cli/src/runtime/outbound.ts:86",
+          "apps/cli/src/runtime/outbound.ts:87",
+          "apps/cli/src/runtime/outbound.ts:94"
+        ],
+        "enumeration_method": "Re-walked the four sites named in the original F-008 class_scope (the separate prior lookup, the enclosing mutation transaction, the tx.set and the appendHistory) in the fixed file and added the new settle() reconciliation point. OutboundMessenger.sendOwned is the sole outbound producer - read outbound.ts in full: the only tx.set(keyFor(...)) calls are :86 (create, inside the rechecked transaction) and :107 (the delivered marker), and the only appendHistory call is :87. The inbound path already performs its duplicate check inside its own mutation transaction (inbound.ts:66-73) and is unaffected."
+      },
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "T38 fix review: fixed. The recheck is the first statement of the same transaction that encrypts and appends history (apps/cli/src/runtime/outbound.ts:69-90), and the existed branch still completes pending -> delivered via settle()/deliver() (:91-109). Pinned by apps/cli/src/runtime/outbound.concurrentSend.test.ts:84-184 with a deterministic barrier."
+      }
+    },
+    {
+      "id": "F-013",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#F-013",
+      "reviewer": "review-logic",
+      "severity": "blocker",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 89,
+      "problem": "T38 disposition: FIXED. Option values beginning with '-' are accepted for every declared string option, and inlineStringOptionValues cannot consume an argument it should not.",
+      "impact": "An identity_id whose base64url encoding begins with '-' (about one in 64) can now be used with --to, --with and --from, and a message body beginning with '-' is accepted by --text. Every pre-existing rejection path still fails closed with INVALID_ARGUMENTS / exit 2, so the fix is not equivalent to strict: false.",
+      "suggested_fix": "No change required. The uniform-rewrite trade-off is recorded separately as T38-L-002 (info).",
+      "evidence": "inlineStringOptionValues (cli.ts:89-102) runs before parseArgs at :105 and strict: true is unchanged at :107. The rewrite fires only when all of arg.startsWith(\"--\"), !arg.includes(\"=\"), stringOptions.has(arg.slice(2)), value !== undefined and value !== \"--\" hold (:95-96). Boolean options: stringOptions is derived from cliOptions by option.type === \"string\" (:63-65), so json and yes are excluded by construction and cannot drift from the option table. Already-inline: the !includes(\"=\") guard fails, the argument is pushed verbatim and `index` is NOT advanced (:97), so the following argument is processed normally. Nothing after it: value !== undefined fails at end of argv, so the bare option reaches parseArgs. Bare --: the loop copies args.slice(index) and breaks on the first \"--\" (:93), and an option immediately followed by \"--\" is excluded by value !== optionSeparator (:96). Bounded read-only probe of node:util parseArgs with strict: true confirmed each load-bearing assumption independently of the fix: inline dash values accepted (--to=-AbC -> -AbC); the separated form still throws ERR_PARSE_ARGS_INVALID_OPTION_VALUE; unknown options still throw ERR_PARSE_ARGS_UNKNOWN_OPTION both inline and as a standalone -value; ['doctor','--json','--profile'] still throws ERR_PARSE_ARGS_INVALID_OPTION_VALUE; ['send','--text','--','--profile=/p'] still throws; a repeated inline option emits TWO option tokens so parseCommand's seen check at :113-118 still fires; and operands after -- become positionals so commandOptions[command] misses. Downstream validation is untouched: --message-id still goes through the UUID regex at :290 and an inline empty value still fails the trim() === \"\" check at :120. Tests: cli.dashOptionValues.test.ts enumerates all nine string options with fixed dash-leading literals (:158-268), pins end-to-end delivery of dash-leading and flag-shaped bodies (:270-300), and carries four over-correction guards for unknown flags, missing values, repeats, disallowed options and the -- separator (:303-377).",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "F-013-logic",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/commands/cli.ts:89",
+          "apps/cli/src/commands/cli.ts:105",
+          "apps/cli/src/commands/cli.ts:63"
+        ],
+        "enumeration_method": "parseCommand at cli.ts:104 is the only parseArgs call site in the repository CLI, and inlineStringOptionValues at :105 is its only pre-parse transform; stringOptions at :63-65 is derived from cliOptions itself so the rewritable set cannot drift from the declared option table. The class of affected inputs was enumerated by the option table rather than by sampling: all nine type: \"string\" options (profile, relay-url, store-key-env, out, from, to, text, message-id, with) versus the two boolean options (json, yes), each covered by a fixed dash-leading literal in cli.dashOptionValues.test.ts:145-156."
+      },
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "T38 fix review: fixed. Pre-parse normalisation at apps/cli/src/commands/cli.ts:89-102 keeps strict: true and every rejection path; confirmed by a bounded node:util parseArgs probe and by apps/cli/src/commands/cli.dashOptionValues.test.ts:158-377."
+      }
+    },
+    {
+      "id": "T38-L-001",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#T38-L-001",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/outbound.ts",
+      "line": 36,
+      "problem": "OutboundMessenger.rotateBundle() - the explicit fresh-allocation operation F-001's suggested fix asked for - has no CLI entry point, and neither does the pre-existing retryPending().",
+      "impact": "Once cli:publication is written, the CLI can only ever resubmit that one bundle, so after its single one-time prekey is claimed a second peer's claim cannot succeed. This is not a regression: before the fix a second publish was rejected anyway by the relay's permanent one-time-prekey uniqueness contract (specification.md:88). The cost is that a capability now exists in the code with no user-reachable path to it.",
+      "suggested_fix": "Either wire rotateBundle() and retryPending() to commands in a later, explicitly scoped decision, or record in the flow that both are deliberately library-only for the prototype. Adding a command now would exceed the documented command surface at specification.md:63-72, which is why this does not block the fix wave.",
+      "evidence": "keryx ctx rg over rotateBundle|rotatePublicationBundle|rotateOneTimePreKey|retryPending|publicationBundle returned 13 matches across 7 files. rotateBundle is referenced only at its definition (outbound.ts:36) and in a test (outbound.publish.test.ts:131); retryPending only at its definition (outbound.ts:110) and in outbound.test.ts:191, :212. No branch of execute() (cli.ts:231-321) reaches either, and specification.md:63-72 lists no rotate or retry command.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "T38-logic-unwired-rotate"
+    },
+    {
+      "id": "T38-L-002",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#T38-L-002",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 95,
+      "problem": "Because the rewrite is applied uniformly rather than only to dash-leading values, a declared string option consumes a following flag-shaped argument: `send --to ID --text --profile /p --json` yields the literal body `--profile` where the pre-fix code returned exit 2.",
+      "impact": "None reachable as a silent wrong result unless the swallowed option is duplicated later in argv; otherwise the command still fails closed on the required --profile check (cli.ts:120) or on an unmatched positional. The ambiguity is unavoidable once --text must accept a value beginning with '-'.",
+      "suggested_fix": "No change. Recorded so the trade-off is visible rather than implicit; cli.dashOptionValues.test.ts:286-289 already pins this as intended behaviour.",
+      "evidence": "cli.ts:95-99 has no lookahead exclusion for arguments that name a declared option. cli.dashOptionValues.test.ts:286-289 sends --text --profile and asserts exit 0, and :297-298 asserts both bodies appear verbatim in history, so the behaviour is deliberate and test-pinned rather than accidental.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "T38-logic-flag-shaped-value"
+    },
+    {
+      "id": "T38-L-003",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#T38-L-003",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "apps/cli/src/runtime/profile.ts",
+      "line": 140,
+      "problem": "Corruption of an already-readable persisted record still classifies as exit 3 rather than exit 5, because such failures originate inside the transaction callback and therefore keep their own type by design.",
+      "impact": "A corrupted cli:publication record (publicationSchema.parse at profile.ts:140) surfaces as OUTBOUND_REJECTED / exit 3, and a corrupted outbox record (decode<Outbox> at outbound.ts:45, :72) or profile metadata (readMetadata at profile.ts:58-62) likewise. Reachable only by store corruption or manual editing, so no operational input reaches it.",
+      "suggested_fix": "No change for the prototype. If a later scope wants storage corruption on the exit-5 side, the place to do it is a typed decode helper at the record-read sites rather than widening Profile.transact, which would reintroduce the risk of swallowing domain errors.",
+      "evidence": "Profile.transact (profile.ts:76-85) deliberately preserves the type of any rejection raised by the operation callback; publicationSchema.parse (:140) runs inside that callback, so its ZodError is preserved and reaches outbound.ts:26-28, which converts non-typed errors to OutboundError(\"OUTBOUND_REJECTED\") -> cli.ts:328 -> exit 3. Noted because cli:publication is a new record in this class.",
+      "confidence": "medium",
+      "blocking_merge": false,
+      "dedupe_key": "T38-logic-record-corruption-exit3"
+    },
+    {
+      "id": "T38-L-004",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#T38-L-004",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 39,
+      "problem": "The --json option is declared and allowed on every command but its parsed value is never read.",
+      "impact": "None: writeResult (cli.ts:333-335) always emits JSON, which matches specification.md:74. The flag is inert rather than wrong.",
+      "suggested_fix": "No change. Listed only because the F-013 work touched the option table and a reader might expect --json to gate output.",
+      "evidence": "keryx ctx rg over values\\.json|values\\[.json across the workspace returned no match; the only consumers of parsed values are required(), rejectUnexpectedMissing() and execute(), none of which reads `json`.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "T38-logic-unused-json-flag"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T15:35:00Z"
+}

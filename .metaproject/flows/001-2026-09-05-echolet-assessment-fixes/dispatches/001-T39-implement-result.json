@@ -1,0 +1,95 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T39-implement",
+  "status": "DONE",
+  "summary": "Fixed blocker F-013 in apps/cli/src/commands/cli.ts by normalizing `--<declared string option> <value>` into the inline `--opt=value` form before parseArgs, which strict mode accepts even when the value begins with '-'. parseArgs keeps strict:true; the command allow-list, duplicate-token check, required-option check and exit-code contract are untouched. All 16 tests in cli.dashOptionValues.test.ts pass unmodified (was 10 failed / 6 passed), including the six over-correction guards. Full workspace pnpm test (7 projects; apps/cli 69 tests incl. 3 two-process E2E runs) and pnpm typecheck pass; no package declares a lint script. No test file was edited, skipped or deleted, and nothing was committed.",
+  "summary_markdown": "## What changed\n\nOne production file: `apps/cli/src/commands/cli.ts`.\n\n- Added `inlineStringOptionValues(args)`, run over raw argv before `parseArgs`. It rewrites `--<declared string option> <value>` into `--<option>=<value>`; strict `parseArgs` accepts the inline form for a dash-leading value (`--to=-AbC` -> `-AbC`, `--text=--profile` -> `--profile`) while still throwing `ERR_PARSE_ARGS_UNKNOWN_OPTION` for an unknown flag.\n- Added `stringOptions`, a `ReadonlySet` derived from `cliOptions` itself so the set cannot drift from the option table, and the `optionSeparator` constant.\n- `strict: true`, `allowPositionals`, the `commandOptions` allow-list, the duplicate check over `parsed.tokens`, `rejectUnexpectedMissing`, `classify` and the 0/2/3/4/5 exit-code contract are unchanged.\n\n## Why validation is not weakened\n\nThe rewrite is narrow, so every prior rejection path reaches the same code with the same argv shape:\n\n- unknown flag (bare or with a dash value): name is not in `stringOptions`, nothing is rewritten or consumed, `parseArgs` still refuses it;\n- missing value at end of argv: with no following argument there is nothing to inline, so `parseArgs` still reports the missing value (the normalizer never invents one, which is the trap since `parseArgs` uses the same error class for both);\n- repeated option: `parseArgs` emits one option token per occurrence in either form, so the `seen` check is unaffected;\n- option not allowed for the command, unknown command, stray positional: allow-list and positional handling untouched.\n\n`strict: false` would have silenced the first, third and fourth of those; this fix cannot.\n\n## Edge cases\n\n- `--`: the scan stops at the first bare `--` and copies it plus everything after it verbatim. Bare trailing `--` stays a no-op (exit 0); any operand after `--` still becomes an unmatched positional (exit 2). An option immediately followed by `--` is passed through unchanged rather than taking `--` as a value.\n- Booleans: `--json`/`--yes` are excluded by construction (filtered on `type === \"string\"`), so a boolean flag can never swallow the next argument — that is what keeps `doctor --json --profile` a missing-value error.\n- Already-inline options: an argument containing `=` is passed through, so it is never re-wrapped and the next argument is not consumed. A value containing `=` survives because `parseArgs` splits on the first `=`.\n- Applied uniformly rather than only to dash-leading values, so there is one code path; the forms are equivalent for `parseArgs` and `parseCommand` reads only `token.name`.\n\n## Verification (all via `keryx ctx run`)\n\n| Check | Result |\n|---|---|\n| dash suite before | 10 failed, 6 passed (16) — RED confirmed |\n| dash suite after | 16 passed (16), unmodified |\n| `pnpm test` | all green: 7 projects; apps/cli 13 files / 69 tests incl. `test/e2e/two-process.test.ts` 3/3 |\n| `pnpm typecheck` | pass (7 projects) |\n| `pnpm lint` | no package declares a `lint` script |\n\nNo plaintext body, ciphertext, store key, private key material or HTTP request body reached any log or report; rejected argument values are not echoed into diagnostics.",
+  "acceptance": [
+    {
+      "criterion": "F-013 (blocker): every string-valued CLI option accepts a value beginning with '-'; a dash-leading value reaches its intended layer verbatim, and for --to that means the trust check (exit 3 CONTACT_NOT_TRUSTED), not the argument parser.",
+      "status": "met",
+      "evidence": "All nine declared string options are covered by the now-green suite: --profile (exit 0), --relay-url and --store-key-env (exit 2 INVALID_CONFIGURATION from the config schema), --out and --from (exit 0), --to (exit 3 CONTACT_NOT_TRUSTED, byte-identical to the control run without the leading dash), --text (exit 3 CONTACT_NOT_TRUSTED), --message-id (exit 2 INVALID_MESSAGE_ID from the message-id validator), --with (exit 0 with an empty history)."
+    },
+    {
+      "criterion": "A --text value beginning with '-' is accepted as message content, including a flag-shaped value such as '--profile', and is never reinterpreted as an option.",
+      "status": "met",
+      "evidence": "The trusted-send content test sends both '-SYNTHETIC_DASH_TEXT' and '--profile' over a stub relay (exit 0 each) and reads both back unchanged through history, proving neither value was reinterpreted or rewritten."
+    },
+    {
+      "criterion": "Argument validation is NOT weakened: unknown flag (bare and with a dash value), missing value at end of argv, repeated option including a dash-leading repeat, option not allowed for the command, unknown command and stray positional all still fail closed with exit 2 INVALID_ARGUMENTS.",
+      "status": "met",
+      "evidence": "parseArgs keeps strict:true; the normalizer only ever joins an argument that exists, only for names declared type:\"string\", and never for an argument already containing '='. The four guard tests covering these classes were passing before the change and still pass after it."
+    },
+    {
+      "criterion": "The `--` separator behaviour pinned by the tests holds: a bare trailing `--` is a no-op with exit 0, and any operand after `--` fails closed with exit 2.",
+      "status": "met",
+      "evidence": "The normalizer stops at the first bare '--' and copies the remainder verbatim, so positional handling is unchanged. Both separator tests pass."
+    },
+    {
+      "criterion": "Every test in apps/cli/src/commands/cli.dashOptionValues.test.ts passes, unmodified.",
+      "status": "met",
+      "evidence": "16 passed (16). The test file was not opened for writing at any point; the only edit in this task is apps/cli/src/commands/cli.ts."
+    },
+    {
+      "criterion": "The exit-code contract (0/2/3/4/5), the single-JSON-object-on-stdout rule and redacted stderr diagnostics are unchanged for every other case.",
+      "status": "met",
+      "evidence": "classify(), writeResult() and main() are untouched. The pre-existing process-level suites cli.test.ts (6) and cli.processFailures.test.ts (8), which pin the exit-code map, the one-JSON-object rule and redaction, all still pass."
+    },
+    {
+      "criterion": "The full apps/cli suite, `pnpm test` and `pnpm typecheck` pass, with no pre-existing test weakened, skipped or deleted.",
+      "status": "met",
+      "evidence": "apps/cli: 13 test files / 69 tests passed, including test/e2e/two-process.test.ts 3/3. Workspace pnpm test green across all 7 projects; pnpm typecheck pass. No test file was modified."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t39-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Describes the pre-parse inlining change, the argument classes that still fail closed and why, and the separator / boolean / repeated-option / already-inline edge cases, with the verification table."
+    },
+    {
+      "path": "apps/cli/src/commands/cli.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The only production file changed."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/commands/cli.ts",
+      "change": "modified: added inlineStringOptionValues() plus the stringOptions set and optionSeparator constant, and applied the normalizer to raw argv at the top of parseCommand. parseArgs keeps strict:true; no validation logic removed."
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t39-implementation-report.md",
+      "change": "added: T39 implementation report."
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T39-implement-result.json",
+      "change": "added: this subagent-result."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_before": "10 failed / 6 passed (16)",
+    "tests_after": "16 passed (16)",
+    "cli_suite": "13 files / 69 tests passed",
+    "workspace_test": "pass (7 projects)",
+    "typecheck": "pass",
+    "self_fix_attempts": 0,
+    "routing_audit": {
+      "graph_used": "no (not-relevant: the defect site, the test file and every file to read were named in the dispatch; no discovery search was required)",
+      "wiki_used": "no (not-relevant: the behavioural contract is pinned by the dispatch, the RED suite and the CLI specification reference, not by a wiki concept)",
+      "ctx_used": "yes (keryx ctx read for configs and the contract schema; keryx ctx run for every test, typecheck and lint invocation)",
+      "raw_rg_used": "no"
+    }
+  },
+  "timestamp_utc": "2026-09-06T14:56:00Z"
+}

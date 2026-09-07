@@ -1,0 +1,56 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T25-tests",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {
+    "title": "Define RED tests for CLI poll, decrypt, history, and acknowledgement",
+    "description": "Create failing Vitest specifications for signed mailbox polling, trusted sender decryption, atomic inbox/history persistence, duplicate suppression, and ack-after-commit retry semantics.",
+    "intent": "test",
+    "scope": "apps/cli inbound messaging and history tests only"
+  },
+  "acceptance_criteria": [
+    "Poll creates and signs a mailbox challenge using the stable local device, then validates strict relay responses.",
+    "Each envelope must match an imported sender identity/device pin before any Signal session or history mutation.",
+    "Successful decrypt commits Signal session changes, inbox deduplication, and plaintext history in one encrypted transaction before acknowledgement.",
+    "Decrypt or persistence failure sends no ack and leaves the envelope retriable; ack timeout retains durable pending-ack state.",
+    "Retry after ack timeout or process restart sends ack without decrypting again or duplicating history.",
+    "Duplicate envelopes do not advance the session twice or duplicate history; malformed ciphertext and changed sender identity fail closed.",
+    "History returns stable chronological inbound/outbound entries only from encrypted storage and JSON/diagnostic output redacts secrets."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T24-tests.json", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T24-implement-result.json", "kind": "report", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t24-implementation-report.md", "kind": "report", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/cli/src/runtime/profile.ts",
+    "apps/cli/src/runtime/outbound.ts",
+    "apps/cli/src/transport/relayClient.ts",
+    "packages/session-node/src/SignalClient.ts",
+    "packages/session-node/src/EncryptedSqliteStore.ts",
+    "packages/protocol/src/types/mailboxEnvelope.ts",
+    "packages/crypto-core/src/mailbox/auth.ts",
+    "packages/crypto-core/src/mailbox/deriveMailboxId.ts",
+    "apps/relay/internal/api/handler/mailbox_handler.go",
+    ".metaproject/data/testing/context.md"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action.",
+    "Load and follow tests-creator and the project testing skill; preserve RED-before-GREEN evidence.",
+    "Read the completed T24 implementation/result when available before finalizing APIs and fixtures.",
+    "Do not write implementation code or weaken existing tests.",
+    "Do not edit flow.json or acceptance-criteria.md; do not modify apps/relay or shared package implementation.",
+    "Use keryx ctx rg for searches and apply_patch for edits.",
+    "Use real encrypted SQLite and official Signal objects for transaction/deduplication tests; fake only the HTTP boundary and injected persistence failure.",
+    "Do not commit because the repository has an unborn untracked baseline.",
+    "Write and validate a subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T25-tests-result.json; final response starts STATUS:."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T25-tests-result.json", "summary_max_tokens": 500},
+  "budget": {"max_output_tokens": 4500, "max_runtime_ms": 1200000},
+  "provenance": {"created_at": "2026-09-06T10:51:45+04:00", "created_by": "flow-orchestrator", "source_request": "Implement the approved Echolet CLI prototype through flow-orchestrator."}
+}

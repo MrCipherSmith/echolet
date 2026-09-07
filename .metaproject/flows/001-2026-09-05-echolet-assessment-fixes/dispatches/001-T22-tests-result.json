@@ -1,0 +1,92 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T22-tests",
+  "status": "DONE",
+  "summary": "Created a cryptographically signed shared relay-v2 fixture, TypeScript fixture-contract checks, and tagged Go RED tests for immutable publish, permanent one-time-prekey reservations, atomic 20-way claims, restart persistence, and exact selector-bound replay. Protocol tests/typecheck and the untagged relay v1 suite pass; the race-enabled relayv2 suite fails because PreKeyBundleService does not yet implement the declared v2 API. No implementation or commits.",
+  "summary_markdown": "`relay-v2.json` is the shared TypeScript/Go source of valid, invalid, collision, expiry, and independent-bundle cases. Run `go test -tags=relayv2 ./internal/storage/repository` during GREEN implementation; use `-race` for the concurrency proof.",
+  "acceptance": [
+    {
+      "criterion": "Shared fixtures are accepted/rejected consistently by TypeScript and Go validation.",
+      "status": "met",
+      "evidence": "The signed relay-v2.json fixture is imported by Vitest and loaded from the same path by the tagged Go service tests; it includes non-schema capabilities order plus unknown-field, expiry, invalid-root-signature, and changed-signed-field cases. TypeScript tests pass."
+    },
+    {
+      "criterion": "Byte-identical bundle publication is idempotent and a changed body under the same bundle_id conflicts.",
+      "status": "met",
+      "evidence": "TestSignalPreKeyBundleV2PublishIsImmutableAndIdempotent republishes the original raw bytes and then submits a separately valid signed variant under the same bundle_id expecting BUNDLE_ID_CONFLICT."
+    },
+    {
+      "criterion": "The same OTK cannot be republished under a new bundle/key id, after expiry, claim, or relay restart.",
+      "status": "met",
+      "evidence": "TestSignalPreKeyBundleV2OneTimePreKeyReservationsArePermanent covers public-key hash collision, tuple collision, advanced-time expiry, completed claim, storage close/reopen, and expects ONE_TIME_PREKEY_REUSED."
+    },
+    {
+      "criterion": "At least twenty concurrent claim IDs produce exactly one allocation.",
+      "status": "met",
+      "evidence": "TestSignalPreKeyBundleV2ConcurrentClaimsAllocateExactlyOnce synchronizes 20 goroutines, requires one byte-exact success and PREKEY_BUNDLE_UNAVAILABLE for all competitors; race-enabled RED run recorded."
+    },
+    {
+      "criterion": "Retrying the same claim_id and selector returns the exact stored bundle; changing selector conflicts.",
+      "status": "met",
+      "evidence": "TestSignalPreKeyBundleV2ClaimReplayIsExactAndSelectorBound compares exact bytes across replay and changes device_id from null to the concrete device expecting CLAIM_ID_CONFLICT."
+    },
+    {
+      "criterion": "V1 routes and tests remain unchanged and green outside the deliberate RED v2 tests.",
+      "status": "met",
+      "evidence": "The new Go tests use the relayv2 build tag. Untagged `go test ./...` passes; no v1 source or tests were changed."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "packages/protocol/src/types/fixtures/relay-v2.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Shared signed valid/invalid and collision variants."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T10-44-16-303Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Protocol fixture and existing tests pass: 8 tests."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T10-44-57-688Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Untagged relay v1 Go suite passes."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T10-44-59-734Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Race-enabled T22 test is RED at the missing v2 service contract."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "packages/protocol/src/types/fixtures/relay-v2.json",
+      "change": "new shared signed fixtures and mutation variants"
+    },
+    {
+      "path": "packages/protocol/src/types/signalPreKeyBundleV2.test.ts",
+      "change": "fixture-based structural, lifetime, root-binding, and outer-signature checks"
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/prekey_bundle_v2_test.go",
+      "change": "new tagged RED service/Badger contract tests for v2 publish and claims"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "tests_written": 7,
+    "fixture_scenarios": 15,
+    "concurrent_claimants": 20,
+    "red_suites": 1,
+    "implementation_files_written": 0,
+    "retries": 2
+  },
+  "timestamp_utc": "2026-09-06T10:44:56Z"
+}

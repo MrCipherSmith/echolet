@@ -1,0 +1,122 @@
+{
+  "now_ms": 1800000000000,
+  "valid_publish_request": {
+    "bundle": {
+      "type": "signal_prekey_bundle",
+      "version": 2,
+      "suite": "libsignal-pq-v1",
+      "bundle_id": "f841b845-e677-4bce-b18e-d1d3bf745e67",
+      "created_at_ms": 1799999999000,
+      "expires_at_ms": 1800086400000,
+      "device_record": {
+        "type": "device_record",
+        "version": 1,
+        "identity_id": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+        "device_id": "110a486a-e330-43dd-8383-b1aa8b1cc353",
+        "device_pubkey": "5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA",
+        "capabilities": {
+          "receipts": true,
+          "mailbox_poll": false,
+          "attachments": true
+        },
+        "created_at_ms": 1799999999000,
+        "signature": "VA_lliu2A-Xw0o4fRrWOgJaqeekqTS_2NQMMwpxeMFrjWfQ9hdUmsKcih14e6NTXgPnnpdbpTwXCDuW0sg2-CA"
+      },
+      "registration_id": 12,
+      "signal_identity_key": "BQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "signed_prekey": {
+        "key_id": 1,
+        "public_key": "BQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB",
+        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQ"
+      },
+      "kyber_prekey": {
+        "key_id": 2,
+        "public_key": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg"
+      },
+      "one_time_prekey": {
+        "key_id": 7,
+        "public_key": "BQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD"
+      },
+      "signature": "MOOuBJSxEQaNfV0ohfYBBa1FfG753MIKGL0lQP6lDrNILd5ML1fodeIaPQxfvZOS-BJb3622r_8Fd7fxZCFqDA"
+    }
+  },
+  "valid_variants": [
+    {
+      "name": "changed_same_bundle_id",
+      "mutations": [
+        { "path": "bundle.registration_id", "value": 13 },
+        { "path": "bundle.signature", "value": "1NYV1bkSqWUrL3Qdtvxl7XWCVYKWqoO8RXB4XMDRlIrtIVqjro2gGukMX4KoXw4a_YoFWCB5lUisjUD680AtCg" }
+      ]
+    },
+    {
+      "name": "new_bundle_same_otk",
+      "mutations": [
+        { "path": "bundle.bundle_id", "value": "11111111-1111-4111-8111-111111111111" },
+        { "path": "bundle.signature", "value": "qx3g1cnbUgF-wRp_2ps5Dy2uutG78hNQLIb9VHTV7ZUzSNu-E3X53DUHlhzau276QzlgjJSWexdqzinIIu86AQ" }
+      ]
+    },
+    {
+      "name": "new_bundle_same_otk_key_id",
+      "mutations": [
+        { "path": "bundle.bundle_id", "value": "22222222-2222-4222-8222-222222222222" },
+        { "path": "bundle.one_time_prekey.key_id", "value": 8 },
+        { "path": "bundle.signature", "value": "KlxVpo4rbtAKxBN0Y6_uIvq9lWMWLWokoGXNgXu7kVTqLut5O0kxRPG1mCweaL38D9aqk9icuU_c6eRPr3tfAA" }
+      ]
+    },
+    {
+      "name": "new_bundle_same_otk_tuple",
+      "mutations": [
+        { "path": "bundle.bundle_id", "value": "33333333-3333-4333-8333-333333333333" },
+        { "path": "bundle.one_time_prekey.public_key", "value": "BQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE" },
+        { "path": "bundle.signature", "value": "uNWdgpfBr8GPl7OA78PjeKzRkkFcaZ-3ilpat89Wl5XEs8k35P2jLmobkkFF9kyaa9utdJ2rx69mkWhToiIqDA" }
+      ]
+    },
+    {
+      "name": "expired_tombstone_reuse",
+      "mutations": [
+        { "path": "bundle.bundle_id", "value": "44444444-4444-4444-8444-444444444444" },
+        { "path": "bundle.created_at_ms", "value": 1800172800000 },
+        { "path": "bundle.expires_at_ms", "value": 1800259200000 },
+        { "path": "bundle.signature", "value": "-V_VQrAu3D203r8_5341ojgaL0h8Q7WBm4JnWfIh56wXTiuzWbisO4FUiTriRniFWVvt-e8ZFc6eEXUJIX1kBA" }
+      ]
+    },
+    {
+      "name": "independent_bundle",
+      "mutations": [
+        { "path": "bundle.bundle_id", "value": "55555555-5555-4555-8555-555555555555" },
+        { "path": "bundle.one_time_prekey.key_id", "value": 9 },
+        { "path": "bundle.one_time_prekey.public_key", "value": "BQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAF" },
+        { "path": "bundle.signature", "value": "-v73J1e4iHvGku1KFilm9JJo3innO8kM_JgH7C2qyo4A383FKEuKBzVpjtY67nKY-nysujdzocdCOuAIgVnbBw" }
+      ]
+    }
+  ],
+  "invalid_publish_requests": [
+    {
+      "name": "unknown bundle field",
+      "error_code": "INVALID_SCHEMA",
+      "mutations": [{ "path": "bundle.unknown", "value": true }]
+    },
+    {
+      "name": "expired bundle",
+      "error_code": "BUNDLE_EXPIRED",
+      "mutations": [
+        { "path": "bundle.expires_at_ms", "value": 1799999999999 },
+        { "path": "bundle.signature", "value": "q-CKbYVcl0Llhm6X_z2VfH4w91HA2t3IqUjwU34ANBtMxL2yBGjPkXdEz4enK_-UnL2toLUL8YHvrBdaartPAA" }
+      ]
+    },
+    {
+      "name": "invalid root device signature",
+      "error_code": "INVALID_SIGNATURE",
+      "mutations": [
+        { "path": "bundle.device_record.signature", "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" },
+        { "path": "bundle.signature", "value": "IlrkK-j5U1pdiFq2QUqBBbgrGgxx6TSBHmZEVMwxlJuzMmx2VQiF2IdcFHMrUNcTZkTm3KkbiRfgXJHwjfm5Dg" }
+      ]
+    },
+    {
+      "name": "changed signed field",
+      "error_code": "INVALID_SIGNATURE",
+      "mutations": [{ "path": "bundle.registration_id", "value": 13 }]
+    }
+  ]
+}

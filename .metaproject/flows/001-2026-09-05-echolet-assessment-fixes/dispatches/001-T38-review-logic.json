@@ -1,0 +1,90 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "orchestrator": "flow-orchestrator",
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/inputs/review-context.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-path-echolet-cli-prototype-t28/consolidated-findings.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/specification.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "allowed_actions": [
+    "read",
+    "run-command"
+  ],
+  "budget": {
+    "max_output_tokens": 7000,
+    "max_runtime_ms": 3000000
+  },
+  "provenance": {
+    "created_at": "2026-09-06T15:10:00+04:00",
+    "created_by": "flow-orchestrator",
+    "source_request": "T38 managed fix review: re-check F-001..F-013 with explicit dispositions."
+  },
+  "dispatch_id": "001-T38-review-logic",
+  "target_skill": "review-logic",
+  "task": {
+    "title": "Fix review: CLI correctness for publish retry, bounded confirmation, persistence classification, concurrent send and argument parsing",
+    "description": "Judge whether the T33 and T39 fixes actually resolve F-001, F-002, F-003, F-008 and F-013 in apps/cli, and whether they introduce new correctness defects.",
+    "intent": "review",
+    "scope": "Read-only fix review for findings F-001, F-002, F-003, F-008, F-013."
+  },
+  "acceptance_criteria": [
+    "Every finding in the assigned set (F-001, F-002, F-003, F-008, F-013) receives an explicit disposition of fixed, partially-fixed, not-fixed or fixed-with-new-risk, each with concrete evidence.",
+    "Any new defect introduced by a fix is reported with severity, file:line and a concrete failure scenario, including defects outside the assigned set that are encountered in the changed code.",
+    "The five non-negotiable criteria in the shared review context are checked and reported on: no test weakened, no strict schema loosened, no secret leakage, exit-code contract intact, prototype scope respected.",
+    "Findings are ranked by severity and each states whether it blocks acceptance of the fix wave."
+  ],
+  "files_to_read": [
+    "apps/cli/src/commands/cli.ts",
+    "apps/cli/src/runtime/outbound.ts",
+    "apps/cli/src/runtime/inbound.ts",
+    "apps/cli/src/runtime/profile.ts",
+    "apps/cli/src/transport/relayClient.ts",
+    "packages/session-node/src/SignalClient.ts",
+    "packages/session-node/src/EncryptedSqliteStore.ts",
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t33-implementation-report.md",
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t39-implementation-report.md"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "Load and follow the project review-logic skill at .metaproject/skills/gdskills/review/review-logic/SKILL.md.",
+    "Read .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/inputs/review-context.md FIRST: it carries the disposition vocabulary, the worker-reported concerns and the five non-negotiable review criteria.",
+    "You are a reviewer. Do NOT modify any source file, test file or configuration. Do not fix what you find - report it.",
+    "You did not write these fixes and must not accept them on the implementer's word. Verify against the code.",
+    "Every disposition needs concrete evidence: file:line, a control-flow argument, or a bounded read-only probe. A disposition without evidence is not acceptable.",
+    "The repository is on unborn `main` with everything untracked, so an empty `git diff` is NOT an empty change set. Review the working tree.",
+    "Do not re-run the full verification matrix; T37 already did and passed. A bounded targeted probe is fine when you need one.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Use `keryx ctx rg` for searches, never bare rg/grep. Use `keryx ctx run` for long command output.",
+    "Never print plaintext message bodies, ciphertext, profile store keys, private key material or HTTP request bodies into your report - describe leakage findings by location and mechanism only.",
+    "Do not commit and do not create a branch, PR or remote.",
+    "Respect prototype scope: this is a local computer CLI prototype. Do not raise findings demanding production hardening, mobile support, deployment or external audit.",
+    "Pay particular attention to F-003: discrimination is by ORIGIN using an Object.is identity check inside Profile.transact(). Confirm that a store-machinery failure cannot be misclassified as a domain error and, more importantly, that a domain error cannot be swallowed as PERSISTENCE_FAILURE - and that the exit-3 control path is genuinely unreachable from exit 5.",
+    "For F-008 confirm the outbox recheck is inside the SAME transaction that encrypts and writes history, and that returning the persisted record cannot skip a required state transition.",
+    "For F-013 confirm inlineStringOptionValues cannot consume an argument it should not: boolean options, an option already in inline form, an option with nothing after it, and everything after a bare `--`.",
+    "For F-001 confirm the persisted publication bundle is reused byte-identically and that rotateBundle() cannot be reached implicitly.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-logic-result.json and a readable report to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-logic-report.md, and make the final response start with STATUS:."
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-logic-result.json",
+    "summary_max_tokens": 1000
+  }
+}

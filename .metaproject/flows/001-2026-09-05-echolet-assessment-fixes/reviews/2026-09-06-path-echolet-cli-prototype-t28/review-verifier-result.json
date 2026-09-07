@@ -1,0 +1,85 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "Independently verified all 12 review claims with bounded execution and source/site checks. Ten claims are confirmed; two causal claims remain unverifiable without controlled storage-failure or concurrency-scheduling hooks.",
+  "verifications": [
+    {
+      "finding": "2026-09-06-path-echolet-cli-prototype-t28#F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "A synthetic local HTTP relay captured two consecutive `relay publish` requests from one initialized profile. Both commands exited 0; bundle_id changed while the one-time-prekey key_id and public_key were identical. Command summary: .metaproject/data/gdctx/artifacts/2026-09-06T12-46-24-025Z_run.md."
+    },
+    {
+      "finding": "2026-09-06-path-echolet-cli-prototype-t28#F-002",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "A spawned contact-import process received `yes` plus newline while stdin remained open. It was still unsettled after 1.5 seconds and exited 0 only after EOF. Command summary: .metaproject/data/gdctx/artifacts/2026-09-06T12-46-24-025Z_run.md."
+    },
+    {
+      "finding": "2026-09-06-path-echolet-cli-prototype-t28#F-003",
+      "verdict": "unverifiable",
+      "method": "reasoning",
+      "evidence": "Source inspection shows broad catches in outbound.ts and inbound.ts and trust-category CLI mappings, but no controlled storage-failure injection was executed. The claimed user-visible misclassification therefore lacks independent causal runtime evidence."
+    },
+    {
+      "finding": "2026-09-06-path-echolet-cli-prototype-t28#F-004",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "A temporary Badger repository probe saved two different envelopes under the same mailbox/envelope key. The second save returned success and retrieval produced one record containing the second message identifier, demonstrating silent overwrite. Command summary: .metaproject/data/gdctx/artifacts/2026-09-06T12-44-12-242Z_run.md."
+    },
+    {
+      "finding": "2026-09-06-path-echolet-cli-prototype-t28#F-005",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "A temporary Badger repository probe saved an envelope whose expires_at_ms was already in the past and immediately retrieved it from the mailbox. Source inspection also shows a fixed seven-day Badger TTL and no expires_at_ms filter. Command summary: .metaproject/data/gdctx/artifacts/2026-09-06T12-44-12-242Z_run.md."
+    },
+    {
+      "finding": "2026-09-06-path-echolet-cli-prototype-t28#F-006",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "ValidateMailboxEnvelope accepted a synthetic envelope whose ciphertext field exceeded the supplied maximum while size_bytes was declared below it. Site inspection of the handler found json.Decoder reading the request body without a limiting reader. Command summary: .metaproject/data/gdctx/artifacts/2026-09-06T12-44-12-242Z_run.md."
+    },
+    {
+      "finding": "2026-09-06-path-echolet-cli-prototype-t28#F-007",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "A temporary Badger probe stored the same device_id under two identity IDs. GetByDeviceID returned the other identity rather than the designated victim identity, confirming that authorization lookup is global and ambiguous. Command summary: .metaproject/data/gdctx/artifacts/2026-09-06T12-44-12-242Z_run.md."
+    },
+    {
+      "finding": "2026-09-06-path-echolet-cli-prototype-t28#F-008",
+      "verdict": "unverifiable",
+      "method": "reasoning",
+      "evidence": "Source inspection places the prior outbox lookup before the profile mutation transaction and shows serialization only within one Messenger instance. No deterministic scheduler or transaction hook was available to prove the claimed duplicate history/envelope outcome across concurrent instances."
+    },
+    {
+      "finding": "2026-09-06-path-echolet-cli-prototype-t28#F-009",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Bounded source checks found the client response cap at 1,048,576 bytes, the relay default batch at 100, the envelope maximum at 65,536 bytes, and no use of poll_batch_size. Ten maximum payloads already have a double-base64 lower bound above the client cap, so a valid default poll batch can be rejected client-side."
+    },
+    {
+      "finding": "2026-09-06-path-echolet-cli-prototype-t28#F-010",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "A temporary httptest probe held the first downstream handler for 250 ms. A request from a different address remained blocked for more than 180 ms, confirming the global limiter mutex is held across next.ServeHTTP. Command summary: .metaproject/data/gdctx/artifacts/2026-09-06T12-44-12-242Z_run.md."
+    },
+    {
+      "finding": "2026-09-06-path-echolet-cli-prototype-t28#F-011",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "With limit 1, two requests from the same IP but different source ports both received success, while repeating the first full RemoteAddr was rate-limited. Source inspection shows the unpruned map is keyed directly by r.RemoteAddr. Command summary: .metaproject/data/gdctx/artifacts/2026-09-06T12-44-12-242Z_run.md."
+    },
+    {
+      "finding": "2026-09-06-path-echolet-cli-prototype-t28#F-012",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "The focused test asserts only that the promise throws. The inspected implementation passes the contact bytes to deserialization immediately after the explicit trust guard; removing the guard still supplies a throwing path for an unknown sender, so the assertion cannot distinguish the required error from a later decode error."
+    }
+  ],
+  "stats": {
+    "confirmed": 10,
+    "refuted": 0,
+    "unverifiable": 2,
+    "not_checked": 0
+  }
+}

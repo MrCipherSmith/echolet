@@ -1,0 +1,129 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T43-tests",
+  "status": "DONE",
+  "summary": "T43 harness fix for T42-F-001. One file changed: apps/cli/vitest.config.ts gains testTimeout: 30000 and hookTimeout: 30000. No test file, no implementation file and no assertion was touched; nothing was skipped. The defect was first REPRODUCED deliberately on the unmodified tree - under a 24-worker artificial CPU load (1m load average 81 -> 234 on a 10-core host) `vitest run src/runtime/` went red with exactly the reported signature, 'Test timed out in 5000ms' in inbound.test.ts on 'rejects malformed native wrappers, tampering and authenticated message-ID mismatch while preserving a valid retry' at 5611ms, 40/41 passing. The identical command under the identical load after the change is 41/41 green. The class is wider than the one file the verifier named: 7 of the 14 apps/cli test files declare no per-test timeout at all and were therefore all running on vitest's 5000ms default (config, inbound.pollBatchSize, inbound, outbound, profile, relayClient.pollCapacity, relayClient) - profile.test.ts was measured at 2207ms in the same red run, 44% of the old budget. A config-level default covers all seven without touching the explicit 30000-90000ms per-test values the other seven files declare, because a third-argument timeout on it() overrides the config default. 30000 was chosen as ~3x the worst loaded per-test duration the T42 verifier recorded (9899ms), ~21x the standalone maximum (1404ms), and identical to the lowest per-test timeout already present in this app, so it adds no new number. It is deliberately NOT large enough to mask a hang: a probe test awaiting a never-resolving promise was measured failing with 'Test timed out in 30000ms' after 30.01s of test time (34s wall, exit 1), and the probe file was deleted. Five full-workspace `pnpm test` runs were executed after the change, three of them under deliberate 8/16/20-worker CPU load: four are 128/128 green across all seven packages. The fifth, at a deliberately excessive 24 workers (~34x CPU oversubscription, 628.94s cumulative apps/cli test time against the 402-468s of the verifier's own red runs), failed for a DIFFERENT and unconfigurable reason - vitest's internal birpc onTaskUpdate call hit its hardcoded 60000ms ceiling and inbound.test.ts's results were never reported. No test timed out in that run either. That is recorded as finding T43-N-001, not fixed here. `pnpm -r typecheck` and `go test ./...` are also green on this revision, and inbound.ts, cli.ts and validate.go are byte-identical to the T41 ledger hashes.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "The CLI suite has deterministic timeout headroom so a loaded machine cannot turn a passing suite red",
+      "status": "met",
+      "evidence": "apps/cli/vitest.config.ts: testTimeout: 30_000, hookTimeout: 30_000. Before/after under the SAME deliberate load, same command (`pnpm --filter @echolet/cli exec vitest run src/runtime/`): BEFORE, at 1m load average 81 rising to 234 on a 10-core host, 1 failed / 40 passed, 'FAIL src/runtime/inbound.test.ts > ... preserving a valid retry :: Error: Test timed out in 5000ms', the failing test measured at 5611ms, cumulative test time 75.34s. AFTER, at 1m load average 234, 8 files / 41 tests all passed, cumulative test time 64.71s. Under the post-fix loaded full-workspace runs the worst per-test duration inside inbound.test.ts was 4211ms (20-worker load) - 84% of the old 5000ms budget and 14% of the new one."
+    },
+    {
+      "criterion": "Prefer the smallest change that fixes the CLASS rather than the one file",
+      "status": "met",
+      "evidence": "A single config default, not a per-file or per-test edit. Enumeration of the class (declared per-test timeouts per apps/cli test file, counting `}, <ms>);` closers): cli.dashOptionValues 18, cli.processFailures 9, cli.test 6, inbound.batchIsolation 8, outbound.concurrentSend 1, outbound.publish 3, test/e2e/two-process 2 - and ZERO in config.test.ts, inbound.pollBatchSize.test.ts, inbound.test.ts, outbound.test.ts, profile.test.ts, relayClient.pollCapacity.test.ts and relayClient.test.ts. Seven of fourteen files were on the 5000ms default, not one. inbound.test.ts is simply the one that crossed it first; profile.test.ts was measured at 2207ms in the pre-fix red run, and inbound.batchIsolation.test.ts (which survives only because it declares 90000) hit 3935ms in that same run. The config default covers all seven and, because a third-argument timeout on it() overrides the config default in vitest, leaves every explicitly declared 30000/40000/60000/90000/150000ms value exactly as it was."
+    },
+    {
+      "criterion": "The value has real headroom over the observed 1404ms standalone maximum and the ~9900ms loaded maximum, with a stated reason",
+      "status": "met",
+      "evidence": "30000ms is 21.4x the T42 verifier's standalone per-test maximum (1404ms), 39.5x the standalone maximum measured in this dispatch (759ms, on an already-busy host at 1m load average 35), 3.03x the worst loaded per-test duration the verifier recorded in its red runs (9899ms), and 7.1x the worst per-test duration measured here under deliberate load (4211ms). It is also EXACTLY the lowest per-test timeout already declared in this app (cli.test.ts and outbound.publish.test.ts both use 30000), so the change introduces no new magnitude into the codebase and can never raise a sibling's explicit value. hookTimeout is set to the same 30000 rather than left at vitest's 10000 default because that default sits only 1% above the 9899ms loaded per-test maximum, and the afterEach in inbound.test.ts does the same class of work the test bodies do (closing encrypted-SQLite handles, recursive rmSync); no hook timeout has been observed, so this half is preventive and is stated as such in the config comment."
+    },
+    {
+      "criterion": "The raised timeout does not mask a hang: a genuinely stuck test still fails in reasonable time",
+      "status": "met",
+      "evidence": "Measured, not argued. A temporary probe at apps/cli/src/runtime/__hangprobe.test.ts containing `await new Promise(() => {})` was run against the new config: 'FAIL ... Error: Test timed out in 30000ms', Duration 31.37s with tests 30.01s, process exit 1. The probe file was then deleted and its absence verified by listing apps/cli/src/runtime/. The trade-off struck: 30s, not 60s or 90s. The honest worst case for any test in this file is 4211ms measured and 9899ms recorded, so a test still running at 30s is ~7x its worst honest loaded duration and ~21x its standalone one - that is a hang, not slowness, and it is reported within half a minute rather than after the 90s and 150s ceilings the heavier siblings sit behind. The cost of the choice is that a hang in one of the seven previously-uncovered files now takes 30s instead of 5s to surface; the benefit is that a correct test under load no longer surfaces as that same failure."
+    },
+    {
+      "criterion": "Repeated-run evidence including at least one deliberately loaded run",
+      "status": "met",
+      "evidence": "Five full-workspace `pnpm test` executions after the change, plus the two targeted before/after apps/cli runs. GREEN 128/128 across all seven packages (protocol 8, client-db 1, crypto-core 4, client-core 2, session-node 24, mobile 6, cli 83) in: run1 baseline (1m load 71 -> 100, wall 48s, apps/cli cumulative 106.07s); run2 baseline (1m load ~100, apps/cli cumulative 115.49s, inbound.test.ts file total 9319ms); run3 under deliberate 8-worker load (1m load 57 -> 181, apps/cli cumulative 189.78s, inbound.test.ts 20700ms, worst per-test 2671ms); run4 under deliberate 16-worker load (1m load 176 -> 237, cumulative 213.15s, inbound.test.ts 22537ms, worst per-test 2710ms); run5 under deliberate 20-worker load (1m load 218 -> 232, cumulative 242.92s, inbound.test.ts 28238ms, worst per-test 4211ms). Each of run3/run4/run5 reported zero occurrences of 'timed out in', 'Unhandled Error', 'Unhandled Rejection' or 'ELIFECYCLE'. The host was independently busy throughout (a Virtualization.framework VM at ~273% CPU), so even the 'baseline' runs were not idle."
+    },
+    {
+      "criterion": "Timeout/headroom change only - no assertion weakened, deleted or skipped, no test changed in what it asserts",
+      "status": "met",
+      "evidence": "The only repository file modified is apps/cli/vitest.config.ts, and the only substantive lines added are `testTimeout: 30_000,` and `hookTimeout: 30_000,` plus an explanatory comment. No *.test.ts or *_test.go file was opened for writing. No `.skip`, `.todo`, `.only`, `--bail` or `--passWithNoTests` was introduced. Test counts are unchanged and complete on every green run: apps/cli 83/83 (14 files), workspace 128/128, identical to the counts T41 recorded. The one temporary file created (__hangprobe.test.ts) was deleted before reporting."
+    },
+    {
+      "criterion": "No implementation code written; inbound.ts, cli.ts and validate.go untouched",
+      "status": "met",
+      "evidence": "sha256 verified after all work: apps/cli/src/runtime/inbound.ts 4c9ff5c87de492b51b3ec6594f953622dc49d211d511e8accb95ac8854ab191f (byte-identical to the value recorded in 001-T41-tests-result.json), apps/cli/src/commands/cli.ts 52966347351e41f93b396602a0f3196728c1fd14ab91e39034e10782bd4077df (matches the T41 prefix 52966347...), apps/relay/internal/validation/validate.go 1232aab7fead2f904da4fe0cefedeebd8e5079c3d56b7538efb8419564317825 (matches the T41 prefix 1232aab7...). None of the three was opened for writing in this dispatch."
+    },
+    {
+      "criterion": "The revision is green on every check the verification gate covers",
+      "status": "met",
+      "evidence": "On the changed revision: `pnpm test` 128/128 green (four independent executions, three of them loaded); `pnpm -r typecheck` green across client-db, crypto-core, client-core, session-node, cli and mobile; `go test ./...` in apps/relay green (handler 1.904s, router 1.510s, middleware cached, storage/repository 2.430s, validation 1.519s, remaining packages have no test files). The one non-green execution recorded in this dispatch is the deliberately excessive 24-worker saturation run, documented as finding T43-N-001 and reproduced only at a load level ~34x the host's core count."
+    },
+    {
+      "criterion": "flow.json and acceptance-criteria.md were not edited",
+      "status": "met",
+      "evidence": "Neither file was opened for writing. The only writes into .metaproject/ made by this dispatch are this result file and the gdctx routing artifacts that keryx ctx produces automatically for every routed command."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T43-tests-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This result contract.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/vitest.config.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The harness change: testTimeout and hookTimeout defaults for the apps/cli vitest project, with an inline rationale comment recording the measured durations and the hang trade-off.",
+      "hash": "da0c9db0ed3b0b193e5b65b83f3b765c8ae26b88fa78744aff436a16c97c94d4"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/vitest.config.ts",
+      "change": "Added `testTimeout: 30_000` and `hookTimeout: 30_000` to the test config, with a comment recording why: these suites do real libsignal crypto and encrypted-SQLite I/O, cost ~0.5-1.4s per test idle but were measured at ~4s under deliberate load and ~9.9s on a saturated host, so vitest's 5000ms default turned a correct suite red intermittently (T42-F-001). Per-test timeouts passed as the third argument to it() still override the default, so the 30000-150000ms values in cli.test, cli.processFailures, cli.dashOptionValues, inbound.batchIsolation, outbound.publish, outbound.concurrentSend and test/e2e/two-process are unchanged. globalSetup is untouched. No other line changed."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T43-N-001",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/cli/vitest.config.ts",
+      "line": 1,
+      "problem": "Above roughly 30x CPU oversubscription the apps/cli run fails for a reason no vitest config option can address: the worker-to-main birpc call `onTaskUpdate` hits its timeout and the whole file's results are discarded. Observed once here, deliberately, at 24 artificial CPU workers on top of an already-busy 10-core host (1m load average 285 -> 342, apps/cli cumulative test time 628.94s against the 402-468s of the T42 verifier's own red runs): 'Unhandled Rejection: Error: [vitest-worker]: Timeout calling \"onTaskUpdate\"', attributed to src/runtime/inbound.test.ts, leaving 'Test Files 13 passed (14)' and 'Tests 72 passed (83)'. Notably NO test timed out in that run - zero tests failed; inbound.test.ts's eleven results were simply never delivered to the reporter.",
+      "impact": "None at any realistic load, and none for T42-F-001, which is a different mechanism with a different signature. It matters only as a boundary on what this fix can claim: raising testTimeout makes the suite robust to a loaded machine, not to a saturated one, and a future intermittent apps/cli red whose message is 'Timeout calling ...' rather than 'Test timed out in ...' must not be diagnosed as a recurrence of T42-F-001.",
+      "suggested_fix": "Nothing in this dispatch, and probably nothing at all. The ceiling is birpc's DEFAULT_TIMEOUT = 6e4 hardcoded in vitest 3.0.8 (dist/chunks/index.68735LiX.js line 1, consumed by createRuntimeRpc in dist/chunks/rpc.TVf73xOu.js) and vitest exposes no option to raise it - so the only levers are structural (capping poolOptions maxThreads so fewer workers contend, or not running the suite on a saturated host), which change how the suite runs rather than how long it waits and are outside a timeout-only change. If it is ever seen on a real CI host, cap maxThreads rather than reaching for a timeout.",
+      "evidence": "Full `pnpm test` at 22:54-22:58 under `node load.mjs 24`: apps/cli 'Duration 203.41s (... tests 628.94s ...)', 'Errors 2 errors', both being the same RPC timeout, 'This error originated in \"src/runtime/inbound.test.ts\"'. The birpc constant was read directly out of the installed vitest 3.0.8 bundle. The same suite at 8, 16 and 20 workers (cumulative 189.78s, 213.15s, 242.92s) is 128/128 green with zero error markers.",
+      "confidence": "high"
+    },
+    {
+      "id": "T43-N-002",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/cli/src/runtime/inbound.test.ts",
+      "line": 1,
+      "problem": "The apps/cli suite is now protected by two different mechanisms that express the same intent in incompatible ways: a config-level default of 30000ms, and 47 individual third-argument timeouts spread over seven files at five distinct magnitudes (30000, 40000, 60000, 90000, 150000). Nothing records which of those explicit values are load-bearing - i.e. which tests genuinely need more than 30s - and which were simply the number that made an intermittent failure stop.",
+      "impact": "None today; every value is now at least the config default, so none of them weakens anything. It is a maintenance smell rather than a defect: the next person to see an intermittent timeout has five precedents to copy and no stated rule for choosing between them, which is how the 5000ms gap arose in the first place - by nobody declaring anything for seven of the fourteen files.",
+      "suggested_fix": "If a later round touches these files: keep an explicit per-test timeout only where the test's own measured duration justifies it (the e2e two-process runs at 49-72s under load plainly do; a 40000 on a test that measures 700ms plainly does not), and let everything else inherit the config default. Do not do this as part of a gate-unblocking fix - it changes many files for no behavioural gain and would need its own repeated-run evidence.",
+      "evidence": "Declared per-test timeout counts across the fourteen apps/cli test files: 18 / 9 / 6 / 8 / 3 / 2 / 1 in cli.dashOptionValues, cli.processFailures, cli.test, inbound.batchIsolation, outbound.publish, test/e2e/two-process and outbound.concurrentSend respectively, and 0 in config, inbound.pollBatchSize, inbound, outbound, profile, relayClient.pollCapacity and relayClient. Measured durations in the loaded runs put most of the annotated tests one to two orders of magnitude below their declared ceiling.",
+      "confidence": "medium"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "files_changed": 1,
+    "test_files_changed": 0,
+    "assertions_changed": 0,
+    "tests_skipped": 0,
+    "testTimeout_ms": 30000,
+    "hookTimeout_ms": 30000,
+    "previous_timeout_ms": 5000,
+    "cli_files_previously_on_the_default": 7,
+    "cli_files_total": 14,
+    "full_workspace_runs_after_change": 5,
+    "full_workspace_runs_green": 4,
+    "full_workspace_runs_loaded": 3,
+    "defect_reproduced_before_change": true,
+    "workspace_suite_final": "128/128",
+    "cli_suite_final": "83/83",
+    "worst_per_test_ms_loaded_after_change": 4211,
+    "hang_probe_failure_ms": 30010
+  },
+  "timestamp_utc": "2026-09-06T18:15:00Z"
+}

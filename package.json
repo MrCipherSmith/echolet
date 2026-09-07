@@ -1,0 +1,32 @@
+{
+  "name": "echolet",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "mobile:start": "pnpm --filter @echolet/mobile start",
+    "relay:dev": "go run ./apps/relay/cmd/relay"
+  },
+  "devDependencies": {
+    "eslint": "9.22.0",
+    "prettier": "3.5.3",
+    "typescript": "5.8.3",
+    "vitest": "3.0.8"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "^55.0.9",
+    "expo": "^55.0.11",
+    "react-dom": "^19.2.4",
+    "react-native": "^0.84.1",
+    "react-native-web": "^0.21.2"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

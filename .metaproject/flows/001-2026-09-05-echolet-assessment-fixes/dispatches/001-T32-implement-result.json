@@ -1,0 +1,19 @@
+{
+  "contract_version": "1.0.0", "run_id": "001", "dispatch_id": "001-T32-implement", "status": "DONE",
+  "summary": "Successful verified v2 publication now atomically registers the existing mailbox authorization index together with bundle and OTK indexes. Identical republish preserves/backfills authorization; conflicting public keys cannot replace it. Three supplied real-router cases, full tagged race suite and untagged suite pass unchanged.",
+  "acceptance": [
+    {"criterion": "Three focused router tests pass unchanged", "status": "met", "evidence": "go test -race -tags=relayv2 ./internal/api/router PASS after confirmed 403 RED."},
+    {"criterion": "Verified publish authorizes mailbox across restart", "status": "met", "evidence": "Verified DeviceRecord carried into model and persisted in existing Badger transaction; restart router test PASS."},
+    {"criterion": "Invalid and conflicting publication cannot replace authorization", "status": "met", "evidence": "Signature checks precede model creation; transaction helper compares identity/device/public key and preserves matching record."},
+    {"criterion": "Full tagged race and untagged suites", "status": "met", "evidence": "go test -race -tags=relayv2 -timeout=90s ./... and go test -timeout=90s ./... PASS."}
+  ],
+  "artifacts": [{"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t32-implementation-report.md", "kind": "implementation-report", "exists": true}],
+  "changed_files": [
+    {"path": "apps/relay/internal/model/signal_prekey_bundle_v2.go", "change": "Carry validated DeviceRecord."},
+    {"path": "apps/relay/internal/validation/signal_prekey_bundle_v2.go", "change": "Populate typed device record after signature verification."},
+    {"path": "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go", "change": "Persist/backfill authorization atomically, rejecting conflicting identity/device/public key."},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t32-implementation-report.md", "change": "Created implementation report."},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T32-implement-result.json", "change": "Created structured result."}
+  ],
+  "findings": [], "questions": [], "errors": [], "metrics": {}, "timestamp_utc": "2026-09-06T11:38:10Z"
+}

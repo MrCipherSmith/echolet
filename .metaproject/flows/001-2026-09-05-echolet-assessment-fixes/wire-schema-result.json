@@ -1,0 +1,50 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-wire-schema",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Strict additive Signal wire v2 schema and deterministic signing/address helpers implemented; protocol tests and typecheck pass.",
+  "acceptance": [
+    {
+      "criterion": "Meet exact signal-wire-v2-spec.md acceptance for owned scope",
+      "status": "met",
+      "evidence": "strict schema, tuple and address helper tests"
+    },
+    {
+      "criterion": "Keep v1 and existing session regression tests green",
+      "status": "partial",
+      "evidence": "Protocol v1 tests pass; cross-package session final suite delegated to adapter worker/parent"
+    },
+    {
+      "criterion": "No mobile/relay or production readiness claim",
+      "status": "met",
+      "evidence": "Schema only, no runtime wire integration"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/wire-schema-report.md",
+      "kind": "report",
+      "exists": true
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "packages/protocol/src/types/signalPreKeyBundleV2.ts",
+      "change": "additive v2 implementation/test/export"
+    },
+    {
+      "path": "packages/protocol/src/types/signalPreKeyBundleV2.test.ts",
+      "change": "additive v2 implementation/test/export"
+    },
+    {
+      "path": "packages/protocol/src/index.ts",
+      "change": "additive v2 implementation/test/export"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {},
+  "timestamp_utc": "2026-09-06T08:40:35.817659+00:00"
+}
