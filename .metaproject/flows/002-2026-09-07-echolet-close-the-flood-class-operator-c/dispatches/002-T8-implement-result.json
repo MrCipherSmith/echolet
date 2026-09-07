@@ -1,0 +1,149 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T8-implement",
+  "status": "DONE",
+  "summary": "The relay now serves HTTPS from a certificate and key file pair on disk, configured by ECHOLET_TLS_CERT_FILE / ECHOLET_TLS_KEY_FILE on the existing ECHOLET_HTTP_ADDR listener. Set neither and it serves plain HTTP exactly as before, so every pre-existing suite and the reproduction runbook are unchanged; set exactly one, or point either at a missing, malformed or mismatched file, and it exits non-zero at startup naming the offending variable or path rather than silently falling back to plain HTTP. The listener gained a TLS 1.2 floor with AEAD-only 1.2 cipher suites and four timeouts a bare http.ListenAndServe leaves unbounded. Certificate reload without restart was IMPLEMENTED, not deferred: change is detected by SHA-256 over the file bytes rather than by mtime, and a read that lands mid-renewal keeps the last good pair serving instead of failing the handshake. No ACME client was added - tailscale cert issues and renews the pair on the tailnet and the relay only reads it. Tests were written RED first (recorded build failure across the three new packages) and 21 Go cases plus 3 real-binary e2e cases now pass; the e2e binds the machine's non-loopback IPv4, proves the CLI refuses http:// for that same host with exit 2 / INVALID_CONFIGURATION, and completes the full acceptance scenario over TLS. Full suite green: go untagged, -race, -race -tags=relayv2, go vet, pnpm typecheck, pnpm test (exit 0, 202 CLI tests). No pre-existing test differs from HEAD (71 tracked test files). No server was touched and tailscale cert was not run - deployment remains T11.",
+  "summary_markdown": "See `t8-implementation-report.md` for the configuration surface, the hardening table, the renewal decision, the RED-first record, and the operator procedure.\n\n**Renewal decision: implemented.** `tls.Config.GetCertificate` is served by a reloader that re-reads both files, throttled by `ECHOLET_TLS_RELOAD_INTERVAL_SECONDS` (default 60, `0` = every handshake), compares a SHA-256 digest over the two files' bytes, and falls back to the last known-good pair with a warning when a read fails mid-rewrite.\n\n**Two measured facts worth carrying forward:** (1) the e2e suite binds the host's first non-loopback IPv4 and degrades to `127.0.0.1` only where no such interface exists - AC4's \"from a different machine\" half is still T10's; (2) Node 26 loads only the FIRST certificate from a multi-PEM trust file, through both `NODE_EXTRA_CA_CERTS` and the `ca` option, so anyone bundling roots for these suites later will hit `DEPTH_ZERO_SELF_SIGNED_CERT`.\n\n**One correction recorded rather than hidden:** an early `go fmt ./...` reformatted three files outside this task's scope, one of them a test. They were reverted and verified byte-identical to `HEAD` by SHA-256, and the two affected packages re-tested green.",
+  "acceptance": [
+    {
+      "criterion": "AC4 (relay half): a relay reachable on a non-loopback address serves HTTPS",
+      "status": "met",
+      "evidence": "apps/cli/test/e2e/relay-tls.test.ts binds the real relay binary to the host's non-loopback IPv4 (192.168.1.106 on this machine) with ECHOLET_TLS_CERT_FILE/ECHOLET_TLS_KEY_FILE set, and /health answers 200 over TLS >= 1.2. Go: TestServerServesHTTPSAndNotPlainHTTP, TestNewSetsAModernMinimumTLSVersion, TestServerRefusesATLS11Client."
+    },
+    {
+      "criterion": "AC4 (client half): the CLI completes the full acceptance scenario against it",
+      "status": "met",
+      "evidence": "e2e case 2 runs the real dist/cli.js as separate processes over https://<non-loopback>:<port>: init, contact export/import, relay publish, offline delivery, byte-identical exact retry (same envelopeId), deduplication (received 0 on the second poll), reply, and both histories at 3 matching entries. The same host is proven non-loopback by the CLI itself refusing http:// with exit 2 / INVALID_CONFIGURATION."
+    },
+    {
+      "criterion": "AC4 (from a different machine)",
+      "status": "partial",
+      "evidence": "Not this task's to close: the dispatch scopes T8 to making the relay CAPABLE of TLS, and verification from a third machine is T10 with deployment gated behind it at T11. Everything here ran on one host."
+    },
+    {
+      "criterion": "Configuration for a TLS certificate and key path and for the listen address, following the ECHOLET_* convention; HTTPS when both are set, plain HTTP when neither is",
+      "status": "met",
+      "evidence": "apps/relay/internal/config/config.go: TLSCertFile, TLSKeyFile, TLSReloadIntervalSeconds, TLSEnabled(), Validate(). ECHOLET_HTTP_ADDR is reused as the single listen address for both schemes - no second ECHOLET_HTTPS_ADDR, because two addresses could only ever disagree. Pinned by TestLoadWithoutTLSPathsKeepsPlainHTTP, TestLoadWithBothTLSPathsEnablesTLS, TestPlainServerStillServesLoopbackHTTP."
+    },
+    {
+      "criterion": "An incomplete pair fails loudly at startup rather than silently falling back to plain HTTP",
+      "status": "met",
+      "evidence": "Go: TestLoadRefusesCertificateWithoutKey, TestLoadRefusesKeyWithoutCertificate, TestNewRefusesAMissingCertificateFileRatherThanFallingBackToPlainHTTP, TestNewRefusesACertificateWithoutAKey, TestNewRefusesAKeyWithoutACertificate, TestNewCertificateReloaderRefusesAMismatchedPair. Real binary: e2e case 1 spawns four misconfigurations (cert-only, key-only, absent cert file, mismatched key), each of which must exit non-zero, name the offending variable or path, and leave NOTHING listening - an http:// request to the port is refused at the socket."
+    },
+    {
+      "criterion": "Sensible server hardening: a modern minimum TLS version and read/write/idle timeouts",
+      "status": "met",
+      "evidence": "MinVersion TLS 1.2 (RFC 8996 floor; 1.3 negotiated with every peer here) plus an AEAD-only TLS 1.2 cipher list, X25519/P-256/P-384 curves, h2+http/1.1 ALPN. ReadHeaderTimeout 10s, ReadTimeout 60s, WriteTimeout 120s, IdleTimeout 120s, MaxHeaderBytes 64 KiB, applied to the plain listener too. TestNewAppliesTimeoutsToThePlainHTTPServer, TestNewSetsAModernMinimumTLSVersion, TestServerRefusesATLS11Client."
+    },
+    {
+      "criterion": "Certificate reload without a restart, or an explicit statement that the complexity was judged not worth it",
+      "status": "met",
+      "evidence": "IMPLEMENTED and stated as such (report section 3). apps/relay/internal/tlsx/reloader.go serves tls.Config.GetCertificate, re-reads both files throttled by ECHOLET_TLS_RELOAD_INTERVAL_SECONDS, detects change by SHA-256 over the file bytes (not mtime), and keeps the last good pair with a warning when a read fails mid-rewrite. Pinned by TestCertificateReloaderPicksUpARenewalWithoutRestart, TestCertificateReloaderKeepsTheLastGoodPairWhenAReadFails, TestCertificateReloaderHonoursItsRecheckInterval, TestCertificateReloaderIsSafeUnderConcurrentHandshakes (-race), and by e2e case 3: the running relay's served certificate is replaced by rename and the new one is read back and validated against the RENEWED anchor, same PID, /health still 200, and the real CLI completes init and relay publish over it."
+    },
+    {
+      "criterion": "Test-first method, with the order recorded",
+      "status": "met",
+      "evidence": "Report section 4 quotes the recorded RED output: the three new test files were written and run before any implementation existed and failed with 'cfg.TLSEnabled undefined', 'undefined: NewCertificateReloader', 'undefined: New' across echolet/apps/relay/internal/{config,tlsx,server} [build failed]. The devcert fixture generator was written first as fixture infrastructure, not as behaviour under test."
+    },
+    {
+      "criterion": "Verified against a real client, not only unit tests",
+      "status": "met",
+      "evidence": "apps/cli/test/e2e/relay-tls.test.ts builds the actual relay from this tree and drives the real apps/cli/dist/cli.js as separate processes, following the two-process.test.ts pattern. 3 cases, 15.7s in the full run."
+    },
+    {
+      "criterion": "No existing test weakened or deleted; full suite stays green (Go untagged, -race, -race -tags=relayv2, pnpm test, pnpm typecheck)",
+      "status": "met",
+      "evidence": "git diff --name-only HEAD -- '*_test.go' '*.test.ts' is EMPTY against 71 tracked test files. go vet clean; go test ./... ok; go test -race ./... ok; go test -race -tags=relayv2 ./... ok; pnpm typecheck green across 7 projects; pnpm test exit 0 with @echolet/cli at 33 files / 202 tests passed, including flood-closure (6), two-process (3), publication-claimability (1) and relay-tls (3)."
+    },
+    {
+      "criterion": "The flood closure from T7 and everything from flow 001 is left intact",
+      "status": "met",
+      "evidence": "No file from T7's change list was edited. The three files an early go fmt touched incidentally were reverted and verified byte-identical to HEAD by SHA-256 (mailbox_read_mark_test.go 9d72966410dba58e..., handler/signal_prekey_bundle_v2.go aa54582328a0cba7..., repository/signal_prekey_bundle_v2.go 48f02d2d03fc9ba0...), and both affected packages re-tested green. flood-closure.test.ts passes all 6 cases unchanged."
+    },
+    {
+      "criterion": "No deployment, no server touched, tailscale cert not run",
+      "status": "met",
+      "evidence": "No SSH, no remote command and no tailscale invocation was made. The operator procedure for geekom.tail5a88fb.ts.net and depr.tail5a88fb.ts.net is written down in report section 6 and in the runbook, explicitly marked as not executed and as T11's work, gated behind T10."
+    },
+    {
+      "criterion": "Forbidden paths untouched: apps/cli/src/tui/, apps/cli/vitest.config.ts, apps/cli/test/globalSetup.ts, flow.json, acceptance-criteria.md",
+      "status": "met",
+      "evidence": "git status over apps/, docs/ and packages/ lists exactly two modified files (apps/relay/cmd/relay/main.go, apps/relay/internal/config/config.go) and five new paths, none of them under apps/cli/src/tui/ or the named files. No git commit was made."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t8-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Configuration surface, hardening choices with reasons, the renewal decision, the RED-first record, the e2e evidence, the operator procedure, and what this does not close.",
+      "hash": "sha256:5bcf801a51b78f4ce18e4832e83d54b8c447522c816ae2cc31e75b2957939dda"
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/runbook.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "New section 'Serving HTTPS (required for any non-loopback relay)': the four variables, the both-or-neither rule, the tailscale cert procedure, renewal behaviour, and the local self-signed generator."
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/relay/internal/config/config.go", "change": "modified - TLSCertFile, TLSKeyFile, TLSReloadIntervalSeconds; TLSEnabled(); Validate() refusing a half-configured pair and a negative interval, called from Load()" },
+    { "path": "apps/relay/cmd/relay/main.go", "change": "modified - builds the listener through server.New, exits 1 on a TLS configuration it cannot honour, logs the scheme and the two paths (never their contents)" },
+    { "path": "apps/relay/internal/server/server.go", "change": "new - timeouts (10s/60s/120s/120s, 64 KiB headers), TLS wiring, Serve / ListenAndServe / Close / Shutdown" },
+    { "path": "apps/relay/internal/tlsx/reloader.go", "change": "new - certificate reloader keyed on SHA-256 over the file bytes, eager load at startup, last-good fallback on a failed re-read, mutex-guarded" },
+    { "path": "apps/relay/internal/tlsx/config.go", "change": "new - server tls.Config: TLS 1.2 floor, AEAD-only 1.2 cipher suites, curve preferences, h2/http1.1 ALPN" },
+    { "path": "apps/relay/internal/devcert/devcert.go", "change": "new - self-signed P-256 pair generator for tests and local development; nothing on the serving path imports it" },
+    { "path": "apps/relay/internal/devcert/gencert/main.go", "change": "new - command form of the generator, so the e2e suite needs no openssl binary; prints paths only" },
+    { "path": "apps/relay/internal/config/tls_config_test.go", "change": "new - 6 cases on the configuration surface and its refusals" },
+    { "path": "apps/relay/internal/tlsx/reloader_test.go", "change": "new - 7 cases: startup refusals, renewal pickup, last-good fallback, interval, concurrency" },
+    { "path": "apps/relay/internal/server/server_test.go", "change": "new - 8 cases: timeouts, TLS refusals, minimum version, HTTPS served, TLS 1.1 refused, plain HTTP still served" },
+    { "path": "apps/cli/test/e2e/relay-tls.test.ts", "change": "new - 3 real-binary cases: loud startup refusal with nothing listening, full two-party exchange over HTTPS on a non-loopback address, renewal without restart" },
+    { "path": "docs/requirements/echolet-cli-prototype/runbook.md", "change": "modified - new section 'Serving HTTPS (required for any non-loopback relay)'" }
+  ],
+  "findings": [
+    {
+      "id": "T8-F-001",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "problem": "Node 26 loads only the FIRST certificate from a multi-PEM trust file, through both NODE_EXTRA_CA_CERTS and the tls/https `ca` option. A second anchor concatenated into the same file is silently ignored.",
+      "impact": "A test or an operator bundling two roots into one file gets DEPTH_ZERO_SELF_SIGNED_CERT for anything chaining to the second one, with no diagnostic pointing at the bundle. It cost one debugging cycle in this dispatch.",
+      "suggested_fix": "Trust each anchor through its own file, or pass an array to the `ca` option. Recorded in the e2e suite's own comment at apps/cli/test/e2e/relay-tls.test.ts so the next reader does not repeat the measurement.",
+      "evidence": "Measured against the real relay binary: with a two-certificate bundle, a relay serving the FIRST certificate validates and one serving the SECOND answers DEPTH_ZERO_SELF_SIGNED_CERT, identically via NODE_EXTRA_CA_CERTS and via tls.connect({ca}). Passing the same two certificates as an array validates both.",
+      "confidence": "high"
+    },
+    {
+      "id": "T8-F-002",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "problem": "The TLS e2e suite picks the host's first non-loopback IPv4 and falls back to 127.0.0.1 when the machine has none. On such a host the non-loopback half of the suite - including the assertion that the CLI refuses http:// for that host - degrades to a loopback run without failing.",
+      "impact": "A CI host with no non-loopback interface would run a weaker version of the suite than a developer machine, and nothing would say so. It does not affect AC4, whose 'from a different machine' half is T10's regardless.",
+      "suggested_fix": "T10 verifies from a genuinely different machine against a real tailnet name, which is the stronger evidence and makes this degradation a convenience rather than a gap. If it ever needs to be closed here, fail the suite when no non-loopback IPv4 exists rather than degrading silently.",
+      "evidence": "apps/cli/test/e2e/relay-tls.test.ts, nonLoopbackAddress() and the `if (nonLoopback)` guard. On this machine the suite ran against 192.168.1.106, so the guarded assertions executed.",
+      "confidence": "high"
+    },
+    {
+      "id": "T8-F-003",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "problem": "Making the relay reachable makes two pre-existing, unfixed classes live rather than academic: ECHOLET_MAX_STORAGE_BYTES is declared and enforced nowhere (T7 section 6, R-3), and POST /v1/device-records/publish is still unauthenticated (T7, R-6).",
+      "impact": "A flood still fills a reachable relay's disk without limit, and identities remain free. Neither blocks delivery after T7's closure, but both become relay-availability concerns the moment a relay is exposed.",
+      "suggested_fix": "Out of scope for T8, which adds TLS only. It belongs to the deployment decisions in T11 - a disk quota, a bounded data directory, or an accepted and documented risk - and should not be discovered there for the first time.",
+      "evidence": "apps/relay/internal/config/config.go declares MaxStorageBytes with no reader; t7-implementation-report.md section 6 records both as residuals of the flood closure.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "go_tests_added": 21,
+    "e2e_tests_added": 3,
+    "cli_tests_total_passing": 202,
+    "tracked_test_files_differing_from_head": 0
+  },
+  "timestamp_utc": "2026-09-07T09:38:43Z"
+}

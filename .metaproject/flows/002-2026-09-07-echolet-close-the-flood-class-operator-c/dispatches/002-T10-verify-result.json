@@ -1,0 +1,223 @@
+{
+ "contract_version": "1.0.0",
+ "run_id": "002",
+ "dispatch_id": "002-T10-verify",
+ "status": "DONE_WITH_CONCERNS",
+ "summary": "Independent re-verification of flow 002. The mailbox flooding class is CLOSED for delivery: measured on the real relay binary, 4 identities/49 max-size poison gives poll exit codes [3,0] with delivery on the 2nd poll, 37 requests, 13676311 bytes downloaded once (amplification 1.062:1) and a second and third message costing 1 poll / 1 page / 3 requests each; 50/800 and 500/8000 also deliver (1.059:1 and 1.052:1); progress survives a SIGKILL mid-walk (resumed at poison index 150 after judging through 100, total 18 pages for 17 pages of work). No wedge threshold at 4/49, 50/800 or 500/8000. Fifteen attacks on the read position all held: forged, replayed, rewound, malformed and cross-device read_through values are all refused, sender-chosen envelope_id ordering no longer buys a head position, and a late flood cannot jump the mark. HOWEVER I found and reproduced a new major regression: the contact-import re-walk that the design added as the R-5 recovery path is itself bounded by the 16-page liveness valve and its request is consumed even when truncated, so 55 maximum-size poison envelopes from 5 self-published identities (14457630 bytes, 60 requests) permanently lose a message from a sender whose card is imported later. A control at 30 poison recovers, isolating the cause. Also found an unauthenticated oracle for a mailbox's lifetime envelope count and an init/RelayClient URL-validation mismatch. TLS cannot silently downgrade: ten misconfiguration paths, ten non-zero exits, nothing listening; content-based reload and last-known-good mid-rewrite confirmed; the CLI refuses plain HTTP to every non-loopback host tried. The operator TUI holds every claim: 1008 frames total, deterministic, ESC-free and exactly rows x cols; the notice on every frame; the trust gate refuses an unpainted or incomplete modal; and in a live run with a real store key in the environment the key appears in no frame and in no child argv while every child inherits it. Full matrix green: 267 tests three times including under 10-core load, three-iteration E2E 3/3, 13/13 e2e, Go untagged + -race + -race -tags=relayv2, keryx test and health --strict PASS, no graph cycles, no broken wiki links. Repository integrity re-verified by SHA-256: 236 of 236 files unchanged. Node v26.5.0.",
+ "summary_markdown": null,
+ "acceptance": [
+  {
+   "criterion": "AC1: the flooding closure is chosen by a written design task naming what it closes, what it does not close, and why the alternatives were rejected",
+   "status": "met",
+   "evidence": "t5-flood-closure-design.md section 3 (the three coupled parts of the closure), section 4 (residuals R-1..R-8, each with the measurement that would confirm it, written before implementation), section 6 (candidates 1, 2 and 3 rejected with measured or cited reasons)."
+  },
+  {
+   "criterion": "AC2: against the real relay binary the 4-identity / 49-envelope probe no longer prevents delivery, the new attacker cost is measured and stated, and a bound is reported as a bound",
+   "status": "met",
+   "evidence": "Measured by me: 4 identities, 49 max-size poison, 12880434 B uploaded, 53 attacker requests -> poll exits [3,0], delivered on the 2nd poll, 18 pages, 37 requests, 13676311 B downloaded once, amplification 1.062:1; 2nd and 3rd messages 3 requests each. 50/800 -> [3,0], 1.059:1. 500/8000 -> delivery on the 11th poll, 171 pages, 343 requests, 1.052:1. Residual R-2 stated as a bound and confirmed."
+  },
+  {
+   "criterion": "AC3: legitimate two-party exchange, offline delivery, byte-identical exact retry and deduplication still pass on the real relay, with no pre-existing test weakened, skipped or deleted",
+   "status": "met",
+   "evidence": "two-process.test.ts 3/3 unfiltered; full e2e 13/13; pnpm -r test 267/267 three times including once under 10-core saturation; go test ./..., -race -count=1 and -race -count=1 -tags=relayv2 all exit 0. Exactly one pre-existing test file changed (mailbox_sender_quota_test.go) and it was inverted and strengthened per T54's own instruction; zero it.skip/t.Skip/.only matches repository-wide."
+  },
+  {
+   "criterion": "AC4: a relay reachable on a non-loopback address serves HTTPS, and the CLI completes the full acceptance scenario against it from a different machine",
+   "status": "partial",
+   "evidence": "HTTPS serving, ten misconfiguration paths each exiting non-zero with nothing listening on the port, SHA-256 content-based reload, identical-bytes-new-mtime ignored, mid-rewrite serving the last known-good pair, and CLI refusal of plain HTTP for every non-loopback host tried (including the 127.-prefix hostnames a naive check would admit) were all confirmed by me. The 'from a different machine' half is unverified: everything ran on loopback and I was instructed not to touch geekom or depr. Minor defect T10-F-003 on this path."
+  },
+  {
+   "criterion": "AC5: the operator console drives a local CLI, shows profiles, queues, history, rejections and relay health, and never receives, stores or transmits a store key or private key material, demonstrated by evidence",
+   "status": "met",
+   "evidence": "Live run of the real dist/tui.js against a real relay with a real 32-byte store key in ECHOLET_E2E_KEY: 29 frames written, key absent from stdout and stderr with a working leak-detector control; 4 real child processes (doctor, relay publish, poll, contact import) captured at OS argv level, key in no argv token and no full command line, while every child inherited it in its environment; contact import argv carries no --yes."
+  },
+  {
+   "criterion": "AC6: the console displays, on its own surface, that this is an unaudited prototype not suitable for sensitive communication",
+   "status": "met",
+   "evidence": "UNAUDITED PROTOTYPE notice present in full on every one of 1008 probe frames wide enough to hold it, including every modal frame, and 29 times in the 29 live frames. Row 0 is never yielded to the modal overlay; below 62 columns the row is a prefix of the notice, never absent."
+  },
+  {
+   "criterion": "AC7: two relay instances run on the user's servers, and a deployment runbook reproduces them from a clean host",
+   "status": "not_applicable",
+   "evidence": "Out of scope for T10. Deployment is task T11 and this dispatch forbids touching geekom or depr. No judgement made."
+  },
+  {
+   "criterion": "AC8: documentation states what remains untrue after this flow",
+   "status": "not_applicable",
+   "evidence": "Out of scope for T10. One input for it: T10-F-001 and T10-F-002 are new residuals AC8's list must carry, alongside T5-F-002's unenforced ECHOLET_MAX_STORAGE_BYTES."
+  }
+ ],
+ "artifacts": [
+  {
+   "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t10-verification-report.md",
+   "kind": "final-report",
+   "exists": true,
+   "summary": "T10 independent verification: closure re-measurement, attack results, TLS, TUI, matrix and AC judgements.",
+   "hash": null
+  },
+  {
+   "path": ".metaproject/data/health/artifacts/latest.md",
+   "kind": "health",
+   "exists": true,
+   "summary": "keryx health run --strict: PASS, score 95, no gate condition triggered.",
+   "hash": null
+  },
+  {
+   "path": ".metaproject/data/testing/artifacts/latest.md",
+   "kind": "custom",
+   "exists": true,
+   "summary": "keryx test run --strict: PASS.",
+   "hash": null
+  },
+  {
+   "path": ".metaproject/data/gdgraph/artifacts/summary.md",
+   "kind": "graph",
+   "exists": true,
+   "summary": "Rebuilt graph: 112 nodes, 186 edges, no cycles.",
+   "hash": null
+  }
+ ],
+ "changed_files": [
+  {
+   "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t10-verification-report.md",
+   "change": "added: the T10 verification report"
+  },
+  {
+   "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T10-verify-result.json",
+   "change": "added: this dispatch result"
+  }
+ ],
+ "findings": [
+  {
+   "id": "T10-F-001",
+   "reviewer": "code-verifier",
+   "severity": "major",
+   "repo": "echolet",
+   "file": "apps/cli/src/runtime/inbound.ts",
+   "line": 135,
+   "symbol": "InboundMessenger.poll",
+   "problem": "The contact-import re-walk, which the T5 design introduces as the R-5 recovery path for an envelope refused CONTACT_NOT_TRUSTED before the card existed, is itself bounded by maxPollPagesPerPoll = 16 (inbound.ts:148), and the re-walk request is consumed exactly once at the start of the walk (inbound.ts:135) whether or not the walk completed. Once the flood ahead of the untrusted envelope exceeds 16 pages, the truncated re-walk never reaches it and every subsequent cursorless poll resumes at the durable mark, which is already past it.",
+   "impact": "A message from a sender whose contact card is imported later is PERMANENTLY LOST rather than delivered. At the shipped defaults (poll byte budget 1 MiB - 4 KiB, ECHOLET_MAX_MESSAGE_BYTES 262144, so 3 max-size envelopes per page) 16 pages is 48 envelopes, so 49 maximum-size poison envelopes - the exact volume T55 recorded as the original wedge - already defeat the recovery path. Measured attacker cost: 5 self-published identities, 55 maximum-size envelopes, 14457630 bytes, 60 HTTP requests, paid once. This is a REGRESSION introduced by this change: before the durable mark, a CONTACT_NOT_TRUSTED envelope was re-offered on every poll and a late import always recovered it.",
+   "suggested_fix": "Consume the re-walk request only when the re-walk actually reached the end of the mailbox (more === false), so a truncated re-walk is resumed by the next poll; or hold a durable re-walk floor that the cursorless resume may not skip past until the walk completes. Then widen flood-closure.test.ts RED-6 beyond one page - it currently uses 40 envelopes at ciphertext 4, about one page, so it exercises the reset flag but never the truncation.",
+   "evidence": "Measured on the real relay binary with a real third CLI profile (Carol) whose card Bob imports after her envelope is queued. Attack run: 49 max-size poison ahead (4 identities, 17 pages) + 6 behind (1 identity); after the import Bob polled 12 more times (exit codes [3,3,3,3,3,3] then [3,3,3,3,3,3]) and history with Carol stayed 0. The post-import poll served 16 cursored pages (the truncated re-walk) followed by 5 cursorless pages resuming at the mark. Control run, identical except 30 poison ahead (10 pages): the first post-import poll exits 0 and history with Carol is 1. Probe: scratchpad/probe-rewalk.mjs.",
+   "confidence": "high",
+   "blocking_merge": true,
+   "learning_candidate": true,
+   "source": "internal",
+   "dedupe_key": "t10-rewalk-truncated-by-page-valve",
+   "class_scope": {
+    "sites": [
+     "apps/cli/src/runtime/inbound.ts:135 - the re-walk request is consumed (cursor := \"0\") before the first page, unconditionally on walk completion",
+     "apps/cli/src/runtime/inbound.ts:148 - maxPollPagesPerPoll = 16 bounds the loop, and therefore bounds the re-walk as well as an ordinary walk",
+     "apps/cli/src/runtime/inbound.ts:160 - the loop exits on the valve without recording that the re-walk did not finish",
+     "apps/cli/src/runtime/inbound.ts:75 - the valve constant itself, documented as a liveness valve that costs 'one more poll invocation instead of a lost message', which is true of an ordinary walk and false of a re-walk",
+     "apps/cli/src/runtime/profile.ts:31,141,157 - mailboxRewalkKey / requestMailboxRewalk / takeMailboxRewalk, the only writer and the only reader of the flag; take() has no notion of an unfinished walk",
+     "apps/cli/src/commands/cli.ts:330 - contact import, the only caller of requestMailboxRewalk and therefore the only entry to the class",
+     "apps/cli/test/e2e/flood-closure.test.ts:599 (RED-6) - the only real-binary test of this path; it floods 40 envelopes at ciphertext 4 (about one page), so it exercises the flag and never the truncation",
+     "apps/cli/src/runtime/inbound.readMark.test.ts:199 - the only test that does drive more than 16 pages, but it exercises the read-mark path against a fake relay and never sets the re-walk flag"
+    ],
+    "enumeration_method": "keryx ctx rg -n 'takeMailboxRewalk|requestMailboxRewalk|mailbox-rewalk|maxPollPagesPerPoll' apps packages returned 12 matches in 6 files, which is the complete set: the flag has exactly one writer (profile.ts:141, called only from cli.ts:330) and exactly one reader (profile.ts:157, called only from inbound.ts:135), and the valve constant has exactly one use site (inbound.ts:148). The two test-file matches are listed because they are the coverage this class has, and both are shown above to miss it. The relay-side match (mailbox_sender_quota_test.go:95) is a comment referring to the constant, not a use."
+   }
+  },
+  {
+   "id": "T10-F-002",
+   "reviewer": "code-verifier",
+   "severity": "minor",
+   "repo": "echolet",
+   "file": "apps/relay/internal/api/handler/mailbox_handler.go",
+   "line": 423,
+   "symbol": "MailboxHandler.resolveReadThrough",
+   "problem": "resolveReadThrough is applied before challenge validation and before authorizeMailboxDevice, and it answers 400 INVALID_SCHEMA ('read_through is above every position issued for this mailbox') versus 400 CHALLENGE_EXPIRED depending on whether the submitted position exceeds HighestIssuedPosition. That makes the relay an unauthenticated oracle for a mailbox's lifetime allocated-position count.",
+   "impact": "Anyone who has ever seen a contact card can compute mailbox_id = base64url(sha256(identity_id + ':mailbox:v1')) and binary-search the victim's lifetime received-envelope count in about 20 unauthenticated requests, with no challenge, no device and no signature. That is metadata about the victim's traffic disclosed to a third party, which goes beyond what SEC-01 section 6.2 confines the relay to exposing, and it is a new disclosure introduced by this change.",
+   "suggested_fix": "Keep the pure shape check (DecodeMailboxCursor) before authorisation, since that is genuinely independent of who is asking, but move the HighestIssuedPosition bound to after the challenge check and signature verification. Malformed input still never reaches a 500 and still never depends on the caller; only the value-dependent answer becomes authenticated.",
+   "evidence": "Measured: with challenge_id 'not-a-challenge', device_id '00000000-0000-4000-8000-000000000000' and signature 'AAAA', binary search over read_through recovered highestIssuedPosition = 66 against a mailbox that had allocated exactly 66 positions (6 + 60). Probe: scratchpad/probe-attack.mjs, result key a5_oracle.",
+   "confidence": "high",
+   "blocking_merge": false,
+   "learning_candidate": false,
+   "source": "internal",
+   "dedupe_key": "t10-readthrough-unauthenticated-oracle",
+   "class_scope": {
+    "sites": [
+     "apps/relay/internal/api/handler/mailbox_handler.go:466 - PollMailbox calls resolveReadThrough before challenge validation and before authorizeMailboxDevice",
+     "apps/relay/internal/api/handler/mailbox_handler.go:644 - AckMailbox calls resolveReadThrough at the same point, with the same ordering, so the oracle is reachable on both routes",
+     "apps/relay/internal/api/handler/mailbox_handler.go:423 - resolveReadThrough itself, which mixes a caller-independent shape check with a mailbox-state-dependent bound"
+    ],
+    "enumeration_method": "Located by reading mailbox_handler.go and by listing every call site of resolveReadThrough with awk over the file (3 occurrences: the definition at :423 and the two route call sites at :466 and :644). Both routes were then exercised against the running binary; the poll route was measured to leak (probe-attack.mjs a5_oracle), and the ack route shares the identical call ordering."
+   }
+  },
+  {
+   "id": "T10-F-003",
+   "reviewer": "code-verifier",
+   "severity": "minor",
+   "repo": "echolet",
+   "file": "apps/cli/src/transport/relayClient.ts",
+   "line": 66,
+   "symbol": "RelayClient constructor",
+   "problem": "The relay-URL policy enforced by RelayClient (no username, password, hash, search, and pathname must be '/') is stricter than the one `init` applies. `echolet init --relay-url https://relay.example.com/path` succeeds and writes the profile; every subsequent relay command then fails.",
+   "impact": "The failure surfaces as exit 5 PERSISTENCE_FAILURE, which points the operator at their disk rather than at their configuration. On the deployment path this AC4 wave is about, a mistyped relay URL is a likely operator error and the diagnosis actively misleads.",
+   "suggested_fix": "Apply the RelayClient URL rule in `init` (construct a RelayClient, or share one validator) so a rejected URL fails at configuration time with exit 2 INVALID_CONFIGURATION, matching every other bad-URL case.",
+   "evidence": "Measured against the built dist/cli.js: `init --relay-url https://relay.example.com/path` exit 0; `relay publish` on that profile exit 5 PERSISTENCE_FAILURE. Thirteen other relay-URL forms were checked and all behave correctly, including the 127.-prefix hostnames (127.evil.example, 127.0.0.1.evil.example), which are correctly refused.",
+   "confidence": "high",
+   "blocking_merge": false,
+   "learning_candidate": false,
+   "source": "internal",
+   "dedupe_key": "t10-init-relayclient-url-validation-mismatch"
+  },
+  {
+   "id": "T10-F-004",
+   "reviewer": "code-verifier",
+   "severity": "info",
+   "repo": "echolet",
+   "file": null,
+   "line": null,
+   "symbol": null,
+   "problem": "Observed while constructing the T10-F-001 attack, and unrelated to T7/T8/T9: after a first sender (Carol) established a session with Bob, a second sender (Alice) could not make a first send to Bob at all, failing exit 3 PREKEY_BUNDLE_UNAVAILABLE and not recovering until Bob re-ran `relay publish`.",
+   "impact": "If reproducible in isolation, one sender consuming a prekey bundle denies first contact to every other sender until the recipient republishes. It is a denial-of-first-contact surface, not a delivery-class defect, and it is outside the flooding class this flow addresses.",
+   "suggested_fix": "Investigate separately as its own flow item: confirm whether it is the expected one-time-prekey model or an exhaustion defect, and if the former, decide whether the CLI should republish automatically.",
+   "evidence": "Reproduced twice in scratchpad/probe-rewalk.mjs runs (controlSend = {code: 3, errorCode: 'PREKEY_BUNDLE_UNAVAILABLE'}). NOT investigated further and NOT counted against any acceptance criterion. Recorded only so it is not lost.",
+   "confidence": "low",
+   "blocking_merge": false,
+   "learning_candidate": false,
+   "source": "internal",
+   "dedupe_key": "t10-prekey-bundle-exhaustion-observation"
+  }
+ ],
+ "questions": [],
+ "errors": [],
+ "metrics": {
+  "duration_ms": null,
+  "prompt_tokens": null,
+  "output_tokens": null,
+  "retries": 0,
+  "workspace_tests_total": 267,
+  "workspace_test_runs": 3,
+  "workspace_test_failures": 0,
+  "workspace_test_files": 47,
+  "e2e_tests": 13,
+  "e2e_failures": 0,
+  "two_process_e2e_iterations": 3,
+  "go_packages": 16,
+  "go_suites_run": 3,
+  "go_data_races": 0,
+  "tui_frames_probed": 1008,
+  "tui_frame_shape_violations": 0,
+  "tui_esc_bytes": 0,
+  "tui_nondeterministic_frames": 0,
+  "tls_misconfiguration_paths_checked": 10,
+  "tls_misconfiguration_paths_leaving_a_listener": 0,
+  "attack_vectors_attempted": 16,
+  "attack_vectors_that_held": 15,
+  "wedges_found": 1,
+  "flood_first_delivery_requests_4x49": 37,
+  "flood_first_delivery_bytes_4x49": 13676311,
+  "flood_amplification_4x49": 1.0618,
+  "flood_second_delivery_requests_4x49": 3,
+  "flood_amplification_50x800": 1.0586,
+  "flood_amplification_500x8000": 1.0519,
+  "integrity_files_checked": 236,
+  "integrity_files_changed": 0,
+  "node_version": "v26.5.0",
+  "go_version": "go1.26.1"
+ },
+ "timestamp_utc": "2026-09-07T11:10:26Z"
+}

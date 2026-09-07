@@ -1,0 +1,152 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T12-implement",
+  "status": "DONE",
+  "summary": "Prepared every deployment artifact for the two tailnet relays and deployed nothing. New files only: a multi-stage, digest-pinned container image for apps/relay/cmd/relay; a compose file plus a plain-docker-run equivalent driven by per-host env templates wiring the full T8 TLS surface with the certificate pair mounted read-only; a systemd timer for tailscale cert renewal that deliberately does not restart the relay; and docs/requirements/echolet-cli-prototype/deployment-runbook.md, which leads with the breaking ack/poll transcript change and ends with an honest limitations section. The image was built for linux/arm64 and for linux/amd64 (the artifact the servers will run) and started in four configurations: it serves HTTPS and answers /health against a verified chain, refuses a half-configured TLS pair, answers plaintext on the TLS port with the TLS listener's refusal rather than the API, and reports healthy to Docker. No server was contacted, no tailscale cert was run, no image was pushed, and no git commit was made.",
+  "summary_markdown": "## What was built\n\n- **`apps/relay/Dockerfile`** — multi-stage; builder `golang:1.26.1-alpine3.22` and runtime `alpine:3.22`, both pinned by digest with a `--build-arg` override for the registry host only (Docker Hub pulls hang from this daemon; `mirror.gcr.io` serves the same digests). `CGO_ENABLED=0`, `-trimpath`, `-buildid=`, cross-compiling from `$BUILDPLATFORM` so `linux/amd64` needs no emulation. Runs as uid 10001 with a read-only rootfs and every capability dropped. **21.3 MB** amd64.\n- **`deploy/relay/`** — `docker-compose.yml` (no `build:` stanza; the hosts have no toolchain), `run-relay.sh` (Ubuntu's `docker.io` ships the engine *without* the compose plugin), `build-image.sh` (builds and `docker save`s; never pushes, never ssh's), `env/{geekom,depr}.env.example`, `systemd/echolet-cert-renew.{service,timer}`, `README.md`.\n- **`docs/requirements/echolet-cli-prototype/deployment-runbook.md`** — 14 sections in the existing runbook's style, marked *prepared, not executed*.\n\n## The two decisions that matter\n\n1. **`ECHOLET_BIND_ADDR` must be the host's tailnet address, never `0.0.0.0`.** Docker's published-port DNAT is evaluated *before* ufw's INPUT chain, so a `0.0.0.0` publish is reachable on every interface of a host whose firewall denies the port — `depr`'s active ufw would not help. The bind address *is* the access control here; `run-relay.sh` refuses `0.0.0.0` and the placeholder outright.\n2. **The renewal unit contains no restart.** The running relay picks up a renewed pair by content digest within the reload interval and keeps the last good pair through a mid-rewrite read. A unit that restarted would turn a routine renewal into the outage the reloader exists to prevent.\n\n## Verified locally (17 checks, no server contacted)\n\nBuilt arm64 (`sha256:68dfb525dcec…`, 20 664 866 B) and amd64 (`sha256:c7cb5c7b203a…`, 21 310 733 B, ELF64 x86-64, tarball sha256 `f475cdddfb66…`). Started plain-HTTP (`{\"ok\":true,\"data\":{\"status\":\"healthy\",…}}`, `scheme=http`) and HTTPS with a read-only mounted pair under `--read-only --cap-drop ALL --security-opt no-new-privileges` as uid 10001 — `/health` 200 over a **chain-verified** `curl --cacert`, `scheme=https`, certificate **paths** in the log and never contents. Plaintext to the TLS port answered `Client sent an HTTP request to an HTTPS server.` A cert-without-key start exits non-zero naming both variables; absent files exit non-zero naming the path. Both containers report `healthy`. `docker compose config` valid for both hosts. `run-relay.sh` refused the placeholder and refused `0.0.0.0`, then really started and served HTTPS. `bash -n` clean; secret scan over every new file clean. All test containers and volumes removed.\n\n## Not verified, stated plainly\n\nByte-for-byte reproducibility was not *measured* (the inputs for it are in place). No `tailscale cert` was run, so the real Let's Encrypt chain was never served — checks used the relay's own `devcert` pair with an explicit anchor, which proves the mechanics and not the public chain. The healthcheck was seen on arm64 and on amd64 under emulation, not on Ubuntu 24.04 hardware. Compose was validated with `config`, not run. Bind mounts behaved as OrbStack maps them; on Linux the `chown 10001:10001` in the runbook is load-bearing and untested.\n\n## What T11 still has to do\n\nBuild `--platform linux/amd64` and `--save`; `docker save | ssh <host> docker load` (no sudo — both users are in the `docker` group); on the host with sudo run `tailscale cert` into `/etc/echolet/tls` and `chown 10001:10001` / `chmod 0644`,`0600`; create and chown `/var/lib/echolet`; copy `deploy/relay/`, fill **two** values in the env file (`ECHOLET_IMAGE`, `ECHOLET_BIND_ADDR`); `up -d` or `run-relay.sh`; confirm `scheme=https` and `(healthy)`; install the renewal timer with `ECHOLET_TLS_HOSTNAME`; then **from a second tailnet machine** `curl https://<host>.tail5a88fb.ts.net:8443/health` with no `-k` and run the full acceptance scenario against a profile `init`ed at that URL. Two decisions left to T11: port `8443` vs `443` (nothing listens on 80/443 on either host), and whether `depr`'s ufw should also deny the port as defence in depth behind the bind address.",
+  "acceptance": [
+    {
+      "criterion": "AC7 (artifact half): a deployment runbook reproduces two relay instances from a clean host",
+      "status": "partial",
+      "evidence": "docs/requirements/echolet-cli-prototype/deployment-runbook.md covers certificate acquisition per host, the exact run command (compose and plain docker run), host-side and second-machine /health verification over HTTPS, pointing a CLI profile at https://<host>.tail5a88fb.ts.net:8443, upgrade, rollback, teardown, and log/data/certificate locations. The runbook is prepared and its artifacts were exercised locally; the 'two relay instances run' half is T11's and is gated behind T10 by explicit user decision. The runbook says so in its own header."
+    },
+    {
+      "criterion": "A container image build for the relay: multi-stage, from repository source, small, base images pinned",
+      "status": "met",
+      "evidence": "apps/relay/Dockerfile builds ./cmd/relay in a golang:1.26.1-alpine3.22 stage pinned to sha256:07e91d24f6330432729082bb580983181809e0a48f0f38ecde26868d4568c6ac and ships it on alpine:3.22 pinned to sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce. Built and loaded for linux/arm64 (20 664 866 B) and linux/amd64 (21 310 733 B, ELF64 x86-64 confirmed)."
+    },
+    {
+      "criterion": "The image starts and answers /health; not pushed anywhere",
+      "status": "met",
+      "evidence": "Plain HTTP: {\"ok\":true,\"data\":{\"status\":\"healthy\",\"uptime_ms\":1036}}. HTTPS with a read-only mounted pair, as uid 10001 with --read-only --cap-drop ALL --security-opt no-new-privileges: /health 200 verified against the trust anchor with curl --cacert, on both the arm64 and the amd64 image. Container HEALTHCHECK reports healthy in both modes. No docker push was run; the only transport the artifacts define is docker save plus ssh, and it was not executed."
+    },
+    {
+      "criterion": "A compose file or run recipe per host, parameterised by environment, wiring the T8 TLS variables and the data directory",
+      "status": "met",
+      "evidence": "deploy/relay/docker-compose.yml and deploy/relay/run-relay.sh both read deploy/relay/env/{geekom,depr}.env.example and set ECHOLET_TLS_CERT_FILE, ECHOLET_TLS_KEY_FILE, ECHOLET_TLS_RELOAD_INTERVAL_SECONDS, ECHOLET_HTTP_ADDR and ECHOLET_DATA_DIR, plus every declared bound. docker compose config validates with both env files."
+    },
+    {
+      "criterion": "The certificate pair comes from tailscale cert on the host and is mounted read-only; the private key is never baked into an image or committed",
+      "status": "met",
+      "evidence": "Both recipes mount ${ECHOLET_TLS_DIR}:/etc/echolet/tls:ro and reference the pair only by path. apps/relay/.dockerignore excludes *.pem, *.key and *.crt from the build context in addition to .gitignore's rules. A grep for PEM blocks and key-shaped strings over every new file returned zero matches. The runbook's §4 says the key is generated, read and renewed on the host and must never be copied off it."
+    },
+    {
+      "criterion": "The migration warning is prominent: the ack/poll transcript change is breaking, relay and client roll together, harmless on fresh hosts",
+      "status": "met",
+      "evidence": "deployment-runbook.md §0 is the first content section, preceded by a 'Before anything else' pointer. It states that a relay on the old transcript and a client built after the change do not interoperate (403 INVALID_SIGNATURE on the second page of every walk), that they must be rolled together from the same tree, that on these two fresh hosts it costs nothing and why the flow's order makes that true, and the two safe options if a relay ever does have data: the in-code chunked idempotent backfill, or wiping the data directory with an explicit warning that undelivered envelopes are destroyed and there is no undo. §11 carries the mirror-image rollback warning."
+    },
+    {
+      "criterion": "An honest limitations section",
+      "status": "met",
+      "evidence": "deployment-runbook.md §14: unaudited prototype not suitable for sensitive communication and deploying does not create an audit; tailnet-only with the tailnet as access control, TLS authenticating the server and not the client, no mTLS; no mobile client; no user-demand evidence. Then the residuals with their measured figures: the first walk of a very large flood still costs roughly an hour and is reported as a bound rather than a fix; ECHOLET_MAX_STORAGE_BYTES is declared and enforced nowhere with no per-mailbox cap; identity creation is free because /v1/device-records/publish is unauthenticated; one published bundle serves one first-contact sender."
+    },
+    {
+      "criterion": "New files only; no existing source, test or configuration file modified",
+      "status": "met",
+      "evidence": "The only change to a tracked file is the permitted one-line link in docs/requirements/echolet-cli-prototype/README.md: git diff --stat reports '1 file changed, 1 insertion(+)'. The other modified paths in git status belong to T7, T8 and T10 and were read only. No workspace test suite was run, so T10's measurements are untouched."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t12-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "What was built, the 17 local verification checks with their observed output, what was explicitly not verified, and the ordered list of what T11 still has to do on the hosts."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/deployment-runbook.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "The deployment runbook: breaking-change warning first, then build, transfer, tailscale cert, data directory, start, host and second-machine verification, CLI profile, upgrade, rollback, locations, teardown, limitations."
+    },
+    {
+      "path": "apps/relay/Dockerfile",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Multi-stage relay image: digest-pinned bases, cross-compiling static build, non-root uid 10001, read-only rootfs, HTTPS healthcheck."
+    },
+    {
+      "path": "deploy/relay/docker-compose.yml",
+      "kind": "custom",
+      "exists": true,
+      "summary": "One relay service, entirely env-file-parameterised, certificate pair mounted read-only, published on the tailnet address only."
+    },
+    {
+      "path": "deploy/relay/run-relay.sh",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Plain docker run equivalent for a host without the compose plugin; refuses a 0.0.0.0 bind address and unfilled placeholders."
+    },
+    {
+      "path": "deploy/relay/build-image.sh",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Builds the image for a target platform and optionally saves a docker load tarball with its sha256. Never pushes, never ssh's, never touches a server."
+    },
+    {
+      "path": "deploy/relay/env/geekom.env.example",
+      "kind": "custom",
+      "exists": true,
+      "summary": "geekom.tail5a88fb.ts.net configuration; two placeholders to fill, no secret of any kind."
+    },
+    {
+      "path": "deploy/relay/env/depr.env.example",
+      "kind": "custom",
+      "exists": true,
+      "summary": "depr.tail5a88fb.ts.net configuration; two placeholders to fill, no secret of any kind."
+    },
+    {
+      "path": "deploy/relay/systemd/echolet-cert-renew.timer",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Daily randomised, Persistent=true certificate refresh timer."
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/relay/Dockerfile", "change": "created — multi-stage relay image, both base images pinned by digest, cross-compiling, non-root, read-only rootfs, HTTPS healthcheck" },
+    { "path": "apps/relay/.dockerignore", "change": "created — excludes .cache/, .data/ (envelope ciphertext), the stray relay binary, and any *.pem/*.key/*.crt from the build context" },
+    { "path": "deploy/relay/docker-compose.yml", "change": "created — one env-file-parameterised service, read-only certificate mount, tailnet-address publish, hardened runtime" },
+    { "path": "deploy/relay/run-relay.sh", "change": "created — plain docker run equivalent reading the same env file, with the 0.0.0.0 and placeholder guards" },
+    { "path": "deploy/relay/build-image.sh", "change": "created — build plus optional docker save; supports --mirror gcr|ecr for the same digests" },
+    { "path": "deploy/relay/env/geekom.env.example", "change": "created — per-host configuration template" },
+    { "path": "deploy/relay/env/depr.env.example", "change": "created — per-host configuration template" },
+    { "path": "deploy/relay/systemd/echolet-cert-renew.service", "change": "created — tailscale cert refresh and ownership fix; deliberately contains no restart" },
+    { "path": "deploy/relay/systemd/echolet-cert-renew.timer", "change": "created — daily randomised Persistent timer" },
+    { "path": "deploy/relay/README.md", "change": "created — what each artifact is and the three rules the files enforce" },
+    { "path": "docs/requirements/echolet-cli-prototype/deployment-runbook.md", "change": "created — the deployment runbook" },
+    { "path": "docs/requirements/echolet-cli-prototype/README.md", "change": "modified — one added line linking the deployment runbook from the document index; the single permitted edit to an existing file, verified as a 1-insertion diff" },
+    { "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t12-implementation-report.md", "change": "created — T12 implementation report" }
+  ],
+  "findings": [],
+  "questions": [
+    {
+      "id": "T12-Q-001",
+      "question": "Should the relays listen on 8443 or on 443?",
+      "why": "Every artifact uses 8443 and nothing listens on 80 or 443 on either host, so 443 is available. Changing it later is one value per env file plus every client relay URL, and a client URL is fixed at `init` time with no supported way to repoint an existing profile — so the port is cheapest to decide before the first profile exists.",
+      "options": [
+        { "id": "8443", "label": "Keep 8443 — unprivileged, unambiguous, already wired through every artifact", "recommended": true },
+        { "id": "443", "label": "Use 443 so client URLs need no port suffix" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T12-Q-002",
+      "question": "Should depr's ufw also deny the relay port, as defence in depth behind the tailnet bind address?",
+      "why": "Docker's published-port DNAT is evaluated before ufw's INPUT chain, so ufw cannot be relied on to contain a 0.0.0.0 publish and is not what keeps the relay on the tailnet — the bind address is. A ufw rule is still worth having as a second layer, but reading and changing the current rules needs sudo on the host, which is T11's step and not this task's.",
+      "options": [
+        { "id": "leave", "label": "Leave ufw as it is; the tailnet bind address is the control", "recommended": true },
+        { "id": "add-deny", "label": "Add an explicit ufw rule for the port as a second layer during T11" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-07T11:30:00Z"
+}

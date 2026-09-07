@@ -1,0 +1,15 @@
+[Unit]
+Description=Renew the Echolet relay's tailnet TLS certificate, daily
+
+[Timer]
+# Daily with a random spread, and Persistent so a host that was off over the
+# renewal window catches up on boot rather than waiting for the next tick.
+# Let's Encrypt certificates last 90 days and `tailscale cert` renews within the
+# last stretch of that, so a daily no-op is the cheap, boring choice.
+OnCalendar=daily
+RandomizedDelaySec=6h
+Persistent=true
+Unit=echolet-cert-renew.service
+
+[Install]
+WantedBy=timers.target
