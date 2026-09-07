@@ -8,7 +8,14 @@ import { openProfile, PersistenceError, type Profile, type OpenProfileOptions, t
 import { appendHistory } from "./history";
 
 export class OutboundError extends Error {
-  constructor(readonly code: string) { super(code); this.name = "OutboundError"; }
+  /**
+   * `code` is the machine name the CLI reports and `classify()` maps to an exit code; `message` is
+   * the operator-readable sentence, defaulting to the code so every pre-existing throw site keeps
+   * the exact shape it had. Carrying an action in the message is the idiom `ProfileError` and
+   * `ConfigurationError` already use — a fixed code beside free text — and it is used here only
+   * where naming the condition is not enough to act on it.
+   */
+  constructor(readonly code: string, message: string = code) { super(message); this.name = "OutboundError"; }
 }
 const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
 const decode = <T>(bytes: Uint8Array): T => JSON.parse(new TextDecoder().decode(bytes)) as T;
@@ -46,6 +53,35 @@ class OutboundMessenger {
     if (prior) return this.settle(prior, contentHash);
     const contact = (await this.profile.listContacts()).find((value) => value.identity_id === input.recipientIdentityId);
     if (!contact) throw new OutboundError("CONTACT_NOT_TRUSTED");
+    // `send` presupposes `relay publish`, and this is where the client says so — locally, before it
+    // spends anything belonging to the RECIPIENT.
+    //
+    // Since T50 (finding T49-F-001) the relay authenticates a mailbox deposit against an
+    // already-published, root-signed device record, so a profile that has never offered a
+    // publication is certain to be refused 403 `UNAUTHORIZED_MAILBOX_ACCESS` on
+    // `/v1/messages/send`. `/v2/prekeys/claim` carries no authentication at all, so without this
+    // guard the doomed send takes the irreversible step first: it permanently consumes the
+    // recipient's one-time prekey on its way to a deposit that could never have been accepted.
+    // Through the frozen eight-command surface a published bundle serves exactly one first-contact
+    // sender and the recipient has no way to allocate a replacement, so one operator's own
+    // misconfiguration would otherwise destroy a third party's ability to receive first contact.
+    //
+    // This is not a new restriction — publication was already a hard precondition of a successful
+    // deposit. Only the MOMENT the operator is told changes: here, at no cost, instead of one
+    // irreversible request too late and at somebody else's expense.
+    //
+    // Ordered AFTER the contact-trust check on purpose. `CONTACT_NOT_TRUSTED` is the more specific
+    // local diagnosis of the same send and predates this guard; an unpinned recipient must keep
+    // reporting it. Both checks are local, so the ordering costs nothing either way.
+    //
+    // It is a local client decision, so it is an `OutboundError` and never a `RelayError`: no
+    // request was made, and nothing here may be mistaken for something the relay said.
+    if (!(await this.profile.hasPublication())) {
+      throw new OutboundError(
+        "SENDER_NOT_PUBLISHED",
+        "This profile has never published its device record, so the relay cannot accept its messages; run `relay publish` for this profile, then send again.",
+      );
+    }
     const address = signalAddressForDevice(contact.identity_id, contact.device_id);
     const sessionKey = `session:${JSON.stringify([address.name, address.deviceId])}`;
     const claimKey = `cli:claim:${contact.identity_id}`;
@@ -57,15 +93,8 @@ class OutboundMessenger {
       tx.set(claimKey, encode(id));
       return id;
     });
-    let verified: ReturnType<typeof importVerifiedSignalBundleV2> | undefined;
-    if (claimId !== null) {
-      const bundle = await this.options.relay.claimBundle({ claimId, identityId: contact.identity_id, deviceId: contact.device_id });
-      try {
-        if (bundle.one_time_prekey === null || bundle.device_record.identity_id !== contact.identity_id || bundle.device_record.device_id !== contact.device_id ||
-            bundle.device_record.device_pubkey !== contact.device_pubkey || bundle.signal_identity_key !== contact.signal_identity_key) throw new Error();
-        verified = importVerifiedSignalBundleV2(bundle, { identityId: contact.identity_id, deviceId: contact.device_id }, this.options.now?.() ?? Date.now());
-      } catch { throw new OutboundError("CONTACT_PIN_MISMATCH"); }
-    }
+    const claimed = claimId === null ? null : await this.claimFirstContact(contact, claimKey, claimId);
+    const verified = claimed?.verified;
     const outcome = await this.profile.withRuntime(async (tx, client, local, signEnvelope) => {
       // Another instance may have committed this message id while the claim was in flight.
       const committed = tx.get(keyFor(input.messageId));
@@ -99,7 +128,65 @@ class OutboundMessenger {
       tx.delete(claimKey);
       return { record, existed: false };
     });
-    return outcome.existed ? this.settle(outcome.record, contentHash) : this.deliver(outcome.record);
+    const delivered = outcome.existed ? await this.settle(outcome.record, contentHash) : await this.deliver(outcome.record);
+    // A dead claim is recovered automatically, never silently: one of the recipient's one-time
+    // prekeys was spent by the claim this send had to abandon, so the receipt says so rather than
+    // leaving the operator to discover later that retries are consuming a peer's key material.
+    return claimed?.replaced === true ? { ...delivered, claimReplaced: true as const } : delivered;
+  }
+  /**
+   * Claim the recipient's first-contact bundle under a durable claim id, and verify it against the
+   * imported pin.
+   *
+   * The stored claim id is what makes a lost claim response recoverable: the relay replays the exact
+   * bundle bound to it, expiry included, so the same one-time prekey is never handed to a second
+   * sender. That exact replay is also how a stored claim becomes DEAD. A sender that comes back
+   * after the claimed bundle's validity window has closed replays a bundle no session can ever be
+   * established from, and the claim was only ever deleted on success - so every later first-contact
+   * attempt to that recipient replayed the same dead bundle, permanently, even while a fresh
+   * claimable publication sat on the relay.
+   *
+   * A dead claim is therefore released exactly once and one fresh claim is taken in its place.
+   * Nothing is rolled back and no relay behaviour is relied on beyond replenishment: the relay's
+   * consumption of the abandoned one-time prekey stays permanent, which is what keeps one one-time
+   * prekey bound to one sender. Dropping the id costs nothing, because the only thing it can still
+   * buy is a bundle that cannot be used. The replacement id is written durably BEFORE the second
+   * claim is issued, exactly as the first was, so an ambiguous replacement is replayed rather than
+   * re-allocated. It is done at most once per send, so a recipient whose fresh publication is also
+   * outside its window cannot turn one send into a claim loop.
+   *
+   * An expired bundle is not a trust failure and is not reported as one. The pinned identity,
+   * device, device key and Signal identity key are checked first and still answer
+   * `CONTACT_PIN_MISMATCH`; a closed validity window is the exhausted-recipient condition instead -
+   * `PREKEY_BUNDLE_UNAVAILABLE` when the replacement claim finds nothing left to claim, and
+   * `PREKEY_BUNDLE_EXPIRED` when even the replacement is outside its window. Telling an operator
+   * their contact's pin no longer matches raises a security alarm; a one-time prekey that expired is
+   * not one (cli.ts: the failure vocabulary grows "where flattening actively misleads").
+   */
+  private async claimFirstContact(contact: ContactIdentifiers, claimKey: string, claimId: string) {
+    let identifier = claimId;
+    let replaced = false;
+    for (;;) {
+      const bundle = await this.options.relay.claimBundle({ claimId: identifier, identityId: contact.identity_id, deviceId: contact.device_id });
+      // One reading of the clock for the decision and for the verification, so a bundle cannot be
+      // judged dead here and live there.
+      const at = this.options.now?.() ?? Date.now();
+      if (bundle.one_time_prekey === null || bundle.device_record.identity_id !== contact.identity_id || bundle.device_record.device_id !== contact.device_id ||
+          bundle.device_record.device_pubkey !== contact.device_pubkey || bundle.signal_identity_key !== contact.signal_identity_key) throw new OutboundError("CONTACT_PIN_MISMATCH");
+      if (at < bundle.created_at_ms || at >= bundle.expires_at_ms) {
+        if (replaced) throw new OutboundError("PREKEY_BUNDLE_EXPIRED");
+        replaced = true;
+        identifier = await this.profile.withRuntime((tx) => {
+          const id = z.string().uuid().parse(this.options.idFactory?.("claim") ?? randomUUID());
+          tx.set(claimKey, encode(id));
+          return id;
+        });
+        continue;
+      }
+      try {
+        return { verified: importVerifiedSignalBundleV2(bundle, { identityId: contact.identity_id, deviceId: contact.device_id }, at), replaced };
+      } catch { throw new OutboundError("CONTACT_PIN_MISMATCH"); }
+    }
   }
   /** Reconcile with an already persisted record: identical content is idempotent, different content is not. */
   private settle(record: Outbox, contentHash: string) {
