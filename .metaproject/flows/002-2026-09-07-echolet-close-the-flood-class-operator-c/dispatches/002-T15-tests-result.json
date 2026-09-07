@@ -1,0 +1,271 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T15-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "SESSION 3 (this one) closes T15-F-002 / T15-Q-002 under the orchestrator's ruling, which also corrected its own earlier premise: `TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued` does NOT sign correctly today, and I verified that independently before touching anything. Exactly two edits, both in apps/relay/internal/api/handler/mailbox_read_mark_test.go, and nothing else in the tree changed. (1) A SECOND helper, `ackWithReadThroughSignedV2`, was ADDED beside `ackWithReadThrough`. It signs `CreateMailboxAckMessageV2(mailbox_id, device_id, envelope_ids, read_through)` - the transcript the handler actually builds whenever `read_through` is present (mailbox_handler.go:706-709) - and its comment names it the legitimate-client helper and names `ackWithReadThrough` as its attack counterpart. `ackWithReadThrough` itself is byte-identical: it must keep signing V1 because `TestAckSignatureMustBindReadThrough` depends on that being an attack. (2) `TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued` now posts through the new helper. NO assertion in it changed - every expectation and every message is byte-identical; the only additions are the call-site swap and a comment above the test saying why the legitimate helper is the right one there. The test now exercises what its own comment always claimed: a legitimate, correctly signed but buggy client presenting a position beyond the end of its own mailbox, refused 400 INVALID_SCHEMA. Under the T16 split (range bound behind VerifyMessageSignature) it stays green for the right reason instead of green by accident of ordering. I measured the ruling's three other claims rather than assuming them, with a throwaway probe test that was deleted afterwards (tree verified clean). All three hold: site 113 (`TestAckSignatureMustBindReadThrough`, in-range V1-signed) answers 403 INVALID_SIGNATURE TODAY, so it already reaches the signature check and the split moves nothing for it; its assertions are only 'not 200', 'bounded 4xx' and 'nothing deleted', all satisfied by 403. Site 153 (five malformed shapes) all answer 400 INVALID_SCHEMA from `decodeReadThroughShape` at mailbox_handler.go:681, which the split leaves ahead of authorisation. Site 203 (`read_through` nil) answers 200 and deletes, because the handler builds V1 there. A control probe confirmed the new helper's signature genuinely verifies: V2-signed IN-range returns 200 and really deletes, so the target test's 400 is the range bound and not a masked 403. `mailbox_ack_read_position_oracle_test.go` was NOT touched, as ruled - digest unchanged. SESSIONS 1-2 (unchanged on disk, digests re-verified this session): three new test files (rewalk-crash-safety.test.ts, relayClient.loopbackHostname.test.ts, mailbox_ack_read_position_oracle_test.go), flood-closure RED-6 re-parameterised 6 -> 60, and RED-4's cursorless assertion re-stated under the recorded ruling into a strictly stronger no-skip pair plus the new RED-4b. FULL RE-RUN on Node v26.5.0 (default non-login interpreter; a login shell starts v22.12.0, which lacks node:sqlite). `pnpm test` exit 1: 50 files / 293 tests, 7 failed, 286 passed - all 7 are session-1 REDs (4 loopback + 3 re-walk crash safety), none is mine and no pre-existing test changed colour. Go, all four configurations - untagged, -tags relayv2, -race, -race -tags relayv2 - each exit 1 with EXACTLY ONE failure, the ack-oracle RED `TestAckDoesNotAnswerTheMailboxEnvelopeCountToAnUnverifiedCaller`, 7 packages ok in each, and 0 DATA RACE in all four. `go vet ./...` exit 0. `pnpm --filter @echolet/cli test:e2e` exit 0, 3/3 (34.7 s). `pnpm typecheck` exit 0. Handover baseline for the implementer is therefore: 7 vitest REDs + 1 Go RED, and the target test is now green for the right reason. STATUS stays DONE_WITH_CONCERNS for exactly one reason, and it is not T15-F-002 (now closed): T15-F-003, the deliberately accepted coverage bound on the re-walk suite - one interruption point, one ciphertext regime - which the verifier should sweep and AC8 should carry as a residual. --- EARLIER CONTINUATION RECORD (session 2) ---\nCONTINUATION of T15 after the orchestrator ruled on the two items the first session escalated. The first session's work stands unchanged on disk (three new files, RED-6 re-parameterised); this session did exactly two things. ITEM 1 (T15-F-001, authorised): flood-closure RED-4's single cursorless assertion `expect(counters.cursored[secondProcessStart]).toBe(false)` was re-stated, and nothing else in RED-4 was touched - the forward-progress, exit-0, history-1 and page-count assertions are byte-identical. It is replaced by TWO strictly stronger assertions plus a precondition: (a) if the resuming poll presents a position at all, that token must be one the RELAY ISSUED to the killed process for a page it actually received - tokens compared for EQUALITY only, never parsed or ordered - with `null` (cursorless) and `\"0\"` (the head, which skips nothing) admitted; (b) the same no-skip property in ENVELOPES, so it also binds the cursorless path: the resumed walk's first page may not start beyond `lastOffered + 1`, where lastOffered is the highest poison index the relay ever served the killed process. A precondition asserts the relay issued that process at least two continuation tokens, so (a) can never pass vacuously against an empty set. The three-part reasoning the orchestrator gave - green only because of the defect; relay-held floor rejected on the merits because `contact import` is an offline trust operation and the relay is adversary-adjacent; the replacement must pin the property and not the mechanism - is recorded verbatim in the file above the assertion, because re-stating an existing assertion must never happen quietly. The narrow half is NOT lost: a new case RED-4b pins that a poll with NO re-walk pending still presents no cursor (F-012 / T6-F-005), after first proving from the relay's own `next_cursor` that the import re-walk had run to the END of the mailbox. RED-4b is also the cursor-shaped T6-F-004 guard: a fix that never clears the re-walk presents a position there and turns it red. The counting proxy gained two recorded fields (`pollCursors`, `pollNextCursors`); `cursored` is untouched and still populated. Both rows pass on the current tree: RED-4 11.4 s, RED-4b 3.0 s. ITEM 2 (T15-F-002 check): all eight `read_through` values in the ack oracle ladder - 0, 1, 5, 6, 7, 39, 1000, 4096 - are WELL-FORMED cursor tokens by the relay's own shape rule, so NOTHING was changed in the Go test. The rule is `DecodeMailboxCursor` (mailbox_repo.go:322-339) reached through `decodeReadThroughShape` (mailbox_handler.go:422-438): non-empty, at most 15 characters, every character an ASCII digit, parseable as uint64. Each of the eight is a 1-to-4-digit decimal. Measured confirmation that the shape gate really passes them: today 0, 1, 5 and 6 answer 403 INVALID_SIGNATURE, which is reachable only PAST the shape check, and 7, 39, 1000 and 4096 answer 400 INVALID_SCHEMA from the RANGE bound at mailbox_handler.go:699. The ladder is therefore satisfiable under the T14-style split and the RED test needs no edit. CONCERN, and the reason this is not plain DONE: the ruling's premise that `TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued` stays green under the split 'because it signs correctly' is not correct on this tree. That test posts through `ackWithReadThrough`, which signs the V1 transcript `CreateMailboxAckMessage(mailbox, device, envelope_ids)` (mailbox_read_mark_test.go:84) while the handler builds the V2 transcript whenever `read_through` is present (mailbox_handler.go:706-709), so its signature does NOT verify. It is green today only because the range bound runs BEFORE `VerifyMessageSignature`; move the bound after it and that test gets 403 INVALID_SIGNATURE where it demands 400 INVALID_SCHEMA. I did not touch it - re-stating a second existing assertion was not authorised - so the orchestrator must decide before T16 starts. Full suite re-run on Node v26.5.0: `pnpm test` 50 files / 293 tests, 7 failed, ALL SEVEN pre-existing REDs from the first session (4 loopback + 3 re-walk crash safety); apps/cli 36 files / 228 tests (227 + RED-4b), 221 passed. `pnpm --filter @echolet/cli test:e2e` 3/3. Go: `vet` exit 0; untagged, -tags=relayv2, -race and -race -tags=relayv2 each show exactly one failure, TestAckDoesNotAnswerTheMailboxEnvelopeCountToAnUnverifiedCaller (the first session's RED), every other package ok, 0 DATA RACE. `pnpm typecheck` exit 0 across 7 projects. No pre-existing test changed colour.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Every new test FAILS on the current tree and fails for the stated reason, not by erroring on a missing import, a typo or a timeout. Quote the actual failure output for each.",
+      "status": "met",
+      "evidence": "Unchanged from the first session; re-measured this session and every failure message is identical in shape. The 7 vitest failures are the 4 loopback rows and the 3 re-walk rows, e.g. \"...a recovery poll interrupted by SIGINT on its third page left the message UNDELIVERED across 6 further polls (exit codes [3,3,3,3,3,3])... expected +0 to be 1\"; \"...was offered envelope 100099 first, but that re-walk had only judged as far as envelope 99... expected 100099 to be less than or equal to 100\"; \"expected [ 'http://127.evil.example/', ...(2) ] to deeply equal []\". The Go RED still reads \"AckMailbox answered 2 distinct results [403 INVALID_SIGNATURE x4, 400 INVALID_SCHEMA x4] across read_through values [0 1 5 6 7 39 1000 4096], and a binary search over them recovered 6 against a mailbox holding exactly 6 envelopes\". `pnpm typecheck` and `go vet` both exit 0, so nothing fails on a compile error; the whole re-walk file and the flood rows finish far inside their budgets. The two cases this session touched are GREEN by design, not RED: RED-4 and RED-4b both pass, because they are guards on the fix rather than statements of the defect."
+    },
+    {
+      "criterion": "A test proves the re-walk survives interruption: SIGINT and separately SIGKILL, message still delivered by a later poll with no second `contact import`, two independent OS processes and a real relay.",
+      "status": "met",
+      "evidence": "Unchanged from the first session: apps/cli/test/e2e/rewalk-crash-safety.test.ts, digest 1983630054ddbb5f6d6b37f3e803821fc3b935822f2a27641253a96bc92e1bf2, verified byte-identical this session. Both arms still fail on their own assertion in the full run."
+    },
+    {
+      "criterion": "A test proves the opposite property still holds, so the fix cannot regress T6-F-004: a completed re-walk is not repeated.",
+      "status": "met",
+      "evidence": "Two guards now, not one. The first session's \"does not repeat a re-walk that completed\" (rewalk-crash-safety.test.ts) asserts it in ENVELOPES and page counts. This session added the CURSOR-shaped statement of the same property, RED-4b in flood-closure.test.ts: after the import re-walk has run to the end of the mailbox - proved from the relay's own `next_cursor` being null on that walk's last page - the next poll must present no cursor. A fix that never clears the re-walk position presents one there and fails. Both guards pass on the current tree, which is the point."
+    },
+    {
+      "criterion": "A test proves the position only ever moves strictly forward across an interrupted-then-resumed sequence, so a fix cannot pass by rewinding to the head.",
+      "status": "met",
+      "evidence": "Unchanged in rewalk-crash-safety.test.ts, and now ALSO bounded from above in flood-closure RED-4: the resumed walk's first page must start at or after `lastJudgedIndex` (the pre-existing assertion, untouched) AND at or before `lastOffered + 1`, the highest poison index the relay ever served the killed process. Together they make the position move forward but never over ground the recipient was not offered - the R-4 hazard the removed cursorless line stood in for."
+    },
+    {
+      "criterion": "A Go test proves the ack route does not distinguish an in-range read_through from an out-of-range one for a caller whose signature does not verify, including with a genuine device_id, asserting on the observable response.",
+      "status": "met",
+      "evidence": "Unchanged: mailbox_ack_read_position_oracle_test.go, digest 87d92255345727c5c09c681284cdf74c18f04303d335900030ee9956eeb23d98, still failing in all four Go configurations. Checked this session at the orchestrator's request: every one of the eight ladder values is a well-formed cursor token, so the test is satisfiable under the T14-style split and needs no edit. See finding T15-F-002 for the one thing about that split that is not as the ruling assumed."
+    },
+    {
+      "criterion": "A test proves RelayClient refuses plain HTTP to 127.evil.example and at least one further hostname a /^127\\./ rule wrongly admits, still accepts genuine loopback, and exercises RelayClient directly.",
+      "status": "met",
+      "evidence": "Unchanged: apps/cli/src/transport/relayClient.loopbackHostname.test.ts, digest 8c6a21459360149581ca96e9cb72d43f94de1be2e3a00150243751ebd29e2d1f, 4 rows still RED in the full run."
+    },
+    {
+      "criterion": "flood-closure RED-6 is re-parameterised so it cannot pass for the wrong reason under a different ciphertext size regime, with the reasoning in a comment.",
+      "status": "met",
+      "evidence": "Unchanged from the first session (`behind` 6 -> 60 with the reasoning comment). Both RED-6 rows passed again in this session's full `pnpm test`, inside the same file as this session's RED-4 edit."
+    },
+    {
+      "criterion": "No existing test is weakened, skipped, deleted or narrowed. Report the SHA-256 of every test file touched, before and after.",
+      "status": "met",
+      "evidence": "SESSION 3: no assertion anywhere was weakened, skipped, narrowed or deleted. apps/relay/internal/api/handler/mailbox_read_mark_test.go before 9d72966410dba58eb2c4596dda832b867a391603f46b2b6051bd7535d65e2c77, after 7624bba01e74e4457573d77236f84eec308f0ef40468726685fc9b285aacc8ca - the delta is one ADDED helper (`ackWithReadThroughSignedV2`) plus its comment, one changed call site in `TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued`, and one added comment above that test. Every `t.Fatalf` condition and message in the file, including all three in that test, is byte-identical; `ackWithReadThrough` is byte-identical. Unchanged and digest-verified after the run: mailbox_ack_read_position_oracle_test.go 87d92255345727c5c09c681284cdf74c18f04303d335900030ee9956eeb23d98, flood-closure.test.ts f610412439f83971d463e12472a2a9de4109f7e216b3ebbcde42bd408a544124, rewalk-crash-safety.test.ts 1983630054ddbb5f6d6b37f3e803821fc3b935822f2a27641253a96bc92e1bf2, relayClient.loopbackHostname.test.ts 8c6a21459360149581ca96e9cb72d43f94de1be2e3a00150243751ebd29e2d1f. A throwaway probe test used to measure the other three call sites was deleted; `git status apps/relay` shows only the one modified file and the one untracked new file. No `skip`, `only`, `todo` or `t.Skip` anywhere. Identity by SHA-256 throughout; mtime never used. SESSION 2: ONE assertion was re-stated, under explicit orchestrator authorisation recorded in the file itself, and it was replaced by strictly stronger statements: no assertion was removed, relaxed or narrowed, and one case (RED-4b) plus two proxy fields were ADDED. apps/cli/test/e2e/flood-closure.test.ts before 7b4b2cadc7a8c9ea518904a901858a471f4da1d2fb7314615959e5a527364e7f (the first session's output), after f610412439f83971d463e12472a2a9de4109f7e216b3ebbcde42bd408a544124. Verified byte-identical this session, by digest: rewalk-crash-safety.test.ts 1983630054ddbb5f6d6b37f3e803821fc3b935822f2a27641253a96bc92e1bf2, relayClient.loopbackHostname.test.ts 8c6a21459360149581ca96e9cb72d43f94de1be2e3a00150243751ebd29e2d1f, mailbox_ack_read_position_oracle_test.go 87d92255345727c5c09c681284cdf74c18f04303d335900030ee9956eeb23d98, mailbox_read_mark_test.go 9d72966410dba58eb2c4596dda832b867a391603f46b2b6051bd7535d65e2c77, two-process.test.ts cb6ff6fa76b1ffa0471a7273d59632f88008f8c375b38cdc0bea74b3d85e0ae9. No `skip`, `only`, `todo` or `t.Skip` introduced. Identity by SHA-256 throughout; mtime never used. No file under apps/cli/src (except the first session's new *.test.ts), apps/relay/internal (except the new *_test.go), packages/ or docs/ was modified."
+    },
+    {
+      "criterion": "The full suite is run once so the pre-existing green count is on record: exact pass/fail counts for pnpm test, pnpm --filter @echolet/cli test:e2e and the Go suites, and which failures are mine.",
+      "status": "met",
+      "evidence": "SESSION 3 re-run, on Node v26.5.0, against the final bytes. `pnpm test` exit 1: protocol 3/12, client-db 1/1, crypto-core 4/20, client-core 2/2, session-node 3/24, mobile 1/6, apps/cli 36 files / 228 tests with 7 failed - 50 files, 293 tests, 7 failed, 286 passed. All 7 are session-1 REDs: relayClient.loopbackHostname 4 rows, rewalk-crash-safety 3 rows. NONE is session 3's. Go, each config run separately with -count=1: untagged exit 1, -tags relayv2 exit 1, -race exit 1, -race -tags relayv2 exit 1; in EVERY one the only failing test is TestAckDoesNotAnswerTheMailboxEnvelopeCountToAnUnverifiedCaller (the session-1 ack-oracle RED), 7 packages report ok, and the DATA RACE count is 0. `go -C apps/relay vet ./...` exit 0. `pnpm --filter @echolet/cli test:e2e` exit 0, 1 file / 3 tests passed, 34.68 s. `pnpm typecheck` exit 0. Targeted handler run confirms the session-3 edit: TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued passes, and it now passes under a verifying signature. SESSION 2 re-run (superseded, retained for the record): `pnpm test` exit 1: protocol 3 files / 12 tests, client-db 1/1, crypto-core 4/20, client-core 2/2, session-node 3/24, mobile 1/6, apps/cli 36 files / 228 tests with 7 failed - 50 files and 293 tests in total, 7 failed, 286 passed. All 7 are the first session's REDs (relayClient.loopbackHostname 4, rewalk-crash-safety 3); none is this session's. The count moved 227 -> 228 in apps/cli purely because of RED-4b. `pnpm --filter @echolet/cli test:e2e` exit 0, 3/3 (40.9 s). Go: `go -C apps/relay vet ./...` exit 0; `test -count=1 ./...`, `-tags=relayv2`, `-race`, `-race -tags=relayv2` each exit 1 with exactly one failing test, TestAckDoesNotAnswerTheMailboxEnvelopeCountToAnUnverifiedCaller, every other package ok, and 0 DATA RACE in all four. `pnpm typecheck` exit 0 across 7 projects. Targeted re-run of the two cases this session touched, against the FINAL bytes of flood-closure.test.ts: RED-4 pass 11 366 ms, RED-4b pass 3 015 ms."
+    },
+    {
+      "criterion": "CONTINUATION ITEM 1: re-state RED-4's cursorless assertion into a strictly stronger form that pins the safety property, keeps the narrow no-re-walk case, and changes nothing else.",
+      "status": "met",
+      "evidence": "flood-closure.test.ts. Removed: one line, `expect(w.counters.cursored[secondProcessStart], \"the resuming poll must be cursorless...\").toBe(false)`. Added in its place: a 39-line comment recording the orchestrator's three reasons; a precondition that the relay issued the killed process >= 2 continuation tokens; a membership assertion that any cursor the resuming poll presents is `null`, `\"0\"`, or a token the relay issued that process for a page it received; and an envelope-level assertion that the resumed walk starts at or before `lastOffered + 1`. Kept untouched: the >= lastJudgedIndex forward assertion, the exit-0 assertion, `history` 1, and the 34-page O(N) bound. Added separately: RED-4b, which pins that a poll with no re-walk pending presents no cursor. The proxy gained `pollCursors` and `pollNextCursors`; `cursored` is unchanged and still recorded. RED-4 and RED-4b both pass."
+    },
+    {
+      "criterion": "CONTINUATION ITEM 2: check whether all eight `read_through` values in the ack oracle ladder are well-formed cursor tokens by the relay's own shape rule.",
+      "status": "met",
+      "evidence": "All eight are well-formed; nothing was changed. The shape rule is `decodeReadThroughShape` (mailbox_handler.go:422-438) rejecting only an empty string, delegating to `DecodeMailboxCursor` (mailbox_repo.go:322-339), which accepts a token of 1..15 characters where every character is an ASCII digit and the whole parses as uint64. The ladder is `{0, 1, allocated-1, allocated, allocated+1, allocated+33, 1000, 4096}` at allocated = 6, i.e. 0, 1, 5, 6, 7, 39, 1000, 4096 - one to four decimal digits each, so every one passes. There is no value-dependent clause in the shape rule; the malformed shapes the sibling test pins are \"12x\", \"-1\", \"+1\", \" \" and a 16-digit string, none of which the ladder resembles. Measured confirmation: 0, 1, 5 and 6 answer 403 INVALID_SIGNATURE today, an answer reachable only past the shape gate, and 7, 39, 1000 and 4096 answer 400 INVALID_SCHEMA from the mailbox-dependent RANGE bound at mailbox_handler.go:699, the very check the split moves. Under the split every one of the eight would reach `VerifyMessageSignature` and get the same 403, which is exactly what the RED test requires."
+    },
+    {
+      "criterion": "SESSION 3 ITEM: add a second, legitimate-client ack helper that signs the V2 transcript, use it in TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued only, change no assertion in that test, leave `ackWithReadThrough` and the other three call sites alone, and leave the ack oracle test untouched.",
+      "status": "met",
+      "evidence": "mailbox_read_mark_test.go, 9d72966410dba58eb2c4596dda832b867a391603f46b2b6051bd7535d65e2c77 -> 7624bba01e74e4457573d77236f84eec308f0ef40468726685fc9b285aacc8ca. ADDED `ackWithReadThroughSignedV2`, which posts the same body but signs `cryptoutil.CreateMailboxAckMessageV2(mailboxID, deviceID, envelopeIDs, readThrough)`; its comment states it is the legitimate-client helper and that `ackWithReadThrough` above it is the attack counterpart that must keep signing V1 for TestAckSignatureMustBindReadThrough. `ackWithReadThrough` is byte-identical. In TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued only, the single `ackWithReadThrough(...)` call became `ackWithReadThroughSignedV2(...)` with the same arguments ('999999999999999', ids[:1]); its three assertions and all three failure messages are byte-identical, and a comment was added above the test explaining that the legitimate helper is what makes it a statement about the R-4 bound rather than about check ordering. The test passes: 400 INVALID_SCHEMA, 3 envelopes still stored. MEASURED rather than assumed, with a throwaway probe since deleted: site 113 in-range V1-signed -> 403 INVALID_SIGNATURE today, 3 stored (already past the range bound, so the split moves nothing and its 'not 200 / bounded 4xx / nothing deleted' assertions all hold); site 153, all five malformed shapes -> 400 INVALID_SCHEMA from the shape gate at mailbox_handler.go:681 which the split leaves ahead of authorisation; site 203 nil read_through -> 200 with 1 of 3 remaining. Control: the new helper's signature really verifies - V2-signed IN-range ('1', ids[:2]) -> 200 with 2 envelopes deleted - so the target test's 400 comes from the range bound, not from a masked 403. mailbox_ack_read_position_oracle_test.go untouched, digest 87d92255345727c5c09c681284cdf74c18f04303d335900030ee9956eeb23d98. My measurements contradict none of the orchestrator's three claims about the other call sites."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/test/e2e/flood-closure.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RED-6 re-parameterised (first session). This session: RED-4's cursorless assertion re-stated, under the recorded orchestrator ruling, into a no-skip assertion on the presented token plus an envelope-level no-skip bound, with a precondition against vacuity; new case RED-4b pins that a poll with no re-walk pending still presents no cursor; the counting proxy now records each poll's request cursor and response next_cursor. Nothing else changed.",
+      "hash": "f610412439f83971d463e12472a2a9de4109f7e216b3ebbcde42bd408a544124"
+    },
+    {
+      "path": "apps/cli/test/e2e/rewalk-crash-safety.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "First session, unchanged this session (digest verified). Four real-relay, two-process tests for T10R3-F-001: SIGINT and SIGKILL during the contact-import re-walk must not lose the message (RED), the position must move strictly forward and never skip unjudged ground (RED), and a completed re-walk must not be repeated (GREEN guard for T6-F-004).",
+      "hash": "1983630054ddbb5f6d6b37f3e803821fc3b935822f2a27641253a96bc92e1bf2"
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.loopbackHostname.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "First session, unchanged this session (digest verified). T10R3-F-003: RelayClient's /^127\\./ prefix rule admits 127.evil.example, 127.0.0.1.evil.example and 127.example.com as loopback plain HTTP.",
+      "hash": "8c6a21459360149581ca96e9cb72d43f94de1be2e3a00150243751ebd29e2d1f"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_ack_read_position_oracle_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "First session, unchanged in sessions 2 and 3 and deliberately so: all eight ladder values were checked against the relay's shape rule and are well-formed, so the test is satisfiable under the T14-style split.",
+      "hash": "87d92255345727c5c09c681284cdf74c18f04303d335900030ee9956eeb23d98"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_read_mark_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Pre-existing T14 test file, modified in session 3 only. Adds `ackWithReadThroughSignedV2`, the legitimate-client helper that signs the V2 ack transcript, and uses it in TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued so that test finally exercises a correctly signed but buggy client rather than depending on the range bound running ahead of the signature check. No assertion changed; `ackWithReadThrough` still signs V1 because TestAckSignatureMustBindReadThrough needs it to be an attack.",
+      "hash": "7624bba01e74e4457573d77236f84eec308f0ef40468726685fc9b285aacc8ca"
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T15-tests-result.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "This dispatch result, updated for the continuation.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/test/e2e/flood-closure.test.ts",
+      "change": "modified (this session) - RED-4's single cursorless assertion re-stated under the recorded orchestrator ruling into (a) a token-membership no-skip assertion and (b) an envelope-level no-skip bound, plus a vacuity precondition; new case RED-4b pins the narrow no-re-walk-pending cursorless property; counting proxy records `pollCursors` and `pollNextCursors`. Every other RED-4 assertion and the first session's RED-6 re-parameterisation are untouched."
+    },
+    {
+      "path": "apps/cli/test/e2e/rewalk-crash-safety.test.ts",
+      "change": "added (first session) - 4 tests (3 RED, 1 green guard) for the crash safety of the contact-import re-walk. Unchanged this session."
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.loopbackHostname.test.ts",
+      "change": "added (first session) - 10 tests (4 RED, 6 green controls) for the loopback hostname rule. Unchanged this session."
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_ack_read_position_oracle_test.go",
+      "change": "added (first session) - 3 tests (1 RED, 2 green guards) for the ack-route lifetime-envelope-count oracle. Unchanged in sessions 2 and 3, after checking that all eight ladder values are well-formed cursor tokens."
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_read_mark_test.go",
+      "change": "modified (session 3) - ADDED `ackWithReadThroughSignedV2`, the legitimate-client helper signing CreateMailboxAckMessageV2, and switched TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued to it. No assertion, message or other call site changed; `ackWithReadThrough` byte-identical."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T15-tests-result.json",
+      "change": "updated - this dispatch result now records the continuation."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T15-F-001",
+      "reviewer": "002-T15-tests",
+      "severity": "info",
+      "file": "apps/cli/test/e2e/flood-closure.test.ts",
+      "problem": "RESOLVED by the orchestrator's ruling and closed in this session. RED-4 required the poll following a SIGKILL to be cursorless, in a world where `contact import` had already requested a re-walk, so a crash-safe LOCAL re-walk position would have turned that existing assertion red the moment T10R3-F-001 was fixed.",
+      "impact": "None remaining. Before the ruling it would have forced the implementer either into a relay-held re-walk floor (a protocol addition) or into quietly relaxing the assertion.",
+      "suggested_fix": "Done as ruled: the one line was re-stated and nothing else was touched. The relay-held floor was rejected on the merits - `contact import` is an offline trust operation that makes no relay request (profile.ts:150-153) and the relay is the adversary-adjacent component, so putting the recovery position there hands the flooding adversary a lever on the one path that recovers from flooding. The replacement pins the property rather than the mechanism: any cursor the resuming poll presents must be a token the relay issued to the killed process for a page it actually received (equality only, no parsing or ordering of tokens), and the resumed walk's first page must not start beyond `lastOffered + 1`. The narrow half is pinned where it still holds, by the new RED-4b.",
+      "evidence": "flood-closure.test.ts, RED-4: the 39-line comment above the assertion records the three reasons in full. Both rows measured green against the final bytes: RED-4 11 366 ms, RED-4b 3 015 ms. The mechanism the assertion no longer names is still described in the file so a later reader can see what changed and why.",
+      "confidence": "high"
+    },
+    {
+      "id": "T15-F-002",
+      "reviewer": "002-T15-tests",
+      "severity": "info",
+      "file": "apps/relay/internal/api/handler/mailbox_read_mark_test.go",
+      "problem": "RESOLVED in session 3 and closed. The orchestrator confirmed the premise correction and ruled option `sign-v2`, implemented additively: a new helper `ackWithReadThroughSignedV2` signs the V2 transcript and is used in TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued only, with no assertion changed and `ackWithReadThrough` left signing V1 so TestAckSignatureMustBindReadThrough keeps its attack. Nothing remains for T16 to decide. ORIGINAL (raised at severity major): The ruling's premise for the ack route is not correct on this tree. It says `TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued` stays green under 'shape before authorisation, range only after VerifyMessageSignature' because it signs correctly. It does not sign correctly: it posts through `ackWithReadThrough`, which always signs the V1 transcript `CreateMailboxAckMessage(mailbox_id, device_id, envelope_ids)` (mailbox_read_mark_test.go:84), while the handler builds the V2 transcript `CreateMailboxAckMessageV2(..., read_through)` whenever `read_through` is present (mailbox_handler.go:706-709). Its signature therefore fails to verify, and it is green today only because the range bound runs BEFORE the signature check. Move the bound after `VerifyMessageSignature` and it answers 403 INVALID_SIGNATURE where the test demands 400 INVALID_SCHEMA.",
+      "impact": "The implementer applies the split exactly as instructed, my RED oracle test goes green, and an existing T14 test goes red - at which point the tempting resolution is to relax the test that pins the R-4 bound. Decided now, it is a one-line choice; discovered inside T16, it looks like the split was wrong.",
+      "suggested_fix": "DONE - option (b) was chosen and applied in session 3, in its additive form: a second helper rather than an edit to `ackWithReadThrough`, so the attack helper keeps signing V1 for TestAckSignatureMustBindReadThrough while the R-4 test signs V2 and keeps its 400 INVALID_SCHEMA assertion literally intact. The other three call sites were measured and are unaffected, exactly as the ruling stated. ORIGINAL OPTIONS: Three options, and the orchestrator should pick one before T16 starts. (a) Re-state `TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued` to require a bounded 4xx that deletes nothing, rather than specifically 400 INVALID_SCHEMA, since under the split an unsigned out-of-range ack is refused for the stronger reason; the sibling `TestAckReadPositionBoundSurvivesForAnAuthenticatedCaller` already pins 400 INVALID_SCHEMA for a CORRECTLY signed out-of-range position, so the R-4 bound stays pinned exactly. (b) Change that test to sign the V2 transcript, which is what a real recipient sending `read_through` does, leaving its 400 INVALID_SCHEMA assertion literally intact. (c) The uniform-400 shape the first session proposed, which the ruling has already declined. Options (a) and (b) both need an authorisation to edit an existing test; (b) is the smaller change and keeps every assertion as written.",
+      "evidence": "mailbox_read_mark_test.go:70-90 (`ackWithReadThrough` signs `CreateMailboxAckMessage`, never the V2 form) and :175-192 (the assertion `response.Code != 400 || code != \"INVALID_SCHEMA\"` fails the test). mailbox_handler.go:681-719: `decodeReadThroughShape` at 681 (shape, already ahead of authorisation - the T14 half the split keeps), `readThroughWithinIssued` at 699 (the range bound the split moves), the V2 transcript chosen at 707-708, `VerifyMessageSignature` at 711 with a single verification attempt and no V1 fallback. Ladder values re-checked and all eight are well-formed, so the RED test itself needs no edit: measured today 0/1/5/6 -> 403 INVALID_SIGNATURE, 7/39/1000/4096 -> 400 INVALID_SCHEMA. Not changed by me: mailbox_read_mark_test.go digest 9d72966410dba58eb2c4596dda832b867a391603f46b2b6051bd7535d65e2c77, unchanged since the first session.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/api/handler/mailbox_read_mark_test.go:70-90 (`ackWithReadThrough`, the V1-signing helper - the single source of the shape)",
+          "apps/relay/internal/api/handler/mailbox_read_mark_test.go:178 TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued, read_through \"999999999999999\": well-formed and out of range, so it is decided TODAY by the range bound at mailbox_handler.go:699 and answers 400 INVALID_SCHEMA. THE ONE MEMBER THAT FLIPS: under the split it reaches VerifyMessageSignature first and answers 403 INVALID_SIGNATURE.",
+          "apps/relay/internal/api/handler/mailbox_read_mark_test.go:113 TestAckSignatureMustBindReadThrough, read_through \"2\" against a 3-envelope mailbox: in range, so it already falls through to the signature check and answers 403 today. It asserts only 'not 200', 'a bounded 4xx' and 'nothing deleted'. Unaffected.",
+          "apps/relay/internal/api/handler/mailbox_read_mark_test.go:153 TestAckRefusesAReadThroughTokenThisRelayCouldNotHaveIssued, five malformed shapes: decided by `decodeReadThroughShape` (mailbox_handler.go:681), which the split leaves ahead of authorisation. Unaffected.",
+          "apps/relay/internal/api/handler/mailbox_read_mark_test.go:203 TestAckWithoutReadThroughStillAcknowledgesAndDeletes, read_through nil: the handler then builds the V1 transcript, so this call's signature does verify. Unaffected.",
+          "apps/relay/internal/api/handler/mailbox_ack_read_position_oracle_test.go:178 (`TestAckReadPositionBoundSurvivesForAnAuthenticatedCaller`) signs `CreateMailboxAckMessageV2`, the correct transcript, and is the guard that keeps 400 INVALID_SCHEMA pinned for a correctly signed out-of-range position under every option."
+        ],
+        "enumeration_method": "`keryx ctx rg -n \"ackWithReadThrough|CreateMailboxAckMessageV2|read_through\" apps/relay/internal/api/handler`. `ackWithReadThrough` is the only helper in the handler package that posts an ack carrying `read_through` under a V1 transcript, and it is defined once (mailbox_read_mark_test.go:70) and called in exactly four places, all listed above; every other ack test in the package either omits `read_through` or signs `CreateMailboxAckMessageV2`. The class is therefore those four calls, of which exactly one - the well-formed, out-of-range, V1-signed case - changes its answer when the range bound moves behind the signature check."
+      }
+    },
+    {
+      "id": "T15-F-003",
+      "reviewer": "002-T15-tests",
+      "severity": "info",
+      "file": "apps/cli/test/e2e/rewalk-crash-safety.test.ts",
+      "problem": "The re-walk suite asserts crash safety at one interruption point (the third page of a five-page recovery walk) and at one flood depth (310 minimum-size poison, 7 pages). It does not sweep the interruption across every page of the walk, nor across the maximum-size ciphertext regime the RED-6 rows use.",
+      "impact": "A fix that persists the position only on some page boundaries - say, every fourth page - would pass this suite while still losing a message when the interruption falls in the wrong place. The property is 'the position is never in no durable place', and one sample cannot prove a universal.",
+      "suggested_fix": "Accepted deliberately, and unchanged by this continuation: the suite is ~31 s and a sweep over every page and both ciphertext regimes is minutes per arm. The verifier should sweep it - interrupt at pages 1 through 5 and repeat the SIGINT arm at ciphertext 262144 - rather than the RED suite paying for it on every run. Record it in AC8's residual list as a bound on what the tests prove, not as a defect.",
+      "evidence": "rewalk-crash-safety.test.ts AHEAD = 200, BEHIND = 110, ciphertext 4 bytes, interruptPollAtPage(3). Digest 1983630054ddbb5f6d6b37f3e803821fc3b935822f2a27641253a96bc92e1bf2, unchanged this session.",
+      "confidence": "medium"
+    }
+  ],
+  "questions": [
+    {
+      "id": "T15-Q-002",
+      "question": "ANSWERED and CLOSED in session 3 - the orchestrator chose `sign-v2`, and it is applied. Nothing is outstanding here. Original question: under the ack-route split, `TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued` turns red because it signs the V1 ack transcript while the handler verifies the V2 one whenever `read_through` is present. Which resolution should T16 take?",
+      "why": "RESOLVED: implemented additively as a second helper, so no existing test lost its attack and no assertion changed. Original reasoning follows. The ruling assumed that test stays green because it 'signs correctly'; it does not, and it is green today only because the range bound runs before the signature check. Choosing now costs one line; discovering it inside T16 makes the split look wrong and invites relaxing the assertion that pins the R-4 bound. The RED oracle test itself needs no change either way - all eight of its `read_through` values are well-formed cursor tokens.",
+      "options": [
+        {
+          "id": "sign-v2",
+          "label": "Change that test to sign the V2 transcript, as a real recipient sending read_through does; its 400 INVALID_SCHEMA assertion then stays literally intact.",
+          "recommended": true
+        },
+        {
+          "id": "restate-4xx",
+          "label": "Re-state it to require a bounded 4xx that deletes nothing; the correctly-signed out-of-range case in TestAckReadPositionBoundSurvivesForAnAuthenticatedCaller keeps 400 INVALID_SCHEMA pinned."
+        },
+        {
+          "id": "uniform-400",
+          "label": "The first session's uniform 400 INVALID_SCHEMA for every signature-invalid ack carrying a read position (already declined by the ruling)."
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "continuation_of": "002-T15-tests (sessions 1 and 2)",
+    "session": 3,
+    "test_files_modified_session3": 1,
+    "test_helpers_added_session3": 1,
+    "call_sites_switched_session3": 1,
+    "assertions_changed_session3": 0,
+    "production_files_modified_session3": 0,
+    "ack_call_sites_measured_session3": 4,
+    "ack_call_sites_contradicting_the_ruling": 0,
+    "go_configurations_rerun_session3": 4,
+    "baseline_workspace_test_files": 48,
+    "baseline_workspace_tests": 278,
+    "baseline_workspace_tests_failing": 0,
+    "baseline_cli_test_files": 34,
+    "baseline_cli_tests": 213,
+    "final_workspace_test_files": 50,
+    "final_workspace_tests": 293,
+    "final_workspace_tests_failing": 7,
+    "final_workspace_tests_passing": 286,
+    "final_cli_test_files": 36,
+    "final_cli_tests": 228,
+    "final_cli_tests_failing": 7,
+    "failures_that_are_mine": 8,
+    "pre_existing_tests_changed_colour": 0,
+    "cli_e2e_script_tests": 3,
+    "cli_e2e_script_failing": 0,
+    "go_failing_tests_untagged": 1,
+    "go_failing_tests_relayv2": 1,
+    "go_failing_tests_race": 1,
+    "go_failing_tests_race_relayv2": 1,
+    "go_data_races": 0,
+    "go_vet_exit_code": 0,
+    "typecheck_exit_code": 0,
+    "new_red_assertions": 8,
+    "new_green_guards": 11,
+    "test_files_added": 3,
+    "test_files_modified": 2,
+    "production_files_modified": 0,
+    "existing_assertions_restated": 1,
+    "existing_assertions_removed": 0,
+    "red4_duration_ms": 11366,
+    "red4b_duration_ms": 3015,
+    "rewalk_suite_duration_ms": 31400,
+    "ack_oracle_ladder_values_wellformed": 8,
+    "ack_oracle_ladder_values_malformed": 0,
+    "ack_oracle_recovered_count": 6,
+    "ack_oracle_true_count": 6,
+    "loopback_disagreements": 3,
+    "node_version": "v26.5.0",
+    "graph_used": "not-relevant",
+    "wiki_used": "not-relevant",
+    "ctx_used": "yes",
+    "raw_rg_used": "no",
+    "new_tests_total": 18
+  },
+  "timestamp_utc": "2026-09-07T15:55:00Z"
+}

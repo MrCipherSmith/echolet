@@ -89,6 +89,38 @@ func ackWithReadThrough(
 	return postJSON(t, http.HandlerFunc(handler.AckMailbox), payload)
 }
 
+// ackWithReadThroughSignedV2 is the LEGITIMATE-CLIENT helper, and the counterpart of the ATTACK
+// helper `ackWithReadThrough` above.
+//
+// The two exist side by side on purpose, because the difference between them is the whole subject of
+// TestAckSignatureMustBindReadThrough. `ackWithReadThrough` signs the V1 transcript
+// (recipient_mailbox_id, device_id, envelope_ids), so `read_through` is invisible to the signature -
+// that is what makes it an attack, and it must stay that way. This helper signs the V2 transcript
+// `CreateMailboxAckMessageV2(recipient_mailbox_id, device_id, envelope_ids, read_through)`, which is
+// the transcript the handler actually builds whenever `read_through` is present
+// (mailbox_handler.go:706-709) and therefore what a real, correctly implemented recipient sends.
+//
+// Use this one whenever the point of a test is a client that is authentic but wrong about its read
+// position, so the test exercises the read-position rule itself rather than the signature check.
+func ackWithReadThroughSignedV2(
+	t *testing.T,
+	handler *MailboxHandler,
+	mailboxID, deviceID string,
+	deviceKey ed25519.PrivateKey,
+	envelopeIDs []string,
+	readThrough string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	return postJSON(t, http.HandlerFunc(handler.AckMailbox), map[string]any{
+		"recipient_mailbox_id": mailboxID,
+		"device_id":            deviceID,
+		"envelope_ids":         envelopeIDs,
+		"read_through":         readThrough,
+		"signature":            signMessage(t, cryptoutil.CreateMailboxAckMessageV2(mailboxID, deviceID, envelopeIDs, readThrough), deviceKey),
+	})
+}
+
 // storedEnvelopeCount is the only evidence that a refused ack changed nothing.
 func storedEnvelopeCount(t *testing.T, handler *MailboxHandler, mailboxID string) int {
 	t.Helper()
@@ -172,10 +204,18 @@ func TestAckRefusesAReadThroughTokenThisRelayCouldNotHaveIssued(t *testing.T) {
 // A well-formed token is not necessarily a token this relay ever handed out. A recipient that sends
 // a read position beyond the end of its own mailbox marks envelopes as judged that it was never
 // offered - the R-4 hazard, reached by a client bug rather than by an attacker, and permanent.
+//
+// The caller here is therefore the LEGITIMATE but buggy client the comment above describes, so it
+// posts through `ackWithReadThroughSignedV2`: it signs the V2 transcript the handler builds whenever
+// `read_through` is present, and its signature verifies. That is what makes this a statement about
+// the read-position bound and nothing else. Posting it through the attack helper
+// `ackWithReadThrough` would sign the V1 transcript instead, and the case would then be decided by
+// whichever of the range bound and the signature check happens to run first - which is a fact about
+// ordering, not about R-4.
 func TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued(t *testing.T) {
 	handler, mailboxID, deviceID, deviceKey, ids := readMarkHarness(t, 3)
 
-	response := ackWithReadThrough(t, handler, mailboxID, deviceID, deviceKey, ids[:1], "999999999999999")
+	response := ackWithReadThroughSignedV2(t, handler, mailboxID, deviceID, deviceKey, ids[:1], "999999999999999")
 
 	if response.Code == http.StatusOK {
 		t.Fatalf("AckMailbox(read_through far above every position this mailbox ever held) status = 200. "+

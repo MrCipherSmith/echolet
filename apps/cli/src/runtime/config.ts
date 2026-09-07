@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isLoopbackHostname } from "../transport/loopback";
 
 export class ConfigurationError extends Error {
   readonly code = "INVALID_CONFIGURATION";
@@ -28,6 +29,11 @@ export type Environment = Readonly<Record<string, string | undefined>>;
  * code for a mistake on the command line, pointing the operator at a disk that is perfectly healthy.
  * The refusal belongs here, where it is a configuration error, is reported as one, and happens
  * before anything is written.
+ *
+ * The same requirement applies to what plain HTTP is allowed to reach. Since finding T10R3-F-003
+ * the loopback rule is not restated here either: it lives once in `transport/loopback.ts` and both
+ * this function and `RelayClient` import it, so the two can no longer answer the same question
+ * differently - which they did, in the unsafe direction, for every hostname beginning `127.`.
  */
 const isRelayOrigin = (url: URL): boolean => !url.search && url.pathname === "/";
 
@@ -35,7 +41,7 @@ export function parseClientConfig(input: unknown): ClientConfig {
   const parsed = configSchema.safeParse(input);
   if (!parsed.success) throw new ConfigurationError("Invalid client configuration");
   const url = new URL(parsed.data.relay_url);
-  const loopback = url.hostname === "localhost" || url.hostname === "[::1]" || /^127\.(?:\d{1,3}\.){2}\d{1,3}$/.test(url.hostname);
+  const loopback = isLoopbackHostname(url.hostname);
   if (url.username || url.password || url.hash || (url.protocol !== "https:" && !(url.protocol === "http:" && loopback))) {
     throw new ConfigurationError("Relay URL requires HTTPS or loopback HTTP without credentials");
   }

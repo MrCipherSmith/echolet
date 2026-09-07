@@ -1,0 +1,198 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T16-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "All 8 handover REDs pass and nothing else moved. T10R3-F-001 (re-walk crash safety) is fixed by peek-and-advance: Profile.takeMailboxRewalk (read+delete) became pendingMailboxRewalk (read only), keepMailboxRewalk is now called once per FULLY JUDGED page from inbound.ts's page loop, and a new finishMailboxRewalk deletes the key in exactly one place - when the relay reports next_cursor === null, i.e. the walk reached the end of the mailbox. The try/catch restoration and the post-loop write are gone because nothing is ever taken away. The invariant is that a single store transaction REPLACES position P(k-1) with P(k), so durable storage always holds a position at or behind where the walk truly got to; there is no interval an interruption can fall into, and an interruption anywhere costs the repeated judging of at most one page. The T6-F-004 trap was NOT taken: the position is still cleared, on exactly the same condition as before, and both guards say so - rewalk-crash-safety case 4 (0 of the pages after a completed re-walk restart at poison index 0; 3 ordinary polls cost <= 6 pages; history == 1) and flood-closure RED-4b (an ordinary poll presents no cursor) are green. T10R3-F-002 is fixed by T14's shape/range split, not a special-case code: decodeReadThroughShape stays ahead of authorisation (the malformed-shapes test demands 400 INVALID_SCHEMA independent of who asks), and readThroughWithinIssued moved to AFTER VerifyMessageSignature on the ack route, matching the poll route. An unverified caller never reaches the range check, so every ladder value answers one uniform 403 and the binary search has nothing to compare. T10R3-F-003 is fixed by one shared predicate in the new product file apps/cli/src/transport/loopback.ts, imported by both RelayClient and parseClientConfig; RelayClient's /^127\\./ prefix rule is gone and the shared rule is the STRICTER original, so 127.0.0.1, 127.9.9.9, localhost and [::1] keep working. MATRIX on Node v26.5.0 (non-login default): pnpm typecheck exit 0; pnpm lint exit 0 (no package defines one); pnpm test exit 0, 50 files / 293 tests / 293 passed / 0 failed; pnpm --filter @echolet/cli test:e2e exit 0, 3/3; go -C apps/relay test ./... untagged, -tags relayv2, -race, and -race -tags relayv2 each exit 0 with 8 packages ok, 0 failures and 0 DATA RACE; go vet exit 0. No test file was modified: all five T15 digests are byte-identical to T15's recorded values. No schema or Go validation was relaxed; the test count is unchanged at 293, so nothing was added, skipped, narrowed or deleted. DONE_WITH_CONCERNS for the residuals only, chiefly T15-F-003's coverage bound (one interruption point, one ciphertext regime) which the verifier should sweep, and stale prose in two test files naming takeMailboxRewalk which I may not edit.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Every RED test T15 wrote passes, and every green guard T15 wrote still passes - in particular the T6-F-004 guard that a completed re-walk is not repeated. Report the named result of each.",
+      "status": "met",
+      "evidence": "8/8 REDs green: loopback 'refuses plain HTTP to http://127.evil.example/', '...127.0.0.1.evil.example/', '...127.example.com:8081/', 'agrees with parseClientConfig about every relay URL'; rewalk 'a SIGINT during the contact-import re-walk does not lose the message' (17.4s), 'a SIGKILL ...' (10.5s), 'carries the re-walk position strictly forward across interrupt-and-resume, never rewinding to the head' (9.5s); Go TestAckDoesNotAnswerTheMailboxEnvelopeCountToAnUnverifiedCaller (0.04s). Guards green: rewalk case 4 'does not repeat a re-walk that completed' (12.3s), flood-closure RED-4b (2.8s), RED-4 (11.5s), RED-1, RED-6 control+attack, RED-7, all three closure/cost cases (9/9 in file), TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued, TestAckSignatureMustBindReadThrough, TestAckRefusesAReadThroughTokenThisRelayCouldNotHaveIssued, TestAckWithoutReadThroughStillAcknowledgesAndDeletes, TestAckDoesNotAnswerTheMailboxEnvelopeCountToAnUnknownDevice, TestAckReadPositionBoundSurvivesForAnAuthenticatedCaller. Full table in t16-implementation-report.md section 4."
+    },
+    {
+      "criterion": "No test file is modified, at all. Report the SHA-256 of every test file T15 touched, showing it is unchanged from T15's recorded value.",
+      "status": "met",
+      "evidence": "Re-measured after all edits: flood-closure.test.ts f610412439f83971d463e12472a2a9de4109f7e216b3ebbcde42bd408a544124; rewalk-crash-safety.test.ts 1983630054ddbb5f6d6b37f3e803821fc3b935822f2a27641253a96bc92e1bf2; relayClient.loopbackHostname.test.ts 8c6a21459360149581ca96e9cb72d43f94de1be2e3a00150243751ebd29e2d1f; mailbox_ack_read_position_oracle_test.go 87d92255345727c5c09c681284cdf74c18f04303d335900030ee9956eeb23d98; mailbox_read_mark_test.go 7624bba01e74e4457573d77236f84eec308f0ef40468726685fc9b285aacc8ca. Each equals T15's recorded hash exactly."
+    },
+    {
+      "criterion": "No existing test is weakened, skipped, narrowed or deleted, and no strict Zod schema or Go validation is relaxed.",
+      "status": "met",
+      "evidence": "pnpm test reports 293 tests, the same total as T15's baseline, with 293 passed instead of 286; no .skip, .only, .todo or deletion was introduced anywhere (no test file was touched at all - see the digests above). No Zod schema changed: configSchema, pollRequestSchema, authorizationSchema, cardSchema, metadataSchema and publicationSchema are byte-identical. No Go validation was removed: decodeReadThroughShape and readThroughWithinIssued are unchanged in behaviour, only readThroughWithinIssued's call SITE on the ack route moved later; TestAckReadPositionBoundSurvivesForAnAuthenticatedCaller proves the R-4 bound still refuses an out-of-range position and still admits an in-range one. The loopback change converges both components on the STRICTER of the two pre-existing rules, so every changed answer is a refusal."
+    },
+    {
+      "criterion": "The re-walk position is never absent from durable storage while a walk that owns it is in flight. State plainly where it is written, where it is cleared, and why no interruption can fall between them.",
+      "status": "met",
+      "evidence": "WRITTEN in two places: commands/cli.ts -> Profile.requestMailboxRewalk() at contact import (the value \"0\", the head), and inbound.ts's page loop -> Profile.keepMailboxRewalk(batch.next_cursor), once per page the walk received and FULLY judged. CLEARED in one place: Profile.finishMailboxRewalk(), called from the same loop only when batch.next_cursor === null - the walk was offered and judged every envelope the mailbox holds. NO INTERRUPTION CAN FALL BETWEEN THEM because there is no 'between': the old shape was a removal and a later restoration with the whole walk in the gap; the new shape is ONE store transaction per page that replaces position P(k-1) with P(k). Before commit the store holds P(k-1), after commit P(k); it never holds nothing. A judgement interrupted part-way through a page has not advanced the position, so that page is re-offered rather than skipped (also the R-4 direction). Death after the last page's commits but before finishMailboxRewalk leaves the position one page back, costing one re-walked page. Section 1.3 of t16-implementation-report.md."
+    },
+    {
+      "criterion": "The F-012 store-identity guarantee is preserved: an ordinary poll with no re-walk pending still leaves the encrypted store byte-identical. Show this rather than asserting it.",
+      "status": "met",
+      "evidence": "Shown two ways. (1) The repository's own measurement: apps/cli/src/runtime/inbound.readMark.test.ts snapshots EVERY key and value of the encrypted store (snapshot(), lines 91-96) before a poll that accepts nothing and asserts toEqual(before) afterwards; its cast() never calls requestMailboxRewalk, so that poll is exactly 'ordinary, no re-walk pending'. It is green on this tree: '✓ src/runtime/inbound.readMark.test.ts (2 tests) 5476ms' with '... acknowledges no envelope and mutates nothing, but advances the read position'. (2) End to end: flood-closure RED-4b, green (2.8s), proves that after a re-walk ran to the end of the mailbox the next poll presents NO cursor, i.e. the client holds no read position of its own. At code level pendingMailboxRewalk() contains no tx.set and no tx.delete, so the re-walk path of an ordinary poll performs no store mutation whatsoever."
+    },
+    {
+      "criterion": "The ack fix is the shape/range split, not a special-case error code, and both pre-existing read-mark tests stay green.",
+      "status": "met",
+      "evidence": "No new error code and no new branch: the only edit in AckMailbox is that the existing h.readThroughWithinIssued(...) call moved from immediately after authorizeMailboxDevice to immediately after VerifyMessageSignature, before AckEnvelopes; decodeReadThroughShape stays ahead of authorisation. That is byte-for-byte the ordering PollMailbox already uses. Pre-existing read-mark tests: TestAckSignatureMustBindReadThrough PASS, TestAckRefusesAReadThroughTokenThisRelayCouldNotHaveIssued PASS, TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued PASS (green for the right reason - it signs the V2 transcript via T15's ackWithReadThroughSignedV2 helper), TestAckWithoutReadThroughStillAcknowledgesAndDeletes PASS."
+    },
+    {
+      "criterion": "The full matrix is green on the resulting tree: pnpm typecheck, pnpm test, pnpm --filter @echolet/cli test:e2e, and go -C apps/relay test ./... untagged, with -race and with -race -tags relayv2. Report exact counts and exit codes, and report 0 data races.",
+      "status": "met",
+      "evidence": "Node v26.5.0 (default non-login interpreter). pnpm typecheck exit 0, 7 projects Done. pnpm lint exit 0 (no package defines a lint script). pnpm test exit 0: 50 test files, 293 tests, 293 passed, 0 failed (protocol 3/12, client-db 1/1, crypto-core 4/20, client-core 2/2, session-node 3/24, mobile 1/6, cli 36/228). pnpm --filter @echolet/cli test:e2e exit 0: 1 file, 3/3 passed, 36.6s. go -C apps/relay test ./... exit 0 (8 ok, 8 no-test, 0 FAIL, 0 DATA RACE); -tags relayv2 exit 0 (8 ok, 0 FAIL, 0 DATA RACE); -race exit 0 (8 ok, 0 FAIL, 0 DATA RACE); -race -tags relayv2 exit 0 (8 ok, 0 FAIL, 0 DATA RACE). go -C apps/relay vet ./... exit 0."
+    },
+    {
+      "criterion": "A written implementation report at .metaproject/flows/002-.../t16-implementation-report.md explaining each change, why the alternative was rejected, and every residual that remains.",
+      "status": "met",
+      "evidence": "Written, SHA-256 7a4c6a63ada2369f9d9451ea78715e2c40414603a12ea7544a95a7465685b29d. Sections: 1 re-walk (defect, peek-and-advance, write/clear sites and the no-gap argument, the T6-F-004 trap and why this is not it, four rejected alternatives, the F-012 demonstration); 2 ack shape/range split and three rejected alternatives; 3 loopback and three rejected alternatives; 4 per-test results; 5 full matrix; 6 test-file digests; 7 product files changed; 8 six residuals."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t16-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Each change, the rejected alternatives, the write/clear argument for the re-walk position, the full matrix, the test-file digests, and six residuals.",
+      "hash": "7a4c6a63ada2369f9d9451ea78715e2c40414603a12ea7544a95a7465685b29d"
+    },
+    {
+      "path": "apps/cli/test/e2e/rewalk-crash-safety.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T15's RED suite, UNCHANGED by this task. All four cases now pass, including the T6-F-004 guard.",
+      "hash": "1983630054ddbb5f6d6b37f3e803821fc3b935822f2a27641253a96bc92e1bf2"
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.loopbackHostname.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T15's RED suite, UNCHANGED by this task. All 10 cases pass.",
+      "hash": "8c6a21459360149581ca96e9cb72d43f94de1be2e3a00150243751ebd29e2d1f"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_ack_read_position_oracle_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T15's RED suite, UNCHANGED by this task. The oracle RED and its unknown-device guard both pass.",
+      "hash": "87d92255345727c5c09c681284cdf74c18f04303d335900030ee9956eeb23d98"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_read_mark_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Pre-existing T14 file with T15's V2-signing helper, UNCHANGED by this task. All four read-mark tests pass.",
+      "hash": "7624bba01e74e4457573d77236f84eec308f0ef40468726685fc9b285aacc8ca"
+    },
+    {
+      "path": "apps/cli/test/e2e/flood-closure.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T15's re-stated RED-4 and new RED-4b, UNCHANGED by this task. All 9 cases pass.",
+      "hash": "f610412439f83971d463e12472a2a9de4109f7e216b3ebbcde42bd408a544124"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/runtime/profile.ts",
+      "change": "takeMailboxRewalk (read-and-delete) replaced by pendingMailboxRewalk (read only, no store mutation); finishMailboxRewalk added as the sole removal site; keepMailboxRewalk unchanged in code and re-documented as a per-page advance; the mailboxRewalkKey doc comment rewritten. SHA-256 29c654f22cea55d525e7b6caf544dd18b2efc52e794b571e0220cefec15a851e"
+    },
+    {
+      "path": "apps/cli/src/runtime/inbound.ts",
+      "change": "poll() peeks the re-walk position instead of consuming it, and inside the page loop - in the same place read_through is computed, after the page is fully judged - either advances it durably (keepMailboxRewalk(next_cursor)) or clears it (finishMailboxRewalk, only when next_cursor === null). The try/catch that restored the position and the post-loop keepMailboxRewalk are removed. SHA-256 18a7d63b9d272c9e422ac681b73c3016337ade9588fdc791c9de5ccfb1de648a"
+    },
+    {
+      "path": "apps/cli/src/transport/loopback.ts",
+      "change": "NEW product file. The single isLoopbackHostname predicate - localhost, [::1], or a 127.x.y.z dotted quad - with the rationale for why one home and the stricter rule. SHA-256 34b62abe227d0adc2e99172ccaf5a3b6add58025b7d5e1771acec91a9b11118f"
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.ts",
+      "change": "The /^127\\./ prefix loopback test is replaced by the shared isLoopbackHostname import. No other behaviour changed. SHA-256 1c99f959c31c93f3c5eeb953221d5eff189c6a9f6a060b542a33bf050f928af7"
+    },
+    {
+      "path": "apps/cli/src/runtime/config.ts",
+      "change": "The inline dotted-quad regex is replaced by the same shared isLoopbackHostname import; the isRelayOrigin doc comment records why the rule has one home. Behaviour identical. SHA-256 6c3059963aa70e6cd0f73c31b3d42b1bf570152f97b6e86021ef68c83574ce49"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "change": "AckMailbox: readThroughWithinIssued moved from after authorizeMailboxDevice to after VerifyMessageSignature (immediately before AckEnvelopes), completing T14's shape/range split on this route; decodeReadThroughShape left ahead of authorisation; the readThroughWithinIssued doc comment updated to record that both routes now apply it behind the signature. gofmt-clean. SHA-256 159c526813df1c6d0f6c8f8af50fcb2a0267a4335146ee7d08d493953942c734"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T16-F-001",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "file": "apps/cli/test/e2e/rewalk-crash-safety.test.ts",
+      "problem": "The re-walk crash-safety suite exercises a single interruption point (the CLI held on its third poll page) and a single ciphertext regime (4-byte minimum, so the page boundary is the client's poll_batch_size rather than the relay's byte budget). Other interruption points - inside accept() between two envelopes of one page, between the last page's commits and finishMailboxRewalk(), inside ackPending() - and the maximum-size-ciphertext regime are argued correct but not measured.",
+      "impact": "A crash-safety property that holds at one interruption point is weaker evidence than the finding it closes deserves. A regression at an unmeasured point would reproduce T10R3-F-001 for a narrower set of crashes and no test would notice.",
+      "suggested_fix": "The verifier should sweep at least the two structurally distinct points named above and one maximum-size-ciphertext world, reusing the existing counting proxy's hold mechanism. This carries T15-F-003 forward rather than restating it; it is a coverage bound the tests-creator accepted deliberately, not a defect introduced here.",
+      "evidence": "rewalk-crash-safety.test.ts interruptPollAtPage(3, ...) is the only interruption used by cases 1-3, and primeLateImport floods with ciphertextBytes = 4 in every world. T15's own result recorded this as T15-F-003 and kept its status at DONE_WITH_CONCERNS for it.",
+      "confidence": "high"
+    },
+    {
+      "id": "T16-F-002",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/cli/test/e2e/rewalk-crash-safety.test.ts",
+      "problem": "Comments in two test files now describe code that no longer exists: rewalk-crash-safety.test.ts lines 17, 18, 29 and 238 and flood-closure.test.ts lines 600-601 and 648 name Profile.takeMailboxRewalk() and describe the delete-before-the-walk shape as current.",
+      "impact": "Prose drift only. Every assertion those comments accompany is unaffected and green; a future reader could waste time looking for a method that is not there.",
+      "suggested_fix": "A separate housekeeping pass may re-word the comments to name pendingMailboxRewalk / keepMailboxRewalk / finishMailboxRewalk and to describe the delete-first shape in the past tense. It was NOT done here because this task forbids editing test files at all, and the comments are also the historical record of why the tests were written.",
+      "evidence": "keryx ctx rg 'MailboxRewalk|mailbox-rewalk' over apps and packages lists 8 matches in rewalk-crash-safety.test.ts and 3 in flood-closure.test.ts, all in comments; no test file calls any of these methods.",
+      "confidence": "high"
+    },
+    {
+      "id": "T16-F-003",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/relay/internal/api/handler/mailbox_read_mark_test.go",
+      "problem": "gofmt -l apps/relay reports three unformatted files: internal/api/handler/mailbox_read_mark_test.go (a T15 file), internal/api/handler/signal_prekey_bundle_v2.go and internal/storage/repository/signal_prekey_bundle_v2.go.",
+      "impact": "None functional; go vet and all four test configurations are clean. It is noted so the verifier does not attribute it to this task.",
+      "suggested_fix": "Leave the test file alone (this task may not edit it). The two production files are pre-existing and outside this task's scope; a formatting pass can take all three together.",
+      "evidence": "gofmt -l apps/relay after all T16 edits lists exactly those three paths; mailbox_handler.go, the only Go file this task changed, is not among them.",
+      "confidence": "high"
+    },
+    {
+      "id": "T16-F-004",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "problem": "A poll interrupted while a re-walk is in flight now leaves the position ADVANCED rather than absent, so the next poll presents a cursor where before it presented none.",
+      "impact": "This is the intended behaviour change and is exactly what flood-closure RED-4 was re-stated to permit. It is recorded so that a future reader of RED-4b does not generalise 'an ordinary poll is cursorless' into 'every poll after a crash is cursorless' and re-introduce the defect while trying to protect F-012.",
+      "suggested_fix": "None. RED-4b already pins the narrow property where it holds: a poll with NO re-walk pending presents no cursor.",
+      "evidence": "flood-closure.test.ts lines 588-650 record the orchestrator's three-part ruling verbatim; RED-4 and RED-4b are both green on this tree.",
+      "confidence": "high"
+    },
+    {
+      "id": "T16-F-005",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/cli/src/runtime/profile.ts",
+      "problem": "Two concurrent poll() invocations against the SAME profile directory from two processes are not serialised by this change (they were not before it either). Both would advance the one cli:mailbox-rewalk key.",
+      "impact": "The safety invariant still holds for each walk - the key only ever moves to a position some walk genuinely received and judged, so nothing is skipped - but the slower walk may find the position further ahead than it left it and re-walk less than it expected. No message is lost; the cost is only that one of the two walks does redundant work.",
+      "suggested_fix": "Out of scope for this task. If concurrent same-profile polls are ever supported, the store's single-writer transaction is the place to serialise, not the page loop.",
+      "evidence": "EncryptedSqliteStore.transaction is the only mutation boundary and is per-process; InboundMessenger.serial() orders operations within one process only.",
+      "confidence": "medium"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "vitest_files": 50,
+    "vitest_tests": 293,
+    "vitest_passed": 293,
+    "vitest_failed": 0,
+    "e2e_tests": 3,
+    "e2e_passed": 3,
+    "go_configurations": 4,
+    "go_failures_total": 0,
+    "go_data_races_total": 0,
+    "node_version": "v26.5.0",
+    "test_files_modified": 0,
+    "product_files_changed": 6
+  },
+  "timestamp_utc": "2026-09-07T16:13:43Z"
+}

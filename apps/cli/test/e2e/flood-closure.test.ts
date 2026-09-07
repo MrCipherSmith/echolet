@@ -249,6 +249,18 @@ interface Counters {
   pages: string[][];
   /** Whether each poll request carried an explicit `cursor`. */
   cursored: boolean[];
+  /**
+   * The `cursor` each poll request carried, verbatim, and `null` when it carried none.
+   *
+   * The boolean above answers "was this walk resumed from a client-held position"; this answers
+   * "WHICH position", which is the only way to ask whether a presented position is one the relay
+   * ever issued to this client for a page it actually received. A token is an opaque server-issued
+   * value here: it is only ever compared for EQUALITY against the `next_cursor` values recorded
+   * below, never parsed, ordered or arithmetically related to anything.
+   */
+  pollCursors: Array<string | null>;
+  /** The `next_cursor` each poll response reported: a token when the page was cut short, `null` at the end of the mailbox. */
+  pollNextCursors: Array<string | null>;
   /** Whether each ack request carried a `read_through`, and its value when it did. */
   ackReadThrough: Array<string | null>;
   ackedIds: string[];
@@ -258,7 +270,7 @@ interface Counters {
 function counterProxy(relayUrl: string) {
   const counters: Counters = {
     requests: 0, polls: 0, acks: 0, challenges: 0, upBytes: 0, downBytes: 0,
-    pages: [], cursored: [], ackReadThrough: [], ackedIds: [], statuses: [],
+    pages: [], cursored: [], pollCursors: [], pollNextCursors: [], ackReadThrough: [], ackedIds: [], statuses: [],
   };
   const server = createServer((request, response) => {
     void (async () => {
@@ -278,15 +290,22 @@ function counterProxy(relayUrl: string) {
       if (path === "/v1/mailbox/challenge") counters.challenges += 1;
       if (path === "/v1/mailbox/poll") {
         counters.polls += 1;
-        let cursored = false;
-        try { cursored = typeof (JSON.parse(requestBody.toString("utf8")) as { cursor?: unknown }).cursor === "string"; } catch { /* bounded */ }
-        counters.cursored.push(cursored);
-        let ids: string[] = [];
+        let cursor: string | null = null;
         try {
-          const parsed = JSON.parse(bytes.toString("utf8")) as { data?: { envelopes?: Array<{ envelope_id?: unknown }> } };
+          const requested = (JSON.parse(requestBody.toString("utf8")) as { cursor?: unknown }).cursor;
+          cursor = typeof requested === "string" ? requested : null;
+        } catch { /* bounded */ }
+        counters.cursored.push(cursor !== null);
+        counters.pollCursors.push(cursor);
+        let ids: string[] = [];
+        let nextCursor: string | null = null;
+        try {
+          const parsed = JSON.parse(bytes.toString("utf8")) as { data?: { envelopes?: Array<{ envelope_id?: unknown }>; next_cursor?: unknown } };
           ids = (parsed.data?.envelopes ?? []).map((entry) => typeof entry.envelope_id === "string" ? entry.envelope_id : "");
+          nextCursor = typeof parsed.data?.next_cursor === "string" ? parsed.data.next_cursor : null;
         } catch { /* a non-success poll response contributes an empty page */ }
         counters.pages.push(ids);
+        counters.pollNextCursors.push(nextCursor);
       }
       if (path === "/v1/mailbox/ack") {
         counters.acks += 1;
@@ -560,15 +579,91 @@ it("RED-4: an interrupted poll resumes after the pages it already judged, and th
     const lastJudgedIndex = poisonIndexOf(lastJudged[0]!);
     expect(lastJudgedIndex, "the interrupted walk must have been reading poison, not something else").toBeGreaterThanOrEqual(0);
 
-    // Process 2: a brand new PID with a freshly loaded profile, polling with NO cursor.
+    // Process 2: a brand new PID with a freshly loaded profile.
     const secondProcessStart = w.counters.pages.length;
     const codes = await w.poll(w.bob, 4, 300000);
     const secondProcessPages = w.counters.pages.slice(secondProcessStart).filter((page) => page.length > 0);
     expect(secondProcessPages.length).toBeGreaterThan(0);
+
+    // -----------------------------------------------------------------------------------------
+    // The resuming poll's POSITION — why this is stated as "the cursor may not skip" and not as
+    // "there is no cursor" (finding T15-F-001, ruled on by the orchestrator before T16 was written)
+    // -----------------------------------------------------------------------------------------
+    // This assertion used to read `expect(w.counters.cursored[secondProcessStart]).toBe(false)` —
+    // the resuming poll must present NO cursor at all. It was re-stated, deliberately and once, for
+    // three reasons that are recorded here because re-stating an existing assertion is the kind of
+    // edit that must never happen quietly.
+    //
+    // 1. It was green only BECAUSE of the defect under repair. `world()`'s setup ends with
+    //    `bob contact import --from alice-card --yes`, so a re-walk from the head of the mailbox is
+    //    pending in every world this file builds, RED-4's included, and the killed poll above IS
+    //    that re-walk. `Profile.takeMailboxRewalk()` DELETES the durable position before
+    //    the walk begins and `keepMailboxRewalk()` writes it back only after the page loop, so a
+    //    process killed inside the loop leaves no re-walk to present and the next poll is
+    //    necessarily cursorless. Any crash-safe re-walk — which is what T15/T16 exist to build —
+    //    makes that same poll cursored. An assertion that can only hold while the bug is present
+    //    protects nothing and would force the fix to be wrong.
+    //
+    // 2. The alternative was rejected on the merits, not on cost. Moving the re-walk floor onto the
+    //    RELAY would keep the resuming poll literally cursorless, but the relay is the
+    //    adversary-adjacent component and this design keeps the recipient's RECOVERY DECISION
+    //    local: `contact import` is an offline trust operation that makes no relay request at all
+    //    (profile.ts:150-153). Putting the recovery position on the relay hands the flooding
+    //    adversary a lever on the one path that recovers from flooding, and grows exactly the
+    //    protocol surface T10 has just finished measuring.
+    //
+    // 3. What replaces it is strictly stronger, and is about the SAFETY PROPERTY rather than the
+    //    mechanism. The cursorless line stood in for one real hazard: a locally held position
+    //    advancing past envelopes the recipient was never offered, which design §4 R-4 makes
+    //    permanent the moment a cursorless poll resumes at the mark. So: if the resuming poll
+    //    presents a position at all, it must be one the RELAY ISSUED to the killed process for a
+    //    page that process actually received — never a position further on. Tokens are compared for
+    //    equality only; this test never parses, orders or does arithmetic on one.
+    //
+    // The narrow half of the old assertion — that a poll with NO re-walk pending is still
+    // cursorless, which is the F-012 / T6-F-005 property that the relay is the durable holder of an
+    // ordinary walk's mark — is not weakened by this: it is pinned where it still holds, by
+    // "RED-4b" immediately after this test.
+    const killedProcessRequests = w.counters.pages
+      .slice(firstProcessStart, secondProcessStart)
+      .map((ids, offset) => ({ ids, next: w.counters.pollNextCursors[firstProcessStart + offset] ?? null }))
+      .filter((request) => request.ids.length > 0);
+    const positionsIssuedToTheKilledProcess = killedProcessRequests
+      .map((request) => request.next)
+      .filter((token): token is string => token !== null);
+    // A precondition, so the membership check below can never pass vacuously against an empty set:
+    // every page of an 800-envelope flood at a batch of 50 is cut short, so the relay issued the
+    // killed process a continuation token for each one it served.
     expect(
-      w.counters.cursored[secondProcessStart],
-      "the resuming poll must be cursorless — `inbound.ts:105` starts every walk with no cursor, and it is the RELAY that must resume the recipient at its stored read position",
-    ).toBe(false);
+      positionsIssuedToTheKilledProcess.length,
+      "the relay must have issued the killed process a continuation token for each cut-short page it served",
+    ).toBeGreaterThanOrEqual(2);
+    const presentedCursor = w.counters.pollCursors[secondProcessStart] ?? null;
+    expect(
+      // `null` is the ordinary cursorless poll; "0" is the head of the mailbox, which skips nothing
+      // by construction. Everything else must be a token this client was handed for ground it saw.
+      [null, "0", ...positionsIssuedToTheKilledProcess],
+      `the poll that resumed after the SIGKILL presented cursor ${presentedCursor === null ? "<none>" : JSON.stringify(presentedCursor)}, ` +
+        `which is not the head of the mailbox and not one of the ${String(positionsIssuedToTheKilledProcess.length)} continuation tokens the relay issued to the killed process for a page it actually received. ` +
+        "A resume position the client holds locally may only ever be a token the relay issued for a page this client received and judged (profile.ts `keepMailboxRewalk`); anything beyond that marks envelopes as judged that the recipient was never offered, and once a walk resumes there they are unreachable for the rest of their lifetime (design §4, R-4). " +
+        "This replaced an assertion that the resuming poll carries no cursor at all, which was true only while the re-walk position was destroyed by the crash it is meant to survive",
+    ).toContain(presentedCursor);
+
+    // The same no-skip property measured in ENVELOPES rather than in tokens, so it also binds the
+    // cursorless path — a relay-held mark that ran ahead of what it served would pass the token
+    // check above and fail here.
+    const offeredToTheKilledProcess = killedProcessRequests.flatMap((request) => request.ids).map(poisonIndexOf).filter((index) => index >= 0);
+    expect(offeredToTheKilledProcess.length, "the killed process must have been served poison to have judged any").toBeGreaterThan(0);
+    const lastOfferedIndex = Math.max(...offeredToTheKilledProcess);
+    const resumeIndexRaw = poisonIndexOf(secondProcessPages[0]![0]!);
+    expect(
+      // A first envelope that is not poison at all means the resumed walk landed past every poison
+      // envelope the mailbox holds, which is the largest skip available here; it is scored as such
+      // rather than as the -1 `poisonIndexOf` returns for "not one of ours".
+      resumeIndexRaw >= 0 ? resumeIndexRaw : poison,
+      `the poll that resumed after the SIGKILL was offered envelope index ${String(resumeIndexRaw)} first, but the killed process was never served anything past index ${String(lastOfferedIndex)}. ` +
+        "A resumed walk may continue after what the interrupted one was offered; it may not step over ground the recipient never saw. Envelopes skipped this way are never re-offered, because the walk resumes at the mark and the mark is now past them (design §4, R-4)",
+    ).toBeLessThanOrEqual(lastOfferedIndex + 1);
 
     expect(
       poisonIndexOf(secondProcessPages[0]![0]!),
@@ -590,6 +685,67 @@ it("RED-4: an interrupted poll resumes after the pages it already judged, and th
     ).toBeLessThanOrEqual(34);
   });
 }, 600000);
+
+// ===========================================================================
+// RED-4b — the exception is NARROW: only a pending re-walk may present a position
+// ===========================================================================
+
+/**
+ * The half of RED-4's original cursorless assertion that still holds, pinned where it holds.
+ *
+ * RED-4 above had to stop requiring that the poll following a crash carries no cursor, because a
+ * crash-safe `contact import` re-walk is exactly a position that survives the crash and is presented
+ * on the next poll. That exception is the re-walk and nothing else. For an ORDINARY poll — one with
+ * no re-walk pending — the rule is unchanged and is the whole of F-012 / T6-F-005: the client keeps
+ * no read position of its own, the RELAY is the durable holder of the mark, and a walk that started
+ * itself from a locally remembered position would be reintroducing the state that finding removed.
+ *
+ * It is also the cursor-shaped statement of T6-F-004, and it is why a fix for the crash-safety
+ * findings cannot be "never clear the re-walk": a position that outlived its own completed walk is
+ * presented here, and this case turns red.
+ *
+ * Deliberately cheap: no flood. The property is about which position a poll presents, not about
+ * how much poison the walk had to cross, and the expensive crossings are measured elsewhere in this
+ * file.
+ */
+it("RED-4b: a poll with no re-walk pending presents no cursor — the relay stays the durable holder of the mark", async () => {
+  await world("red4b-ordinary-poll", async (w) => {
+    // `world()` ends with `bob contact import`, so the FIRST poll below is a re-walk. It is allowed
+    // to present a position; that is R-5's recovery path and RED-4 covers it.
+    const first = `E2E_FLOOD_ORDINARY_FIRST_${randomUUID()}`;
+    await w.run(w.alice, ["send", "--to", w.bobIdentity, "--text", first]);
+    const rewalkStart = w.counters.pages.length;
+    const rewalkCodes = await w.poll(w.bob, 3, 120000);
+    expect(rewalkCodes[rewalkCodes.length - 1], `re-walk poll exit codes ${JSON.stringify(rewalkCodes)}, want a final 0`).toBe(0);
+    expect(await w.historyLength(w.bob, w.aliceIdentity)).toBe(1);
+
+    // The re-walk reached the END of the mailbox: the last page the relay served reported no
+    // continuation, which is the condition under which there is nothing left to re-walk
+    // (inbound.ts:180 — a re-walk ENDS the moment the relay reports no more pages). Whatever the
+    // implementation does with the position, from here on this profile's polls are ordinary ones.
+    const rewalkNextCursors = w.counters.pollNextCursors.slice(rewalkStart);
+    expect(rewalkNextCursors.length, "the re-walk must have made at least one poll request").toBeGreaterThan(0);
+    expect(
+      rewalkNextCursors[rewalkNextCursors.length - 1],
+      `the last page of the import re-walk reported next_cursor ${JSON.stringify(rewalkNextCursors[rewalkNextCursors.length - 1])}, so the walk had not reached the end of the mailbox and this case cannot say what follows it. ` +
+        "This is a precondition of the assertion below, not the assertion itself",
+    ).toBeNull();
+
+    const second = `E2E_FLOOD_ORDINARY_SECOND_${randomUUID()}`;
+    await w.run(w.alice, ["send", "--to", w.bobIdentity, "--text", second]);
+    const ordinaryStart = w.counters.pages.length;
+    const ordinaryCodes = await w.poll(w.bob, 3, 120000);
+    expect(ordinaryCodes[ordinaryCodes.length - 1], `ordinary poll exit codes ${JSON.stringify(ordinaryCodes)}, want a final 0`).toBe(0);
+    expect(await w.historyLength(w.bob, w.aliceIdentity)).toBe(2);
+
+    expect(
+      w.counters.pollCursors[ordinaryStart] ?? null,
+      `a poll made after the import re-walk had run to the end of the mailbox presented cursor ${JSON.stringify(w.counters.pollCursors[ordinaryStart] ?? null)}. ` +
+        "An ordinary walk must present NO cursor: `inbound.ts:105` starts it with none and the RELAY resumes the recipient at its stored read position, which is what makes progress survive a process that never returned (finding T6-F-005) and what keeps an ordinary poll from writing to the store at all (F-012). " +
+        "A client that presents a position here is either holding a read mark of its own or has kept a re-walk that outlived its own completed walk — and a re-walk that outlives its walk restarts every later poll at the same place and reinstates the whole flooding class (finding T6-F-004)",
+    ).toBeNull();
+  });
+}, 300000);
 
 // ===========================================================================
 // RED-6 — the residual the design predicted (§4, R-5), at the depth T10 measured
@@ -645,15 +801,29 @@ async function introduceCarol(w: World): Promise<Carol> {
  * `behind` is poison stored AFTER the message, so the target does not sit in the never-marked final
  * page: without it the residual the implementer disclosed would recover the message for a reason
  * that has nothing to do with the re-walk.
+ *
+ * Why `behind` is 60 and not 6 (finding T10R3-F-004)
+ * ---------------------------------------------------
+ * A walk never marks its FINAL page: `inbound.ts` reports page k's position on page k+1's request,
+ * and the last page has no k+1. So "behind" only does its job if it is enough to fill at least one
+ * whole page AFTER the message, and the size of a page is not a constant of this suite — it is
+ * `min(poll_batch_size, what the relay's byte budget allows)`, which is 3 envelopes in the
+ * maximum-size ciphertext regime these rows use and up to the configured batch of 50 in any smaller
+ * one. `behind: 6` was therefore two pages here and ZERO pages the moment the ciphertext regime
+ * changes — `ECHOLET_MAX_MESSAGE_BYTES`, the poll byte budget or the batch size moving is enough —
+ * at which point the message sits in the never-marked final page and the row passes because the mark
+ * never got past it, not because the re-walk recovered it. 60 exceeds the configured batch of 50, so
+ * at least one full page follows the message under EVERY regime, and the row can only pass for the
+ * reason it is about.
  */
 const lateImportDepths = [
   {
     label: "control — 30 maximum-size poison ahead (10 pages), inside the 16-page valve",
-    ahead: 30, behind: 6, aheadPages: 10, postImportPolls: 3, timeoutMs: 480000,
+    ahead: 30, behind: 60, aheadPages: 10, postImportPolls: 4, timeoutMs: 600000,
   },
   {
     label: "attack — 49 maximum-size poison ahead (17 pages), past the 16-page valve (T10-F-001)",
-    ahead: 49, behind: 6, aheadPages: 17, postImportPolls: 8, timeoutMs: 720000,
+    ahead: 49, behind: 60, aheadPages: 17, postImportPolls: 9, timeoutMs: 900000,
   },
 ] as const;
 

@@ -1,0 +1,98 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T10-verify-r2",
+  "parent_dispatch_id": "002-T10-verify",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "independent-verifier",
+  "task": {
+    "title": "T10 re-run: verify the closure, TLS and the operator console on a real relay after T14",
+    "description": "Independently re-verify flow 002 on the post-T14 tree. T10 attempt 2 FAILED this task by finding T10-F-001 (the contact-import re-walk was itself bounded at 16 pages and its flag was consumed regardless, permanently losing a message behind a deep flood), T10-F-002 (an unauthenticated lifetime-envelope-count oracle) and T10-F-003 (an init/RelayClient relay-URL validation mismatch). T14 claims to have fixed all three by converting the re-walk flag into a durable position `cli:mailbox-rewalk`, splitting `resolveReadThrough` into `decodeReadThroughShape` and `readThroughWithinIssued` so the count bound is applied only after signature verification, and making `parseClientConfig` refuse a relay URL carrying a path or query. You did not write any of this and must not credit the earlier verification retroactively. Re-measure the closure with your own numbers on the real relay binary, re-attack it with particular attention to the re-walk path that just changed, re-confirm TLS cannot silently downgrade, re-confirm the TUI leaks no key material into frames or child argv, and judge AC1-AC6 yourself.",
+    "intent": "verify",
+    "scope": "apps/cli, apps/relay, the flow 002 artifacts, and docs/requirements/echolet-cli-prototype; loopback only"
+  },
+  "acceptance_criteria": [
+    "AC1: The flooding closure is chosen by a written design task that names what it closes, what it does not close, and why the alternatives were rejected.",
+    "AC2: Against the real relay binary, the probe that previously wedged a mailbox with 4 self-published identities and 49 maximum-size envelopes no longer prevents delivery of a legitimate message, and the new attacker cost is measured and stated. If the result is a bound rather than a closure, it is reported as a bound and not as a fix.",
+    "AC3: A legitimate two-party exchange, offline delivery, byte-identical exact retry and deduplication all still pass on the real relay after the change, with no pre-existing test weakened, skipped or deleted.",
+    "AC4: A relay reachable on a non-loopback address serves HTTPS, and the CLI completes the full acceptance scenario against it from a different machine.",
+    "AC5: The operator console drives a local CLI, shows profiles, queues, history, rejections and relay health, and never receives, stores or transmits a store key or private key material. This is demonstrated by evidence, not asserted.",
+    "AC6: The console displays, on its own surface, that this is an unaudited prototype not suitable for sensitive communication.",
+    "T10-F-001 is closed: reproduce the exact 5-identity / 55-maximum-size-envelope attack that lost a message before T14 and show the message is delivered; then push past it (more identities, more envelopes, a re-walk interrupted by SIGKILL) and state the first configuration, if any, at which a message is still lost.",
+    "T10-F-002 is closed: the lifetime envelope count is not answerable to a caller without a verified signature, on every route that reads read_through, and the residual (a caller holding a contact-card device_id on the ack route) is stated as a bound rather than claimed closed.",
+    "T10-F-003 is closed: `init` refuses a relay URL carrying a path or query with exit 2, and the CLI and RelayClient agree on what a relay URL is.",
+    "The full matrix is re-run on this tree by you: pnpm typecheck, pnpm test, pnpm --filter @echolet/cli test:e2e, go -C apps/relay test ./... untagged, with -race and with -race -tags relayv2."
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/acceptance-criteria.md",
+      "kind": "context",
+      "exists": true,
+      "summary": "The frozen AC1-AC8. AC7 and AC8 belong to T11 and are out of scope here."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t5-flood-closure-design.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "The closure design and the residuals R-1..R-8 written before implementation."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t10-verification-report.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "The FAILED T10 attempt 2 report: measurements, fifteen attacks on the read position, and the three findings T14 claims to have fixed."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t14-implementation-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "The T14 implementer's own account of the three fixes. Treat as a claim to be checked, not as evidence."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/runbook.md",
+      "kind": "context",
+      "exists": true,
+      "summary": "The reproduction runbook whose commands were executed against the real relay and the real dist/cli.js."
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/index.md",
+    "apps/cli/src/runtime/inbound.ts",
+    "apps/cli/src/runtime/profile.ts",
+    "apps/cli/src/runtime/config.ts",
+    "apps/cli/src/transport/relayClient.ts",
+    "apps/cli/src/commands/cli.ts",
+    "apps/cli/src/tui/tui-shell.ts",
+    "apps/relay/internal/api/handler/mailbox_handler.go",
+    "apps/relay/internal/storage/repository/mailbox_repo.go",
+    "apps/relay/internal/validation/validate.go"
+  ],
+  "constraints": [
+    "Do not modify any source, test, documentation or flow file. This is a read-and-measure task; your only writes are your two deliverables and scratch files under /tmp.",
+    "Do not touch the remote hosts geekom or depr, and do not open any non-loopback listener. Everything runs on this machine.",
+    "Do not weaken, skip, delete or filter any test to obtain a green result. Report a failure as a failure.",
+    "Do not print plaintext, ciphertext, store keys, profile keys, private key material or HTTP request bodies into any log, report or terminal output.",
+    "Every text, symbol or pattern search over project code goes through `keryx ctx rg`, never a bare rg or grep. Route commands and large logs through `keryx ctx run` and `keryx ctx read`.",
+    "Verify repository integrity with SHA-256 over tracked files. mtime is NOT a sound signal in this tree: files have been touched with byte-identical content, so an mtime ordering proves nothing about whether tests were edited after implementation.",
+    "Do not edit flow.json or the frozen acceptance-criteria.md by hand; all flow state changes are the orchestrator's.",
+    "Requires Node 22.13+ for node:sqlite. Report the Node version you measured on.",
+    "Judge AC4's 'from a different machine' half honestly: it cannot be established from loopback, so report it as partial with the reason, not as met."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T10-verify-r2-result.json",
+    "summary_max_tokens": 1200
+  },
+  "budget": {
+    "max_prompt_tokens": null,
+    "max_output_tokens": null,
+    "max_runtime_ms": null,
+    "max_findings": 20
+  },
+  "provenance": {
+    "created_at": "2026-09-07T12:10:00.000Z",
+    "created_by": "orchestrator",
+    "source_request": "Flow 002 T10 re-run after T14; T10 was recorded failed and re-pointed to depend on T14, and is not credited retroactively."
+  }
+}

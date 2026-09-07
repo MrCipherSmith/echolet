@@ -1,0 +1,98 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T16-implement",
+  "parent_dispatch_id": "002-T15-tests",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Fix T10R3-F-001 re-walk crash safety, T10R3-F-002 the ack-route count oracle, T10R3-F-003 the loopback hostname rule",
+    "description": "Make the RED tests T15 wrote pass, without weakening anything. You did not write those tests and you must not change them: they are the specification for this task. Three defects, found by the independent verification of T10 (attempt 3).\n\nT10R3-F-001 (major). The contact-import re-walk is not crash-safe. `Profile.takeMailboxRewalk()` in apps/cli/src/runtime/profile.ts DELETES the durable position `cli:mailbox-rewalk` before the walk begins; `keepMailboxRewalk()` writes it back only after the page loop returns, or from the catch around it. The whole walk is therefore a window in which the position exists in no durable place, and an interruption inside it — Ctrl-C is enough, and inbound.ts itself names Ctrl-C as a normal interruption — silently and permanently loses the recovery and the message it was requested for.\n\nThe orchestrator's intended shape is peek-and-advance rather than take-and-restore: never remove the position before the walk; advance it to the position the walk actually reached; clear it only when the walk reaches the end of the mailbox. At every instant the store must then hold a position at or behind where the walk truly got to, which is the invariant that makes an interruption cost repeated work rather than a lost message. You may choose a different mechanism, but it must satisfy every test, and the invariant above is what the tests are pinning.\n\nThe trap you must not fall into, because it is a worse defect than the one you are fixing: delete-before-the-walk was deliberate. The comment on `takeMailboxRewalk` cites finding T6-F-004 — a re-walk position that survives its own SUCCESSFUL walk makes every later poll restart at the same place and reinstates the entire mailbox flooding class this flow exists to close. A green guard test already pins this and it must stay green. Passing the crash-safety tests by never clearing the position is a failure of this task, not a solution to it.\n\nT10R3-F-002 (minor). The ack route still answers a mailbox's lifetime envelope count to a caller who cannot produce a verifying signature: a real `device_id` from a contact card plus a junk signature distinguishes an in-range `read_through` from an out-of-range one, and a binary search recovers the exact count in about 13 requests. Apply the same split T14 already applied to the poll route: validate the SHAPE of `read_through` before authorisation — which is what the existing malformed-shapes test in mailbox_read_mark_test.go demands, that malformed input never answers 500 and never depends on authorisation — and apply the RANGE bound only after `VerifyMessageSignature`. A caller whose signature does not verify then gets one uniform answer because the range check never runs, and `TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued` stays green because it signs correctly. Do not introduce a special-case uniform error code; the split is the fix.\n\nT10R3-F-003 (minor). `RelayClient` decides loopback with `/^127\\./` at apps/cli/src/transport/relayClient.ts:75, which accepts the hostname `127.evil.example` and would serve every relay request to a remote host over plain HTTP. It is unreachable through the CLI today only because config validation runs first at apps/cli/src/commands/cli.ts:210 — a defence in depth that currently is not one. Make `RelayClient` and `parseClientConfig` agree on exactly what loopback means, keeping `127.0.0.1`, `127.9.9.9`, `localhost` and `[::1]` working.",
+    "intent": "implement",
+    "scope": "apps/cli/src/runtime/profile.ts, apps/cli/src/runtime/inbound.ts, apps/cli/src/transport/relayClient.ts, apps/relay/internal/api/handler/mailbox_handler.go, and whatever else these require. No test files."
+  },
+  "acceptance_criteria": [
+    "Every RED test T15 wrote passes, and every green guard T15 wrote still passes — in particular the T6-F-004 guard that a completed re-walk is not repeated. Report the named result of each.",
+    "No test file is modified, at all. Report the SHA-256 of every test file T15 touched, showing it is unchanged from T15's recorded value.",
+    "No existing test is weakened, skipped, narrowed or deleted, and no strict Zod schema or Go validation is relaxed.",
+    "The re-walk position is never absent from durable storage while a walk that owns it is in flight. State plainly where it is written, where it is cleared, and why no interruption can fall between them.",
+    "The F-012 store-identity guarantee is preserved: an ordinary poll with no re-walk pending still leaves the encrypted store byte-identical. Show this rather than asserting it.",
+    "The ack fix is the shape/range split, not a special-case error code, and both pre-existing read-mark tests stay green.",
+    "The full matrix is green on the resulting tree: `pnpm typecheck`, `pnpm test`, `pnpm --filter @echolet/cli test:e2e`, and `go -C apps/relay test ./...` untagged, with `-race` and with `-race -tags relayv2`. Report exact counts and exit codes, and report 0 data races.",
+    "A written implementation report at .metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t16-implementation-report.md explaining each change, why the alternative was rejected, and every residual that remains."
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T15-tests-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "The RED set that specifies this task, its measured failures, and the two items the orchestrator ruled on."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t10-verification-report-r2.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "The independent verification these three findings come from, with the verifier's own reproductions."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t14-implementation-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "How the durable re-walk position and the poll-route shape/range split were introduced; the ack route was not given the same split."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t5-flood-closure-design.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "The closure design; §4 states the R-4 rule bounding read_through and the R-5 recovery path the re-walk implements."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/journal.md",
+      "kind": "context",
+      "exists": true,
+      "summary": "Carries the orchestrator's two rulings, including why the re-walk floor must stay local rather than move onto the relay."
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/index.md",
+    "apps/cli/src/runtime/profile.ts",
+    "apps/cli/src/runtime/inbound.ts",
+    "apps/cli/src/transport/relayClient.ts",
+    "apps/cli/src/commands/cli.ts",
+    "apps/cli/src/runtime/config.ts",
+    "apps/relay/internal/api/handler/mailbox_handler.go",
+    "apps/cli/test/e2e/rewalk-crash-safety.test.ts",
+    "apps/cli/test/e2e/flood-closure.test.ts",
+    "apps/cli/src/transport/relayClient.loopbackHostname.test.ts",
+    "apps/relay/internal/api/handler/mailbox_ack_read_position_oracle_test.go",
+    "apps/relay/internal/api/handler/mailbox_read_mark_test.go"
+  ],
+  "constraints": [
+    "Do NOT modify any test file. The tests are the specification; if you believe a test is wrong, stop and report it rather than editing it.",
+    "Do not weaken, skip, narrow or delete any existing test, and do not relax any strict Zod schema or Go validation to obtain green.",
+    "Do not pass the crash-safety tests by never clearing the re-walk position — that reinstates finding T6-F-004 and the whole flooding class.",
+    "Do not move the re-walk floor onto the relay. The orchestrator rejected that on the merits: the relay is adversary-adjacent, and `contact import` is an offline trust operation that makes no relay request.",
+    "Do not print plaintext, ciphertext, store keys, profile keys, private key material or HTTP request bodies into logs or reports.",
+    "Every text or symbol search goes through `keryx ctx rg`, never a bare rg or grep; route commands and large logs through `keryx ctx run` / `keryx ctx read`.",
+    "Report file identity by SHA-256, never by mtime — files in this tree have been touched with byte-identical content.",
+    "Do not edit flow.json or the frozen acceptance-criteria.md.",
+    "`bash -lc` on this machine starts Node v22.12.0, which lacks `node:sqlite` and makes packages/session-node fail to collect in a way that looks exactly like broken code. Use the default non-login interpreter, v26.5.0. Report the version you ran on."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T16-implement-result.json",
+    "summary_max_tokens": 1000
+  },
+  "budget": {
+    "max_prompt_tokens": null,
+    "max_output_tokens": null,
+    "max_runtime_ms": null,
+    "max_findings": 10
+  },
+  "provenance": {
+    "created_at": "2026-09-07T15:40:00.000Z",
+    "created_by": "orchestrator",
+    "source_request": "T10 attempt 3 findings, with the orchestrator's rulings on T15-F-001 (re-state RED-4's cursorless line, keep the floor local) and T15-F-002 (use T14's shape/range split on the ack route)."
+  }
+}
