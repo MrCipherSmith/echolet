@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 
+	"echolet/apps/relay/internal/protocol"
+
 	"github.com/caarlos0/env/v11"
 )
 
@@ -34,10 +36,16 @@ type Config struct {
 	LogLevel                 string `env:"ECHOLET_LOG_LEVEL" envDefault:"info"`
 	NodeCallsign             string `env:"ECHOLET_NODE_CALLSIGN" envDefault:"RPT-LOCAL-DEV"`
 	MaxStorageBytes          int64  `env:"ECHOLET_MAX_STORAGE_BYTES" envDefault:"2147483648"`
-	MaxMessageBytes          int64  `env:"ECHOLET_MAX_MESSAGE_BYTES" envDefault:"262144"`
-	MailboxTTLHours          int    `env:"ECHOLET_MAILBOX_TTL_HOURS" envDefault:"168"`
-	ChallengeTTLSeconds      int    `env:"ECHOLET_CHALLENGE_TTL_SECONDS" envDefault:"60"`
-	MaxMailboxBatch          int    `env:"ECHOLET_MAX_MAILBOX_BATCH" envDefault:"100"`
+	// MaxMessageBytes is the largest ciphertext this deployment accepts. Its
+	// default IS the protocol maximum (protocol.MaxMessageBytes, mirroring
+	// LIMITS.MAX_MESSAGE_BYTES); the envDefault has to be a literal because it is
+	// a struct tag, and the two are pinned together by Validate(). Lowering it is
+	// a deployment's business; raising it past the protocol maximum is refused at
+	// startup - see Validate() for why silence there is the worst outcome.
+	MaxMessageBytes     int64 `env:"ECHOLET_MAX_MESSAGE_BYTES" envDefault:"262144"`
+	MailboxTTLHours     int   `env:"ECHOLET_MAILBOX_TTL_HOURS" envDefault:"168"`
+	ChallengeTTLSeconds int   `env:"ECHOLET_CHALLENGE_TTL_SECONDS" envDefault:"60"`
+	MaxMailboxBatch     int   `env:"ECHOLET_MAX_MAILBOX_BATCH" envDefault:"100"`
 	// MaxUnackedEnvelopesPerSender bounds how many unacknowledged envelopes one
 	// sender identity may hold in one recipient mailbox. The default (16) is
 	// chosen against the drain-walk capacity MaxMailboxBatch and MaxMessageBytes
@@ -65,6 +73,20 @@ func (c Config) TLSEnabled() bool {
 // be a silent downgrade: the relay would come up, answer /health, and carry
 // every envelope in the clear on a network the operator thought was protected.
 // Refusing at startup makes that mistake loud and unmissable instead.
+//
+// ECHOLET_MAX_MESSAGE_BYTES is refused on the same principle (residual RI-09).
+// The maximum message size is a PROTOCOL constant, agreed in advance by both
+// sides (protocol.MaxMessageBytes, mirroring LIMITS.MAX_MESSAGE_BYTES in
+// packages/protocol) and never negotiated on the wire: the client sizes its own
+// poll-response bound from it and the relay sizes its poll byte budget from it.
+// A deployment may configure LESS - a relay that accepts less than a client can
+// carry is merely stricter, and every bound here scales down with it. A
+// deployment may not configure MORE: the relay would accept an envelope, store
+// it, and answer every poll with a body above the bound the recipient enforces,
+// so the recipient refuses the whole batch, acknowledges nothing and the mailbox
+// is undeliverable - accepted, stored, and silent. One environment variable is
+// enough to do that, and nothing at runtime would report it, so it is refused at
+// the one moment somebody is watching.
 func (c Config) Validate() error {
 	if (c.TLSCertFile == "") != (c.TLSKeyFile == "") {
 		return errors.New("ECHOLET_TLS_CERT_FILE and ECHOLET_TLS_KEY_FILE must be set together: " +
@@ -73,6 +95,23 @@ func (c Config) Validate() error {
 	}
 	if c.TLSReloadIntervalSeconds < 0 {
 		return fmt.Errorf("ECHOLET_TLS_RELOAD_INTERVAL_SECONDS must not be negative, got %d", c.TLSReloadIntervalSeconds)
+	}
+	if c.MaxMessageBytes < 0 {
+		// Not merely useless: this value is the ciphertext bound the send route
+		// validates against, so a negative one makes the relay come up healthy and
+		// refuse every legitimate envelope as PAYLOAD_TOO_LARGE. Zero is left
+		// alone deliberately - it is the zero value of a partially constructed
+		// Config, which the server package builds directly and which the handler
+		// reads as "unconfigured, use the protocol maximum"; Load() can never
+		// produce it, because the field carries an envDefault.
+		return fmt.Errorf("ECHOLET_MAX_MESSAGE_BYTES must not be negative, got %d", c.MaxMessageBytes)
+	}
+	if c.MaxMessageBytes > protocol.MaxMessageBytes {
+		return fmt.Errorf("ECHOLET_MAX_MESSAGE_BYTES is %d, above the protocol maximum of %d: a client sizes its "+
+			"poll-response bound from the same protocol maximum, so an envelope larger than it would be accepted, "+
+			"stored and then refused in full by every recipient, leaving the mailbox undeliverable. Configure %d or "+
+			"less. Refusing to start rather than silently accepting messages that can never be delivered",
+			c.MaxMessageBytes, protocol.MaxMessageBytes, protocol.MaxMessageBytes)
 	}
 	return nil
 }

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+
+	"echolet/apps/relay/internal/protocol"
 )
 
 // Request body bounds for the v1 JSON surface. Every v1 decoder site wraps
@@ -21,9 +23,12 @@ const (
 // force the decoder to read.
 const envelopeJSONOverheadBytes int64 = 64 << 10
 
-// defaultMaxMessageBytes mirrors config.MaxMessageBytes so an unconfigured
-// handler still derives a usable bound instead of collapsing to the overhead.
-const defaultMaxMessageBytes int64 = 262144
+// defaultMaxMessageBytes is the protocol maximum, used when a handler is
+// constructed without a configured maximum so it still derives a usable bound
+// instead of collapsing to the overhead. It is the shared constant rather than a
+// fourth hand-written copy of the same number (residual RI-09); a configured
+// ECHOLET_MAX_MESSAGE_BYTES may only be lower, which config.Validate enforces.
+const defaultMaxMessageBytes int64 = protocol.MaxMessageBytes
 
 // defaultMaxMailboxBatch mirrors config.MaxMailboxBatch, used when a handler is
 // constructed without a configured batch size.

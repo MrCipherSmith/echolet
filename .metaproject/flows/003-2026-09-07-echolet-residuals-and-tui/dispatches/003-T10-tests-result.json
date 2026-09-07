@@ -1,0 +1,186 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T10-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "2 new RED vitest tests in 2 new *.test.ts files under apps/cli/src/transport, pinning the CLIENT half of RI-09: the response bound at relayClient.ts:144 is the literal 1024*1024 and has no relation to the maximum message size the relay is configured with. Both fail on their own assertion in ~20ms. Established by reading, before asserting anything: (1) the client's bound is COMPILED IN - RelayClient takes only {baseUrl,timeoutMs,fetch} and the CLI profile schema has no size field, so nothing an operator sets reaches it; (2) the client applies NO send-side bound, so it will post a ciphertext it then refuses to read back; (3) a shared protocol constant DOES exist - LIMITS.MAX_MESSAGE_BYTES = 262144, exported from @echolet/protocol - and is consumed by nothing, the same number being written by hand in four places; (4) the relay does NOT advertise its configured maximum anywhere on the wire, so making an arbitrary per-deployment maximum work is a WIRE CHANGE, which this task reports rather than invents. Recommendation: derive the client's bound from the shared constant (necessary - nothing else can make the frozen relay test green) AND have Config.Validate() refuse at startup a maximum the deployment cannot carry (one-sided, precedented by the TLS half-pair refusal, and reconcilable with TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes because that test builds its handler directly and never calls Validate). A per-client config field alone must NOT be used: it relocates the skew from operator-vs-relay to sender-vs-recipient. Achievability verified with a throwaway patch (reverted; relayClient.ts is byte-identical). Typecheck clean; 26 pre-existing transport tests still green. No production file changed.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Establish, by reading, where each of the two limits lives before asserting anything: is the client's limit reachable from configuration, is there an existing shared protocol constant, and would closing this need a wire change",
+      "status": "met",
+      "evidence": "Recorded in t10-size-derivation-analysis.md sections 1.1-1.4 with file and line for every claim. The client's bound is the literal at relayClient.ts:144 inside the streaming reader; RelayClient's constructor is `{ baseUrl, timeoutMs, fetch }` (relayClient.ts:73) and the profile schema at runtime/config.ts:8-16 carries request_timeout_ms and poll_batch_size and NO size field, so the bound is unreachable from configuration today. A shared constant exists - LIMITS.MAX_MESSAGE_BYTES = 262144 in packages/protocol/src/constants/limits.ts:2, exported at index.ts:9 - and `keryx ctx rg LIMITS apps packages` returns exactly one match, the declaration itself: nothing consumes it. The same 262144 is hand-written in four places (LIMITS, config.go:37 envDefault, request_body.go:26 defaultMaxMessageBytes, mailbox_poll_capacity_test.go:48). The relay advertises no maximum: every response schema in relayClient.ts:91-120 is closed and strict and none carries a size, so a per-deployment maximum cannot reach a client without a wire change. Reported, not invented."
+    },
+    {
+      "criterion": "RED tests pin that the client's response limit is derived from the same notion of maximum message size the relay is configured with, asserting on the property rather than on a particular constant",
+      "status": "met",
+      "evidence": "relayClient.responseBoundDerivation.test.ts asserts TWO things so that neither 'raise the literal to 2 MiB' nor 'delete the check' passes: a poll response carrying exactly ONE envelope of the maximum message size is accepted, AND a response of eight of them is still refused with a non-retryable INVALID_RELAY_RESPONSE. No constant is asserted on; 2 MiB is the operator action RI-09 describes and is read as a bound nowhere. The raised maximum is supplied through both seams that exist without a wire change - the shared protocol constant (vi.mock, since packages/ is production code) and a constructor option (cast, since it does not exist yet) - and the test asserts the mocked constant really reached the module under test, so it cannot be red for the wrong reason."
+    },
+    {
+      "criterion": "A test that states the property without pre-deciding the fix or inventing surface",
+      "status": "met",
+      "evidence": "relayClient.sizeSymmetry.test.ts names no maximum and uses no new API at all. It asserts only that the client's two opinions about size agree: it serializes and posts an envelope (no send-side bound exists) and then refuses to read that same envelope back. It allows either coherent answer - the bound moves with the maximum, or the send is refused locally, non-retryably, without reaching the wire (asserted: `expect(paths).not.toContain('/v1/messages/send')`) - and refuses only today's incoherence, mirroring the structure of the frozen relay-side test."
+    },
+    {
+      "criterion": "Every new test is RED for the right reason: on its assertion, not on a compile error, a missing fixture or a timeout",
+      "status": "met",
+      "evidence": "Both fail via expect.fail carrying measured byte counts, in 21ms and 13ms against a 30000ms suite timeout, so neither can be a timeout. relayClient.sizeSymmetry.test.ts: 'the client serialized and posted an envelope whose ciphertext is 2097152 bytes and then refused the 2097730-byte poll response carrying that same envelope back (INVALID_RELAY_RESPONSE, retryable=false)...'. relayClient.responseBoundDerivation.test.ts: 'with the maximum message size raised to 2097152 the client refused a 2097730-byte poll response carrying exactly one envelope of that size (INVALID_RELAY_RESPONSE, retryable=false)...'. Both files compile: `npx tsc -p tsconfig.json --noEmit` in apps/cli exits 0 with them present."
+    },
+    {
+      "criterion": "The tests are achievable: they go green under a fix rather than being structurally unsatisfiable",
+      "status": "met",
+      "evidence": "Verified with a throwaway patch of relayClient.ts (an optional maxMessageBytes option defaulting to LIMITS.MAX_MESSAGE_BYTES, a response bound of max(4 x max, max + 64 KiB), and a local non-retryable refusal to send a ciphertext above the maximum). Result: 8 transport test files, 28 tests, ALL green - both new tests plus all 26 pre-existing ones, including the four in relayClient.pollCapacity.test.ts that pin the 1 MiB behaviour at the default. 4 x 262144 is exactly that 1 MiB, which is evidence the current literal was always an unwritten derivation. src/runtime (inbound, outbound, config, pollBatchSize, pollProgress, publish - 26 tests) also stayed green under the patch. The patch was then reverted and the file re-hashed: sha256:1c99f959c31c93f3c5eeb953221d5eff189c6a9f6a060b542a33bf050f928af7, identical to its pre-task value."
+    },
+    {
+      "criterion": "Nothing existing is weakened, skipped, narrowed or deleted; mailbox_poll_byte_budget_derivation_test.go and TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes are untouched",
+      "status": "met",
+      "evidence": "Two new files only. `git status --porcelain apps packages` lists exactly relayClient.responseBoundDerivation.test.ts and relayClient.sizeSymmetry.test.ts, both untracked; no Go file, no production TypeScript file and nothing in packages/ or docs/ was touched. mailbox_poll_byte_budget_derivation_test.go is byte-identical to the copy T8 recorded, sha256:d3ad8fa2e661ba4b360bcc58208327b444265f208931d2cd10c38b3d2f9f5819. mailbox_poll_capacity_test.go, which holds TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes, is unmodified at sha256:988c7c8dffbbba21b3d92149d3beefc078d73b488d2988000520367c5e67f285."
+    },
+    {
+      "criterion": "Recommend between 'make every size work' and 'refuse a maximum the deployment cannot carry', having checked the second against the existing acceptance test",
+      "status": "partial",
+      "evidence": "Recommendation delivered in t10-size-derivation-analysis.md section 3: take BOTH, split - derive the client's bound (necessary; nothing else can make the frozen relay test green) and add a loud startup refusal (one-sided, precedented, and reconcilable - TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes builds its handler through newMailboxHandlerWithMaxMessageBytes at mailbox_poll_capacity_test.go:328-342, which calls NewMailboxHandler directly and never constructs a config.Config, so Validate() cannot turn it red). PARTIAL because the startup refusal is recommended but NOT pinned by a test: see finding T10-F-003 - naming the ceiling it must refuse would either contradict the frozen T8 test's premise (a 2 MiB configured maximum must be deliverable at the handler) or hardcode a number the implementer has not chosen, which is the exact move this task was told to avoid."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/src/transport/relayClient.sizeSymmetry.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RI-09 client half, stated as the consequence and needing no new surface: the client posts an envelope of 2 MiB ciphertext and then refuses the poll response carrying that same envelope back. Allows either coherent answer (bound moves, or the send is refused locally without reaching the wire). RED at 2097730 bytes refused.",
+      "hash": "sha256:f4ab443069249aa95549cb248928566d66f8520e272e955eff55af136904bf0d"
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.responseBoundDerivation.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RI-09 client half, stated as the mechanism: the response bound must be a function of the maximum message size. Raised maximum supplied through both no-wire-change seams (mocked LIMITS.MAX_MESSAGE_BYTES and a cast constructor option), with a precondition assertion that the seam is live. Asserts one maximum-size envelope is accepted AND eight are still refused, so neither raising the literal nor deleting the check passes. RED at 2097730 bytes refused.",
+      "hash": "sha256:f0dad8b42d389bce4728d0949494d2289531717d33669b2fedeb0cf752956e86"
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t10-size-derivation-analysis.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Where each limit lives (file and line for every claim), the three ways a client could learn a maximum and why two of them do not close the residual, the reconcilability check for the startup refusal, the recommendation, the two tests with their RED output, and the achievability evidence.",
+      "hash": "sha256:e6926e62f33a0679549461ff927c8995852578be3ac0acbb7ccf530b75767f03"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/transport/relayClient.sizeSymmetry.test.ts",
+      "change": "added"
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.responseBoundDerivation.test.ts",
+      "change": "added"
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t10-size-derivation-analysis.md",
+      "change": "added"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T10-F-001",
+      "severity": "major",
+      "confidence": "high",
+      "file": "apps/cli/src/runtime/config.ts",
+      "line": 8,
+      "problem": "Closing RI-09 with a per-client config field does not close it: it relocates the skew from operator-vs-relay to sender-vs-recipient",
+      "evidence": "The client's bound is unreachable from configuration today (RelayClient takes { baseUrl, timeoutMs, fetch } at relayClient.ts:73; the profile schema at runtime/config.ts:8-16 has no size field), so any 'make every size work' fix must add a way for the client to learn the maximum. The obvious one - a max_message_bytes profile field - is per-install. The sender's client and the recipient's client are different installs with different profiles: a sender configured at 2 MiB posts a 2 MiB envelope, and a recipient still at the default refuses the poll response at relayClient.ts:144, acknowledges nothing, and the mailbox is undeliverable exactly as it is today, now with no single place an operator can look. The relay advertises no maximum (every response schema at relayClient.ts:91-120 is closed and strict and none carries a size), so nothing detects the mismatch.",
+      "impact": "The residual gets marked closed while the identical failure survives one level out, in a form that is harder to diagnose because it depends on which of two machines is misconfigured.",
+      "suggested_fix": "Derive the client's bound from the shared protocol constant LIMITS.MAX_MESSAGE_BYTES (packages/protocol/src/constants/limits.ts:2), which ships with the code rather than with the deployment and therefore cannot skew, and pair it with a relay startup refusal for a configured maximum above it. If an arbitrary per-deployment maximum really is wanted, the relay must advertise its configured maximum on the wire - see T10-F-002.",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/transport/relayClient.ts:144 (the literal response bound)",
+          "apps/cli/src/transport/relayClient.ts:73 (the constructor, which has no size option)",
+          "apps/cli/src/runtime/config.ts:8-16 (the profile schema, which has no size field)",
+          "packages/protocol/src/constants/limits.ts:2 (LIMITS.MAX_MESSAGE_BYTES, exported and consumed by nothing)",
+          "apps/relay/internal/config/config.go:37 (ECHOLET_MAX_MESSAGE_BYTES, per-deployment and unbounded above)"
+        ],
+        "enumeration_method": "keryx ctx rg over apps and packages for LIMITS, and for maxMessageBytes|MAX_MESSAGE_BYTES|max_message_bytes|1024 * 1024, then reading every hit. The list is every place either number is declared, defaulted or consumed on the client side, plus the relay declaration they must agree with."
+      },
+      "reviewer": "tests-creator (003-T10)"
+    },
+    {
+      "id": "T10-F-002",
+      "severity": "major",
+      "confidence": "high",
+      "file": "apps/cli/src/transport/relayClient.ts",
+      "line": 112,
+      "problem": "Making an arbitrary per-deployment ECHOLET_MAX_MESSAGE_BYTES deliverable requires a WIRE CHANGE: the relay advertises no maximum anywhere",
+      "evidence": "Read at source: createChallenge, pollMailbox, sendEnvelope, publishBundle and claimBundle (relayClient.ts:91-120) all parse closed, strict response schemas and none of them carries a size; there is no limits endpoint and no header the client reads. So a client cannot learn a maximum an operator raised on one relay. The only skew-free way to carry it is a new field on a small response that precedes the poll (the challenge response is the natural carrier, being bounded and already on the path) or a new limits route. Per the dispatch this is reported, not invented, and no such field appears in either new test.",
+      "impact": "If the flow decides 'every size must work', it is a protocol decision with a schema, a version and a compatibility story - not the bounded relay-internal fix the RI-09 inventory row still describes. Discovering that during implementation, after T8 already re-bucketed the row once, would be the second correction to the same row.",
+      "suggested_fix": "Decide explicitly at flow level. If a fixed protocol maximum is acceptable (recommended), no wire change is needed: derive from LIMITS.MAX_MESSAGE_BYTES and refuse a larger configured maximum at relay startup. If a per-deployment maximum is required, schedule the advertised-limit field as its own protocol change with its own tests; the two new client tests assert behaviour and survive it, with only the plumbing helper clientAtRaisedMaximum needing to be repointed.",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/transport/relayClient.ts:107-111 (createChallenge, the natural carrier for an advertised limit)",
+          "apps/cli/src/transport/relayClient.ts:112-116 (pollMailbox, the response being bounded - it cannot carry the bound itself)",
+          "apps/relay/internal/api/router/router.go:74 (where cfg.MaxMessageBytes enters the handler and stops)",
+          "apps/relay/internal/api/handler/mailbox_handler.go:67 (the poll budget that would have to be advertised)"
+        ],
+        "enumeration_method": "Every request/response pair the CLI has with the relay, read from RelayClient's five route methods and their closed schemas, checking each for any size-bearing field."
+      },
+      "reviewer": "tests-creator (003-T10)"
+    },
+    {
+      "id": "T10-F-003",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "apps/relay/internal/api/handler/mailbox_poll_capacity_test.go",
+      "line": 43,
+      "problem": "The likeliest false green: maxPollResponseBytes is a test constant that MIRRORS the client bound, and editing it alone makes the frozen relay test green while the defect survives",
+      "evidence": "The frozen T8 test compares the poll response against maxPollResponseBytes (mailbox_poll_capacity_test.go:43, `1 << 20`), whose own comment says it mirrors apps/cli/src/transport/relayClient.ts. Its answer (b) - refuse the send - is unsatisfiable, since TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes pins a 200 for the same route, same configured size and same envelope, so the only remaining answer is (a). Satisfying (a) requires that constant to move, because a 2 MiB envelope cannot fit in a 1 MiB response. It is a test constant outside the two protected tests, so editing it is permitted - and editing it WITHOUT moving the client's bound turns the relay suite green while every real recipient still refuses the batch.",
+      "impact": "RI-09 is recorded as closed on green Go tests while a raised ECHOLET_MAX_MESSAGE_BYTES still produces a silently undeliverable mailbox - the exact outcome the residual describes, now with a passing test standing over it.",
+      "suggested_fix": "When maxPollResponseBytes is made derived, derive it from the same rule the client uses and say so in its comment, and require the two new client tests to be green in the same change. Also worth pinning the startup refusal (Config.Validate refusing a maximum the deployment cannot carry) at whatever ceiling the implementer chooses: it is reconcilable - newMailboxHandlerWithMaxMessageBytes (mailbox_poll_capacity_test.go:328-342) calls NewMailboxHandler directly and never constructs a config.Config, so no handler test can be turned red by it - but this task did not pin it, because naming the ceiling first would hardcode a number the implementer has not chosen.",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/api/handler/mailbox_poll_capacity_test.go:43 (maxPollResponseBytes, the mirror)",
+          "apps/relay/internal/api/handler/mailbox_poll_byte_budget_derivation_test.go:121 (the frozen comparison against it)",
+          "apps/relay/internal/api/handler/mailbox_handler.go:67 (pollEnvelopeByteBudget, the relay-side number it mirrors)",
+          "apps/cli/src/transport/relayClient.ts:144 (the client-side number it claims to mirror)",
+          "apps/relay/internal/config/config.go:68-78 (Config.Validate, where a startup refusal would live)"
+        ],
+        "enumeration_method": "Read every use of maxPollResponseBytes and pollEnvelopeByteBudget in apps/relay via keryx ctx rg, then traced which of them is asserted on by the frozen test and which the implementer is free to edit."
+      },
+      "reviewer": "tests-creator (003-T10)"
+    }
+  ],
+  "questions": [
+    {
+      "id": "T10-Q-001",
+      "options": [
+        {
+          "id": "fixed-protocol-maximum",
+          "label": "Fixed protocol maximum plus a loud relay startup refusal; no wire change",
+          "recommended": true
+        },
+        {
+          "id": "advertised-maximum",
+          "label": "Relay advertises its configured maximum; schedule as a protocol change with its own tests"
+        },
+        {
+          "id": "per-client-config",
+          "label": "Per-client config field only (NOT recommended - see finding T10-F-001)"
+        }
+      ],
+      "can_be_resolved_by_agent": false,
+      "question": "Is a FIXED protocol maximum message size acceptable for Echolet (LIMITS.MAX_MESSAGE_BYTES as the single source of truth, with the relay refusing at startup any ECHOLET_MAX_MESSAGE_BYTES above it), or must an operator be able to raise the maximum per deployment?",
+      "why": "The second answer requires the relay to advertise its configured maximum on the wire - a protocol change - and cannot be closed inside this task's scope."
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_added": 2,
+    "test_files_added": 2,
+    "tests_red": 2,
+    "tests_green": 0,
+    "preexisting_transport_tests_still_green": 26,
+    "production_files_changed": 0
+  },
+  "timestamp_utc": "2026-09-07T22:41:41Z"
+}

@@ -1,0 +1,236 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T11-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "RI-09 closed on the product side with one shared maximum derived on both ends, no wire change. CLIENT: relayClient.ts's response bound is no longer the literal 1024*1024 - it is max(4*LIMITS.MAX_MESSAGE_BYTES, LIMITS.MAX_MESSAGE_BYTES + 64 KiB), read per instance from the shared protocol constant that until now was exported and consumed by nobody; at the shared 262144 the derivation yields the same 1 048 576, so no existing behaviour moves. sendEnvelope gained the send-side bound it never had: a ciphertext (or declared size_bytes) above the same maximum is refused locally and non-retryably as ENVELOPE_TOO_LARGE, measuring exactly what validation.ValidateMailboxEnvelope measures, so nothing reaches the wire that could not be polled back. RELAY: config.Validate() now refuses at startup an ECHOLET_MAX_MESSAGE_BYTES above the protocol maximum (and a negative one), on the precedent of the existing half-configured-TLS refusal; a lower value is still allowed, which is what makes the two sides agree at every setting. A new internal/protocol package holds the Go mirror of LIMITS.MAX_MESSAGE_BYTES, and handler.defaultMaxMessageBytes plus the poll byte budget now derive from it (4*protocol.MaxMessageBytes - wrapper = the same 1 MiB - 4 KiB), taking the hand-written copies of 262144 from four to two. RESULT: both new client tests GREEN; apps/cli 255/255 and every package green; pnpm typecheck exit 0; go test, -race and -race -tags relayv2 all show the SAME single failure and 0 data races. The Go test mailbox_poll_byte_budget_derivation_test.go REMAINS RED and was left red deliberately: its mirror constant maxPollResponseBytes lives in mailbox_poll_capacity_test.go (a _test.go file), the dispatch forbade editing it, and editing it would have been the named false green - the client's bound is 1 MiB at every setting, so a raised mirror would assert an acceptance that does not exist. Verified first-hand that no product-code change can make it green: clamping NewMailboxHandler's maxMsgBytes to the protocol maximum turns that test PASS and the frozen TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes FAIL (413 vs want 200); the clamp was reverted. The test now pins a configuration the relay refuses to start with. NO test file was changed - all four are shown byte-identical by SHA-256. A deployed relay still starts unless it exports ECHOLET_MAX_MESSAGE_BYTES above 262144 or below 0; nothing in the repo does, and geekom/depr were not contacted.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "relayClient.sizeSymmetry.test.ts passes",
+      "status": "met",
+      "evidence": "vitest src/transport: 8 files / 28 tests passed. The client takes answer (b): sendEnvelope refuses a 2 MiB ciphertext locally with a non-retryable RelayError and /v1/messages/send is never called (the test asserts the recorded paths do not contain it)."
+    },
+    {
+      "criterion": "relayClient.responseBoundDerivation.test.ts passes",
+      "status": "met",
+      "evidence": "Same run. With LIMITS.MAX_MESSAGE_BYTES mocked to 2 MiB the client accepts a 2 097 730-byte response carrying one maximum-size envelope and still refuses eight of them with INVALID_RELAY_RESPONSE, retryable=false; the bound is derived per instance from the mocked constant, not raised to a new literal."
+    },
+    {
+      "criterion": "mailbox_poll_byte_budget_derivation_test.go passes",
+      "status": "not_met",
+      "evidence": "Still RED, deliberately. Its comparison constant maxPollResponseBytes = 1 << 20 lives in mailbox_poll_capacity_test.go:43, a _test.go file the dispatch forbade editing. Proven first-hand that the alternative (clamping the handler's configured maximum) turns the frozen TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes red with 'status = 413, want 200'; exactly one of the two can be green. See finding T11-F-001."
+    },
+    {
+      "criterion": "No test file changed",
+      "status": "met",
+      "evidence": "git status --porcelain apps packages lists only 4 modified product files plus the new internal/protocol/ directory and T10's two untracked test files. Both Go test files hash identical to their HEAD blobs (d3ad8fa2..., 988c7c8d...); both new TS test files hash identical to the values recorded in 003-T10-tests-result.json (f4ab4430..., f0dad8b4...)."
+    },
+    {
+      "criterion": "No wire schema field and no limits endpoint added",
+      "status": "met",
+      "evidence": "The diff touches relayClient.ts, mailbox_handler.go, request_body.go, config.go, one new Go constants file and one docs file. No request or response schema, no route table and no handler registration changed; the client learns no size at runtime."
+    },
+    {
+      "criterion": "Nothing weakened, skipped, narrowed or deleted",
+      "status": "met",
+      "evidence": "All 26 pre-existing transport tests still green including the two pollCapacity cases that sit on either side of the bound (5 envelopes refused, 3 accepted); apps/cli 255/255; every Go package green except the single known failure; the strict schemas are untouched and TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes passes."
+    },
+    {
+      "criterion": "Startup refusal cannot turn the frozen handler tests red",
+      "status": "met",
+      "evidence": "Verified by reading (newMailboxHandlerWithMaxMessageBytes and newRaisedMaxMessageBytesHarness both call NewMailboxHandler directly and never construct a config.Config) and empirically: internal/config and internal/server are green and no handler test other than the known one fails."
+    },
+    {
+      "criterion": "Full matrix including -race and -race -tags relayv2",
+      "status": "met",
+      "evidence": "go test ./..., go test -race ./... and go test -race -tags relayv2 ./... each report the same single failure; a scan of both race runs for the string DATA RACE returns 0 occurrences. gofmt clean on every touched file, go vet clean, pnpm typecheck exit 0."
+    },
+    {
+      "criterion": "No secret, key, plaintext or request body printed or recorded",
+      "status": "met",
+      "evidence": "Only byte counts, status codes, error codes, envelope identifiers and file hashes appear in the report, this result and every command run."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t11-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "The change, the first-hand proof that the Go test cannot be made green in product code, every test file shown unchanged by SHA-256, the deployed-relay startup answer and five residuals.",
+      "hash": "sha256:d24cee909834f7b8e53d25dc707ae812d3887ec8019bc9a8210df56dbf8236b8"
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.ts",
+      "kind": "diff",
+      "exists": true,
+      "summary": "Response bound derived from LIMITS.MAX_MESSAGE_BYTES; send-side ENVELOPE_TOO_LARGE refusal added.",
+      "hash": "sha256:d7daac897417c1cf2b713b43a82293f95897ba99d0a00a00be6834d66381fc1d"
+    },
+    {
+      "path": "apps/relay/internal/protocol/limits.go",
+      "kind": "diff",
+      "exists": true,
+      "summary": "New: the Go mirror of LIMITS.MAX_MESSAGE_BYTES, documented as a protocol constant and a ceiling rather than a deployment setting.",
+      "hash": "sha256:0225c19e58269d93d99961dc1a190cf8bc0d65fd1e03d420f602bceab835af83"
+    },
+    {
+      "path": "apps/relay/internal/config/config.go",
+      "kind": "diff",
+      "exists": true,
+      "summary": "Validate() refuses a configured maximum above the protocol maximum, and a negative one.",
+      "hash": "sha256:540ba7d1bbd3e57aba9c2d27580a83e81865132d5ccf772d56de86449699c9db"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "kind": "diff",
+      "exists": true,
+      "summary": "Poll byte budget written as the derivation it always was: 4*protocol.MaxMessageBytes - wrapper. Numerically unchanged.",
+      "hash": "sha256:974d99d921add51765c5e118514b0b9964f20de6c2a5a0deee3d057df343a25a"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/request_body.go",
+      "kind": "diff",
+      "exists": true,
+      "summary": "defaultMaxMessageBytes now reads the shared Go constant instead of a hand-written 262144.",
+      "hash": "sha256:24efbb058f5fa4157fd7dc9c2096a6cc393a45d93c9a0818d0adddd6bb16d87a"
+    },
+    {
+      "path": "docs/OPS-23_LOCAL_ENV_VARS.md",
+      "kind": "diff",
+      "exists": true,
+      "summary": "ECHOLET_MAX_MESSAGE_BYTES documented as bounded above by a protocol constant, with the startup refusal named.",
+      "hash": "sha256:1c7fa3b5714f1880e3e427adf2247bc0291084b808c4870fcbd13c9026ecdbe2"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/transport/relayClient.ts",
+      "change": "modified - response bound derived from LIMITS.MAX_MESSAGE_BYTES (max(4*max, max+64KiB), the same 1 MiB at the shared 262144) replacing the literal 1024*1024; new local non-retryable ENVELOPE_TOO_LARGE refusal in sendEnvelope measuring ciphertext bytes and size_bytes"
+    },
+    {
+      "path": "apps/relay/internal/protocol/limits.go",
+      "change": "added - package protocol with MaxMessageBytes = 262144, the Go mirror of LIMITS.MAX_MESSAGE_BYTES"
+    },
+    {
+      "path": "apps/relay/internal/config/config.go",
+      "change": "modified - Validate() refuses ECHOLET_MAX_MESSAGE_BYTES above protocol.MaxMessageBytes and refuses a negative value; zero left alone because it is the zero-value Config the server package builds"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "change": "modified - pollEnvelopeByteBudget now derived from clientPollResponseBound = 4*protocol.MaxMessageBytes; numerically identical to the previous (1<<20) - 4 KiB"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/request_body.go",
+      "change": "modified - defaultMaxMessageBytes now = protocol.MaxMessageBytes instead of a hand-written 262144"
+    },
+    {
+      "path": "docs/OPS-23_LOCAL_ENV_VARS.md",
+      "change": "modified - ECHOLET_MAX_MESSAGE_BYTES documented as capped by the protocol constant, with the startup refusal"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T11-F-001",
+      "global_id": "003-T11-implement#T11-F-001",
+      "reviewer": "task-implementer",
+      "severity": "major",
+      "confidence": "high",
+      "file": "apps/relay/internal/api/handler/mailbox_poll_byte_budget_derivation_test.go",
+      "line": 77,
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/api/handler/mailbox_poll_byte_budget_derivation_test.go:75 (raisedPollMaxMessageBytes = 2 << 20, the configuration that can no longer start)",
+          "apps/relay/internal/api/handler/mailbox_poll_byte_budget_derivation_test.go:121 (the comparison against maxPollResponseBytes)",
+          "apps/relay/internal/api/handler/mailbox_poll_capacity_test.go:43 (maxPollResponseBytes = 1 << 20, the mirror constant, deliberately NOT edited)",
+          "apps/relay/internal/api/handler/mailbox_poll_capacity_test.go:202 (configuredMaxMessageBytes = 2 << 20 in the frozen TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes - the same configuration, asserting the opposite outcome)"
+        ],
+        "enumeration_method": "keryx ctx rg for MaxMessageBytes|MAX_MESSAGE_BYTES over apps, packages, docs and jobs, and for pollEnvelopeByteBudget|maxPollResponseBytes|pollResponseWrapperBytes|defaultMaxMessageBytes|envelopeJSONOverheadBytes over apps/relay: those searches return every site in the repository that names the maximum message size or a bound derived from it. The four above are the complete set of test-side sites that hard-code a maximum ABOVE the protocol maximum or compare against the client's bound; every other match is either product code changed by this task or prose."
+      },
+      "problem": "The frozen T8 test pins a relay configuration that, after this change, cannot start - so it stays red and cannot be made green by product code without breaking TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes",
+      "impact": "RI-09 is closed in the product but the Go suite stays red, so the flow cannot record it as closed on a green suite. The tempting shortcut - raising maxPollResponseBytes in mailbox_poll_capacity_test.go - would produce a green suite asserting a client acceptance that does not exist at any setting, which is the exact false green the dispatch named.",
+      "suggested_fix": "Re-author or retire the test as a test-authoring decision: either drive it at a configured maximum at or below the protocol maximum (where it becomes a true statement about a startable relay), or restate it against config.Validate() refusing the 2 MiB configuration. Do not raise the mirror constant on its own.",
+      "evidence": "Measured first-hand. Clamping NewMailboxHandler's maxMsgBytes to protocol.MaxMessageBytes out of tree: TestMaximumSizeEnvelopeIsDeliverableAtRaisedMaxMessageBytes PASS (413 PAYLOAD_TOO_LARGE, nothing stored - its answer (b) branch), TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes FAIL 'status = 413, want 200'. Clamp reverted. Without the clamp the poll answers 2 097 917 bytes against the mirror's 1 048 576. The test builds its handler through newRaisedMaxMessageBytesHarness, which calls NewMailboxHandler directly and never constructs a config.Config, so config.Validate's new refusal is invisible to it."
+    },
+    {
+      "id": "T11-F-002",
+      "global_id": "003-T11-implement#T11-F-002",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 380,
+      "problem": "A local ENVELOPE_TOO_LARGE refusal is reported to the operator as PROTOCOL_REJECTED, a trust-shaped diagnosis for a purely local size decision",
+      "impact": "If it were reachable, an operator would be told the relay rejected their message when in fact their own client declined to send it. It is not reachable through the CLI's own commands today, so the cost is a misleading message on a safety net rather than a live defect.",
+      "suggested_fix": "Give classify() a distinct branch for locally-decided RelayError codes, or raise the local refusal as an OutboundError-shaped input failure. Both are cli.ts/runtime surface and were out of this task's scope.",
+      "evidence": "classify() maps a non-retryable RelayError with no remoteCode to trustFailure('PROTOCOL_REJECTED') (cli.ts:380-384). outbound.ts bounds plaintext at 65536 bytes (outbound.ts:22,46), whose base64url ciphertext is roughly 90 KiB against the 262144 maximum, so no CLI command can currently produce an oversized envelope."
+    },
+    {
+      "id": "T11-F-003",
+      "global_id": "003-T11-implement#T11-F-003",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "apps/relay/internal/config/config.go",
+      "line": 99,
+      "problem": "ECHOLET_MAX_MESSAGE_BYTES=0 set explicitly still passes validation and makes the relay accept nothing",
+      "impact": "The relay comes up healthy and answers every legitimate send with PAYLOAD_TOO_LARGE, because ValidateMailboxEnvelope compares against 0 while envelopeBodyLimit falls back to the default. The same silent-swallow shape RI-09 describes, from a different value.",
+      "suggested_fix": "Refuse a non-positive value in Validate() and give internal/server's test harness a Config with a configured maximum. That is a test change, so it was deliberately not made here.",
+      "evidence": "Refusing a non-positive value was tried first and turned six internal/server tests red ('ECHOLET_MAX_MESSAGE_BYTES must be positive, got 0'), because server_test.go's base(t) builds config.Config{HTTPAddr: ..., TLSReloadIntervalSeconds: 60} with the field unset. The refusal was narrowed to negative-only rather than the tests adjusted."
+    },
+    {
+      "id": "T11-F-004",
+      "global_id": "003-T11-implement#T11-F-004",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "confidence": "high",
+      "file": "apps/relay/internal/config/config.go",
+      "line": 105,
+      "problem": "A deployed relay that exports ECHOLET_MAX_MESSAGE_BYTES above 262144 will fail to start on its next restart",
+      "impact": "Operational, and it affects the live relays on geekom and depr, which were not contacted or inspected by this task. A running process is unaffected until restarted, because Validate() runs at Load(); the failure is loud and names the value, the ceiling and what to configure instead. This is the intended trade against a silently undeliverable mailbox.",
+      "suggested_fix": "Check the environment or unit file on both hosts before the next restart. Nothing in the repository sets the variable above the default (docs/OPS-23 and its sample .env.local both use 262144), so no change is expected to be needed.",
+      "evidence": "config.Validate() now returns an error for MaxMessageBytes > protocol.MaxMessageBytes. Every other configuration, including an unset variable (envDefault 262144) and any lower value, starts exactly as before; internal/server and internal/config test suites are green."
+    }
+  ],
+  "questions": [
+    {
+      "id": "T11-Q-001",
+      "question": "How should mailbox_poll_byte_budget_derivation_test.go be re-authored now that a relay at ECHOLET_MAX_MESSAGE_BYTES = 2 MiB cannot start: drive it at a configured maximum within the protocol maximum, or restate it against config.Validate() refusing that configuration?",
+      "why": "It is the one remaining red test, and it can only be closed by a test-file change. This task was told to report rather than edit test files, and raising the mirror constant on its own is the named false green.",
+      "options": [
+        {
+          "id": "a",
+          "label": "Re-author it at a configured maximum at or below protocol.MaxMessageBytes, so it pins a startable relay's round trip",
+          "recommended": true
+        },
+        {
+          "id": "b",
+          "label": "Restate it as a config.Validate() test: the 2 MiB configuration is refused at startup"
+        },
+        {
+          "id": "c",
+          "label": "Retire it and record RI-09 as closed by the client derivation plus the startup refusal"
+        }
+      ],
+      "can_be_resolved_by_agent": "no - it requires changing a test file, which this dispatch forbade"
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "production_files_changed": 6,
+    "test_files_changed": 0,
+    "cli_tests_passed": 255,
+    "cli_tests_total": 255,
+    "go_test_failures": 1,
+    "data_races_race": 0,
+    "data_races_race_relayv2": 0,
+    "typecheck_exit": 0,
+    "target_tests_green": 2,
+    "target_tests_red": 1
+  },
+  "timestamp_utc": "2026-09-07T23:07:18Z"
+}

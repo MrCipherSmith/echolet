@@ -9,7 +9,7 @@
   "title": "Echolet: close the recorded residuals and make the operator TUI usable",
   "status": "in-progress",
   "createdAt": "2026-09-07T19:26:13.895Z",
-  "updatedAt": "2026-09-07T22:15:24.679Z",
+  "updatedAt": "2026-09-07T23:23:38.263Z",
   "source": {
     "type": "description",
     "ref": null
@@ -204,7 +204,7 @@
       "id": "T10",
       "title": "RED tests for the two-sided max-message-size derivation (RI-09)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -218,21 +218,31 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Two client-side RED tests plus an analysis that located every limit. Established: the relay's maximum is per-deployment and unbounded above, never checked by Config.Validate(); the client's is a compiled-in literal unreachable from configuration, and the client applies NO send-side bound at all, so it will post a ciphertext it then refuses to read back; a shared protocol constant already exists and is used nowhere, with the same value hand-written in four places, so consuming it removes duplication rather than adding coupling; and the relay advertises no maximum on any route. Neither test can be passed by moving a literal: one asserts only that the client's two size opinions agree, the other that one max-size envelope is accepted AND eight are still refused. The agent also warned that the frozen Go test compares against a mirror constant the implementer may edit, which is the likeliest false green here."
     },
     {
       "id": "T11",
       "title": "Implement the two-sided max-message-size derivation (RI-09)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T22:44:29.779Z",
+            "outcome": "started",
+            "detail": "003-T11-size-derivation-implement"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Both client tests green, the Go test deliberately still red, and the agent proved by measurement that no product-code change can close both: clamping the handler's maximum makes the frozen acceptance test fail with 413 where it wants 200, so exactly one can be green and the frozen one wins. It did NOT edit the mirror constant, both because it lives in a test file and because doing so would assert an acceptance that does not exist - the false green I warned about. The protocol constant now has consumers on both sides; hand-written copies went from four to two. apps/cli 255/255, typecheck 0, Go untagged and both race configurations each with only that one failure and 0 data races. Operational check by the orchestrator: both live relays set the variable to exactly the protocol maximum, so neither would be refused at its next restart."
     },
     {
       "id": "T12",
@@ -395,6 +405,48 @@
             "at": "2026-09-07T22:15:24.679Z",
             "outcome": "started",
             "detail": "003-T20-publish-before-send-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T21",
+      "title": "Re-author the poll-budget test: pin deliverability at the protocol maximum, not at a refused configuration",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T23:08:45.980Z",
+            "outcome": "started",
+            "detail": "003-T21-reauthor-poll-budget-test"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Re-authored in place; the file and its RI-09 provenance stay, the test NAME is retired because it named exactly the premise the design decision invalidated, and both files carry the retired name in their headers so the history reads from the code. One red test became five green tests over ten sub-cases, and nothing was dropped: the replacement removes the old permissive or-refused branch, keeps the bound and delivery assertions, adds a stored-count assertion, and runs at three configurations instead of one. Every case first passes its maximum through the real Validate(), so the test cannot drift back into asserting a relay that does not start. No size is a literal anywhere, and non-vacuity was proved by two out-of-tree mutations: widening the derived bound fails the guard, and doubling the protocol constant leaves deliverability green while three other assertions fail by name - so the tests track the relationship rather than the number. The mirror constant was not touched; instead it is now a checked derivation in place, because it already equals the client's rule. Verified by the orchestrator: go test -race -tags relayv2 exit 0, nine packages ok, 0 data races."
+    },
+    {
+      "id": "T22",
+      "title": "Refuse a zero maximum message size, and correct the fixtures that build a zero-value config",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T23:23:38.263Z",
+            "outcome": "started",
+            "detail": "003-T22-zero-max-refusal"
           }
         ]
       },
@@ -631,6 +683,46 @@
       "at": "2026-09-07T22:15:24.679Z",
       "event": "task-attempt",
       "detail": "T20: started (attempt 1) — 003-T20-publish-before-send-implement"
+    },
+    {
+      "at": "2026-09-07T22:44:29.684Z",
+      "event": "task-done",
+      "detail": "T10: RED tests for the two-sided max-message-size derivation (RI-09)"
+    },
+    {
+      "at": "2026-09-07T22:44:29.779Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 003-T11-size-derivation-implement"
+    },
+    {
+      "at": "2026-09-07T23:08:40.306Z",
+      "event": "task-done",
+      "detail": "T11: Implement the two-sided max-message-size derivation (RI-09)"
+    },
+    {
+      "at": "2026-09-07T23:08:40.395Z",
+      "event": "task-added",
+      "detail": "T21: Re-author the poll-budget test: pin deliverability at the protocol maximum, not at a refused configuration"
+    },
+    {
+      "at": "2026-09-07T23:08:40.483Z",
+      "event": "task-added",
+      "detail": "T22: Refuse a zero maximum message size, and correct the fixtures that build a zero-value config"
+    },
+    {
+      "at": "2026-09-07T23:08:45.980Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 003-T21-reauthor-poll-budget-test"
+    },
+    {
+      "at": "2026-09-07T23:23:38.181Z",
+      "event": "task-done",
+      "detail": "T21: Re-author the poll-budget test: pin deliverability at the protocol maximum, not at a refused configuration"
+    },
+    {
+      "at": "2026-09-07T23:23:38.263Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 003-T22-zero-max-refusal"
     }
   ]
 }
