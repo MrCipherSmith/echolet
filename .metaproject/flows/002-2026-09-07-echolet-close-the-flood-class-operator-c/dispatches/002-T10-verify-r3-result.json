@@ -1,0 +1,179 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T10-verify-r3",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent re-verification of flow 002 on c302485. Nothing credited from earlier attempts. T10R3-F-001 is CLOSED by measurement: 32 completed interruption configurations (SIGINT and SIGKILL; inside the page request at pages 1/3/5/16, inside accept(), between the last page's commits and finishMailboxRewalk(), and inside ackPending() with the ack both dropped and applied upstream) across two ciphertext regimes - 4-byte and 261000-byte, the latter at 3 envelopes per page so the re-walk crosses the 16-page valve - lost ZERO messages. There is no first configuration at which a message is still lost. The T6-F-004 trap was not taken: in all 32 runs, 0 pages served after a completed re-walk began again at poison index 0, three ordinary polls cost 3-4 pages, and history stayed at exactly 1. The relay's AdvanceReadMark is monotone, so a head re-walk cannot rewind the durable mark either. I did not accept the suite's greenness: reverting ONLY the four fixed source files to 624ea47 while leaving every test at c302485 makes rewalk-crash-safety fail 3 of 4 (the T6-F-004 guard passing both before and after, as a guard should), relayClient.loopbackHostname fail 4 of 10 on exactly 127.evil.example, and the ack-oracle test fail - a genuine RED->GREEN. T10R3-F-002 is CLOSED: an unverified caller holding a genuine contact card distinguishes exactly 1 answer (403/INVALID_SIGNATURE) across read_through from 0 to 10^15, and the binary search recovers nothing; the same probe against the pre-T16 relay distinguishes 2 answers and recovers the exact lifetime count, which is the control proving the probe works. T10R3-F-003 is CLOSED: 19-URL corpus through the real dist/cli.js, no non-loopback host admitted, genuine loopback still working. AC5 demonstrated on the live console (store key never emitted; every base64url run in the frames explained as public card material or the profile path; all five surfaces present; the TUI imports only node:child_process/path/url and its own siblings). AC6 found in live frames. Full matrix green: typecheck 0; pnpm test 0 with 50 files and 293 tests; e2e 0 with 3 tests; go untagged, -race, and -race -tags relayv2 all exit 0 with 8 packages ok and 0 data races. Tracked-tree SHA-256 identical before and after. Two concerns: AC4's different-machine half is unestablishable from loopback and is reported partial, and the criterion that T15's tests be shown unchanged by T16 is unsatisfiable because both landed in the same commit with no digests recorded - I substituted the RED replay, which tests the property that criterion protects.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC1: The flooding closure is chosen by a written design task that names what it closes, what it does not close, and why the alternatives were rejected.",
+      "status": "met",
+      "evidence": "t5-flood-closure-design.md: §3 (C4-1/C4-2/C4-3 and 'Why this closes the class'), §4 ('What it does not close - predicted before implementation, with how to measure'), §6 (candidate 1 mailbox-proportional walk alone, candidate 2 proof-of-work on publish, candidate 3 recipient authorisation, each with its rejection reason). §2 reports candidate 1 as 'a bound, not a closure - measured'."
+    },
+    {
+      "criterion": "AC2: The 4-identity / 49-max-size-envelope probe no longer prevents delivery, and the new attacker cost is measured and stated; a bound is reported as a bound.",
+      "status": "met",
+      "evidence": "Re-measured on this tree with Bob already trusting Carol (the wedge path). Attacker: 4 self-published identities, 49 maximum-size envelopes stored, 12.23 MB uploaded, 53 requests. Recipient: message DELIVERED in 2 polls / 17 pages, exit codes [3, 0]. Three ordinary polls afterwards cost 4 pages; history stays 1. Reported explicitly as a BOUND: the attacker can still enqueue for 53 unauthenticated requests and the recipient still pays a one-time 17-page walk; what is closed is the amplification across polls that made the wedge permanent."
+    },
+    {
+      "criterion": "AC3: Two-party exchange, offline delivery, byte-identical exact retry and deduplication still pass, with no pre-existing test weakened, skipped or deleted.",
+      "status": "met",
+      "evidence": "two-process.test.ts 3/3 green. Full suite 293/293. Zero it.skip/describe.skip/test.skip/it.todo/.only/xit/xdescribe in TypeScript and zero t.Skip in Go. T16 deleted 12 lines across two pre-existing test files; all were read. The material one, flood-closure RED-4's 'the resuming poll must be cursorless', was REPLACED by an assertion on the envelopes the resuming walk is offered (mechanism-independent, strictly stronger), a helper pinning the half of the original that still holds, and the file gained a test (5 -> 6). mailbox_read_mark_test.go kept all 4 test functions. The removal was necessary: any crash-safe re-walk makes that poll cursored, so the old line could only hold while the bug was present."
+    },
+    {
+      "criterion": "AC4: A relay on a non-loopback address serves HTTPS and the CLI completes the acceptance scenario against it from a different machine.",
+      "status": "partial",
+      "evidence": "HTTPS half verified: relay-tls.test.ts passes 3/3 against the real relay binary. The 'different machine' half cannot be established from loopback, and the dispatch forbids touching geekom and depr and forbids opening any non-loopback listener. Reported as partial for that reason - not as met, not as failed."
+    },
+    {
+      "criterion": "AC5: The operator console drives a local CLI, shows profiles, queues, history, rejections and relay health, and never receives, stores or transmits key material, demonstrated by evidence.",
+      "status": "met",
+      "evidence": "Structural: every non-test module under src/tui/ imports only node:child_process, node:path, node:url and its own siblings - it never imports the profile, store or crypto layer, and drives the CLI via spawn with the environment inherited wholesale and never inspected. Runtime: 10931 bytes of live console output captured across doctor/poll/history/pane-cycling; the store key never appears (only the env-var NAME). Token audit: 5 maximal base64url runs of >=20 chars, 4 public contact-card material and 1 the profile directory path - zero unexplained. All five surfaces present in the rendered frames and as state types. A first-pass 'unknown 43-char token' was my own regex splitting a 44-char PUBLIC Signal identity key; corrected by matching maximal runs."
+    },
+    {
+      "criterion": "AC6: The console displays, on its own surface, that this is an unaudited prototype not suitable for sensitive communication.",
+      "status": "met",
+      "evidence": "'UNAUDITED PROTOTYPE - not suitable for sensitive communication' found in the live captured frames, both halves matched independently. Emitted by shell-chrome.ts on every frame, every pane, behind any modal."
+    },
+    {
+      "criterion": "T10R3-F-001 is closed: interrupt a recovery poll with SIGINT and SIGKILL at several points and at maximum ciphertext size; state the first configuration at which a message is still lost.",
+      "status": "met",
+      "evidence": "32 completed configurations, ZERO lost messages: there is no such first configuration. Points swept: inside the page request at pages 1, 3, 5 and 16 (the valve boundary); inside accept() at pages 4, 5 and 16; between the last page's commits and finishMailboxRewalk(); inside ackPending() with the ack dropped and with the ack applied upstream but its response never seen. Regimes: 4-byte ciphertext (50/page) and 261000-byte ciphertext (3/page, so the re-walk needs 18 pages and crosses the 16-page valve). Every run: delivered=1, finalHistory=1, and the signal confirmed as the actual cause of death. max/page-1 needed 2 polls and 17 pages, showing the position carried across the valve. small/accept-5 confirms a part-way judgement re-offers its page rather than skipping it."
+    },
+    {
+      "criterion": "The T6-F-004 property still holds by measurement: a completed re-walk is not repeated, later polls do not restart at the head, and three ordinary polls stay bounded.",
+      "status": "met",
+      "evidence": "In all 32 configurations: 0 pages served after the completed re-walk began again at poison index 0; three ordinary polls cost 3-4 pages against mailboxes whose full walk costs 7 (small) or 21 (max) pages; history stayed exactly 1. Independently, the relay cannot reinstate the class either: MailboxRepository.AdvanceReadMark (mailbox_repo.go:797) refuses any position at or below the current one, so the low read_through values a head re-walk reports cannot rewind the durable mark."
+    },
+    {
+      "criterion": "T10R3-F-002 is closed: the lifetime envelope count is not answerable on the ack route to a caller whose signature does not verify; report how many distinct answers it can distinguish.",
+      "status": "met",
+      "evidence": "Re-ran the binary search in its strongest form (caller holds the victim's genuine contact card, so it knows mailbox_id and a real device_id; only the signature is not one). On this tree: exactly 1 distinct answer, 403/INVALID_SIGNATURE, for read_through absent, 0, 1, 2, 5, 10, 20, 30, 35, 36, 37, 38, 39, 40, 50, 100, 1000, 100000 and 10^15; a 50-step binary search recovers nothing and converges on the search ceiling. CONTROL against the pre-T16 relay: 2 distinct answers, flipping between 10 and 20, and the binary search recovers the exact lifetime count (16). The control is what makes the negative result meaningful. Structurally, shape precedes authorisation and readThroughWithinIssued follows VerifyMessageSignature on both routes (poll 500/540/553, ack 691/710/736)."
+    },
+    {
+      "criterion": "T10R3-F-003 is closed: RelayClient and parseClientConfig agree on every URL, including hostnames a /^127\\./ prefix rule wrongly admits, and genuine loopback still works.",
+      "status": "met",
+      "evidence": "Both now import one isLoopbackHostname from apps/cli/src/transport/loopback.ts, so they cannot disagree by construction. 19-URL adversarial corpus through the real dist/cli.js init: 127.evil.example, 127.0.0.1.evil.example and 127.example.com:8081 all refused (exit 2 INVALID_CONFIGURATION), as are evil.example, a path, credentials, a fragment and a query. Genuine loopback still admitted, including 127.1, 0177.0.0.1, 2130706433 and the trailing-dot form, which the WHATWG parser normalises to 127.0.0.1 before the predicate sees them. No non-loopback host is admitted as loopback."
+    },
+    {
+      "criterion": "The full matrix is re-run on this tree: pnpm typecheck, pnpm test, pnpm --filter @echolet/cli test:e2e, and go test ./... untagged, with -race and with -race -tags relayv2. Report exact counts, exit codes and data-race counts.",
+      "status": "met",
+      "evidence": "All on Node v26.5.0 (the default non-login interpreter; bash -lc's v22.12.0 was avoided). pnpm typecheck exit 0, 7 packages. pnpm test exit 0: 50 test files, 293 tests, 293 passed, 0 failed (protocol 3/12, client-db 1/1, crypto-core 4/20, client-core 2/2, session-node 3/24, mobile 1/6, cli 36/228). pnpm --filter @echolet/cli test:e2e exit 0: 1 file, 3 tests. go test ./... exit 0, 8 packages ok, 87 test functions, 0 data races. -race exit 0, 8 ok, 0 data races. -race -tags relayv2 exit 0, 8 ok, 92 test functions, 0 data races. Zero FAIL lines and zero DATA RACE reports in all three Go runs."
+    },
+    {
+      "criterion": "Repository integrity is verified by SHA-256, and every test file T15 wrote or touched is shown unchanged by T16.",
+      "status": "partial",
+      "evidence": "Integrity: MET. SHA-256 over all 908 tracked files is 9b4698bb1a99f35502a76b78ac6d5742956db25b390ea4d7bffff16d19be7fce identically at the start and end of the run, working tree clean both times; dist/cli.js rebuilds byte-for-byte to 9f0dd98b..., proving the shipped bundle is this source. Integrity was checked by digest only, never mtime. The second half is NOT SATISFIABLE and is finding T10R3V-F-001: T15's tests and T16's implementation landed in the SAME commit c302485, and 002-T15-tests-result.json records no digests, so there is nothing to diff against. I substituted a RED replay (revert only the four fixed source files to 624ea47, keep every test at c302485): rewalk-crash-safety fails 3 of 4 with the T6-F-004 guard still passing, relayClient.loopbackHostname fails 4 of 10, and the ack-oracle test fails. That establishes the tests were not rewritten to fit the fix, but it is not the same check."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t10-verification-report-r3.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full measurements and AC1..AC6 judgements for this attempt: the 32-configuration crash sweep, the RED replay, the ack-oracle binary search with its pre-T16 control, the loopback URL corpus, the AC2 wedge cost, the live console evidence and the full matrix.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T10-verify-r3-result.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "This result document.",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "T10R3V-F-001",
+      "global_id": "002-T10-verify-r3#T10R3V-F-001",
+      "reviewer": "independent-verifier",
+      "severity": "major",
+      "problem": "The acceptance criterion 'every test file T15 wrote or touched is shown unchanged by T16' cannot be satisfied from the record. T15's RED tests and T16's implementation were committed together in c302485: the same commit adds rewalk-crash-safety.test.ts (+640), relayClient.loopbackHostname.test.ts (+119) and mailbox_ack_read_position_oracle_test.go (+202) alongside the source changes they are red against. 002-T15-tests-result.json records no SHA-256 for any test file.",
+      "impact": "The separation between 'the tests that define the fix' and 'the fix' is unauditable for this task. Neither git history nor a recorded digest can distinguish tests T15 wrote from tests T16 shaped to pass, which is precisely the failure mode this flow has already hit twice (RED-4's cursorless assertion, and the ack-range helper that never produced a verifying signature). The verdict for this criterion is partial, not met.",
+      "suggested_fix": "Land RED tests in their own commit, before the implementation commit, and record a SHA-256 per test file in the tests-phase result document so a later verifier can check the fix did not move them. For this task, treat the RED replay in §1 of the report as the substitute evidence.",
+      "evidence": "`git show --stat c302485` shows tests and implementation in one commit. `rg sha256` over 002-T15-tests-result.json returns no matches. Substitute check performed: reverting only apps/cli/src/runtime/{inbound,profile}.ts, apps/cli/src/transport/relayClient.ts and apps/relay/internal/api/handler/mailbox_handler.go to 624ea47 while leaving every test at c302485 makes rewalk-crash-safety fail 3 of 4 (guard 4 still passing), relayClient.loopbackHostname fail 4 of 10, and TestAckDoesNotAnswerTheMailboxEnvelopeCountToAnUnverifiedCaller fail.",
+      "class_scope": {
+        "sites": [
+          "c302485 - 5 test files and 6 implementation files in one commit (T15 RED tests + T16 fix); the site this finding is anchored to",
+          "0e87e31 - 6 test files and 9 implementation files in one commit (relay TLS listener)",
+          "c36d5c9 - 14 test files and 22 implementation files in one commit (flood-class closure and operator TUI)"
+        ],
+        "enumeration_method": "For each of the five commits in this flow, `git show --name-only --format= <sha>` was partitioned into paths matching /(\\.test\\.ts|_test\\.go)$/ and other paths under apps/ or packages/. Commits carrying both a nonzero test count and a nonzero source count are listed. The set is exhaustive over the flow because it covers every commit reachable from HEAD in this flow's history. 624ea47 (0 test files, 4 source files) and e9f0da7 (docs only) do not carry the shape. Note that the habit is flow-wide rather than specific to T16: for 3 of the 5 commits, whether the tests were shaped to fit the fix cannot be checked from history."
+      },
+      "confidence": "high"
+    },
+    {
+      "id": "T10R3V-F-002",
+      "global_id": "002-T10-verify-r3#T10R3V-F-002",
+      "reviewer": "independent-verifier",
+      "severity": "minor",
+      "problem": "apps/relay/relay is an untracked binary in the working tree that corresponds to no commit in this flow. It hashes 08e33e83..., while a fresh build of HEAD produces 144b544f... and a fresh build of 624ea47 produces 19917dd8.... Both fresh builds reproduce across different output paths, so the difference is not build nondeterminism.",
+      "impact": "Anyone who runs apps/relay/relay directly - including a previous verification attempt, or a reader following the runbook - measures relay code of unknown provenance while believing they are exercising the tree under test. Evidence gathered that way cannot be tied to a commit.",
+      "suggested_fix": "Add apps/relay/relay to .gitignore and build to a temporary path, which is what the e2e suites already do (rewalk-crash-safety.test.ts builds to a mkdtemp directory). Do not leave a build output at a stable in-tree path.",
+      "evidence": "shasum -a 256 apps/relay/relay -> 08e33e83...; go -C apps/relay build -o <tmp>/relay-fresh ./cmd/relay -> 144b544f...; the same build written to apps/relay/relay also yields 144b544f..., and a build from the 624ea47 worktree yields 19917dd8.... The verifier restored the original file bit-for-bit and used its own HEAD build for every measurement; the tracked-tree digest is unchanged.",
+      "confidence": "high"
+    },
+    {
+      "id": "T10R3V-F-003",
+      "global_id": "002-T10-verify-r3#T10R3V-F-003",
+      "reviewer": "independent-verifier",
+      "severity": "info",
+      "problem": "inbound.ts:159 and profile.ts:176 state that an ordinary poll leaves the encrypted store byte-identical (F-012 / T6-F-005). Measured by SHA-256 over the profile directory, an ordinary poll on an empty mailbox does change the bytes - but so do doctor and history, which write nothing, and the file sizes are stable (client.sqlite 32768, config.json 252).",
+      "impact": "None behavioural. The churn is encrypted-SQLite bookkeeping, is pre-existing, and is not a T16 regression; the property that matters (an ordinary poll does not write the re-walk key) is confirmed by 32 runs with zero post-completion head restarts. Recorded only so the comment is not later relied on as a byte-level guarantee it does not have - a future verifier hashing the store file to check F-012 would get a false positive.",
+      "suggested_fix": "Reword the comments to say an ordinary poll writes no KEY to the store, and if a byte-level property is wanted, assert it over the decrypted key set rather than the file.",
+      "evidence": "Profile-directory SHA-256 measured around each command: ordinary poll changes it, second ordinary poll changes it, and the read-only control commands doctor and history change it too. File sizes identical before and after another poll.",
+      "confidence": "high"
+    },
+    {
+      "id": "T10R3V-F-004",
+      "global_id": "002-T10-verify-r3#T10R3V-F-004",
+      "reviewer": "independent-verifier",
+      "severity": "info",
+      "problem": "isLoopbackHostname refuses http://[::ffff:127.0.0.1]/, because the WHATWG URL parser normalises it to [::ffff:7f00:1], which the regex does not match.",
+      "impact": "None to security: this is the safe direction, a genuine loopback address refused rather than a remote host admitted, and it is consistent with the deliberate decision to converge on the stricter of the two original rules. An operator who writes the IPv4-mapped form gets INVALID_CONFIGURATION with a message about HTTPS or loopback.",
+      "suggested_fix": "Optional. If accepted, match the mapped form explicitly; otherwise record it in loopback.ts's comment alongside the forms that are accepted, so the omission reads as chosen rather than overlooked.",
+      "evidence": "http://[::ffff:127.0.0.1]/ exits 2 INVALID_CONFIGURATION through the real dist/cli.js init, while 127.0.0.1, 127.9.9.9, localhost, [::1], 127.1, 0177.0.0.1, 2130706433 and 127.0.0.1. all exit 0.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "AC4's 'different machine' half is unestablishable under this dispatch's constraints. Should it be re-dispatched with the remote hosts in scope, or accepted as a standing partial for this flow?",
+      "why": "The HTTPS half is verified on loopback, but 'the CLI completes the full acceptance scenario against it from a different machine' cannot be observed without either touching geekom/depr or opening a non-loopback listener, both of which this dispatch forbids. Leaving it as an unqualified 'partial' means no attempt of T10 can ever fully meet AC4.",
+      "options": [
+        {
+          "id": "redispatch",
+          "label": "Re-dispatch the AC4 remote half as its own task with geekom/depr explicitly in scope",
+          "recommended": true
+        },
+        {
+          "id": "accept-partial",
+          "label": "Accept AC4 as a standing partial for flow 002 and record the reason in the acceptance criteria"
+        },
+        {
+          "id": "rescope",
+          "label": "Rewrite AC4 so the loopback-verifiable half is the criterion and the remote half becomes a separate deployment check"
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "interruption_configurations_completed": 32,
+    "interruption_configurations_losing_a_message": 0,
+    "ack_oracle_distinct_answers_this_tree": 1,
+    "ack_oracle_distinct_answers_pre_t16_control": 2,
+    "loopback_urls_tested": 19,
+    "ts_tests_passed": 293,
+    "go_data_races": 0
+  },
+  "timestamp_utc": "2026-09-07T17:10:00.000Z"
+}

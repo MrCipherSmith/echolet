@@ -1,15 +1,40 @@
 # Echolet CLI Prototype Requirements Package
-Version: 0.1.1
+Version: 0.2.0
 
 ## Purpose and status
 
 This package defines the next implementable Echolet prototype: two independent command-line clients on computers exchange end-to-end encrypted text through the existing local Go relay, retain history, and continue after process restart.
 
-**Status: implemented and locally verified as a computer technical prototype (2026-09-07).** Relay v2 allocation over the network path, the CLI client, and the complete two-process networked scenario are implemented, and the acceptance evidence exists: 162 workspace tests green across four full unfiltered executions, `go -C apps/relay test ./...` green untagged, with `-race` and under the `relayv2` tag, and the two-process end-to-end scenario green 3/3 (offline delivery, restart, exact retry, ack recovery). Measurements: [`t55-final-verification.md`](../../../.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t55-final-verification.md); dispositions: [`t56-final-dispositions.md`](../../../.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t56-final-dispositions.md); the wave's summary: [`final-change-report.md`](../../../.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/final-change-report.md).
+**Status: implemented and locally verified as a computer technical prototype, as of commit `c302485` (2026-09-07).** Relay v2 allocation over the network path, the CLI client, and the complete two-process networked scenario are implemented, and the acceptance evidence exists. Independently re-measured on `c302485` by the flow 002 verification: `pnpm typecheck` clean, `pnpm test` **293/293 across 50 files**, `pnpm --filter @echolet/cli test:e2e` **3/3**, and `go -C apps/relay test ./...` green untagged, with `-race`, and with `-race -tags relayv2`, **0 data races** in all three. Measurements: [`t10-verification-report-r3.md`](../../../.metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t10-verification-report-r3.md); the earlier flow 001 baseline: [`t55-final-verification.md`](../../../.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t55-final-verification.md); dispositions: [`t56-final-dispositions.md`](../../../.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t56-final-dispositions.md); the first wave's summary: [`final-change-report.md`](../../../.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/final-change-report.md).
 
-What that status does **not** mean. Everything in Non-goals below remains untouched: no mobile delivery, no production deployment, no external cryptographic audit, no user pilot. Evidence covers one macOS arm64 machine and one working tree; `main` is unborn with no commit and no remote, so no result can be pinned to a commit hash. Two limitations are open and documented rather than fixed: **mailbox flooding is bounded, not eliminated** — a self-published sender can still wedge a victim's mailbox for up to the 168 h retention cap, at a measured cost of 4 self-published identities and 49 maximum-size envelopes — and **one published bundle serves exactly one first-contact sender**. Both are stated in full in [specification.md](specification.md) and in the change report.
+### What changed in flow 002, and may now be claimed
 
-Verification requires **Node 22.13+**; on Node 22.12 and below `node:sqlite` is missing and most CLI suites fail to collect in a way indistinguishable from a broken implementation.
+- **The mailbox flooding class is closed for delivery, and it is closed as a bound rather than as an elimination.** Measured by the independent verifier on the real relay at `c302485`: an attacker's 4 self-published identities and 49 maximum-size envelopes (12.23 MB uploaded over 53 requests) **no longer wedge the mailbox** — the legitimate message is delivered in **2 polls / 17 pages**, and three ordinary polls afterwards cost 4 pages. Read this precisely: the attacker can still publish identities and still enqueue the envelopes, and the recipient still pays a **one-time** walk over them. What is closed is the **amplification across polls** — the durable read position means the poison is never re-read — which is what made the wedge permanent. The per-flood cost is bounded, not zero.
+- **The contact-import re-walk is crash-safe.** Swept by the verifier across **32 interruption configurations** (SIGINT and SIGKILL, at both minimum and maximum ciphertext size, inside the page request, inside acceptance, and around the acknowledgement) with **zero lost messages and zero duplicates**; the completed re-walk is not repeated.
+- **The relay serves HTTPS with no silent downgrade.** Set only one of the two TLS variables, or point either at a missing, malformed or mismatched file, and it exits non-zero at startup naming the offender rather than serving plain HTTP.
+- **An operator TUI exists** and drives the local CLI. It was demonstrated, not asserted, against a real relay with a real store key in the environment: the key appears in no rendered frame, and the console imports no profile, store or crypto module.
+
+### What that status still does **not** mean
+
+Everything in Non-goals below remains untouched, and none of it is softened by the above:
+
+- **no independent cryptographic audit** — the reviews and verifications on record are internal agentic ones;
+- **no mobile client** — `apps/mobile` is untouched;
+- **no evidence of user demand** — no interviews, no pilot;
+- **no production deployment and no production-readiness claim**;
+- **no safety for sensitive communication.** This is an unaudited prototype;
+- **the pinned `@signalapp/libsignal-client@0.102.0` is not a permanent decision.**
+
+Open limitations carried forward, documented rather than fixed:
+
+- **One published bundle serves exactly one first-contact sender.** After the first sender claims a recipient's bundle, a second distinct sender receives `PREKEY_BUNDLE_UNAVAILABLE`; rotation exists in the runtime but has no CLI entry point.
+- **`ECHOLET_MAX_STORAGE_BYTES` is declared and enforced nowhere**, and there is no per-mailbox occupancy cap, so a flood still consumes relay disk without limit.
+- **Identity creation is free.** `POST /v1/device-records/publish` is still unauthenticated; minting identities no longer wedges a mailbox, but nothing bounds how many distinct senders one mailbox accumulates.
+- The residuals in [`t16-implementation-report.md`](../../../.metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t16-implementation-report.md) §8 (R-1…R-6, including stale prose in two test files and unserialised concurrent polls on one profile) and the findings in [`t10-verification-report-r3.md`](../../../.metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t10-verification-report-r3.md) §7 (T10R3V-F-001…F-004).
+
+Two acceptance criteria of flow 002 are **not** fully established: the "different machine" half of AC4 (verified for HTTPS, not for a cross-machine run — loopback cannot establish it), and AC7's deployment, which is blocked on enabling HTTPS Certificates for the tailnet (see §3.1 of the [deployment runbook](deployment-runbook.md)).
+
+Verification requires **Node 22.13+**; on Node 22.12 and below `node:sqlite` is missing and most CLI suites fail to collect in a way indistinguishable from a broken implementation. Note that a login shell (`bash -lc`) on the development machine may itself start Node 22.12.
 
 ## Document index
 

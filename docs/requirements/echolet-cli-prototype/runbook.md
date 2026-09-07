@@ -1,5 +1,5 @@
 # Echolet CLI Prototype Runbook
-Version: 0.1.0
+Version: 0.1.1
 
 Copyable commands for reproducing the computer CLI prototype from a clean
 checkout. This is the manual reproduction that
@@ -248,11 +248,16 @@ fixed:
   `PREKEY_BUNDLE_UNAVAILABLE`, and a republish reports `claimable: false`.
   Explicit rotation exists in the runtime but has no CLI entry point, which is a
   deliberate frozen-surface decision.
-- **The mailbox flooding class is bounded, not eliminated.** Measured on the
-  real relay at default configuration: wedging a recipient requires 4
-  self-published identities and 49 maximum-size envelopes (~12.85 MB), holding
-  up to the 168 h retention cap, because device-record publication is itself
-  unauthenticated.
+- **The mailbox flooding class is closed for delivery as a bound, not
+  eliminated as an attack.** Re-measured on the real relay at commit `c302485`
+  by the flow 002 verification: 4 self-published identities and 49
+  maximum-size envelopes (12.23 MB over 53 requests) no longer wedge the
+  mailbox — the legitimate message is delivered in 2 polls / 17 pages, and
+  three ordinary polls afterwards cost 4 pages. The attacker can still publish
+  identities and enqueue the envelopes, because device-record publication is
+  itself unauthenticated, and the recipient still pays that walk **once**; what
+  is closed is the amplification across polls. Relay disk consumption is still
+  unbounded (`ECHOLET_MAX_STORAGE_BYTES` is enforced nowhere).
 
 See [STATUS_CURRENT.md](../../STATUS_CURRENT.md) and the flow's final change
 report for the complete list.

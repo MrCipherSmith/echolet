@@ -1,0 +1,176 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T17-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "All four T18 REDs pass and nothing else moved. One product file changed: apps/relay/cmd/relay/main.go. The relay installed no signal handler at all, so SIGTERM/SIGINT had their default disposition (death by signal) and `defer st.Close()` never ran - hence `docker stop` reporting Exited (2), a *.mem write-ahead log and a LOCK left in the data directory on every ordinary stop, and in-flight requests being cut. Server.Shutdown already existed in internal/server/server.go and was already correct; nothing called it, which is exactly why T18's tests drive the real binary as a child process. main() became os.Exit(run()) so no exit path depends on a defer. signal.Notify(SIGINT, SIGTERM) is installed BEFORE badger.Open, not after the listener is up: between Open and the first /health answer the directory is already locked and already has a memtable, so a signal in that window would abandon it. SHUTDOWN ORDER, which is the fix and not an incidental: (1) srv.Shutdown(ctx) closes the listeners first, so a fresh dial is refused from the moment the signal is handled; (2) the same call waits for requests already being served; (3) only then st.Close(), because closing Badger under a running handler would be worse than the defect being fixed; (4) exit 0, because an operator stop is a success. DRAIN TIMEOUT 5s, bounded by Docker's 10s SIGKILL grace: at the deadline Shutdown returns DeadlineExceeded, srv.Close() closes the remaining connections, the store is still closed cleanly and the status is still 0 - a slow client must not be able to make the relay look like it crashed (measured: 5.05s signal-to-exit, no *.mem, no LOCK). SECOND SIGNAL abandons the drain but not the store: srv.Close() at once, the in-flight Shutdown result is still collected so the store is never closed while Shutdown is running, then the same clean close and the same exit 0 (measured: 0.05s, no *.mem, no LOCK). Every later signal is dropped on purpose - past that point there is nothing to wait for and interrupting the store close is the damage being avoided; SIGKILL still works. Only st.Close() failing produces exit 1 on a signal path, deliberately: an unflushed memtable is the durability problem this exists to prevent and must not be hidden from the supervisor. No store key, private key, plaintext or request body is logged - only the signal name and the drain timeout. MATRIX on Node v26.5.0 (default non-login): pnpm typecheck exit 0; pnpm test exit 0, 50 files / 293 tests / 293 passed / 0 failed; apps/cli test:e2e exit 0, 3/3; go test ./... in apps/relay untagged, -race, and -race -tags relayv2 each exit 0 with 8 packages ok, 0 failures, 0 DATA RACE; go vet and gofmt clean on the changed file. process_shutdown_test.go is byte-identical to T18's digest. Neither geekom nor depr was contacted. DONE_WITH_CONCERNS for six residuals, chiefly that net/http cannot wait for handler goroutines past a forced Close (R-1), that the cleanup-service goroutine is still outside the shutdown sequence and is only harmless because runCleanup is a no-op (R-2), and that neither escalation path is covered by a test (R-3).",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "All four tests in apps/relay/internal/server/process_shutdown_test.go pass, each named with its result.",
+      "status": "met",
+      "evidence": "go test ./internal/server/ -run 'TestRelay(ExitsZeroOnSIGTERM|ExitsZeroOnSIGINT|DrainsInFlightRequestOnSIGTERM|ClosesStorageCleanlyOnSIGTERM)' -v -count=1, exit 0: TestRelayExitsZeroOnSIGTERM PASS (1.82s), previously 'relay exited signal: terminated'; TestRelayExitsZeroOnSIGINT PASS (1.36s); TestRelayDrainsInFlightRequestOnSIGTERM PASS (1.42s), previously 'no response was read back: unexpected EOF'; TestRelayClosesStorageCleanlyOnSIGTERM PASS (1.23s), previously *.mem and LOCK remained. All four well inside the 10s shutdownBudget. Confirmed again in the full package run (internal/server ok, 9.837s untagged; 10.757s -race; 12.072s -race -tags relayv2)."
+    },
+    {
+      "criterion": "No test file is modified, at all. Report the SHA-256 of process_shutdown_test.go showing it unchanged from c38372f5ff4a983d6ad39799dfda28e36e5d9e8625131094222bc5eb08329155.",
+      "status": "met",
+      "evidence": "shasum -a 256 apps/relay/internal/server/process_shutdown_test.go, measured after every edit in this task: c38372f5ff4a983d6ad39799dfda28e36e5d9e8625131094222bc5eb08329155 - byte-identical to T18's recorded value. Identity by digest, never mtime. git status --porcelain over apps/ and packages/ lists exactly one modification, apps/relay/cmd/relay/main.go; process_shutdown_test.go appears only as the untracked file T18 added."
+    },
+    {
+      "criterion": "Nothing existing is weakened, skipped, narrowed or deleted, and no validation is relaxed.",
+      "status": "met",
+      "evidence": "pnpm test still reports 293 tests, the same total as the T16 baseline, now 293 passed. No .skip/.only/.todo and no deletion was introduced; no test file was touched. Go validation untouched: internal/server/server.go, internal/config/config.go (Validate, TLSEnabled) and every handler are byte-identical - the sole product edit is cmd/relay/main.go. The TLS refusal path is preserved verbatim, including its comment: server.New still returns an error rather than degrading to plain HTTP, and that path now also closes storage before exiting 1 instead of leaking the open directory."
+    },
+    {
+      "criterion": "The shutdown order is stop accepting, drain, close storage, exit 0 - and storage is never closed while a handler is still writing.",
+      "status": "met",
+      "evidence": "srv.Shutdown(ctx) closes the listeners before it waits for anything, so step 1 precedes step 2 by net/http's own contract; TestRelayDrainsInFlightRequestOnSIGTERM checks dial-refusal WHILE the in-flight request is still held open, so this is verified as a sequence and not merely as the consequence of a dead process. st.Close() is reached only after the drain channel has been read, on every path including both escalations - in the second-signal branch <-drained is collected after srv.Close() and before the close, so the store is never closed while Shutdown is running. Residual R-1 states the one bound honestly: net/http exposes no way to wait for handler GOROUTINES past a forced Close, so a handler stuck beyond the 5s deadline may still be executing during st.Close(); Badger answers such a write with ErrDBClosed rather than corrupting."
+    },
+    {
+      "criterion": "Both SIGTERM and SIGINT are handled, and a second signal during shutdown does not leave the store half-closed. State what it does.",
+      "status": "met",
+      "evidence": "signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM) - one path, no divergence; TestRelayExitsZeroOnSIGINT and TestRelayExitsZeroOnSIGTERM both pass. A SECOND signal abandons the drain but not the store: srv.Close() closes the remaining connections immediately, <-drained is still collected so the store is not closed while Shutdown runs, and the sequence continues into the same clean st.Close() and exit 0. Measured against a built binary holding an Expect: 100-continue request whose body is never sent - exit code 0, 0.05s after the second signal, mem files left [], LOCK left False. Every LATER signal is dropped by the size-2 buffered channel on purpose: past that point there is nothing left to wait for and interrupting the store close is exactly the damage being prevented; SIGKILL still works, and Docker's grace period is orders of magnitude longer than the tens of milliseconds Badger needs."
+    },
+    {
+      "criterion": "The drain timeout fits comfortably inside the 10s Docker grace period, and a drain that exceeds its own deadline still ends in a clean storage close and exit 0.",
+      "status": "met",
+      "evidence": "drainTimeout = 5s, half the Docker default, leaving the rest for a store close that takes tens of milliseconds. On deadline, srv.Shutdown returns context.DeadlineExceeded, the code logs a WARN, calls srv.Close() to close the remaining connections so no handler outlives the store, closes Badger and returns 0. Measured on the same held-open request with NO second signal: exit code 0, 5.05s from signal to exit, mem files left [], LOCK left False, log lines 'Drain did not complete; closing remaining connections' error=\"context deadline exceeded\" then 'Storage closed'. A slow client therefore cannot make an ordinary operator stop look like a crash."
+    },
+    {
+      "criterion": "No store key, private key, plaintext or HTTP request body is printed or recorded in logs.",
+      "status": "met",
+      "evidence": "The new log lines carry only operational facts: signal=<name>, drain_timeout=5s, and whether the drain completed, plus errors from Shutdown/Close/st.Close which are net/http and Badger error values, not request content. No handler, body, header, key or envelope is read or logged anywhere in main.go. The pre-existing 'Starting relay server' line is unchanged and still logs certificate PATHS only, never contents. Confirmed against the captured child-process output in both hand-run escalation probes - the complete output is six INFO/WARN lines, none containing request data."
+    },
+    {
+      "criterion": "The full matrix is green: pnpm test 293/293, e2e 3/3, pnpm typecheck exit 0, and every Go package ok under untagged, -race and -race -tags relayv2 with 0 data races.",
+      "status": "met",
+      "evidence": "Node v26.5.0 (default non-login interpreter). pnpm typecheck exit 0, 7 projects Done. pnpm test exit 0: 50 files, 293 tests, 293 passed, 0 failed (protocol 3/12, client-db 1/1, crypto-core 4/20, client-core 2/2, session-node 3/24, mobile 1/6, cli 36/228). test:e2e has no root script - it lives in apps/cli/package.json - so it was run there: exit 0, 1 file, 3/3 passed, 16.85s. In apps/relay: go test ./... -count=1 exit 0 (8 ok, 8 no-test, 0 FAIL); -race exit 0 (8 ok, 0 FAIL, 0 DATA RACE); -race -tags relayv2 exit 0 (8 ok, 0 FAIL, 0 DATA RACE). go vet ./cmd/relay/ exit 0; gofmt -l apps/relay/cmd/relay/ empty."
+    },
+    {
+      "criterion": "A written implementation report at .metaproject/flows/002-.../t17-implementation-report.md covering the change, the shutdown order and why, the second signal, the drain timeout, and every residual.",
+      "status": "met",
+      "evidence": "Written, SHA-256 96b8b0f28fd8c02528a6e3892913428487f0bfafb4f2a41dcc0288fefbb3bba3. Sections: 1 the defect and its three consequences; 2 the change (where the handler is installed and why there, the four-step order, the 5s timeout, the second signal, the exit-status table, logging); 3 what was NOT changed; 4 per-test before/after; 5 both escalation paths measured against a built binary; 6 test-file digest; 7 the full matrix; 8 six residuals; plus the routing audit."
+    },
+    {
+      "criterion": "Everything runs locally; the relays on geekom and depr are not touched and neither host is contacted.",
+      "status": "met",
+      "evidence": "Every command in this task ran against the local working tree: go build/vet/test in apps/relay, pnpm typecheck/test in the workspace, and two hand-run probes that start a locally built binary on a reserved 127.0.0.1 port with a fresh temporary data directory under TMPDIR. No ssh, curl, docker or any other command addressed geekom or depr, and no ECHOLET_* variable pointed anywhere off loopback. The probe script and probe binary live in the session scratchpad, never in the repository tree; git status over apps/ and packages/ shows only the one product file."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t17-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "The defect, the shutdown order and why order is the fix, the 5s drain timeout against Docker's 10s grace, second-signal semantics, the exit-status table, both escalation paths measured, the full matrix, and six residuals.",
+      "hash": "96b8b0f28fd8c02528a6e3892913428487f0bfafb4f2a41dcc0288fefbb3bba3"
+    },
+    {
+      "path": "apps/relay/internal/server/process_shutdown_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T18's RED suite, UNCHANGED by this task. All four process-level shutdown tests now pass.",
+      "hash": "c38372f5ff4a983d6ad39799dfda28e36e5d9e8625131094222bc5eb08329155"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/relay/cmd/relay/main.go",
+      "change": "main() became os.Exit(run()) so no exit path depends on a defer; the old `defer st.Close()`, which never ran under a signal, is replaced by an explicit closeStorage helper used on every path. signal.Notify(SIGINT, SIGTERM) on a size-2 buffered channel is installed before badger.Open, so a signal landing during startup cannot abandon a just-locked data directory. ListenAndServe moved into a goroutine feeding a serveErr channel; a first select distinguishes a startup failure (exit 1) from a stop signal. On a signal the sequence is Shutdown(ctx with drainTimeout=5s) -> close listeners, drain in flight -> st.Close() -> exit 0, with two escalations that both still end in a clean store close and exit 0: the drain deadline (Shutdown returns DeadlineExceeded, srv.Close() closes what is left) and a second signal (srv.Close() at once, <-drained still collected first). Only a failing st.Close() turns a signal path into exit 1. New logging carries the signal name and drain timeout only. gofmt-clean, go vet clean. SHA-256 72e9a873d146351ead30914bd17c19171195aa27347423bd2e4cecb382c9e299"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T17-F-001",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "file": "apps/relay/cmd/relay/main.go",
+      "problem": "When the 5s drain deadline expires, or a second signal escalates, srv.Close() closes the connections but net/http offers no API that waits for handler GOROUTINES beyond Shutdown itself. A handler stuck past the deadline can therefore still be executing while st.Close() runs.",
+      "impact": "Bounded, not unbounded. Badger answers a write against a closing database with ErrDBClosed/ErrBlockedWrites rather than corrupting anything, and the window is only ever reached by an explicit operator escalation or a client that ignored a 5s drain. Still, 'no handler outlives the store' is an argument here rather than a guarantee.",
+      "suggested_fix": "Only a relay that tracks its own in-flight handler count - e.g. a counting middleware whose WaitGroup is awaited after Close - can close that gap. That is a larger change than this defect warrants and would touch the router, so it is recorded rather than taken.",
+      "evidence": "http.Server.Shutdown waits on connection state, not handler goroutines; after Close the connection is removed from the tracked set while its handler may still be unwinding. Measured escalation paths both exit 0 with an empty data directory (no *.mem, no LOCK), so no damage was observed - the concern is the absence of a guarantee, not an observed failure.",
+      "confidence": "high"
+    },
+    {
+      "id": "T17-F-002",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "file": "apps/relay/internal/service/cleanup_service.go",
+      "problem": "CleanupService.Start() spawns a time.Ticker goroutine that is not cancellable and is not part of the shutdown sequence. It is harmless today only because runCleanup() is a documented no-op that touches no storage ('BadgerDB handles TTL automatically ... For MVP, BadgerDB's built-in TTL is sufficient').",
+      "impact": "If runCleanup is ever given real work, it will be running Badger transactions on a timer with nothing stopping it before st.Close(). That reintroduces exactly the 'write against a closing store' hazard that step 3 of the new shutdown order exists to prevent, and it would do so silently, since no test observes the cleanup goroutine.",
+      "suggested_fix": "Give CleanupService a Stop() (or a context) and call it between the drain and st.Close(). Doing that now would mean giving router.NewRouter a lifecycle it does not currently have - it returns a bare *chi.Mux and owns the cleanup service internally - which is beyond this task's scope. Flagged so the next person to give runCleanup real work sees the coupling first.",
+      "evidence": "router.go line 48 calls cleanupSvc.Start() and keeps no handle; cleanup_service.go lines 31-39 create the ticker inside Start with no stop channel and never call ticker.Stop(). runCleanup's body is two slog.Debug calls.",
+      "confidence": "high"
+    },
+    {
+      "id": "T17-F-003",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "file": "apps/relay/internal/server/process_shutdown_test.go",
+      "problem": "Neither escalation path is covered by a test. T18's four tests exercise only the ordinary drain, which completes in milliseconds; the drain-deadline path and the second-signal path were verified by hand for this report and are described in code comments, but nothing pins them.",
+      "impact": "A regression in either escalation - a future change that returns non-zero on DeadlineExceeded, or one that lets a second signal skip the store close - would be silent. Those are the two paths where the store is most at risk, so they are the ones least well protected.",
+      "suggested_fix": "Both are testable with T18's existing harness and its Expect: 100-continue synchronisation point: hold the request open and either wait past the drain timeout asserting exit 0 with no *.mem/LOCK, or send a second signal and assert the same. Not added here because this task may not touch a test file at all; the verifier or a follow-up tests-creator task should take it.",
+      "evidence": "Hand-run probes (report section 5): second signal -> exit 0 in 0.05s, mem [] LOCK False; drain deadline -> exit 0 in 5.05s, mem [] LOCK False. Neither corresponds to any assertion in the suite.",
+      "confidence": "high"
+    },
+    {
+      "id": "T17-F-004",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/relay/cmd/relay/main.go",
+      "problem": "drainTimeout is a compile-time constant (5s), not configuration. An operator running `docker stop --time 60` or a systemd unit with the default 90s TimeoutStopSec cannot lengthen the drain without a rebuild.",
+      "impact": "None on the target, where the 10s Docker default is what bounds the choice. It only matters if a deployment deliberately widens its grace period expecting the relay to use it.",
+      "suggested_fix": "An ECHOLET_SHUTDOWN_DRAIN_SECONDS variable in config.Config, validated non-negative like TLSReloadIntervalSeconds. Not done here because it widens the configuration surface and T18's spec did not ask for it; the constant carries its full rationale in a comment so the bound is visible to whoever changes it.",
+      "evidence": "const drainTimeout = 5 * time.Second, with the Docker-grace reasoning in the comment above it. config.Config has no shutdown-related field.",
+      "confidence": "high"
+    },
+    {
+      "id": "T17-F-005",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/relay/cmd/relay/main.go",
+      "problem": "A failing st.Close() produces exit 1 even on an operator-requested stop, which is in tension with the headline property that a normal stop must not look like a crash.",
+      "impact": "Deliberate, and recorded so a later reader does not 'fix' it into an unconditional 0. An unflushed memtable is the durability problem this whole path exists to prevent; exiting 0 after one would hide it from the very supervisor the exit status is written for. A Badger close that fails is not a normal stop.",
+      "suggested_fix": "None. If it is ever revisited, the alternative worth considering is exit 0 plus a loud ERROR line and a health-endpoint marker, not a silent 0.",
+      "evidence": "closeStorage(st, code) returns 1 whenever st.Close() errors, on every path. TestRelayExitsZeroOnSIGTERM and TestRelayClosesStorageCleanlyOnSIGTERM both pass, so the ordinary path closes cleanly and returns 0.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T17-F-006",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "package.json",
+      "problem": "There is no root `test:e2e` script; `pnpm test:e2e` fails with ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL. The script lives only in apps/cli/package.json. Separately, gofmt -l apps/relay still reports three pre-existing unformatted files (internal/api/handler/mailbox_read_mark_test.go, internal/api/handler/signal_prekey_bundle_v2.go, internal/storage/repository/signal_prekey_bundle_v2.go), carried over from T16-F-003.",
+      "impact": "None functional. Both are recorded only so a verifier does not read either as a regression introduced by this task.",
+      "suggested_fix": "A root `\"test:e2e\": \"pnpm --filter @echolet/cli test:e2e\"` would make the documented matrix command work as written. The three gofmt files are outside this task's scope and one of them is a test file this task may not edit; a formatting pass can take them together.",
+      "evidence": "pnpm test:e2e at the root exits 254 with 'Command \"test:e2e\" not found'; run in apps/cli it exits 0 with 3/3. gofmt -l apps/relay/cmd/relay/ (the only directory changed here) is empty.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "red_tests_targeted": 4,
+    "red_tests_passing": 4,
+    "vitest_files": 50,
+    "vitest_tests": 293,
+    "vitest_passed": 293,
+    "vitest_failed": 0,
+    "e2e_tests": 3,
+    "e2e_passed": 3,
+    "go_configurations": 3,
+    "go_failures_total": 0,
+    "go_data_races_total": 0,
+    "node_version": "v26.5.0",
+    "test_files_modified": 0,
+    "product_files_changed": 1,
+    "drain_timeout_seconds": 5,
+    "measured_signal_to_exit_seconds_drain_deadline": 5.05,
+    "measured_signal_to_exit_seconds_second_signal": 0.05
+  },
+  "timestamp_utc": "2026-09-07T18:30:00Z"
+}
