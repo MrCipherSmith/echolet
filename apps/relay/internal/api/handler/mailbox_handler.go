@@ -9,6 +9,7 @@ import (
 
 	"echolet/apps/relay/internal/cryptoutil"
 	"echolet/apps/relay/internal/model"
+	"echolet/apps/relay/internal/protocol"
 	"echolet/apps/relay/internal/service"
 	"echolet/apps/relay/internal/storage/repository"
 	"echolet/apps/relay/internal/validation"
@@ -59,12 +60,24 @@ type SendEnvelopeRequest struct {
 	Envelope *model.MailboxEnvelope `json:"envelope"`
 }
 
+// clientPollResponseBound is the response bound a conforming client enforces,
+// derived from the SAME protocol maximum this relay validates
+// ECHOLET_MAX_MESSAGE_BYTES against. It mirrors `responseByteBoundFor` in
+// apps/cli/src/transport/relayClient.ts, which reads
+// LIMITS.MAX_MESSAGE_BYTES - so the two are one derivation from one number,
+// not two literals that happen to match today (residual RI-09). At the shared
+// 262144 it is the 1 MiB that used to be written here by hand.
+const clientPollResponseBound int64 = 4 * protocol.MaxMessageBytes
+
 // pollEnvelopeByteBudget is the aggregate encoded-envelope budget for one poll
-// response. It is the client's hard response bound (1 MiB, enforced in
-// apps/cli/src/transport/relayClient.ts) minus the room the surrounding
-// success envelope and next_cursor need, so a batch this relay selects is never
-// one the client has to refuse.
-const pollEnvelopeByteBudget int64 = (1 << 20) - pollResponseWrapperBytes
+// response: the client's response bound minus the room the surrounding success
+// envelope and next_cursor need, so a batch this relay selects is never one the
+// client has to refuse. A deployment may configure a LOWER maximum, which only
+// leaves this budget with more headroom; it may not configure a higher one,
+// because that envelope would come back in a response the client refuses in
+// full - config.Validate refuses to start rather than accept messages it could
+// never hand back.
+const pollEnvelopeByteBudget int64 = clientPollResponseBound - pollResponseWrapperBytes
 
 // pollResponseWrapperBytes reserves room for {"ok":true,"data":{"envelopes":
 // [...],"next_cursor":"..."}} around the selected envelopes.

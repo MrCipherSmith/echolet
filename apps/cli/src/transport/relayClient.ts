@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MailboxEnvelopeSchema, SignalPreKeyBundleV2Schema, type MailboxEnvelope, type SignalPreKeyBundleV2 } from "@echolet/protocol";
+import { LIMITS, MailboxEnvelopeSchema, SignalPreKeyBundleV2Schema, type MailboxEnvelope, type SignalPreKeyBundleV2 } from "@echolet/protocol";
 import { isLoopbackHostname } from "./loopback";
 
 export class RelayError extends Error {
@@ -66,10 +66,41 @@ const pollRequestSchema = authorizationSchema.extend({
 // key that would silently degrade a no-op republish back into plain success.
 const claimableSchema = z.boolean();
 
+// The maximum ciphertext size, and everything this client derives from it (RI-09).
+//
+// WHERE THE NUMBER COMES FROM. `LIMITS.MAX_MESSAGE_BYTES` in the shared protocol package - the
+// same value the relay's ECHOLET_MAX_MESSAGE_BYTES defaults to and the same one its own
+// `defaultMaxMessageBytes` mirrors. It is NOT learned at runtime and the relay does not advertise
+// it: the relay is the adversary-adjacent component, and every schema on this wire is closed and
+// agreed in advance rather than negotiated. It is also not a per-install setting, because a
+// sender's profile and a recipient's profile are different installs: a size only one of them knows
+// relocates the skew instead of removing it. `config.Validate()` on the relay refuses to start with
+// a configured maximum ABOVE this one and permits any value below it, which is what makes the two
+// sides agree at every setting.
+//
+// THE RESPONSE BOUND. `4 x max` is the relay's own aggregate poll budget plus the room its
+// response wrapper needs (mailbox_handler.go: `pollEnvelopeByteBudget`), so a poll response the
+// relay is allowed to produce is always one this client will read. `max + 64 KiB` covers the
+// relay's deliberate first-envelope exemption - a single maximum-size envelope is always handed
+// back, even alone - which only binds when the maximum is small. At the shared 262144 the two give
+// 1 048 576, the literal that used to sit in the reader below with nothing keeping it in step.
+const pollResponseWrapperBytes = 64 * 1024;
+const pollResponseEnvelopeBudgetFactor = 4;
+const responseByteBoundFor = (maxMessageBytes: number) =>
+  Math.max(pollResponseEnvelopeBudgetFactor * maxMessageBytes, maxMessageBytes + pollResponseWrapperBytes);
+// A send this client would refuse to read back is a send it must not make (RI-09, the symmetry
+// half). The relay measures the same two things - the actual ciphertext length and the declared
+// `size_bytes` (validation.ValidateMailboxEnvelope) - so this refusal is the relay's own rule
+// applied one hop earlier, never a second, looser opinion about size. It is local and
+// non-retryable: nothing reaches the wire, so nothing lands in a mailbox that could not drain.
+const oversizedEnvelope = () => new RelayError("ENVELOPE_TOO_LARGE", false);
+
 export class RelayClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetcher: typeof fetch;
+  private readonly maxMessageBytes: number;
+  private readonly responseByteBound: number;
   constructor(options: { baseUrl: string; timeoutMs: number; fetch?: typeof fetch }) {
     let url: URL;
     try { url = new URL(options.baseUrl); } catch { throw new RelayError("INVALID_RELAY_CONFIGURATION", false); }
@@ -86,6 +117,8 @@ export class RelayClient {
     this.baseUrl = url.origin;
     this.timeoutMs = options.timeoutMs;
     this.fetcher = options.fetch ?? globalThis.fetch;
+    this.maxMessageBytes = LIMITS.MAX_MESSAGE_BYTES;
+    this.responseByteBound = responseByteBoundFor(this.maxMessageBytes);
   }
 
   async publishBundle(input: SignalPreKeyBundleV2) {
@@ -101,6 +134,9 @@ export class RelayClient {
   }
   async sendEnvelope(input: MailboxEnvelope) {
     const envelope = this.validate(MailboxEnvelopeSchema.strict(), input);
+    if (Buffer.byteLength(envelope.ciphertext, "utf8") > this.maxMessageBytes || envelope.size_bytes > this.maxMessageBytes) {
+      throw oversizedEnvelope();
+    }
     const data = await this.request("/v1/messages/send", { envelope }, z.object({ accepted: z.literal(true), envelope_id: z.literal(envelope.envelope_id), status: z.literal("relayed") }).strict());
     return { accepted: data.accepted, envelopeId: data.envelope_id, status: data.status };
   }
@@ -141,7 +177,7 @@ export class RelayClient {
               const { done, value } = await reader.read();
               if (done) break;
               size += value.length;
-              if (size > 1024 * 1024) { void reader.cancel().catch(() => {}); throw invalid(); }
+              if (size > this.responseByteBound) { void reader.cancel().catch(() => {}); throw invalid(); }
               chunks.push(value);
             }
           } finally { reader.releaseLock(); }

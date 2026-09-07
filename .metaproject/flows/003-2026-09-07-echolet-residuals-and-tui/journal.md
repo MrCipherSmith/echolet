@@ -46,3 +46,11 @@
 - 2026-09-07T21:48:31.670Z - task-attempt: T19: started (attempt 1) — 003-T19-publish-before-send-tests
 - 2026-09-07T22:15:24.580Z - task-done: T19: RED tests: send must refuse before claiming when the sender has not published
 - 2026-09-07T22:15:24.679Z - task-attempt: T20: started (attempt 1) — 003-T20-publish-before-send-implement
+- 2026-09-07T22:44:29.684Z - task-done: T10: RED tests for the two-sided max-message-size derivation (RI-09)
+- 2026-09-07T22:44:29.779Z - task-attempt: T11: started (attempt 1) — 003-T11-size-derivation-implement
+- 2026-09-07T23:08:40.306Z - task-done: T11: Implement the two-sided max-message-size derivation (RI-09)
+- 2026-09-07T23:08:40.395Z - task-added: T21: Re-author the poll-budget test: pin deliverability at the protocol maximum, not at a refused configuration
+- 2026-09-07T23:08:40.483Z - task-added: T22: Refuse a zero maximum message size, and correct the fixtures that build a zero-value config
+- 2026-09-07T23:08:45.980Z - task-attempt: T21: started (attempt 1) — 003-T21-reauthor-poll-budget-test
+- 2026-09-07T23:23:38.181Z - task-done: T21: Re-author the poll-budget test: pin deliverability at the protocol maximum, not at a refused configuration
+- 2026-09-07T23:23:38.263Z - task-attempt: T22: started (attempt 1) — 003-T22-zero-max-refusal
