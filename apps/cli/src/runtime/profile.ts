@@ -284,6 +284,28 @@ export class Profile {
   }
 
   /**
+   * Whether `relay publish` has ever been ATTEMPTED for this profile.
+   *
+   * This is the deliberately CONSERVATIVE reading of the publication precondition. `cli:publication`
+   * is written by `publicationBundle()` alone — reached only from `publish()` and `rotateBundle()` —
+   * and it is written inside the transaction that precedes the relay call, so its absence is durable
+   * proof that no publication was ever offered. Only under that proof is a mailbox deposit CERTAIN to
+   * be refused: since T50 `/v1/messages/send` authenticates the sender against an already-published,
+   * root-signed device record.
+   *
+   * The converse is intentionally not claimed. A profile whose publication the relay rejected, or
+   * whose publish response was lost, HAS attempted it, and this answers `true` for it — local state
+   * cannot tell those apart from a stored record, and refusing only the provably doomed send is what
+   * keeps this predicate from ever blocking a send that could have succeeded.
+   *
+   * The stored bytes are never decoded here: presence is the whole question, and a publication that
+   * fails to parse is still an attempt.
+   */
+  hasPublication(): Promise<boolean> {
+    return this.transact((tx) => tx.get(publicationKey) !== undefined);
+  }
+
+  /**
    * The exact signed bundle offered to the relay. It is written durably before any publication
    * attempt and returned unchanged afterwards, so a lost response is retried with the identical
    * bundle_id around the identical reserved one-time prekey.
