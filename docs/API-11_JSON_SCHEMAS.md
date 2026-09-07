@@ -419,10 +419,18 @@ said 3; that figure came from `ceil(48/16)` and was off by one.
 Точные UTF-8 входы подписи (без завершающего перевода строки):
 
 ```text
-create: echolet-mailbox-create-challenge:v1:{recipient_mailbox_id}:{device_id}
-poll:   echolet-mailbox-challenge:v1:{challenge_id}:{recipient_mailbox_id}:{device_id}:{nonce}
-ack:    echolet-mailbox-ack:v1:{recipient_mailbox_id}:{device_id}:{sorted_envelope_ids_joined_with_comma}
+create:  echolet-mailbox-create-challenge:v1:{recipient_mailbox_id}:{device_id}
+poll:    echolet-mailbox-challenge:v1:{challenge_id}:{recipient_mailbox_id}:{device_id}:{nonce}
+poll v2: echolet-mailbox-challenge:v2:{challenge_id}:{recipient_mailbox_id}:{device_id}:{nonce}:{read_through}
+ack:     echolet-mailbox-ack:v1:{recipient_mailbox_id}:{device_id}:{sorted_envelope_ids_joined_with_comma}
+ack v2:  echolet-mailbox-ack:v2:{recipient_mailbox_id}:{device_id}:{sorted_envelope_ids_joined_with_comma}:{read_through}
 ```
+
+Версия `v2` подписывается **тогда и только тогда**, когда запрос несёт поле
+`read_through` — durable read position получателя (§9.9). Отсутствующее и
+присутствующее поле дают разные подписываемые строки, поэтому позицию нельзя
+добавить, убрать или изменить в подписанном получателем запросе. Запрос без
+`read_through` подписывает `v1` в точности как раньше.
 
 Метки `create:`, `poll:`, `ack:` не входят в подписываемые строки. Список ack сортируется лексикографически, разделитель — запятая без пробелов, дубликаты сохраняются. Подписи кодируются base64url без padding; nonce подписывается дословно из ответа (текущий Go relay использует padded base64url). Реальный challenge ID — UUIDv4, примеры UUIDv7 иллюстративны.
 
@@ -467,7 +475,8 @@ Create и ack не содержат nonce/timestamp и допускают пов
   "device_id": "uuid-v7",
   "signature": "base64url(signature-over-challenge)",
   "batch_size": 50,
-  "cursor": "48"
+  "cursor": "48",
+  "read_through": "48"
 }
 ```
 
@@ -479,8 +488,30 @@ at the configured maximum message size is always delivered, so the byte budget
 can never starve the mailbox.
 
 `cursor` (optional string) is the `next_cursor` a previous poll returned, echoed
-back verbatim. Omitted or empty means "start at the head of the mailbox". A token
-this relay could not have issued is a client error: `400 INVALID_SCHEMA`.
+back verbatim, and selection resumes **strictly after** the position it names.
+Omitted or empty means "resume at this device's stored read position" (see
+`read_through`), which is the head of the mailbox until the device has judged
+anything; an explicit `"0"` therefore always requests a full re-walk. A token this
+relay could not have issued is a client error: `400 INVALID_SCHEMA`.
+
+`read_through` (optional string) is the recipient's **durable read position**: the
+highest server-issued position this device has judged — committed *or permanently
+refused*. It is the same opaque, server-issued decimal token `cursor` is, it takes
+the same shape rule, and it is additionally refused with `400 INVALID_SCHEMA` when
+it is above any position the relay ever allocated for that mailbox. It is
+**inside the signed transcript** (`:v2:`, §9), because it decides what the
+recipient is offered next: a value that advances the mark past an envelope makes
+that envelope unreachable for the rest of its lifetime. The relay stores it per
+`(mailbox, device)` and moves it **forward only**; a lower value is ignored, never
+a rewind. Recovery from a mark that is too far ahead is an explicit `cursor`, not
+a rewind.
+
+The recipient reports the position of page *k* on the request for page *k+1*, so
+progress survives an interrupted walk — a rate-limit `429`, a request timeout, an
+operator's Ctrl-C, or a process kill — at a cost of at most one repeated page. It
+rides on the poll rather than on the ack so that a walk which accepted nothing
+still records what it judged without making an ack request, which the
+"acknowledges nothing" guarantee forbids.
 
 Every poll needs its own challenge — a challenge is consumed by the poll that
 uses it — so a client walking several pages creates one challenge per page.
@@ -525,27 +556,36 @@ by the batch or byte bound and undelivered envelopes remain, and null when the
 mailbox is drained. The token is opaque and server-controlled.
 
 It is both the remaining-work signal **and a resume position**: the value is the
-number of undelivered envelopes this walk has already handed out, so a poll that
-sends it back as `cursor` skips exactly those and continues past them. Before
-this became a resume position, every poll re-selected from the head of the
+**relay-assigned ordering position of the last envelope on this page**, and a poll
+that sends it back as `cursor` (or as `read_through`) resumes *strictly after* it.
+Before this became a resume position, every poll re-selected from the head of the
 mailbox prefix, and because a permanently rejected envelope is deliberately never
 acknowledged, a sender who filled one selection window monopolised it and the
 legitimate envelopes behind it were never delivered (round-2 finding
 R2-001 path B).
 
+**Selection order is the relay's, not the sender's.** Envelopes are handed out in
+the order the relay accepted them, from a per-mailbox ordering index written inside
+the store transaction. The storage key's second half is the *sender-supplied*
+`envelope_id`, and the identifier rule admits ~10²⁸ values that sort ahead of every
+random v4 UUID a client mints, so a byte-order scan over that key let a sender
+choose its own queue position — including ahead of an envelope the mailbox already
+held. Positions are never derived from any sender-supplied value.
+
 Two consequences the client must accept, both deliberate:
 
-- A **position**, not a key, is issued, because the second half of the storage
-  key is the sender-supplied `envelope_id` and a key-derived cursor would put an
-  attacker-chosen string back on the wire. An acknowledgement or an expiry
-  between two pages of one walk shifts later positions by one, so a single
-  envelope can be skipped or repeated. A skipped envelope is offered again by the
-  next poll, because a walk always restarts at the head; a repeated one is
-  idempotent at the client's inbox dedupe. Nothing is dropped.
-- The cursor is **outside the signed challenge transcript**, and a syntactically
-  valid but out-of-range position is answered with an empty final page rather
-  than a bounded 4xx. Cursors are bounded server-side (15 decimal digits) and
-  non-numeric or over-long tokens are refused `400 INVALID_SCHEMA`.
+- A **position**, not a key, is issued, because a key-derived cursor would put an
+  attacker-chosen string back on the wire. Because the position is the envelope's
+  own place in the mailbox rather than a count of envelopes handed out, an
+  acknowledgement or an expiry between two pages of one walk no longer shifts
+  later positions, so the earlier skip/repeat window is closed. That matters now
+  that a cursorless poll resumes at a stored mark: a skipped envelope would
+  otherwise be skipped permanently.
+- The cursor is **outside the signed challenge transcript** (`read_through`, which
+  can move the stored mark, is inside it), and a syntactically valid but
+  out-of-range position is answered with an empty final page rather than a bounded
+  4xx. Cursors are bounded server-side (15 decimal digits) and non-numeric or
+  over-long tokens are refused `400 INVALID_SCHEMA`.
 
 ---
 
@@ -558,9 +598,17 @@ Two consequences the client must accept, both deliberate:
   "recipient_mailbox_id": "base64url(bytes)",
   "device_id": "uuid-v7",
   "envelope_ids": ["uuid-v7", "uuid-v7"],
-  "signature": "base64url(signature-over-ack-message)"
+  "signature": "base64url(signature-over-ack-message)",
+  "read_through": "48"
 }
 ```
+
+`read_through` (optional string) is the same durable read position §10 documents,
+carried here for the case where an acknowledgement and a read position are one
+signed statement. Same shape rule, same upper bound, same forward-only store, and
+the same transcript rule: present means the `:v2:` ack string, absent means the
+`:v1:` string unchanged. The CLI reports its position on the **poll** instead, so
+that a walk which accepted nothing makes no ack request at all.
 
 ### Success response
 

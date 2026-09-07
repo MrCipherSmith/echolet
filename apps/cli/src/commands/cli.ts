@@ -319,6 +319,15 @@ async function execute(command: string, values: CliValues): Promise<unknown> {
           throw trustFailure("INVALID_CONTACT_CARD");
         }
         if (!imported) throw trustFailure("CONTACT_NOT_CONFIRMED");
+        // Importing a card is the exact event that changes the verdict for an envelope already
+        // refused as CONTACT_NOT_TRUSTED. Since the recipient's read position is durable, such an
+        // envelope is passed ONCE rather than re-offered on every poll (T5 design §4, R-5), so the
+        // next walk has to start at the head of the mailbox again.
+        //
+        // The request is recorded LOCALLY and nothing is sent: `contact import` is an offline trust
+        // operation and must stay one, or importing a card starts failing whenever the relay is
+        // unreachable (finding T6-F-004). The next `poll` consumes it exactly once.
+        await profile.requestMailboxRewalk();
         return { trusted: true };
       } finally { await profile.close(); }
     }

@@ -61,12 +61,16 @@ const ackKey = (id: string) => `cli:pending-ack:${id}`;
 /**
  * How many relay pages one `poll()` will walk while every page has yielded nothing.
  *
- * The walk exists so permanently rejected envelopes cannot monopolise the selection window
- * forever, but it must stay bounded: each page costs a challenge and a poll round trip, and the
- * mailbox is attacker-fillable. Sixteen pages at the wire maximum batch size (100) consults 1600
- * envelopes before giving up and re-raising, which is far beyond any legitimate backlog the 24h
- * declared expiry and the relay's 7-day retention cap can produce, and bounded enough that a
- * deliberately flooded mailbox costs a bounded number of requests rather than an unbounded one.
+ * Since flow 002 / T5 C4-3 this is a LIVENESS VALVE and nothing more. It used to be the whole of
+ * the recipient's patience: nothing carried progress from one poll to the next, so a legitimate
+ * message that did not fall inside these pages was never delivered and expired behind the poison.
+ * Now the recipient's read position is durable and held by the relay, so hitting the valve costs
+ * one more `poll` invocation instead of a lost message, and `poll` already reports `more: true` as
+ * the signal to poll again.
+ *
+ * It still has to exist: each page costs a challenge and a poll round trip, and the mailbox is
+ * attacker-fillable, so one `poll` must return in bounded time rather than walking a mailbox an
+ * attacker chose the size of.
  */
 const maxPollPagesPerPoll = 16;
 type Options = Pick<OpenProfileOptions, "profileDir" | "environment"> & { relay: RelayClient; now?: () => number };
@@ -82,11 +86,29 @@ class InboundMessenger {
     this.queue = result.catch(() => {});
     return result;
   }
-  /** Reads one page of the mailbox, resuming at `cursor` when the previous page reported one. */
-  private async page(cursor: string | undefined) {
+  /**
+   * Reads one page of the mailbox, resuming at `cursor` when the previous page reported one and
+   * reporting `readThrough`, the position of the last page this walk fully judged.
+   *
+   * The read position rides on the POLL rather than on the ack (finding T6-F-001). The poll is
+   * already signed and challenge-bound, so the position is authenticated by the same key with no
+   * extra request, and the ack stays purely about acknowledgement - which is what keeps F-012's
+   * "a batch that accepted nothing acknowledges nothing" literally true as "no ack REQUEST at all".
+   *
+   * It is reported per PAGE, not once at the end of the walk (finding T6-F-003). A walk that
+   * reported its progress only on completion would lose all of it to a rate-limit 429, a request
+   * timeout, an operator's Ctrl-C or a supervisor restart - and under the shipped 120/min per-IP
+   * limit the recipient's own rate limiter interrupts a long walk routinely, so that is the normal
+   * case rather than the exotic one. Presenting page k's position on page k+1's request costs no
+   * extra request and bounds the repeated work after any interruption to a single page.
+   */
+  private async page(cursor: string | undefined, readThrough: string | undefined) {
     const challenge = await this.options.relay.createChallenge(await this.profile.mailboxAuthorization({ kind: "challenge" }));
     if (challenge.expires_at_ms <= (this.options.now?.() ?? Date.now())) throw new InboundError("CHALLENGE_EXPIRED");
-    const authorization = await this.profile.mailboxAuthorization({ kind: "poll", challengeId: challenge.challenge_id, nonce: challenge.nonce });
+    const authorization = await this.profile.mailboxAuthorization({
+      kind: "poll", challengeId: challenge.challenge_id, nonce: challenge.nonce,
+      ...(readThrough === undefined ? {} : { readThrough }),
+    });
     // The configured batch size is forwarded so the relay bounds the batch it
     // selects; without it the relay applies its own maximum and can return a
     // response larger than this client will read. A challenge is single-use, so
@@ -94,6 +116,7 @@ class InboundMessenger {
     return this.options.relay.pollMailbox({
       ...authorization, challenge_id: challenge.challenge_id, batch_size: this.profile.pollBatchSize,
       ...(cursor === undefined ? {} : { cursor }),
+      ...(readThrough === undefined ? {} : { read_through: readThrough }),
     });
   }
   poll() {
@@ -102,28 +125,46 @@ class InboundMessenger {
       let received = 0;
       let firstRejection: InboundError | undefined;
       let more = false;
-      let cursor: string | undefined;
+      // A poll with no cursor resumes at the read position the RELAY holds for this device, so a
+      // walk continues where the last one stopped even across a process that never returned. The
+      // one exception is a pending `contact import` re-walk: an explicit cursor of "0" asks for the
+      // head of the mailbox, which is how an envelope refused as CONTACT_NOT_TRUSTED before the
+      // card existed is offered again (T5 design §4, R-5). The request is consumed exactly once,
+      // here, before the walk begins - a flag that outlived its walk would restart every subsequent
+      // poll at the head and silently reinstate the whole flooding class (finding T6-F-004).
+      let cursor: string | undefined = (await this.profile.takeMailboxRewalk()) ? "0" : undefined;
+      // The highest position this walk has fully judged. Held in memory for the duration of the
+      // walk and put on the wire; never persisted locally, because a poll that writes to the store
+      // breaks F-012's store-identity guarantee and because the relay is the durable holder
+      // (finding T6-F-005).
+      let readThrough: string | undefined;
       // Walk the relay's pages while every page so far has yielded nothing and the relay says more
       // remain. A permanently rejected envelope is deliberately never acknowledged (F-012), so it
       // stays queued and keeps occupying its place in the relay's selection order; without walking,
       // an unauthenticated sender who fills one selection window makes every batch entirely poison
       // and the legitimate envelopes behind it are never delivered (round-2 finding R2-001 path B).
       // The walk stops as soon as anything is accepted, because the accepted envelopes must be
-      // acknowledged promptly and the next `poll()` resumes the remainder from a fresh cursor.
+      // acknowledged promptly and the next `poll()` resumes the remainder from the durable mark.
       for (let page = 0; page < maxPollPagesPerPoll; page += 1) {
-        const batch = await this.page(cursor);
+        const batch = await this.page(cursor, readThrough);
         const accepted = await this.accept(batch.envelopes);
         received += accepted.received;
         rejected.push(...accepted.rejected);
         firstRejection ??= accepted.firstRejection;
         more = batch.next_cursor !== null;
         cursor = batch.next_cursor ?? undefined;
+        // The page just judged becomes the position the NEXT page's request reports. It is only
+        // ever a token the relay itself issued for a page this walk actually received, which is
+        // what keeps the mark from advancing past an envelope the recipient never read (R-4).
+        readThrough = batch.next_cursor ?? undefined;
         if (accepted.received > 0 || !more) break;
       }
       // Nothing survived any page the walk reached: keep the historical whole-batch contract, which
       // is also the F-012 guarantee - re-raise the first rejection, acknowledge nothing, mutate
       // nothing. Walking further pages changes only how much of the mailbox is consulted before
-      // this answer is given, never whether it is given.
+      // this answer is given, never whether it is given. What the walk JUDGED is not thrown away
+      // with the answer: each page reported the previous page's position on the way past, so the
+      // pages already refused are not re-downloaded and re-refused by the next poll.
       if (received === 0 && firstRejection) throw firstRejection;
       await this.ackPending();
       return { received, more, rejected } satisfies PollResult;

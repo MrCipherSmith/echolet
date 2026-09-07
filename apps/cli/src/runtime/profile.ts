@@ -24,6 +24,11 @@ export class PersistenceError extends Error {
 
 const metadataKey = "cli:profile";
 const publicationKey = "cli:publication";
+/**
+ * A pending request that the next mailbox walk start at the head of the mailbox.
+ * Written by `contact import`, consumed exactly once by the next `poll`.
+ */
+const mailboxRewalkKey = "cli:mailbox-rewalk";
 const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
 const decode = (value: Uint8Array): unknown => JSON.parse(new TextDecoder().decode(value));
 const metadataSchema = z.object({
@@ -94,8 +99,18 @@ export class Profile {
     });
   }
 
-  /** Sign only mailbox operations; no private material leaves this boundary. */
-  async mailboxAuthorization(operation: { kind: "challenge" } | { kind: "poll"; challengeId: string; nonce: string } | { kind: "ack"; envelopeIds: string[] }) {
+  /**
+   * Sign only mailbox operations; no private material leaves this boundary.
+   *
+   * A poll may carry `readThrough`, the recipient's durable read position. It is
+   * signed rather than merely sent: the position decides what the recipient is
+   * offered next, so an unbound value would let anyone who can reshape one poll
+   * request advance a victim's mark and make the envelopes behind it unreachable
+   * (T5 design §4, R-4). `createMailboxChallengeMessage` emits a distinct
+   * transcript when it is present, so absent and present are different signed
+   * statements.
+   */
+  async mailboxAuthorization(operation: { kind: "challenge" } | { kind: "poll"; challengeId: string; nonce: string; readThrough?: string } | { kind: "ack"; envelopeIds: string[] }) {
     const owned = structuredClone(operation);
     return this.transact(async (tx) => {
       const metadata = readMetadata(tx), record = metadata.device_record;
@@ -103,10 +118,47 @@ export class Profile {
       const key = decodeBase64Url(identity.deviceSecretKey), mailboxId = deriveMailboxId(record.identity_id);
       try {
         const text = owned.kind === "challenge" ? createMailboxCreateChallengeMessage(mailboxId, record.device_id)
-          : owned.kind === "poll" ? createMailboxChallengeMessage(owned.challengeId, mailboxId, record.device_id, owned.nonce)
+          : owned.kind === "poll" ? createMailboxChallengeMessage(owned.challengeId, mailboxId, record.device_id, owned.nonce, owned.readThrough)
           : createMailboxAckMessage(mailboxId, record.device_id, owned.envelopeIds);
         return { recipient_mailbox_id: mailboxId, device_id: record.device_id, signature: signUtf8Message(text, key) };
       } finally { key.fill(0); }
+    });
+  }
+
+  /**
+   * Record that the next mailbox walk must start from the head of the mailbox
+   * rather than from the relay-held read position.
+   *
+   * This is the one piece of read-position state that is kept locally, and it is
+   * deliberately not the position itself (T5 design §4, R-4 / finding T6-F-005:
+   * a poll that writes to the store breaks F-012's store-identity guarantee, and
+   * the relay is the durable holder of the mark, which is what makes it survive a
+   * process kill). It is written by `contact import`, which is an OFFLINE trust
+   * operation and must stay one — no relay request is made here — and it exists
+   * because importing a card is the exact event that changes the verdict for a
+   * `CONTACT_NOT_TRUSTED` envelope the walk has already passed.
+   */
+  requestMailboxRewalk(): Promise<void> {
+    return this.transact((tx) => { tx.set(mailboxRewalkKey, Uint8Array.of(1)); });
+  }
+
+  /**
+   * Consume a pending re-walk request, EXACTLY ONCE.
+   *
+   * The "exactly once" is load-bearing and is the most dangerous path in this
+   * change (finding T6-F-004): a flag that survives the walk it started would
+   * make every subsequent poll restart at the head of the mailbox, which
+   * reinstates the whole flooding class while every unit test still passes. It is
+   * therefore deleted here, before the walk begins, and not on the walk's success.
+   *
+   * When no request is pending this writes nothing at all, so an ordinary poll
+   * leaves the encrypted store byte-identical.
+   */
+  takeMailboxRewalk(): Promise<boolean> {
+    return this.transact((tx) => {
+      if (!tx.get(mailboxRewalkKey)) return false;
+      tx.delete(mailboxRewalkKey);
+      return true;
     });
   }
 

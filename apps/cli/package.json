@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": { "node": ">=22.13" },
-  "bin": { "echolet": "./dist/cli.js" },
+  "bin": { "echolet": "./dist/cli.js", "echolet-tui": "./dist/tui.js" },
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",

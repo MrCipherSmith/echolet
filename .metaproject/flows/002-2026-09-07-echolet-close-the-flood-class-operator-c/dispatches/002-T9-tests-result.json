@@ -1,0 +1,243 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T9-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Designed the operator TUI and committed 90 RED tests pinning it. Module split under apps/cli/src/tui: one impure function (runTuiShell) and eight pure modules. Render contract is renderFrame(state, viewport) -> plain text lines of exactly the viewport's shape, no ANSI, deterministic. Input model is mapKey -> Intent -> reduce -> effect descriptions, with the trust gate in the reducer. 87 of 90 tests fail on named NOT_IMPLEMENTED stubs; the other 3 lock exported contract constants. Every test was proven satisfiable by a throwaway probe (90/90 green), which was then reverted and the tree verified by SHA-256. pnpm typecheck stays green on 7 projects. Concern: the dispatch premise that the reference TUI has no UI dependency is incorrect - it depends on @opentui/core as an optional, type-only dependency; the transferable property is dependency inversion, not absence, and that is what was adopted.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC5 (rendering half) - a store key or private key never appears in any rendered frame",
+      "status": "partial",
+      "evidence": "apps/cli/src/tui/tui.keyMaterial.test.ts sweeps all five panes at three viewports, with and without the trust modal, against a real 32-byte base64url store key placed in the process environment as the runbook places it. Also asserts renderFrame does not read the environment (removing the variable must change nothing on screen). RED. The running-process half belongs to T10."
+    },
+    {
+      "criterion": "AC5 (argv half) - a store key or private key never appears in any argument vector",
+      "status": "partial",
+      "evidence": "tui.keyMaterial.test.ts builds argv for all eight frozen commands and asserts no token contains the secret; asserts init carries --store-key-env plus the variable NAME; asserts no --store-key/--key/--secret/--seed flag can be emitted. Structural backstop: createInitialState's full serialisation contains the NAME and not the value. RED."
+    },
+    {
+      "criterion": "AC5 - shows profiles, queues, history, rejections and relay health",
+      "status": "partial",
+      "evidence": "profiles-pane.test.ts, mailbox-pane.test.ts, history-pane.test.ts and shell-chrome.test.ts pin all five panes. PANE_IDS is the pluggable-pane list. RED; the panes are declaration stubs."
+    },
+    {
+      "criterion": "AC6 - the surface itself states this is an unaudited prototype not suitable for sensitive communication",
+      "status": "partial",
+      "evidence": "shell-chrome.test.ts asserts UNAUDITED_NOTICE is present in every frame, on every pane, at every viewport, and with the trust modal open; and that the constant names both halves of the warning and fits MIN_VIEWPORT without truncation. RED apart from the constant-wording assertion."
+    },
+    {
+      "criterion": "Specification Contact contract - the four identifiers are shown before trust is recorded",
+      "status": "partial",
+      "evidence": "modal-host.test.ts pins TRUST_IDENTIFIER_FIELDS against the runbook's four names and order, asserts all four values render in full, and that removing or blanking any one makes the modal incomplete. tui-shell.test.ts pins the same precondition in the reducer, plus a renderedAt gate so a modal that was never painted cannot be confirmed. RED apart from the field-name lock."
+    },
+    {
+      "criterion": "Runbook section 9 - history renders plaintext only for the explicitly selected contact",
+      "status": "partial",
+      "evidence": "history-pane.test.ts pins the narrowing at the snapshot boundary (JSON.stringify of the snapshot contains only the selected contact's bodies), asserts no plaintext at all when nothing is selected, and pins withheldCount so hiding is visible. RED."
+    },
+    {
+      "criterion": "Specification poll result - rejected envelopes render only {envelopeId, code}",
+      "status": "partial",
+      "evidence": "mailbox-pane.test.ts hands formatRejectionLine an object carrying ciphertext, plaintext, senderIdentityId and note, and asserts none of those values or property names reaches the line, the snapshot or the formatted pane. RED."
+    },
+    {
+      "criterion": "No UI dependency is added",
+      "status": "met",
+      "evidence": "apps/cli/package.json is unchanged. The eight new modules import only sibling modules; the only Node builtin used anywhere is none at all in the pure layer."
+    },
+    {
+      "criterion": "Every RED test proven satisfiable, then reverted and verified by SHA-256",
+      "status": "met",
+      "evidence": "Probe implementation applied over the eight stubs: 90/90 green (vitest run src/tui). Stubs restored from a pre-probe copy and verified with shasum -a 256 -c: 18/18 OK against the manifest recorded before the probe. Re-run after restore: 87 failed of 90."
+    },
+    {
+      "criterion": "Protected files untouched; apps/relay not touched",
+      "status": "met",
+      "evidence": "Only apps/cli/src/tui/** (new directory) and the flow's own design note and dispatch result were written. apps/cli/vitest.config.ts, apps/cli/test/globalSetup.ts, flow.json, acceptance-criteria.md and apps/relay are unmodified."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t9-operator-tui-design.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Design note: why a TUI is the safer surface for AC5, what was taken from the geekom reference and where this diverges, the module split, the render contract, the input model, the contact-roster problem and its rejected alternatives, and the plaintext-in-argv exposure this design inherits rather than fixes.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/shell-chrome.test.ts",
+      "kind": "report",
+      "exists": true,
+      "summary": "12 tests: frame shape, purity, no ESC byte, the AC6 notice on every pane and modal, fitLine code-point width.",
+      "hash": "6b1ecf16b265ea546d306a59a8ffe7905fc73b93a59d1aa822d39d0bffbedce6"
+    },
+    {
+      "path": "apps/cli/src/tui/tui.keyMaterial.test.ts",
+      "kind": "report",
+      "exists": true,
+      "summary": "9 tests: AC5 sweep over every frame and every argv with a real 32-byte store key in the environment.",
+      "hash": "8905ffb8616463bf7e63f4accb6397ef0f0a1eff290a0d2b06d793b70af53824"
+    },
+    {
+      "path": "apps/cli/src/tui/modal-host.test.ts",
+      "kind": "report",
+      "exists": true,
+      "summary": "14 tests: the four identifiers, incompleteness on removal or blanking, the key contract, panel geometry.",
+      "hash": "2bdea6cb14ec97b27ff9ac9d8494df7682d65a9847f7b0c3c7ead54f35c4ebd0"
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.test.ts",
+      "kind": "report",
+      "exists": true,
+      "summary": "14 tests: key to intent to state to effect, and the trust gate in the reducer.",
+      "hash": "b14468fd08dcde2ddd08c238a8669221b46e502f1d3c787ac0281bb73e4b03ad"
+    },
+    {
+      "path": "apps/cli/src/tui/history-pane.test.ts",
+      "kind": "report",
+      "exists": true,
+      "summary": "10 tests: plaintext only for the explicitly selected contact, narrowed in the snapshot.",
+      "hash": "87a56d0715ef6f2d89ecc3799727f4304993b3a8a0f4bc351877d5e766d800f4"
+    },
+    {
+      "path": "apps/cli/src/tui/mailbox-pane.test.ts",
+      "kind": "report",
+      "exists": true,
+      "summary": "7 tests: rejections render only envelopeId and code, proven against a widened runtime object.",
+      "hash": "dd1ce1277e7a7cea8b5c469e154dbe0a87b44313159c5193ce76465c33c5475b"
+    },
+    {
+      "path": "apps/cli/src/tui/profiles-pane.test.ts",
+      "kind": "report",
+      "exists": true,
+      "summary": "10 tests: profiles, relay URL, store key variable name, contacts, relay health, roster discrepancy.",
+      "hash": "d72ac8e302d567f7e2c87395de29747d93583d350094f5d3a4a3ae38c21a2a6e"
+    },
+    {
+      "path": "apps/cli/src/tui/cli-bridge.test.ts",
+      "kind": "report",
+      "exists": true,
+      "summary": "14 tests: the eight frozen commands, their exact argv, the ninth-command refusal, outcome parsing.",
+      "hash": "ed69f561118194050ae299fc8c29ff90c099c07e2011a47d33dae264ccbd244f"
+    }
+  ],
+  "changed_files": [
+    { "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t9-operator-tui-design.md", "change": "added - design note" },
+    { "path": "apps/cli/src/tui/state.ts", "change": "added - state model types and createInitialState (declaration stub)" },
+    { "path": "apps/cli/src/tui/intents.ts", "change": "added - Intent, Effect and Step types (types only, no stub needed)" },
+    { "path": "apps/cli/src/tui/cli-bridge.ts", "change": "added - frozen command list, CliRequest, buildArgv and parseCliOutcome (declaration stubs)" },
+    { "path": "apps/cli/src/tui/modal-host.ts", "change": "added - trust modal contract, geometry and key intents (declaration stubs)" },
+    { "path": "apps/cli/src/tui/shell-chrome.ts", "change": "added - UNAUDITED_NOTICE, MIN_VIEWPORT, fitLine, renderFrame, styleFrame (declaration stubs)" },
+    { "path": "apps/cli/src/tui/profiles-pane.ts", "change": "added - profiles/contacts/health pane contract (declaration stubs)" },
+    { "path": "apps/cli/src/tui/mailbox-pane.ts", "change": "added - mailbox and rejections pane contract (declaration stubs)" },
+    { "path": "apps/cli/src/tui/history-pane.ts", "change": "added - history pane contract (declaration stubs)" },
+    { "path": "apps/cli/src/tui/tui-shell.ts", "change": "added - mapKey, reduce, TuiIo and runTuiShell (declaration stubs)" },
+    { "path": "apps/cli/src/tui/not-implemented.ts", "change": "added - RED-phase scaffold; the implementer deletes it" },
+    { "path": "apps/cli/src/tui/shell-chrome.test.ts", "change": "added - 12 RED tests" },
+    { "path": "apps/cli/src/tui/tui.keyMaterial.test.ts", "change": "added - 9 RED tests" },
+    { "path": "apps/cli/src/tui/modal-host.test.ts", "change": "added - 14 RED tests" },
+    { "path": "apps/cli/src/tui/tui-shell.test.ts", "change": "added - 14 RED tests" },
+    { "path": "apps/cli/src/tui/history-pane.test.ts", "change": "added - 10 RED tests" },
+    { "path": "apps/cli/src/tui/mailbox-pane.test.ts", "change": "added - 7 RED tests" },
+    { "path": "apps/cli/src/tui/profiles-pane.test.ts", "change": "added - 10 RED tests" },
+    { "path": "apps/cli/src/tui/cli-bridge.test.ts", "change": "added - 14 RED tests" }
+  ],
+  "findings": [
+    {
+      "id": "T9-F-001",
+      "reviewer": "tests-creator",
+      "severity": "major",
+      "problem": "The dispatch states the reference TUI at /home/altsay/keryx/src/tui has 'no UI dependency whatsoever - only Node builtins'. The source says otherwise: shell-chrome.ts declares '@opentui/core is an OPTIONAL dependency (ADR-0005)' and types its renderables as typeof import(\"@opentui/core\"), with a static regex guard forbidding the literal import form in runtime modules. modal-host.test.ts loads the real package through a try/catch and skips when it is absent.",
+      "impact": "The premise attributes the reference's testability to the wrong cause. If an implementer copies 'no dependency' without copying 'no static coupling to a renderer, everything injected at the I/O edge', they can still write an untestable TUI - the reference is testable because state-to-lines is pure and the renderer arrives as a parameter, not because a package.json is short. Acting on the stated premise alone risks losing the property AC5 and AC6 depend on.",
+      "suggested_fix": "Record the corrected reason in the flow journal alongside the original note. The design note section 2 states it, and the design adopts the transferable property (dependency inversion plus pure formatters) while still adding no UI package, as the dispatch requires.",
+      "evidence": "SSH read-only inspection of geekom:/home/altsay/keryx/src/tui/shell-chrome.ts lines 38-56 and modal-host.test.ts lines 1-40. Nothing on geekom was modified.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/journal.md (2026-09-07 entry: 'no UI dependency at all - only Node builtins')",
+          "the 002-T9 dispatch prompt ('no UI dependency whatsoever')",
+          ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t9-operator-tui-design.md section 2 (the correction, the only site now stating it accurately)"
+        ],
+        "enumeration_method": "The claim originates in one journal entry and was carried verbatim into the dispatch prompt; those are the only two places in the repository that assert it. Verified by keryx ctx rg over .metaproject for 'no UI dependency' and 'Node builtins', which returns the journal entry and nothing else. The reference tree itself was enumerated over SSH: grep for non-relative imports across modal-host.ts, shell-chrome.ts, theme.ts and tui-shell.ts returns only node: builtins, which is exactly the evidence that produced the wrong conclusion - the coupling is type-only and therefore invisible to an import grep."
+      }
+    },
+    {
+      "id": "T9-F-002",
+      "reviewer": "tests-creator",
+      "severity": "major",
+      "problem": "AC5 requires the surface to show pinned contacts, but the frozen eight-command CLI surface has no command that lists them. doctor returns contact_count only; Profile.listContacts() exists in the runtime with no entry point, like rotateBundle() and retryPending().",
+      "impact": "The two obvious resolutions are both wrong. Adding 'contact list' is the ninth command specification.md deliberately froze the surface against. Reading the encrypted store directly from the TUI would require the TUI to hold the 32-byte store key - precisely what AC5 forbids - so the convenient fix is the one that breaks the criterion being satisfied.",
+      "suggested_fix": "Adopted: the TUI lists the contacts this session observed (exported or imported through the trust modal, whose four identifiers it already had to display), cross-checks the count against doctor's contact_count, and states the shortfall explicitly rather than showing a plausible list that is silently short. Pinned by profiles-pane.test.ts.",
+      "evidence": "apps/cli/src/commands/cli.ts commandOptions (eight commands); apps/cli/src/runtime/profile.ts listContacts and summary; specification.md section 'CLI surface'.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/profile.ts:225 listContacts() - reachable from no command",
+          "apps/cli/src/runtime/outbound.ts rotateBundle() - reachable from no command (documented in specification.md)",
+          "apps/cli/src/runtime/outbound.ts retryPending() - reachable from no command (documented in specification.md)",
+          "apps/cli/src/runtime/inbound.ts:218 retryPendingAcks() - reachable from no command",
+          "apps/cli/src/commands/cli.ts:87-96 commandOptions - the eight-entry map that is the whole reachable surface"
+        ],
+        "enumeration_method": "The class is 'runtime capability with no CLI entry point', and it is enumerated by construction rather than by search: commandOptions in cli.ts:87-96 is the single dispatch table, parseCommand refuses any positional string absent from it, and specification.md names the frozen surface as exactly those eight. So every public runtime method not reachable from one of the eight switch arms in execute() is a member. specification.md already names rotateBundle and retryPending as deliberate members; listContacts and retryPendingAcks are the two further members, found by reading the public methods of Profile, OutboundMessenger and InboundMessenger against those switch arms (keryx ctx rg over apps/cli/src). The set is exhaustive for those three classes."
+      }
+    },
+    {
+      "id": "T9-F-003",
+      "reviewer": "tests-creator",
+      "severity": "minor",
+      "problem": "send passes the message body as --text <plaintext>, so message plaintext appears in the child's argument vector and is visible in the local process table for the life of that process.",
+      "impact": "None of the AC5 assertions in this task cover it, and none claim to: they are about key material. Reported so the evidence is not read as proving more than it does. The exposure is the existing CLI contract, which the runbook drives the same way; the TUI inherits it rather than creating it.",
+      "suggested_fix": "Out of scope for T9 - closing it needs a change to send's interface or a ninth entry point, both of which reopen the frozen-surface decision. Recorded in the design note section 6 so a later flow can weigh it deliberately.",
+      "evidence": "docs/requirements/echolet-cli-prototype/runbook.md section 6; apps/cli/src/commands/cli.ts case 'send'.",
+      "confidence": "high"
+    },
+    {
+      "id": "T9-F-004",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "problem": "Eight declaration stubs were committed alongside the tests, rather than leaving the modules absent. apps/cli/tsconfig.json includes src/**/*, so tests importing non-existent modules would turn pnpm typecheck red for the whole project.",
+      "impact": "Without the stubs the RED phase reports as a compile failure rather than as failing expectations, and the stated baseline (typecheck green on 7 projects) would break for reasons unrelated to the implementation. With them, every test fails on a named NOT_IMPLEMENTED and typecheck stays green.",
+      "suggested_fix": "The implementer replaces each stub body and deletes apps/cli/src/tui/not-implemented.ts, whose header says exactly that. No behaviour was written: every stub function body is a single call to notImplemented(name, ...args).",
+      "evidence": "apps/cli/src/tui/not-implemented.ts; pnpm -r typecheck green on 7 projects after the tests were added.",
+      "confidence": "high"
+    },
+    {
+      "id": "T9-F-005",
+      "reviewer": "tests-creator",
+      "severity": "minor",
+      "problem": "Three of the 90 tests pass in the RED phase because they assert over exported contract constants the stubs already carry: the eight-command list, the four trust identifier names and order, and the wording of UNAUDITED_NOTICE.",
+      "impact": "They are contract locks rather than RED tests, and must not be counted as evidence that the implementation exists. A fourth would have joined them - a bare expect(...).toThrow() on an unsupported command was satisfied by the NOT_IMPLEMENTED scaffold itself - and was tightened to require the refusal to name the command it refused.",
+      "suggested_fix": "None needed; the distinction is recorded so the RED evidence is read correctly. 87 of 90 fail on named missing implementations.",
+      "evidence": "vitest run src/tui after restore: 87 failed of 90. The passing three are cli-bridge 'declares exactly the eight commands', modal-host 'names exactly the four fields', shell-chrome 'states both halves of the warning'.",
+      "confidence": "high"
+    },
+    {
+      "id": "T9-F-006",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "problem": "During the probe step a glob copy from the session scratchpad pulled in seven files belonging to another worker's earlier probe (boundary.ts, dbg.ts, perpage.ts, t52-probe.test.ts, t52-vitest.config.ts, t55-probe.ts, t55-threshold.ts) into apps/cli/src/tui/.",
+      "impact": "None persisted. They were detected in the same run (vitest reported 'No test suite found' for t52-probe.test.ts), deleted immediately, and the subsequent SHA-256 verification confirms the directory holds exactly the 18 files authored by this task and nothing else. They contributed no passing test to the probe evidence.",
+      "suggested_fix": "This task's probe files were moved to a task-specific scratchpad subdirectory so the shared directory is back to its prior contents. A future worker should copy named files rather than globbing a shared scratchpad.",
+      "evidence": "shasum -a 256 -c against the manifest recorded before the probe: 18/18 OK, and ls of apps/cli/src/tui shows 18 files.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 90,
+    "tests_red": 87,
+    "tests_green_contract_locks": 3,
+    "test_files": 8,
+    "source_stubs": 10,
+    "probe_result": "90/90 green, reverted, SHA-256 verified 18/18",
+    "typecheck_projects_green": 7,
+    "preexisting_cli_suites": "22 of 24 files green (102 tests); the 2 failing files, test/e2e/flood-closure.test.ts and src/runtime/inbound.readMark.test.ts, are the parallel T6 worker's RED tests and were not touched"
+  },
+  "timestamp_utc": "2026-09-07T07:50:00Z"
+}

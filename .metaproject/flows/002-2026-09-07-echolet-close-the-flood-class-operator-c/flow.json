@@ -1,0 +1,368 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "002",
+  "slug": "echolet-close-the-flood-class-operator-c",
+  "title": "Echolet: close the flood class, operator console, and two-relay deployment",
+  "status": "in-progress",
+  "createdAt": "2026-09-07T06:55:37.619Z",
+  "updatedAt": "2026-09-07T09:04:14.758Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:736524228b28b2c1a7b32bb2f60fc57784727eb5963477107d8ae0499208254b",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row superseded by the explicit T5-T11 plan for this flow"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row superseded by the explicit T5-T11 plan for this flow"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row superseded by the explicit T5-T11 plan for this flow"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold row superseded by the explicit T5-T11 plan for this flow"
+    },
+    {
+      "id": "T5",
+      "title": "Design the flooding closure and justify the choice",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T06:57:10.556Z",
+            "outcome": "started",
+            "detail": "002-T5-design"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "RED tests for the chosen flooding closure",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T07:13:34.731Z",
+            "outcome": "started",
+            "detail": "002-T6-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Implement the flooding closure",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T08:32:12.886Z",
+            "outcome": "started",
+            "detail": "002-T7-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Serve HTTPS for non-loopback relay URLs",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Operator console over the local CLI",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-07T07:22:40.752Z",
+            "outcome": "started",
+            "detail": "002-T9-tui-design-and-tests"
+          },
+          {
+            "at": "2026-09-07T08:32:12.979Z",
+            "outcome": "started",
+            "detail": "002-T9-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Verify the closure and the console on a real relay",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T7",
+        "T8",
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Deploy two relay instances and write the deployment runbook",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-07T06:55:37.619Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-07T06:56:43.880Z",
+      "event": "task-added",
+      "detail": "T5: Design the flooding closure and justify the choice"
+    },
+    {
+      "at": "2026-09-07T06:56:43.959Z",
+      "event": "task-added",
+      "detail": "T6: RED tests for the chosen flooding closure"
+    },
+    {
+      "at": "2026-09-07T06:56:44.036Z",
+      "event": "task-added",
+      "detail": "T7: Implement the flooding closure"
+    },
+    {
+      "at": "2026-09-07T06:56:44.114Z",
+      "event": "task-added",
+      "detail": "T8: Serve HTTPS for non-loopback relay URLs"
+    },
+    {
+      "at": "2026-09-07T06:56:44.190Z",
+      "event": "task-added",
+      "detail": "T9: Operator console over the local CLI"
+    },
+    {
+      "at": "2026-09-07T06:56:44.266Z",
+      "event": "task-added",
+      "detail": "T10: Verify the closure and the console on a real relay"
+    },
+    {
+      "at": "2026-09-07T06:56:44.347Z",
+      "event": "task-added",
+      "detail": "T11: Deploy two relay instances and write the deployment runbook"
+    },
+    {
+      "at": "2026-09-07T06:57:00.427Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-07T06:57:00.520Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-07T06:57:09.881Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-07T06:57:09.965Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-07T06:57:10.046Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-07T06:57:10.132Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-07T06:57:10.236Z",
+      "event": "task-depends-set",
+      "detail": "T6: dependsOn T5 (was empty) — Tests follow the chosen design"
+    },
+    {
+      "at": "2026-09-07T06:57:10.319Z",
+      "event": "task-depends-set",
+      "detail": "T7: dependsOn T6 (was empty) — Implementation follows the RED tests"
+    },
+    {
+      "at": "2026-09-07T06:57:10.398Z",
+      "event": "task-depends-set",
+      "detail": "T10: dependsOn T7, T8, T9 (was empty) — Verification runs on the closure, TLS and the console together"
+    },
+    {
+      "at": "2026-09-07T06:57:10.477Z",
+      "event": "task-depends-set",
+      "detail": "T11: dependsOn T10 (was empty) — Nothing is exposed before the closure is verified — the user fixed this order"
+    },
+    {
+      "at": "2026-09-07T06:57:10.556Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 002-T5-design"
+    },
+    {
+      "at": "2026-09-07T07:13:34.648Z",
+      "event": "task-done",
+      "detail": "T5: Design the flooding closure and justify the choice"
+    },
+    {
+      "at": "2026-09-07T07:13:34.731Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 002-T6-tests"
+    },
+    {
+      "at": "2026-09-07T07:22:40.753Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 002-T9-tui-design-and-tests"
+    },
+    {
+      "at": "2026-09-07T08:32:12.797Z",
+      "event": "task-done",
+      "detail": "T6: RED tests for the chosen flooding closure"
+    },
+    {
+      "at": "2026-09-07T08:32:12.886Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 002-T7-implement"
+    },
+    {
+      "at": "2026-09-07T08:32:12.979Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 2) — 002-T9-implement"
+    },
+    {
+      "at": "2026-09-07T09:04:14.679Z",
+      "event": "task-done",
+      "detail": "T7: Implement the flooding closure"
+    },
+    {
+      "at": "2026-09-07T09:04:14.758Z",
+      "event": "task-done",
+      "detail": "T9: Operator console over the local CLI"
+    }
+  ]
+}

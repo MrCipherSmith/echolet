@@ -1,0 +1,32 @@
+# Flow Journal
+
+- 2026-09-07T06:55:37.619Z - flow created
+- 2026-09-07T06:56:43.880Z - task-added: T5: Design the flooding closure and justify the choice
+- 2026-09-07T06:56:43.959Z - task-added: T6: RED tests for the chosen flooding closure
+- 2026-09-07T06:56:44.036Z - task-added: T7: Implement the flooding closure
+- 2026-09-07T06:56:44.114Z - task-added: T8: Serve HTTPS for non-loopback relay URLs
+- 2026-09-07T06:56:44.190Z - task-added: T9: Operator console over the local CLI
+- 2026-09-07: USER DECISION — the operator surface becomes a **TUI**, not a browser page, with `keryx` on `geekom` at `/home/altsay/keryx/src/tui` as the reference. Inspected before adopting: 77 files, 38 colocated tests, 1.4 MB and **no UI dependency at all** — only Node builtins, so the rendering is hand-rolled ANSI over the alternate screen with raw-mode input. That property is why the reference is worth following here: a hand-rolled renderer is unit-testable line by line, which a framework's virtual DOM would not be, and this flow's method is test-first with independent acceptance. Structure to mirror: `tui-shell` as the shell, `shell-chrome` for frames, `transcript-blocks`, `modal-host` for confirmations, and pluggable inspector panes.
+- 2026-09-07: The TUI is also strictly safer than the web console for the property AC5 protects. There is no HTTP server, no browser origin and no localhost port to reach, so a store key or private key cannot leave the operator's terminal even by accident. AC5 becomes easier to satisfy honestly rather than harder, and the `description.md` rationale for rejecting a server-side-keys web client holds a fortiori.
+- 2026-09-07: Repository connected to `git@github.com:MrCipherSmith/echolet.git` (private, was empty). GitHub rejected the first push under email-privacy protection because the four commits carried the user's personal address. The protection was NOT disabled — instead the four local, unpushed commits were re-authored to the GitHub noreply address, verified as 0 commits carrying the personal address and 4 carrying noreply, and the repository-local `user.email` was pinned so it cannot recur. Tailscale was started at the user's request; tailnet is `tail5a88fb.ts.net` with MagicDNS, and both relays will use `tailscale cert` names rather than public DNS.
+- 2026-09-07T06:56:44.266Z - task-added: T10: Verify the closure and the console on a real relay
+- 2026-09-07T06:56:44.347Z - task-added: T11: Deploy two relay instances and write the deployment runbook
+- 2026-09-07T06:57:00.427Z - frozen: 8 criteria; checksum recorded
+- 2026-09-07T06:57:00.520Z - started
+- 2026-09-07T06:57:09.881Z - task-done: T1: Collect remaining context
+- 2026-09-07T06:57:09.965Z - task-done: T2: Implement per plan
+- 2026-09-07T06:57:10.046Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-07T06:57:10.132Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-07T06:57:10.236Z - task-depends-set: T6: dependsOn T5 (was empty) — Tests follow the chosen design
+- 2026-09-07T06:57:10.319Z - task-depends-set: T7: dependsOn T6 (was empty) — Implementation follows the RED tests
+- 2026-09-07T06:57:10.398Z - task-depends-set: T10: dependsOn T7, T8, T9 (was empty) — Verification runs on the closure, TLS and the console together
+- 2026-09-07T06:57:10.477Z - task-depends-set: T11: dependsOn T10 (was empty) — Nothing is exposed before the closure is verified — the user fixed this order
+- 2026-09-07T06:57:10.556Z - task-attempt: T5: started (attempt 1) — 002-T5-design
+- 2026-09-07T07:13:34.648Z - task-done: T5: Design the flooding closure and justify the choice
+- 2026-09-07T07:13:34.731Z - task-attempt: T6: started (attempt 1) — 002-T6-tests
+- 2026-09-07T07:22:40.753Z - task-attempt: T9: started (attempt 1) — 002-T9-tui-design-and-tests
+- 2026-09-07T08:32:12.797Z - task-done: T6: RED tests for the chosen flooding closure
+- 2026-09-07T08:32:12.886Z - task-attempt: T7: started (attempt 1) — 002-T7-implement
+- 2026-09-07T08:32:12.979Z - task-attempt: T9: started (attempt 2) — 002-T9-implement
+- 2026-09-07T09:04:14.679Z - task-done: T7: Implement the flooding closure
+- 2026-09-07T09:04:14.758Z - task-done: T9: Operator console over the local CLI

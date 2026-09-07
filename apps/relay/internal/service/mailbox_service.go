@@ -43,6 +43,25 @@ func (s *MailboxService) SenderOccupancy(mailboxID, senderIdentityID, envelopeID
 	return s.repo.SenderOccupancy(mailboxID, senderIdentityID, envelopeID, countLimit)
 }
 
+// HighestIssuedPosition is the highest ordering position this mailbox has ever
+// allocated: the upper bound on any continuation token or read position the relay
+// could have issued.
+func (s *MailboxService) HighestIssuedPosition(mailboxID string) (uint64, error) {
+	return s.repo.HighestIssuedPosition(mailboxID)
+}
+
+// ReadMark is one recipient device's durable read position in one mailbox. Zero
+// means the head of the mailbox.
+func (s *MailboxService) ReadMark(mailboxID, deviceID string) (uint64, error) {
+	return s.repo.ReadMark(mailboxID, deviceID)
+}
+
+// AdvanceReadMark moves a recipient device's read position forward, and only
+// forward.
+func (s *MailboxService) AdvanceReadMark(mailboxID, deviceID string, position uint64) error {
+	return s.repo.AdvanceReadMark(mailboxID, deviceID, position)
+}
+
 func (s *MailboxService) AckEnvelopes(mailboxID string, envelopeIDs []string) error {
 	for _, envelopeID := range envelopeIDs {
 		if err := s.repo.DeleteEnvelope(mailboxID, envelopeID); err != nil {
