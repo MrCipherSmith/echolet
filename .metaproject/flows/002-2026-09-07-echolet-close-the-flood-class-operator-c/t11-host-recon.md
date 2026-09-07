@@ -13,7 +13,7 @@ The deployment-runbook's §1 table is accurate in every respect it asserts, and 
 
 **There is exactly one blocking gap, and it is shared by both hosts and is not fixable on the hosts:**
 
-> `tailscale status --json` reports `CertDomains: null` on **both** `geekom` and `depr`. `CertDomains` is the field the Tailscale client populates with the names it is permitted to issue certificates for; an empty value means **HTTPS Certificates are not enabled for this tailnet**. `sudo tailscale cert …` (runbook §4) will therefore fail, and §4 is the step every later step depends on — no certificate means no `cert.pem`/`key.pem`, and the relay refuses to start without both (it never degrades to plain HTTP). The fix is a one-click toggle in the Tailscale **admin console** (DNS page → *HTTPS Certificates* → Enable), performed by the tailnet owner (`aleks.zeitler@gmail.com`). It cannot be done over SSH.
+> `tailscale status --json` reports `CertDomains: null` on **both** `geekom` and `depr`. `CertDomains` is the field the Tailscale client populates with the names it is permitted to issue certificates for; an empty value means **HTTPS Certificates are not enabled for this tailnet**. `sudo tailscale cert …` (runbook §4) will therefore fail, and §4 is the step every later step depends on — no certificate means no `cert.pem`/`key.pem`, and the relay refuses to start without both (it never degrades to plain HTTP). The fix is a one-click toggle in the Tailscale **admin console** (DNS page → *HTTPS Certificates* → Enable), performed by the tailnet owner (the tailnet owner). It cannot be done over SSH.
 
 Everything else is either already in place or is a routine, expected step of the runbook (create two directories, `chown` them, install a timer unit).
 
@@ -78,7 +78,7 @@ Note: this is a busy machine (32 containers, 48 images, 4.5 GiB of swap in use).
 | Installed | `/usr/bin/tailscale`, version **1.102.2** |
 | `tailscaled` | `active`, `enabled` |
 | `BackendState` | **Running**; `WantRunning=True`, `LoggedOut=False`, `ShieldsUp=False` |
-| Tailnet | `aleks.zeitler@gmail.com`, suffix **`tail5a88fb.ts.net`** |
+| Tailnet | the tailnet owner, suffix **`tail5a88fb.ts.net`** |
 | MagicDNS | **enabled tailnet-wide** (`tailscale dns status` confirms) |
 | **MagicDNS FQDN** | **`geekom.tail5a88fb.ts.net`** |
 | **Tailnet IPv4** | **`100.116.255.111`** ← this is `ECHOLET_BIND_ADDR` |
@@ -200,7 +200,7 @@ Worth recording: `run-relay.sh`'s header and runbook §6 both warn that "Ubuntu'
 | Installed | `/usr/bin/tailscale`, version **1.102.3** |
 | `tailscaled` | `active`, `enabled` |
 | `BackendState` | **Running**; `WantRunning=True`, `LoggedOut=False`, `ShieldsUp=False`, `Hostname=depr` |
-| Tailnet | `aleks.zeitler@gmail.com`, suffix **`tail5a88fb.ts.net`** |
+| Tailnet | the tailnet owner, suffix **`tail5a88fb.ts.net`** |
 | MagicDNS | **enabled tailnet-wide** |
 | **MagicDNS FQDN** | **`depr.tail5a88fb.ts.net`** |
 | **Tailnet IPv4** | **`100.100.188.64`** ← this is `ECHOLET_BIND_ADDR` |
@@ -293,7 +293,7 @@ Commands are **written down, not executed**. Nothing below has been run.
 
 | # | Gap | Where | Exact remedy |
 |---|---|---|---|
-| G0 | **HTTPS certificates are not enabled for tailnet `tail5a88fb.ts.net`** (`CertDomains: null` on both hosts). `tailscale cert` will fail, and with no cert pair the relay exits at startup rather than serving plain HTTP. | Tailscale **admin console**, not the hosts | Admin console → **DNS** → **HTTPS Certificates** → *Enable*. Owner: `aleks.zeitler@gmail.com`. **Not doable over SSH.** Re-verify with `ssh geekom 'tailscale status --json \| jq .CertDomains'` — it must list `geekom.tail5a88fb.ts.net`. |
+| G0 | **HTTPS certificates are not enabled for tailnet `tail5a88fb.ts.net`** (`CertDomains: null` on both hosts). `tailscale cert` will fail, and with no cert pair the relay exits at startup rather than serving plain HTTP. | Tailscale **admin console**, not the hosts | Admin console → **DNS** → **HTTPS Certificates** → *Enable*. Owner: the tailnet owner. **Not doable over SSH.** Re-verify with `ssh geekom 'tailscale status --json \| jq .CertDomains'` — it must list `geekom.tail5a88fb.ts.net`. |
 
 ### `geekom` (`altsay@100.116.255.111`, FQDN `geekom.tail5a88fb.ts.net`)
 
