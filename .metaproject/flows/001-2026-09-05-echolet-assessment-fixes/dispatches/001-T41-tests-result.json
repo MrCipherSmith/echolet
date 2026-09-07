@@ -1,0 +1,146 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T41-tests",
+  "status": "DONE",
+  "summary": "T41 test half of the T38 remediation. Part 1: new RED tests for HL-N-001 (batch isolation, permanent vs transient), BE-R-001 (unbounded envelope identifier strings) and HL-N-002 (poll must surface remaining work) - 13 new RED assertions across three files, all failing for the reported reason on the unmodified tree. Part 2: repaired T38-TP-001 (concurrency barrier re-anchored through the idFactory('envelope') seam; MC3b now RED in 437ms where it was GREEN in 215ms, MC3 now RED in 217ms with a real assertion instead of a 60s timeout, MC2 still RED with 5 of 6 soft assertions firing), T38-TP-002 (F-005(c) expiry regression moved onto GetEnvelopeBatch, the production poll reader; MG4 now RED where the whole relay suite was GREEN), T38-TP-003 (the inert outboxKeys prefix repaired to a real scan plus a new envelope-identity assertion that MC2 kills; the pollCapacity byte assertion made load-bearing by two new cases either side of the client's 1 MiB reader bound, which the 1 GiB mutation now kills) and the MC10 gap (two new cases pinning that strict parseArgs is load-bearing via inline values on boolean options; strict:false now turns them RED at exit 0 and exit 3). No implementation code was written; no existing assertion was weakened or deleted. All four mutation-target source files verified byte-identical to the T38 verifier's recorded sha256 after every mutation was reverted. Part 3 (follow-up dispatch, repairing finding T40-N-001): after T40 implemented per-envelope acceptance, one assertion in inbound.batchIsolation.test.ts was found to be over-pinned - it pinned the NUMBER of recorded ack ATTEMPTS rather than the behaviour it meant to pin, and no implementation could satisfy it, because the mailbox() fixture records a request before state.intercept can reject it. That single assertion was repaired to pin the SET of envelope ids ever offered for acknowledgement. No implementation code was written in Part 3 either, no other test file was touched, and the two mutations run to prove the repaired assertion can still fail were reverted with inbound.ts verified byte-identical (sha256 4c9ff5c8...54ab191f). apps/cli is now 14 files / 83 tests, 83 passed; the whole workspace (pnpm test) is green at 128 tests.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "HL-N-001: RED tests pin that one permanently unacceptable envelope cannot block delivery of legitimate envelopes in the same or later batches",
+      "status": "met",
+      "evidence": "apps/cli/src/runtime/inbound.batchIsolation.test.ts. Seven tests: mixed batch in both orders (untrusted sender first and last), a later-batch test where the unacked poison stays queued while a newly arrived envelope is still delivered, and two permanent variants (malformed ciphertext, misaddressed recipient). All RED today: 'InboundError: CONTACT_NOT_TRUSTED' out of inbound.ts:55, plus 'expected undefined to deeply equal []' for the required `rejected` field."
+    },
+    {
+      "criterion": "HL-N-001: the permanent/transient distinction is pinned on both sides",
+      "status": "met",
+      "evidence": "Permanent (untrusted sender, malformed ciphertext, wrong recipient): not decrypted, not in history, NOT acked, and does not block the batch. Transient (store commit failure, relay unavailable): 'leaves both envelopes queued and the store untouched when the commit fails, then delivers them on retry' asserts acks()==[] and a full-store snapshot equal to before, then a clean retry delivering both; 'keeps the pending acknowledgement ... when the ack request fails' asserts RELAY_TIMEOUT, a surviving pending ack retried later, and that the poison is never in the ack set. The ack assertion of that second test was repaired in the follow-up dispatch (finding T40-N-001): it read expect(fake.ackedIds()).toEqual([legitimate.envelope_id]), which pins the number of recorded ack ATTEMPTS at one. The fixture records two - poll() must reach the ack step for the RELAY_TIMEOUT to fire, and retryPendingAcks() must issue a second, successful ack because only the fake's ack branch drops the envelope from the queue - and both carry the same single id, so no implementation could satisfy it. It now reads expect([...new Set(fake.ackedIds())]).toEqual([legitimate.envelope_id]), pinning WHICH envelopes were ever offered for acknowledgement. The surrounding assertions are unchanged and none was weakened."
+    },
+    {
+      "criterion": "HL-N-001: the existing F-012 assertions are not weakened",
+      "status": "met",
+      "evidence": "inbound.test.ts is untouched and still 11/11 green on the restored tree. The new suite additionally re-pins F-012 directly: 'still rejects a batch whose every envelope is permanently unacceptable' asserts rejectsWith(poll(), 'CONTACT_NOT_TRUSTED'), acks()==[] and full-store snapshot equality. It is the ONE test in the new file that is green today, by design."
+    },
+    {
+      "criterion": "BE-R-001: RED Go tests require a bounded 4xx rejection rather than a 500",
+      "status": "met",
+      "evidence": "apps/relay/internal/validation/mailbox_envelope_identifier_test.go and apps/relay/internal/api/handler/mailbox_envelope_identifier_test.go. Handler run reproduces the verifier's result exactly: 'SendEnvelope(identifier_len=70000) status = 500, want a bounded 4xx' for BOTH recipient_mailbox_id and envelope_id (the second half of the Badger key, which the finding did not enumerate). Validation run: 'ValidateMailboxEnvelope(identifier_len=70000) = nil, want a bounded rejection'. Both files carry a green control proving ordinary identifiers still validate / still return 200, so the bound cannot be obtained by refusing the route. No exact maximum is pinned."
+    },
+    {
+      "criterion": "HL-N-002: a RED test requires the poll result to surface remaining work to the caller",
+      "status": "met",
+      "evidence": "Third describe block of apps/cli/src/runtime/inbound.batchIsolation.test.ts. RED with 'expected undefined to be true' on `more` when the relay returned a non-null next_cursor, and 'expected { received: +0 } to match object { received: +0, more: false }' for a drained mailbox."
+    },
+    {
+      "criterion": "T38-TP-001: the F-008 barrier is re-anchored to idFactory('envelope') and proved by mutation",
+      "status": "met",
+      "evidence": "holdBeforeFirstEnvelopeAllocation arms only on a transaction that observed cli:outbox:<id> missing AND in which no envelope had been or was allocated, measured through the idFactory('envelope') seam; barrier.arrived is raced against the first send so a barrier that fails to arm reports itself. MC3b (delete only the '// Optimization only' pre-read, F-008 fix kept): was GREEN in 215ms, now RED in 437ms - 'expected first send finished without ever opening a concurrency window to be opened'. MC3 (both reads removed): was RED by 60s timeout with no assertion, now RED in 217ms on the same assertion. MC2 (F-008 fix reverted, pre-read kept): still RED, now with 5 soft assertions firing including the two new ones. outbound.ts reverted, sha256 3720f372...7e8bba0f, matches the T38 ledger."
+    },
+    {
+      "criterion": "T38-TP-002: the F-005(c) expiry regression is moved onto the production path and proved by mutation",
+      "status": "met",
+      "evidence": "TestGetEnvelopeBatchFiltersExpiredBeforeApplyingBatchLimit added to apps/relay/internal/storage/repository/mailbox_repo_test.go, pinning GetEnvelopeBatch (mailbox_handler.go:252 -> mailbox_service -> mailbox_repo.go:153) at limit=1, limit=10 and byteBudget=1, including HasMore. The existing GetEnvelopes test is untouched. MG4 (remove the ExpiresAtMs skip from GetEnvelopeBatch, with the compensating `_ = nowMS` the verifier noted is needed to compile) was GREEN across `go test ./...`; it is now RED: 'GetEnvelopeBatch(limit=1) returned envelope 00000000-... want ffffffff-...'. mailbox_repo.go reverted, sha256 d598cbe1...7fc36ef7, matches the T38 ledger."
+    },
+    {
+      "criterion": "T38-TP-003: both assertions that could not fail are made capable of failing",
+      "status": "met",
+      "evidence": "(1) outbound.concurrentSend.test.ts: tx.keys(`cli:outbox:${messageID}`) (a complete key) became tx.keys('cli:outbox:') pinned against the exact set of message ids the test sends - the warmup now uses a fixed id instead of randomUUID so the set is exact. The property the inert assertion claimed is now carried by a NEW assertion that the persisted record, both receipts and every envelope id that reached the relay name one and the same envelope; MC2 kills it. (2) relayClient.pollCapacity.test.ts: the byte assertion is kept and cross-referenced, and two new cases sit either side of the client's reader bound at relayClient.ts:96. Widening 1 MiB -> 1 GiB, which previously left the file 2/2 green, now turns it RED ('expected undefined to be an instance of RelayError'). relayClient.ts reverted, sha256 d01e31c0...e584e843."
+    },
+    {
+      "criterion": "MC10 gap: a test now fails if strict: true is removed",
+      "status": "met",
+      "evidence": "Two cases added to cli.dashOptionValues.test.ts using the one rejection parseCommand does not re-implement: an inline value on a BOOLEAN option. Baseline 18/18 green. Under `strict: false` at cli.ts:107 both go RED with exactly the divergence predicted: `doctor --json=please` exits 0 'ok' instead of 2 INVALID_ARGUMENTS, and `contact import --yes=maybe` exits 3 CONTACT_NOT_CONFIRMED instead of 2. Each case carries a green control (the same commands with the flags spelled correctly) so the guard cannot be met by refusing valid input. cli.ts reverted, sha256 40886948...9c5f7ef, matches the T38 ledger."
+    },
+    {
+      "criterion": "No implementation code written, no existing assertion weakened or deleted",
+      "status": "met",
+      "evidence": "The only non-test files touched were the four mutation targets, each reverted and hash-verified byte-identical against the T38 verifier's recorded sha256 values. Full restored-tree runs: apps/cli 14 files / 83 tests with 9 failures, ALL of them the new HL-N-001 / HL-N-002 RED tests; every pre-existing suite green including inbound.test.ts 11/11 and cli.dashOptionValues.test.ts 18/18. apps/relay: only the two new BE-R-001 files fail; handler, router, middleware, repository and validation otherwise ok. `tsc --noEmit` clean, `go vet ./...` clean."
+    },
+    {
+      "criterion": "T40-N-001 repair: the over-pinned ack assertion now pins the intended property and is still able to fail for the right reason",
+      "status": "met",
+      "evidence": "inbound.batchIsolation.test.ts:330. GREEN both ways. Against the current implementation: the file is 10/10, apps/cli is 83/83 and pnpm test is green across all seven packages (protocol 8, client-db 1, crypto-core 4, client-core 2, session-node 24, mobile 6, cli 83). Mutation A (persist a pending ack for a permanently REJECTED envelope, in the catch branch of accept() at inbound.ts:110) turns it RED at the repaired line with two DISTINCT ids where the pre-repair assertion failed with two copies of the same id: 'expected [ ...(2) ] to deeply equal [ Array(1) ]' listing the poison alongside the legitimate envelope. Mutation B (in ackPending(), delete the pending-ack keys BEFORE the relay call instead of after) turns the test RED at inbound.batchIsolation.test.ts:334 - queuedIds() holds two envelopes because the dropped pending ack was never replayed - proving the retention half is still load-bearing. Both mutations reverted; inbound.ts sha256 4c9ff5c87de492b51b3ec6594f953622dc49d211d511e8accb95ac8854ab191f, byte-identical to the pre-mutation baseline. cli.ts (52966347...) and validate.go (1232aab7...) were never opened for writing."
+    }
+  ],
+  "artifacts": [],
+  "changed_files": [
+    { "path": "apps/cli/src/runtime/inbound.batchIsolation.test.ts", "change": "new: 10 tests. RED for HL-N-001 (permanent vs transient batch isolation) and HL-N-002 (poll must surface remaining work). One test is green by design: the F-012 preservation case. Repaired in the follow-up dispatch for finding T40-N-001: the ack assertion of 'keeps the pending acknowledgement ...' changed from expect(fake.ackedIds()).toEqual([legitimate.envelope_id]) to expect([...new Set(fake.ackedIds())]).toEqual([legitimate.envelope_id]), plus two comments naming the fixture artefact and why queuedIds() proves the retry reached the relay. Nothing else in the file changed; all 10 tests now green." },
+    { "path": "apps/relay/internal/validation/mailbox_envelope_identifier_test.go", "change": "new: RED for BE-R-001 at the validation layer - a 70000-byte recipient_mailbox_id or envelope_id must be refused as a *ValidationError, with a green control for ordinary identifiers." },
+    { "path": "apps/relay/internal/api/handler/mailbox_envelope_identifier_test.go", "change": "new: RED for BE-R-001 at /v1/messages/send - a bounded 4xx with a client error code and nothing persisted, instead of the reproduced 500. Green control for ordinary identifiers." },
+    { "path": "apps/cli/src/runtime/outbound.concurrentSend.test.ts", "change": "repaired: T38-TP-001 barrier re-anchored to the idFactory('envelope') allocation seam and raced against the first send; T38-TP-003 (1) inert outboxKeys prefix repaired and a new envelope-identity assertion added. Nothing removed." },
+    { "path": "apps/cli/src/transport/relayClient.pollCapacity.test.ts", "change": "repaired: T38-TP-003 (2). The byte assertion is kept and cross-referenced; two new cases either side of the client's 1 MiB reader bound make responseByteBound load-bearing." },
+    { "path": "apps/relay/internal/storage/repository/mailbox_repo_test.go", "change": "repaired: T38-TP-002. TestGetEnvelopeBatchFiltersExpiredBeforeApplyingBatchLimit added on the production poll reader; the existing GetEnvelopes regression is untouched." },
+    { "path": "apps/cli/src/commands/cli.dashOptionValues.test.ts", "change": "repaired: MC10 gap. Two cases pinning that strict parseArgs is load-bearing, via inline values on boolean options, each with a green control. Nothing removed." }
+  ],
+  "findings": [
+    {
+      "id": "T41-N-001",
+      "reviewer": "tests-creator",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/inbound.test.ts",
+      "line": 177,
+      "problem": "The existing F-012 test asserts a FULL-STORE snapshot equality and acks() == [] for a batch containing only the unpinned sender's envelope. That rules out one of the two remediations the verifier offered for HL-N-001: the poison cannot be quarantined into a local store record, and it cannot be added to the ack set, at least not when it is the only envelope in the batch.",
+      "impact": "An implementer who follows the verifier's 'quarantine the offending envelope_id locally and include it in the ack set' wording will turn a pre-existing green test red and may be tempted to weaken it. The remaining design - process each envelope in its own transaction, ack only what was accepted, and rethrow the first rejection when nothing was accepted - satisfies both the old test and the new ones.",
+      "suggested_fix": "Implement per-envelope acceptance with an aggregated `rejected` list. Ack exactly the accepted envelope ids. If zero envelopes were accepted and at least one was permanently rejected, rethrow that first InboundError so the batch-of-one case behaves exactly as it does today. Leave the poison queued: the new tests assert it stays queued, not that it is acked.",
+      "evidence": "inbound.test.ts:177-183 asserts `rejectsWith(receiver.poll(), 'CONTACT_NOT_TRUSTED')`, `expect(fake.acks()).toEqual([])` and `expect(await snapshot(bob)).toEqual(before)` where snapshot() covers every key in the store. Re-pinned independently in inbound.batchIsolation.test.ts ('still rejects a batch whose every envelope is permanently unacceptable'), which is green today and must stay green.",
+      "confidence": "high"
+    },
+    {
+      "id": "T41-N-002",
+      "reviewer": "tests-creator",
+      "severity": "minor",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 304,
+      "problem": "The new poll result contract adds `more` and `rejected` to what `poll()` returns, and cli.ts writes that value straight to stdout as the `poll` command's JSON payload. `rejected` therefore becomes part of the process-level output contract.",
+      "impact": "Two consequences the implementer must handle deliberately rather than incidentally. First, `rejected` entries must carry envelope ids and typed codes only - never ciphertext, plaintext or any envelope field - or the redaction assertions in cli.test.ts and cli.dashOptionValues.test.ts become reachable. Second, no existing test asserts on the poll payload shape, so nothing breaks, but the documented command surface should be updated to match.",
+      "suggested_fix": "Return `{ received, more, rejected }` where each rejected entry is exactly `{ envelopeId, code }`. Keep the exit code contract unchanged: a poll that accepted at least one envelope is exit 0 even when it also reports rejections.",
+      "evidence": "cli.ts:304 `return await messenger.poll();` feeds writeResult directly. `keryx ctx rg 'received'` over apps/cli/src/commands and apps/cli/test returns 0 matches, so no process-level test pins the current shape.",
+      "confidence": "high"
+    },
+    {
+      "id": "T41-N-003",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 190,
+      "problem": "T38-TP-002 named four unpinned gates. T41 as dispatched covered two of them: the GetEnvelopeBatch expiry filter (now pinned) and the strict-parsing claim (now pinned by the MC10 repair). The other two remain unpinned: MG3, the first-envelope byte-budget exemption at mailbox_repo.go:190, which is unreachable at MaxMessageBytes = 262144 and would need a repository-level call with a byteBudget smaller than one envelope; and MG6, SetRetentionCap, which survives being made a no-op.",
+      "impact": "None today - both gates are correct in the tree. Recorded so that closing T38-TP-002 is not read as closing all four gates it enumerated.",
+      "suggested_fix": "If a later round takes them: drive the exemption through GetEnvelopeBatch with byteBudget smaller than one stored envelope and assert exactly one envelope is still returned, and add one SetRetentionCap(1 * time.Hour) case to TestSaveEnvelopeRetentionNeverExceedsDeclaredLifetime. MC15 (the `--` verbatim-copy short circuit) is unreachable-by-design while no command takes positional operands and needs nothing.",
+      "evidence": "T38 review-testing-practices report section 6, finding T38-TP-002 class_scope: mailbox_repo.go:183 (now pinned), mailbox_repo.go:190, mailbox_repo.go:42, cli.ts:107 (now pinned), cli.ts:93.",
+      "confidence": "high"
+    },
+    {
+      "id": "T41-N-004",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/cli/src/runtime/inbound.batchIsolation.test.ts",
+      "line": 130,
+      "problem": "The mailbox() fixture pushes every request into `requests` BEFORE consulting `state.intercept`, so a request the test made fail is recorded exactly like one that succeeded. Any assertion of the form expect(fake.ackedIds()).toEqual([...]) inside a test that intercepts an ack is therefore pinning the count of ack ATTEMPTS, which is a property of the fixture rather than of the implementation.",
+      "impact": "One such assertion (raised by the implementer as T40-N-001) was unsatisfiable by any implementation and held the suite at 82/83 with the intended behaviour already correct. The same trap is open to any future test in this file that combines `state.intercept` with an exact-equality assertion over `ackedIds()` or `requests`.",
+      "suggested_fix": "When a test intercepts a request, assert over the SET of ids (new Set(fake.ackedIds())), over the last recorded body (fake.acks().at(-1).body.envelope_ids), or build a fresh mailbox() for the retry as inbound.test.ts:255 does. Reserve exact-equality over ackedIds()/requests for tests that intercept nothing. Recording the request after the intercept would change the meaning of `requests` for the existing tests and was deliberately not done.",
+      "evidence": "inbound.batchIsolation.test.ts:130-135 - `requests.push({ path, body })` precedes `const overridden = await state.intercept?.(path)`. Pre-repair failure: 'expected [ ...(2) ] to deeply equal [ Array(1) ]' with the SAME id twice. Repaired at line 330; the repair is mutation-proved in both directions (see the T40-N-001 acceptance entry).",
+      "confidence": "high",
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "Assertion repaired at inbound.batchIsolation.test.ts:330 in this follow-up dispatch. apps/cli 83/83 and pnpm test green; both mutations reverted with inbound.ts byte-identical (sha256 4c9ff5c8...54ab191f)."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "new_test_files": 3,
+    "repaired_test_files": 4,
+    "red_tests_part1": 13,
+    "mutations_run": 8,
+    "mutations_reverted_byte_identical": 5,
+    "repaired_assertions": 1,
+    "cli_suite_final": "83/83",
+    "workspace_suite_final": "128/128"
+  },
+  "timestamp_utc": "2026-09-06T17:10:00Z"
+}

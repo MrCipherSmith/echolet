@@ -1,0 +1,157 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T45-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "GREEN phase for the two defects diagnosed in T44. T44-001 is fixed at both places the CLI destroyed the relay's diagnosis: PREKEY_BUNDLE_UNAVAILABLE was added to the remoteCodes allowlist in apps/cli/src/transport/relayClient.ts so the relay's 404 survives the transport boundary as remoteCode, and classify() in apps/cli/src/commands/cli.ts no longer collapses every non-retryable RelayError to one code - a remoteCode listed in a new explicit, closed reportedRelayCodes set is reported under the relay's own name at exit 3, everything else stays PROTOCOL_REJECTED at exit 3, and the retryable RELAY_UNAVAILABLE/exit 4 path is untouched. The set holds exactly PREKEY_BUNDLE_UNAVAILABLE, because the other allowlisted relay codes genuinely are protocol rejections and only the exhausted prekey was an ordinary recoverable condition being reported as a trust failure; the operator vocabulary therefore grows by exactly one code. The dead v1-era PREKEYS_EXHAUSTED entry was removed (T45-N-003), and the allowlist itself was kept so an unrecognised relay-chosen code is still discarded. T44-002 required the relay-side field predicted by T45-N-001: SaveSignalV2 now returns (claimable bool, error) - true on the first-store path, !stored.Claimed on the idempotent re-store path, which is exact because ClaimSignalV2 sets Claimed and deletes the availability index in one transaction and validation rejects out-of-window bundles before publication - a new PublishSignalPreKeyBundleV2Claimable carries it, and the publish handler emits `claimable` alongside `stored` and `bundle_id`. The existing error-only PublishSignalPreKeyBundleV2 was KEPT and delegates, because the relayv2-tagged repository test declares the relay v2 API as a Go interface with an error-only publish signature and type-asserts against it; widening it in place would have failed that pre-existing test. On the TypeScript side the publish response schema stays .strict() and gains a named closed constant `claimableSchema = z.boolean().optional()`; optional rather than required only because five PRE-EXISTING CLI tests stub the publish response without the field and a required boolean would have made the strict schema reject them all - when the field is absent the CLI omits the key rather than guessing a value. Verification with Node v26.5.0: apps/cli 17 files / 89 tests all passing (the three RED tests pass unmodified), workspace pnpm test 134 passed / 0 failed, pnpm typecheck green across all 7 projects, go -C apps/relay test -race -count=1 ./... ok and the -tags relayv2 variant ok. No test file, no configuration file, vitest.config.ts and test/globalSetup.ts included, was modified; no assertion was weakened, skipped or deleted; no git commit was made and git status --porcelain is byte-identical to the session-start snapshot (23 untracked entries). Status is DONE_WITH_CONCERNS for two reasons that block nothing but the verifier must see: the CLI-side `claimable` is optional rather than required (T45-I-001), forced by five pre-existing stubs this dispatch may not edit; and the machine's default node v22.12.0 is below the declared >=22.13 engine and collapses 13 apps/cli suites with 'No such built-in module: node:sqlite' regardless of any code change (T45-I-003), so every verification must run under a node satisfying the engine.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "All three failing tests pass unmodified and apps/cli reaches 89/89",
+      "status": "met",
+      "evidence": "`pnpm --filter @echolet/cli test` reports 'Test Files 17 passed (17) / Tests 89 passed (89)'. relayClient.prekeyUnavailable.test.ts, cli.relayErrorCodes.test.ts and test/e2e/publication-claimability.test.ts were not opened for writing; their sha-256 hashes recorded in 001-T45-tests-result.json still describe the files on disk. The e2e suite runs against the real relay binary built from source and observes claimable true/true/false with one identical bundle_id across all three publishes."
+    },
+    {
+      "criterion": "pnpm test, pnpm typecheck and both Go test variants pass",
+      "status": "met",
+      "evidence": "Workspace `pnpm test`: protocol 8, client-db 1, crypto-core 4, client-core 2, session-node 24, mobile 6, cli 89 = 134 passed, 0 failed. `pnpm typecheck`: all 7 projects Done. `go -C apps/relay test -race -count=1 ./...` and `go -C apps/relay test -tags relayv2 -race -count=1 ./...`: every package ok, both exit 0. All runs used Node v26.5.0; the machine's default /usr/local/bin/node is v22.12.0, below the package's >=22.13 engine requirement, and cannot load node:sqlite - that is an environment fact, not a code change, and it collapses 13 suites identically before and after this work."
+    },
+    {
+      "criterion": "T44-001: an exhausted recipient prekey is distinguishable from a genuine trust/protocol violation",
+      "status": "met",
+      "evidence": "relayClient.ts remoteCodes now carries PREKEY_BUNDLE_UNAVAILABLE, so a 404 claim rejection yields RelayError(code RELAY_HTTP_ERROR, remoteCode PREKEY_BUNDLE_UNAVAILABLE, httpStatus 404, retryable false). cli.ts classify() reports a remoteCode present in reportedRelayCodes under the relay's own name at exit 3. cli.relayErrorCodes.test.ts observes the exhausted send at exit 3 with a code that is not PROTOCOL_REJECTED and matches /PREKEY/, while the 400 INVALID_SIGNATURE publish stays exit 3 with a code that does not match /PREKEY/ and differs from the exhausted one."
+    },
+    {
+      "criterion": "T44-001: genuine trust and protocol violations keep reporting as trust/protocol rejections",
+      "status": "met",
+      "evidence": "Only codes in the explicit reportedRelayCodes set (today: PREKEY_BUNDLE_UNAVAILABLE alone) are surfaced; every other non-retryable RelayError still becomes PROTOCOL_REJECTED at exit 3, and retryable ones still become RELAY_UNAVAILABLE at exit 4. The green over-correction guard in cli.relayErrorCodes.test.ts passes unchanged: CONTACT_NOT_TRUSTED, a 409 BUNDLE_ID_CONFLICT publish, a 503 at exit 4 RELAY_UNAVAILABLE and CONTACT_PIN_MISMATCH all keep their documented codes and exits. The transport guard that an unrecognised relay-chosen code is still discarded also passes - the allowlist was preserved, not deleted."
+    },
+    {
+      "criterion": "T44-002: relay publish reports honestly whether the published bundle is available for claiming",
+      "status": "met",
+      "evidence": "The relay answers, because the client cannot: SaveSignalV2 returns true on the first-store path (it writes the v2:available: index in that transaction) and !stored.Claimed on the idempotent re-store path (ClaimSignalV2 sets Claimed and deletes that same index atomically; validation rejects out-of-window bundles before publication reaches the repository, so Claimed is the whole question). The publish handler emits it, relayClient publishBundle surfaces it, and the e2e test observes true while unclaimed, true on the repeat publish while still unclaimed, and false on the recovery publish after Alice's send consumed the bundle - so the fix reports truth in both directions rather than declaring every repeat publish unclaimable."
+    },
+    {
+      "criterion": "Design boundaries: no ninth command, no rotateBundle entry point, publish does not implicitly rotate",
+      "status": "met",
+      "evidence": "commandOptions in cli.ts still holds exactly eight commands and was not edited. rotateBundle() remains reachable only from outbound.ts:36 and its own unit test - T38-L-001 stays open by design. publish() still submits profile.publicationBundle() unchanged; profile.ts was not modified. The F-001 suite outbound.publish.test.ts is green and unmodified, and the e2e test's process-level assertion that all three publishes carry one identical bundle_id passes."
+    },
+    {
+      "criterion": "The wire-contract change is additive, strict and closed on both sides",
+      "status": "met",
+      "evidence": "Go: `claimable` is always present and always a boolean in the publish success data; the existing handler test unmarshals only stored/bundle_id and is unaffected, and no Go assertion was weakened. TypeScript: the response object stays .strict() (unknown keys still refused) and the field is declared through a named, documented constant, `claimableSchema = z.boolean().optional()` - a boolean and nothing else, never a string, never null - in the same style the earlier next_cursor widening used. Optional is a constraint, not a preference: five pre-existing tests (cli.test.ts:129, cli.dashOptionValues.test.ts:274, outbound.publish.test.ts:65, outbound.test.ts:78, relayClient.test.ts:32) stub the publish response without the field, and a required boolean would have made the strict schema reject all five. When the field is absent the CLI omits the key from its JSON result instead of guessing a value."
+    },
+    {
+      "criterion": "No pre-existing test weakened, skipped or deleted; forbidden files untouched",
+      "status": "met",
+      "evidence": "Five source files were edited, all of them production code: three Go files under apps/relay/internal and two TypeScript files under apps/cli/src. No *_test.go, no *.test.ts, no vitest.config.ts, no test/globalSetup.ts, no flow.json and no acceptance-criteria.md was opened for writing. No .skip, .todo or .only exists anywhere in the change. The relayv2 interface constraint was satisfied by ADDING a service method rather than by relaxing the test that declares the error-only signature."
+    },
+    {
+      "criterion": "No secret, plaintext, ciphertext, store key or HTTP body is logged",
+      "status": "met",
+      "evidence": "The only new operator-visible outputs are a relay error code (PREKEY_BUNDLE_UNAVAILABLE) and a boolean (claimable). The RelayError still carries no relay-supplied message - the transport continues to discard it, which relayClient.prekeyUnavailable.test.ts asserts in boolean form - and the e2e and process suites check every CLI run's stdout and stderr against all store keys and the synthetic plaintext."
+    },
+    {
+      "criterion": "Report and result contract written; no git commit made",
+      "status": "met",
+      "evidence": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t45-implementation-report.md covers the error-code surfacing, the claimability signal and the wire-contract decision including the optional-versus-required judgement call. This file is the result contract, validated with `keryx skills contracts validate <file> --schema subagent-result`. `git status --porcelain` lists the same 23 untracked entries as the session-start snapshot; the repository is still on unborn main."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T45-implement-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This result contract.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t45-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "T45 implementation report: the two flattening sites of T44-001, the relay-side claimability signal for T44-002, the wire-contract change and why the CLI field is optional, the documentation gap, and the verification evidence.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go",
+      "change": "SaveSignalV2 now returns (claimable bool, err error): true after the first-store path writes the v2:available: index, !stored.Claimed on the idempotent re-store path. The flag is reset at the top of the update closure because updateV2 re-runs it on a Badger conflict, so the answer belongs to the attempt that commits. A doc comment records why only the relay can answer and why expiry does not enter into it."
+    },
+    {
+      "path": "apps/relay/internal/service/signal_prekey_bundle_v2.go",
+      "change": "Added PublishSignalPreKeyBundleV2Claimable(raw, nowMS) (bool, error). The existing error-only PublishSignalPreKeyBundleV2 is kept and delegates to it, because the relayv2-tagged repository test declares the relay v2 API as a Go interface with that exact signature and type-asserts the service against it; a comment records that constraint."
+    },
+    {
+      "path": "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go",
+      "change": "PublishSignalPreKeyBundleV2 calls the claimability-reporting service method and emits `claimable` (always present, always boolean) alongside `stored` and `bundle_id` in the success envelope, with a comment stating why the client cannot derive it."
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.ts",
+      "change": "remoteCodes: added PREKEY_BUNDLE_UNAVAILABLE, removed the dead v1-era PREKEYS_EXHAUSTED (T45-N-003), and documented why the allowlist itself must survive. Added the named closed constant claimableSchema = z.boolean().optional() with a comment explaining the closed shape and why absence is reported as unknown; publishBundle's response schema stays .strict() and gains the field, and the method now returns { stored, bundleId, claimable }."
+    },
+    {
+      "path": "apps/cli/src/commands/cli.ts",
+      "change": "Added the documented reportedRelayCodes set (today: PREKEY_BUNDLE_UNAVAILABLE alone) and rewrote the RelayError branch of classify(): retryable failures keep RELAY_UNAVAILABLE at exit 4, a non-retryable remoteCode present in the set is reported under the relay's own code at exit 3, and everything else stays PROTOCOL_REJECTED at exit 3."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T45-I-001",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/cli/src/transport/relayClient.ts",
+      "line": 30,
+      "problem": "The new `claimable` field is optional in the CLI's publish-response schema rather than required, so the wire contract is closed in shape but not in presence. Five pre-existing CLI tests stub the publish response as { stored: true, bundle_id } with no claimable (cli.test.ts:129, cli.dashOptionValues.test.ts:274, outbound.publish.test.ts:65, outbound.test.ts:78, relayClient.test.ts:32); because the response object is .strict(), a required boolean would have made the schema reject all five as INVALID_RELAY_RESPONSE, and repairing them means editing tests this dispatch is forbidden to touch.",
+      "impact": "Against the real relay the field is always present, so nothing observable is weaker today. The residue is that a relay predating the field would be reported as 'unknown claimability' rather than refused - the CLI omits the key instead of guessing a value, so it never lies, but a future relay regression that dropped the field would degrade silently instead of failing closed.",
+      "suggested_fix": "When a task is allowed to touch those five stubs, add `claimable: true` to each and change claimableSchema to z.boolean(). That closes presence as well as shape and makes a missing field a refused response.",
+      "evidence": "The Go handler emits the field unconditionally, and test/e2e/publication-claimability.test.ts asserts it against the real relay binary on all three publishes; the five stub sites were found with `keryx ctx rg 'publishBundle|stored:|bundleId'`.",
+      "confidence": "high"
+    },
+    {
+      "id": "T45-I-002",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "docs/requirements/echolet-cli-prototype/specification.md",
+      "line": 74,
+      "problem": "Two operator-facing facts introduced by this change have nowhere to be documented. specification.md:74 lists exit codes only and enumerates no machine-readable CLI error codes, and schemas/relay-v2.schema.json carries request/bundle shapes only, with no response contract - so neither the chosen code name PREKEY_BUNDLE_UNAVAILABLE (T45-N-002) nor the new publish response field `claimable` has a home in the requirements package.",
+      "impact": "An operator who sees PREKEY_BUNDLE_UNAVAILABLE at exit 3, or `claimable: false` on a publish that exited 0, has only the tests to explain them. This also touches AC-10, which requires the retained limitations to be described: the structural limitation that one published bundle serves exactly one first-contact sender is exactly what these two signals now report.",
+      "suggested_fix": "The flow's documentation task should record two sentences: `send` reports PREKEY_BUNDLE_UNAVAILABLE (exit 3) when the recipient has no unclaimed published bundle - a recoverable condition, not a trust failure; and `relay publish` reports `claimable`, where false means the publication is stored but its bundle is already consumed, so the re-publish restored nothing. This dispatch deliberately did not edit the change-controlled requirements documents.",
+      "evidence": "specification.md:74 documents exit codes 0/2/3/4/5 and one JSON result per run; `keryx ctx rg 'response|stored' schemas/relay-v2.schema.json` returns no matches.",
+      "confidence": "high"
+    },
+    {
+      "id": "T45-I-003",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/cli/package.json",
+      "line": 1,
+      "problem": "The machine's default node on PATH (/usr/local/bin/node) is v22.12.0, below the package's declared engine requirement of >=22.13. Under it, 13 of the 17 apps/cli suites fail to collect with 'Error: No such built-in module: node:sqlite' and the process-level suites exit 1 with no output - a failure mode that looks exactly like a broken implementation and is not one. The homebrew node at /opt/homebrew/bin/node is v26.5.0 and runs the suite correctly.",
+      "impact": "A verifier whose shell resolves the older node first will see 21 failures across 13 files and could attribute them to this change. All results reported here were produced with PATH=/opt/homebrew/bin:$PATH.",
+      "suggested_fix": "Run every apps/cli verification with a node satisfying the declared engine (PATH=/opt/homebrew/bin:$PATH on this machine), or pin one through a version manager for the flow.",
+      "evidence": "`npx vitest run src/runtime/outbound.publish.test.ts` under v22.12.0: 'Failed Suites 1 - Error: No such built-in module: node:sqlite'. The identical command under v26.5.0 passes, and the full suite reports 89/89.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_modified": 5,
+    "test_files_modified": 0,
+    "config_files_modified": 0,
+    "tests_added": 0,
+    "assertions_weakened": 0,
+    "tests_skipped": 0,
+    "cli_suite_before": "86 passed / 3 failed (89 tests, 17 files)",
+    "cli_suite_after": "89 passed / 0 failed (89 tests, 17 files)",
+    "workspace_total_after": "134 passed / 0 failed",
+    "typecheck": "green",
+    "go_tests": "ok (default and -tags relayv2, both with -race -count=1)",
+    "git_commits": 0
+  },
+  "timestamp_utc": "2026-09-06T18:45:00Z"
+}

@@ -1,0 +1,104 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T40-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "GREEN phase for HL-N-001, BE-R-001, HL-N-002 and SEC-R-001. inbound.ts now accepts envelopes one per transaction, acking only what committed and re-raising the first rejection when nothing was accepted; failures that are not verdicts about the envelope (PersistenceError, RelayError, ProfileError) abort the whole poll so a transient failure is never turned into a discarded message. poll() returns { received, more, rejected } with rejected entries carrying only { envelopeId, code }, and more derived from the relay's next_cursor. Relay validation bounds every envelope identifier string at 256 bytes, turning the former HTTP 500 into a 400 INVALID_SCHEMA. The cli.ts inlineStringOptionValues docstring now documents the GNU-semantics class it actually changes (send --text --json). pnpm typecheck, both go -race variants (with and without -tags relayv2) and every non-cli package pass; apps/cli is 82/83. The single remaining failure is inbound.batchIsolation.test.ts:325, which I believe is unsatisfiable by any implementation - reported as finding T40-N-001 rather than modified.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "HL-N-001 (major): a permanently unacceptable envelope no longer blocks delivery of legitimate envelopes in the same batch or in later batches; permanent rejections are isolated per envelope while transient failures leave the envelope queued, unacked and retriable.",
+      "status": "met",
+      "evidence": "accept() loops per envelope; acceptOne() opens its own profile.withRuntime transaction. Tests: 'delivers and acknowledges the legitimate envelope sharing a batch with an untrusted sender's envelope' (poison first and poison last), 'keeps delivering later batches while the same untrusted envelope stays queued', 'does not let a malformed-ciphertext/misaddressed envelope block the batch either', and 'leaves both envelopes queued and the store untouched when the commit fails, then delivers them on retry' all pass."
+    },
+    {
+      "criterion": "The F-012 guarantees survive unchanged: an unpinned sender is still rejected with CONTACT_NOT_TRUSTED, is never accepted into history, and a batch containing only that envelope still acks nothing and mutates nothing.",
+      "status": "met",
+      "evidence": "poll() re-raises the first rejection when received === 0 before ackPending() is reached. inbound.test.ts:177 ('rejects an envelope from an unpinned sender with CONTACT_NOT_TRUSTED before mutation') and batchIsolation 'still rejects a batch whose every envelope is permanently unacceptable, without acking or mutating anything (F-012)' both pass, including full-store snapshot equality."
+    },
+    {
+      "criterion": "BE-R-001 (minor): oversized envelope identifier strings are refused by validation with a bounded 4xx, not by the store with an HTTP 500, while ordinary identifiers keep validating.",
+      "status": "met",
+      "evidence": "maxEnvelopeIdentifierBytes = 256 checked over all eight identifier-shaped fields in ValidateMailboxEnvelope, returning ValidationError{Code: INVALID_SCHEMA} -> HTTP 400. Both new files pass under go test -race -count=1 ./... and the -tags relayv2 variant, including their 'ordinary identifiers still validate' / 'ordinary identifiers are still accepted' controls."
+    },
+    {
+      "criterion": "HL-N-002 (minor): the poll result surfaces remaining work to the caller, derived from the relay's next_cursor signal.",
+      "status": "met",
+      "evidence": "poll() returns more: batch.next_cursor !== null; commands/cli.ts returns the poll result verbatim to stdout. Tests 'reports more work while the relay withheld envelopes, and no more work once the mailbox is drained' and 'reports no remaining work for an empty mailbox' pass."
+    },
+    {
+      "criterion": "SEC-R-001 (minor): the docstring at apps/cli/src/commands/cli.ts is corrected without changing the behaviour.",
+      "status": "met",
+      "evidence": "The docstring now states that a string option consumes the next argument even when it looks like an option, names the send --text --json change from exit 2 to literal content, gives the --text=--json escape, and keeps the four (still accurate) narrowness bullets. No executable line changed; cli.dashOptionValues.test.ts 18/18 and cli.test.ts 6/6 pass."
+    },
+    {
+      "criterion": "Every test added or repaired by 001-T41-tests passes, unmodified.",
+      "status": "partial",
+      "evidence": "inbound.batchIsolation.test.ts is 9/10 (RED baseline 1/10). The remaining failure is line 325, which I believe no implementation can satisfy - see finding T40-N-001. No test file was edited, skipped or deleted."
+    },
+    {
+      "criterion": "pnpm test, pnpm typecheck, go -C apps/relay test -race -count=1 ./... and the -tags relayv2 variant all pass; no pre-existing test weakened, skipped or deleted.",
+      "status": "partial",
+      "evidence": "pnpm typecheck pass (7 packages); both go -race variants pass; go vet clean. pnpm test: protocol 8/8, client-db 1/1, crypto-core 4/4, client-core 2/2, session-node 24/24, mobile 6/6 all green; apps/cli 82/83 with the single T40-N-001 assertion failing. No pre-existing test regressed."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t40-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Per-envelope acceptance model, permanent-vs-transient classification, identifier bounds, cursor signal, verification table and the T40-N-001 unsatisfiability proof.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/runtime/inbound.ts",
+      "change": "Per-envelope acceptance: accept() loops and classifies, new acceptOne() holds the unchanged guard chain inside its own transaction; added RejectedEnvelope/PollResult types and isNotAnEnvelopeVerdict; poll() re-raises the first rejection when nothing was accepted and returns { received, more, rejected }."
+    },
+    {
+      "path": "apps/cli/src/commands/cli.ts",
+      "change": "Documentation only: corrected the inlineStringOptionValues docstring to state the GNU-semantics class the rewrite deliberately changes (send --text --json) and the escape for it."
+    },
+    {
+      "path": "apps/relay/internal/validation/validate.go",
+      "change": "Added maxEnvelopeIdentifierBytes = 256 and mailboxEnvelopeIdentifiers(); ValidateMailboxEnvelope now refuses any over-long identifier string with INVALID_SCHEMA, naming the field and never echoing the value."
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t40-implementation-report.md",
+      "change": "New implementation report."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T40-N-001",
+      "global_id": "001-T40-implement#T40-N-001",
+      "reviewer": "task-implementer",
+      "severity": "major",
+      "file": "apps/cli/src/runtime/inbound.batchIsolation.test.ts",
+      "line": 325,
+      "symbol": "keeps the pending acknowledgement of an accepted envelope when the ack request fails, and never acks the poison",
+      "problem": "The assertion expect(fake.ackedIds()).toEqual([legitimate.envelope_id]) at line 325 is unsatisfiable together with line 320 (poll must reject with RELAY_TIMEOUT) and line 327 (the relay queue must no longer hold the legitimate envelope). state.intercept throws only for /v1/mailbox/ack and poll() touches the relay only via challenge, poll and ack, so line 320 requires poll() to have issued an ack request. mailbox() records requests.push({path, body}) at line 131, before consulting state.intercept at line 133, so the failed attempt is recorded, and ackedIds() (line 149) flat-maps envelope_ids over ALL recorded ack requests, successful or not. Line 327 requires a second, successful ack request, because the fake removes envelopes only inside its ack branch, which is reached only after intercept returns. Both requests necessarily carry envelope_ids: [legitimate.envelope_id], because it is the only pending ack at both moments, so ackedIds() is necessarily two elements long.",
+      "impact": "One of the ten T41 RED tests cannot go green under any implementation, so the flow's definition of done cannot be met without touching the test - which this worker is forbidden to do. The behaviour the test describes in prose IS implemented: the poison is never acked (line 326 passes), the accepted envelope's acknowledgement survives the relay failure as pending rather than being dropped, and the retry drains it (line 327's queue state is reached). Only the count of recorded ack attempts is over-pinned, so the finding is about the assertion, not about a defect in the runtime.",
+      "suggested_fix": "Either expect([...new Set(fake.ackedIds())]).toEqual([legitimate.envelope_id]) or expect(fake.acks().at(-1)!.body.envelope_ids).toEqual([legitimate.envelope_id]). Both keep the guarantee the test exists to protect (only the legitimate envelope is ever acked, the poison never) while no longer counting the deliberately-failed ack attempt as a second acknowledgement. The equivalent scenario in inbound.test.ts:247-262 sidesteps the problem by constructing a fresh mailbox() for the retry, whose requests array holds only the successful ack; adopting that shape here is a third option.",
+      "evidence": "pnpm --filter @echolet/cli exec vitest run: 'AssertionError: expected [ ...(2) ] to deeply equal [ Array(1) ]' with the received array showing the same envelope id twice, at inbound.batchIsolation.test.ts:325:29. The whole file is otherwise 9/10 (RED baseline was 1/10) and the full apps/cli suite is 82/83; every other suite in the repository is green.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/inbound.batchIsolation.test.ts:325"
+        ],
+        "enumeration_method": "Read every use of ackedIds() in the file (lines 201, 208, 225, 234, 257, 302, 325, 326). Line 325 is the only one evaluated at a point where a deliberately-failed ack request precedes a successful one; every other call site runs in a scenario where each ack attempt either succeeds or is never issued, so none of them double-counts."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T17:05:00Z"
+}

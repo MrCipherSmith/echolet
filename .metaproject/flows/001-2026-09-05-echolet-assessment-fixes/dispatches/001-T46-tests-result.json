@@ -1,0 +1,200 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T46-tests",
+  "status": "DONE",
+  "summary": "T46 closes the one loosening T45 was forced into: `claimable` on the relay v2 publish response is declared `z.boolean().optional()` in apps/cli/src/transport/relayClient.ts:37, so a response that omits the field parses on a `.strict()` object and the CLI silently loses the signal T44-002 added. The five pre-existing stubs that made a required boolean impossible now carry the field, and one new RED test requires the omission to be rejected. All five line references from the dispatch were verified against the current files before editing and all five were exact. Every one of the five scenarios is a publication of a freshly signed bundle that nothing in that test ever claims - the local profile publishes its own bundle while the claim path serves a different, remote peer's bundle - so `claimable: true` is what the real relay answers in each, and no stub was blanket-set against its own scenario. One assertion was strengthened rather than weakened: relayClient.test.ts:41 `resolves.toEqual({...})` now also requires `claimable: true`, because publishBundle() returns the field and an exact-equality assertion must account for it. The new file apps/cli/src/transport/relayClient.claimable.test.ts has three tests: one RED (omitted `claimable` must be rejected as INVALID_RELAY_RESPONSE) and two green guards that hold on both sides of the production change - both boolean answers survive the transport unchanged (`false` in particular, the case T44-002 exists for), and the field stays closed to a string, null, a number, while the envelope still refuses unknown keys. No implementation code was written: relayClient.ts, cli.ts and every Go file are untouched, and making `claimableSchema` a required `z.boolean()` remains the implementer's one-line change. Counts: apps/cli went from 17 files / 89 tests all green to 18 files / 92 tests with 91 passed and exactly 1 failed - the intended RED. All 89 pre-existing tests are still green, including all five suites whose stubs were edited. `pnpm typecheck` is green across all 7 projects. No git commit was made; `git status --porcelain` still lists the same 23 untracked entries as the session-start snapshot.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "The five pre-existing publish stubs carry `claimable`, matching what the real relay now sends",
+      "status": "met",
+      "evidence": "All five dispatch line references were verified against the current files first and all five were exact. (1) apps/cli/src/commands/cli.test.ts:129 - the in-process HTTP server's /v2/prekeys/publish branch now returns `{ stored: true, bundle_id, claimable: true }`. (2) apps/cli/src/commands/cli.dashOptionValues.test.ts:274 - the startRelay route map's publish handler likewise. (3) apps/cli/src/runtime/outbound.publish.test.ts:65 - the shared `stored` response helper. (4) apps/cli/src/runtime/outbound.test.ts:78 - the relayFetch publish branch. (5) apps/cli/src/transport/relayClient.test.ts:32 - the strict-transport-boundary publish stub. Each edit carries a one- or two-line comment stating why that scenario is claimable."
+    },
+    {
+      "criterion": "The value chosen for each stub is the one its scenario actually implies, not a blanket true",
+      "status": "met",
+      "evidence": "The relay answers `claimable: true` on a first store, and `!stored.Claimed` on an idempotent re-store (t45-implementation-report.md section 3.2). Every publication in all five suites is either a first store or a re-store of a bundle that suite never claims, so `true` is the honest answer in each: in cli.test.ts and cli.dashOptionValues.test.ts Alice publishes her own bundle while /v2/prekeys/claim serves Bob's card-exported bundle, never Alice's; in outbound.test.ts the publish branch stores the local profile's bundle while the claim branch returns a separate `claimedBundle` fixture; in outbound.publish.test.ts the three scenarios are a byte-identical retry after a lost response, a repeat of an already successful publication, and a post-rotation publish - no claim is ever issued in that file. The `false` case is deliberately not stubbed anywhere here: it is already covered end-to-end against the real relay at apps/cli/test/e2e/publication-claimability.test.ts, and it is covered at the transport boundary by the new green guard."
+    },
+    {
+      "criterion": "A RED test requires a publish response that omits `claimable` to be rejected by the strict response schema",
+      "status": "met",
+      "evidence": "apps/cli/src/transport/relayClient.claimable.test.ts:39 `await expect(publishing({ stored: true, bundle_id: bundle.bundle_id })).rejects.toMatchObject({ code: 'INVALID_RELAY_RESPONSE', retryable: false })`. Observed failure, both in a targeted run and in the full apps/cli run: `AssertionError: promise resolved \"{ stored: true, …(2) }\" instead of rejecting` - received `{ bundleId: 'f841b845-e677-4bce-b18e-d1d3bf745e67', claimable: undefined, stored: true }`. The received value is itself the defect: with `.optional()` the omission parses and `claimable` reaches the caller as undefined. The assertion passes as soon as `claimableSchema` in relayClient.ts:37 becomes a required `z.boolean()`, because `.strict()` then rejects the missing key and `request()` maps the parse failure to `INVALID_RELAY_RESPONSE`, retryable false."
+    },
+    {
+      "criterion": "The new test file also guards against over-correction, and those guards hold on both sides of the production change",
+      "status": "met",
+      "evidence": "Two green guards in the same file. (1) 'carries both claimability answers through the transport unchanged' requires `resolves.toEqual({ stored: true, bundleId, claimable: true })` and `... claimable: false }`, so a fix that hard-codes or coerces the field, or drops `false` on the way out, fails. (2) 'keeps claimable closed to anything that is not a boolean, and the envelope closed to unknown keys' requires rejection of `claimable: 'true'`, `claimable: null`, `claimable: 1` and of an otherwise valid envelope carrying an extra `unexpected` key, so the required field may not be reached by widening the schema in some other direction. Both are green today (2 of the 3 new tests pass) and stay green under a required boolean."
+    },
+    {
+      "criterion": "No implementation code was written; the one-line production change is left to the implementer",
+      "status": "met",
+      "evidence": "apps/cli/src/transport/relayClient.ts, apps/cli/src/commands/cli.ts and every file under apps/relay were read but never opened for writing. `claimableSchema = z.boolean().optional()` at relayClient.ts:37 is unchanged, which is exactly why the RED test fails. Only six files were written: one new test file and five existing test files."
+    },
+    {
+      "criterion": "No existing assertion was weakened, deleted, skipped or relaxed",
+      "status": "met",
+      "evidence": "Four of the five stub edits add a key to a mock response body only; no assertion in those files was touched. The fifth file needed one assertion change and it is a strengthening, not a weakening: relayClient.test.ts:41 `resolves.toEqual({ stored: true, bundleId: bundle.bundle_id })` became `resolves.toEqual({ stored: true, bundleId: bundle.bundle_id, claimable: true })`. `toEqual` ignores undefined-valued properties, which is precisely how the old form tolerated the missing field; the new form pins the value exactly. No `.skip`, `.todo`, `.only` or `--bail` was introduced anywhere. The three `resolves.toMatchObject({ stored: true })` assertions in outbound.publish.test.ts (lines 92, 114, 115 after the edit) were left exactly as they were."
+    },
+    {
+      "criterion": "The forbidden files were not touched",
+      "status": "met",
+      "evidence": "apps/cli/vitest.config.ts and apps/cli/test/globalSetup.ts (owned by T43) were never opened for writing, and neither were flow.json or acceptance-criteria.md. The new suite is a pure unit test over RelayClient with an injected `fetch` mock - it starts no server, builds nothing and touches no dist/ artifact, so it needs nothing from either config file."
+    },
+    {
+      "criterion": "The RED demonstration is real and the other 89 tests stay green",
+      "status": "met",
+      "evidence": "`pnpm --filter @echolet/cli test` under Node v26.5.0 (/opt/homebrew/bin/node): 'Test Files 1 failed | 17 passed (18) / Tests 1 failed | 91 passed (92)'. Per-file: the single failure is `src/transport/relayClient.claimable.test.ts (3 tests | 1 failed)`; all 17 pre-existing files are ✓, including the five whose stubs changed - cli.test.ts (6), cli.dashOptionValues.test.ts (18), outbound.publish.test.ts (3), outbound.test.ts (6), relayClient.test.ts (3). 89 pre-existing passed + 2 new green guards = 91 passed; 1 failed is the intended RED. `pnpm typecheck` (workspace, 7 projects) exits 0. The six non-CLI packages were not run again: no file outside apps/cli was written, and nothing outside apps/cli imports these test files."
+    },
+    {
+      "criterion": "No secret, plaintext, ciphertext, store key, private key material or HTTP request body is printed",
+      "status": "met",
+      "evidence": "The new file constructs no profile, no store key and no ciphertext: it parses the public relay-v2 fixture bundle and asserts only on `{ stored, bundleId, claimable }` and on `{ code, retryable }` of the RelayError. Its one diagnostic label is `JSON.stringify(Object.keys(data))` - key names only, never a body. The five stub edits added the literal `claimable: true` and comments, and removed no redaction assertion; the existing `redacted(...)` guards in cli.test.ts and cli.dashOptionValues.test.ts and the boolean `bodyText === bodyText` comparisons in outbound.publish.test.ts are untouched."
+    },
+    {
+      "criterion": "No git commit was made",
+      "status": "met",
+      "evidence": "`git status --porcelain | wc -l` is 23 after all work - byte-identical to the session-start snapshot, since the new test file lives inside the already-untracked apps/ entry. The repository is still on unborn main. No `git add`, `git commit` or any other history-changing command was run."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T46-tests-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This result contract.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.claimable.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New file, 3 tests. RED: a publish success envelope omitting `claimable` must be rejected as INVALID_RELAY_RESPONSE. Green guards: both boolean answers survive the transport unchanged, and the field stays closed to string/null/number while the envelope still refuses unknown keys.",
+      "hash": "764edde6a1bd241eba1e46767d366328822993bb1d18a9dc664f020878b5bc70"
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Publish stub carries `claimable: true`; the exact-equality assertion on publishBundle() now pins that value.",
+      "hash": "62f5fa533570d431da5fdd5523fd35b573b5e5bd43f75d68f6ed28c2dde071f9"
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "relayFetch publish branch carries `claimable: true`.",
+      "hash": "de0b4877d5af612bae352eba217250e1a646aa497933d2e11d5036d0218c7d98"
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.publish.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Shared `stored` response helper carries `claimable: true` for all three F-001 idempotence scenarios.",
+      "hash": "fa49adfcf6f2604c9f5cec08fee8c8a09bef65e5869b2df1c39c2414102cf691"
+    },
+    {
+      "path": "apps/cli/src/commands/cli.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "In-process relay server's publish route carries `claimable: true`.",
+      "hash": "e7cea8ed3ce785235ec7ce75b50dd08f44ced935831ddc0338fff6a70ddb11ca"
+    },
+    {
+      "path": "apps/cli/src/commands/cli.dashOptionValues.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "startRelay publish route carries `claimable: true`.",
+      "hash": "6e4ce6eae2f32060a94b62f7dcf649b67246c826b8741a73497972bcd6024dd1"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/transport/relayClient.claimable.test.ts",
+      "change": "New file, 3 tests (1 RED, 2 green guards), no server and no build - a pure unit test over RelayClient with an injected fetch mock. RED at line 39: a publish success envelope of `{ stored: true, bundle_id }` must be rejected with `{ code: 'INVALID_RELAY_RESPONSE', retryable: false }`; it currently resolves to `{ stored: true, bundleId, claimable: undefined }`. Guards: `claimable: true` and `claimable: false` both round-trip exactly, and `'true'`, `null`, `1` and an unknown extra key are all rejected. The file header records why `.optional()` is a loosening rather than a widening."
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.test.ts",
+      "change": "Line 32-34: publish stub now returns `{ stored: true, bundle_id, claimable: true }` (a first publication of a freshly signed bundle that this suite never claims), with a comment stating why. Line 41: `resolves.toEqual(...)` extended with `claimable: true` - required, because publishBundle() now returns the value and toEqual is exact; this strengthens the assertion rather than weakening it."
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.publish.test.ts",
+      "change": "Lines 64-68: the shared `stored` response helper returns `claimable: true`. A comment records that no scenario in this file claims the published bundle - the byte-identical retry after a lost response, the repeat of an already successful publication, and the post-rotation publish all leave an unclaimed bundle behind - so `true` is the answer the real relay gives in each. No assertion in this F-001 suite was touched."
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.test.ts",
+      "change": "Lines 76-81: the relayFetch publish branch returns `claimable: true`. Comment records that the local profile's own bundle is published here and claimed by nobody - the claim branch serves a separate remote-peer fixture bundle."
+    },
+    {
+      "path": "apps/cli/src/commands/cli.test.ts",
+      "change": "Lines 128-131: the in-process HTTP relay's /v2/prekeys/publish branch returns `claimable: true`. Comment records that Alice publishes her own fresh bundle and nobody claims it in this scenario. The unavailable/malformed relay modes and every redaction assertion are unchanged."
+    },
+    {
+      "path": "apps/cli/src/commands/cli.dashOptionValues.test.ts",
+      "change": "Lines 273-275: the startRelay route map's publish handler returns `claimable: true`, with a comment recording that Alice's own first publication is never claimed here."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T46-N-001",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/cli/src/transport/relayClient.ts",
+      "line": 37,
+      "problem": "The RED test is satisfied by exactly one production edit: `const claimableSchema = z.boolean().optional();` becomes `const claimableSchema = z.boolean();`. The surrounding comment at relayClient.ts:31-36 currently justifies the optionality ('Optional only so that a relay predating the field is reported as \"unknown\" rather than misreported as available'), and that justification stops being true with the edit, so the comment needs rewriting in the same change rather than being left to contradict the code.",
+      "impact": "If only the schema line changes, the file keeps a comment asserting a tolerance the schema no longer has - the same kind of stale-comment drift that made the missing PREKEY_BUNDLE_UNAVAILABLE look intentional (T45-N-003).",
+      "suggested_fix": "Change line 37 to `z.boolean()` and rewrite the comment to state the actual contract: the relay always emits the field, always as a boolean, so a response without it is a malformed response and must be refused like any other. No other production line needs to change - `publishBundle()` at line 61 already returns `data.claimable`, whose type simply narrows from `boolean | undefined` to `boolean`.",
+      "evidence": "The three new tests plus the 89 pre-existing ones were designed around that single edit: the RED assertion fails only on the omission case, and every green guard (true, false, string, null, number, unknown key) holds identically under `z.boolean()` and `z.boolean().optional()`.",
+      "confidence": "high"
+    },
+    {
+      "id": "T46-N-002",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": null,
+      "problem": "Once `claimable` is required at the transport boundary it is always defined on the value `relay publish` prints, so any conditional the CLI carries for 'the key is simply omitted from the JSON result' (t45-implementation-report.md section 3.3) becomes dead. This dispatch did not read or change cli.ts, and no test here pins the printed shape either way.",
+      "impact": "A leftover conditional is harmless at runtime but leaves the impression that a publish response without claimability is still an expected case, which is the exact belief this task exists to remove.",
+      "suggested_fix": "When making the schema change, check whether cli.ts still guards the printing of `claimable`; if so, print it unconditionally. If the implementer wants that pinned by a test, say so and it can be added - it was left out here deliberately, because pinning the exact stdout shape of `relay publish` is a wider contract than the one this task was scoped to tighten.",
+      "evidence": "t45-implementation-report.md section 3.3: 'When the field is absent the CLI reports nothing - the key is simply omitted from the JSON result'. That branch is unreachable once the schema refuses the absent case.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T46-N-003",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/cli/src/transport/relayClient.claimable.test.ts",
+      "line": 41,
+      "problem": "This dispatch could not itself observe the RED test going green, because doing so would require making the production change it is forbidden to make. The claim that the test passes under a required `z.boolean()` is a reasoned one, not an executed one.",
+      "impact": "Low. The reasoning is mechanical: `request()` maps every schema parse failure to `INVALID_RELAY_RESPONSE`/retryable false (relayClient.ts:89, 122), which is already demonstrated green by the four existing malformed-envelope cases in relayClient.test.ts, and a missing required key on a `.strict()` z.object is a parse failure. The remaining two new tests and all 89 pre-existing tests were executed and are green.",
+      "suggested_fix": "The implementer should confirm 18 files / 92 tests all green after the one-line change; if anything else in apps/cli turns out to stub a publish response without `claimable`, it will surface there as an INVALID_RELAY_RESPONSE. A repository-wide search for publish-response stubs found exactly the five named in the dispatch and no others.",
+      "evidence": "`keryx ctx rg 'stored: true|stored\":\\s*true|bundle_id' --glob 'apps/cli/**/*.ts'` returns 20 matches across 8 files; the only publish-response stubs among them are the five that were edited, plus the e2e suite which talks to the real relay binary.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "test_files_added": 1,
+    "test_files_modified": 5,
+    "source_files_modified": 0,
+    "tests_added": 3,
+    "tests_red": 1,
+    "tests_green_guards": 2,
+    "assertions_weakened": 0,
+    "assertions_strengthened": 1,
+    "tests_skipped": 0,
+    "cli_suite_before": "89/89 green (17 files)",
+    "cli_suite_after": "91 passed / 1 failed (92 tests, 18 files)",
+    "non_cli_workspace_unchanged": "45/45 green (11 files), not re-run - no file outside apps/cli was written",
+    "workspace_total_after": "136 passed / 1 failed (137 tests)",
+    "typecheck": "green (7 projects)",
+    "node_version": "v26.5.0 (/opt/homebrew/bin/node)",
+    "git_commits": 0
+  },
+  "timestamp_utc": "2026-09-06T18:55:00Z"
+}

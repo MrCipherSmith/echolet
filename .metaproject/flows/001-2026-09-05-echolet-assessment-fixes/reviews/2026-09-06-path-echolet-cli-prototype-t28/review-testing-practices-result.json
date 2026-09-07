@@ -1,0 +1,193 @@
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "summary": "Executed4 isolated guard mutations:3 killed,1 survived. One minor coverage gap in typed unknown-sender rejection; no new runtime defect or unimplemented acceptance criterion claimed. Canonical selected files unchanged.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/inbound.test.ts",
+      "line": 167,
+      "problem": "Unknown-sender rejection test does not pin the explicit CONTACT_NOT_TRUSTED guard.",
+      "impact": "Deleting the dedicated missing-contact guard still leaves the nearest suite green: the later decode of a missing value rejects, satisfying rejects.toThrow. A future edit can remove the intended typed trust rejection unnoticed, although the current mutant still fails closed.",
+      "suggested_fix": "Assert the public rejection code CONTACT_NOT_TRUSTED for the unknown-sender fixture, while retaining unchanged-state and no-ack assertions. Keep changed-device and malformed-data cases distinct so each names its own intended failure.",
+      "evidence": "Isolated deletion of inbound.ts:50 ran inbound.test.ts with exit0 and10/10 tests passing; unmodified baseline also10/10. Test at inbound.test.ts:167 only asserts rejects.toThrow. Removing confirmation, duplicate-hash and batch-minimum gates in the same bounded pass caused1 focused failure each, demonstrating the harness detects real assertion failures.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing-unknown-sender-guard",
+      "blocking_merge": false
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 0
+  },
+  "mutation_pass": {
+    "isolated_root": "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/echolet-t28-mutations-n770zfoj",
+    "method": "Copied CLI tree; symlinked existing dependencies, mutated only local runtime sources one at a time; captured all stdout/stderr in memory; restored each local file before next mutation.",
+    "baselines": {
+      "profile.test.ts": {
+        "exit_code": 0,
+        "numTotalTests": 6,
+        "numPassedTests": 6,
+        "numFailedTests": 0,
+        "numPendingTests": 0
+      },
+      "inbound.test.ts": {
+        "exit_code": 0,
+        "numTotalTests": 10,
+        "numPassedTests": 10,
+        "numFailedTests": 0,
+        "numPendingTests": 0
+      },
+      "config.test.ts": {
+        "exit_code": 0,
+        "numTotalTests": 3,
+        "numPassedTests": 3,
+        "numFailedTests": 0,
+        "numPendingTests": 0
+      }
+    },
+    "mutations": [
+      {
+        "label": "confirmation",
+        "file": "apps/cli/src/runtime/profile.ts",
+        "suite": "profile.test.ts",
+        "deleted_guard": "if (await options.confirm(Object.freeze({ ...identifiers })) !== true) return false;",
+        "baseline": {
+          "exit_code": 0,
+          "numTotalTests": 6,
+          "numPassedTests": 6,
+          "numFailedTests": 0,
+          "numPendingTests": 0
+        },
+        "mutated": {
+          "exit_code": 1,
+          "numTotalTests": 6,
+          "numPassedTests": 5,
+          "numFailedTests": 1,
+          "numPendingTests": 0
+        },
+        "isolation_repair": "Initial copy missed relative packages imports (0 tests loaded). Repeated in new copy with packages symlink; only local CLI runtime source mutated."
+      },
+      {
+        "label": "inbound-trusted-peer",
+        "file": "apps/cli/src/runtime/inbound.ts",
+        "suite": "inbound.test.ts",
+        "deleted_guard": "if (!contactBytes) throw new InboundError(\"CONTACT_NOT_TRUSTED\");",
+        "baseline": {
+          "exit_code": 0,
+          "numTotalTests": 10,
+          "numPassedTests": 10,
+          "numFailedTests": 0,
+          "numPendingTests": 0
+        },
+        "mutated": {
+          "exit_code": 0,
+          "numTotalTests": 10,
+          "numPassedTests": 10,
+          "numFailedTests": 0,
+          "numPendingTests": 0
+        }
+      },
+      {
+        "label": "duplicate-content",
+        "file": "apps/cli/src/runtime/inbound.ts",
+        "suite": "inbound.test.ts",
+        "deleted_guard": "if (decode<string>(previous) !== hash) throw new InboundError(\"MESSAGE_ID_CONFLICT\");",
+        "baseline": {
+          "exit_code": 0,
+          "numTotalTests": 10,
+          "numPassedTests": 10,
+          "numFailedTests": 0,
+          "numPendingTests": 0
+        },
+        "mutated": {
+          "exit_code": 1,
+          "numTotalTests": 10,
+          "numPassedTests": 9,
+          "numFailedTests": 1,
+          "numPendingTests": 0
+        }
+      },
+      {
+        "label": "poll-minimum",
+        "file": "apps/cli/src/runtime/config.ts",
+        "suite": "config.test.ts",
+        "deleted_guard": "poll_batch_size: z.number().int().min(1).max(100),",
+        "baseline": {
+          "exit_code": 0,
+          "numTotalTests": 3,
+          "numPassedTests": 3,
+          "numFailedTests": 0,
+          "numPendingTests": 0
+        },
+        "mutated": {
+          "exit_code": 1,
+          "numTotalTests": 3,
+          "numPassedTests": 2,
+          "numFailedTests": 1,
+          "numPendingTests": 0
+        }
+      }
+    ],
+    "canonical_selected_files_unchanged": true,
+    "canonical_files_verified": 6,
+    "temporary_copies_removed": true
+  },
+  "mutation_scope": {
+    "selected_mutations": 4,
+    "executed_mutations": 4,
+    "killed": 3,
+    "survived": 1,
+    "enumerated_if_sites_in_three_target_files": 24,
+    "mutated_if_sites": 3,
+    "omitted_if_sites_in_three_target_files": 21,
+    "additional_schema_predicates_mutated": 1,
+    "scope_limit": "Four-gate budget. Other modules and additional schema predicates were not exhaustively enumerated or mutated;21 other if-sites in profile/inbound/config were omitted. No prior-round gates were supplied."
+  },
+  "checked_and_cleared": [
+    {
+      "hypothesis": "Contact confirmation can be ignored without test detection.",
+      "evidence": "Deleted the false-confirmation guard at profile.ts:105 in the temporary copy: baseline6/6 green; mutant5 passed/1 failed."
+    },
+    {
+      "hypothesis": "Duplicate ciphertext content binding is not tested.",
+      "evidence": "Deleted inbound.ts:63 hash-conflict guard: baseline10/10 green; mutant9 passed/1 failed."
+    },
+    {
+      "hypothesis": "The minimum polling batch size is merely schema decoration.",
+      "evidence": "Removed min(1) from poll_batch_size: baseline3/3 green; mutant2 passed/1 failed."
+    },
+    {
+      "hypothesis": "Networked E2E silently substitutes in-process session setup.",
+      "evidence": "two-process.test.ts spawns actual CLI command processes and local Go relay, exchanges contact cards, and observes network requests; native snapshots are read only for assertions. Test validates offline send, lost response, restart, ack recovery and replay."
+    },
+    {
+      "hypothesis": "Runtime tests can escape to arbitrary external services.",
+      "evidence": "Inbound/outbound provide explicit fetch boundary fakes whose unrecognized routes throw; process/E2E servers bind dynamically allocated loopback ports and include cleanup/deadlines."
+    },
+    {
+      "hypothesis": "Failed mutation assertions leak fixture material into review artifacts.",
+      "evidence": "All subprocess stdout/stderr was captured in memory; only exit codes and aggregate counts were emitted/persisted. No raw failing assertion logs or request bodies were saved."
+    }
+  ],
+  "stage1": {
+    "status": "PASS",
+    "scope": "Specification/T27 coverage mapping retained. Focused test behavior assessed independently; no whole-suite rerun or claim of exhaustive mutation coverage."
+  },
+  "limitations": [
+    "Initial profile baseline in first temporary copy loaded0 tests due to absent relative packages path. This was a harness problem, corrected with a packages dependency symlink in a fresh copy; successful6-test baseline and red mutation then ran.",
+    "No full regressions were repeated; T27 supplies broad verification evidence.",
+    "Canonical6 selected source/test files were hashed before/after and unchanged; temporary CLI copies were removed. Other canonical sources were only read via dependencies; parent retains full canonical hashes.",
+    "Related-test intelligence returned none for inbound, so the explicit colocated suite was selected after graph/context routing."
+  ],
+  "routing_audit": {
+    "graph_used": "gdgraph affected inbound.test.ts",
+    "wiki_used": "wiki index previously read; no accepted CLI testing page",
+    "ctx_used": "compact test reads and targeted rg; mutation subprocess output deliberately captured in memory instead of raw gdctx logs",
+    "raw_rg_used": "no"
+  }
+}

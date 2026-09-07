@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "enabled": true,
+  "runner": "auto",
+  "changedSelection": {
+    "strategies": [
+      "runner",
+      "gdgraph",
+      "naming"
+    ],
+    "fallbackWhenEmpty": "warn"
+  },
+  "coverageMap": {
+    "enabled": true,
+    "source": "auto",
+    "path": "coverage/lcov.info",
+    "artifact": ".metaproject/data/testing/coverage-map.json",
+    "lineGranularity": true
+  },
+  "smoke": {
+    "selectors": []
+  },
+  "hooks": {
+    "postCommitRefresh": true,
+    "prePushGate": true
+  },
+  "artifacts": {
+    "keepRawLogs": true,
+    "historyLimit": 50
+  }
+}

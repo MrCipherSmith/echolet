@@ -1,0 +1,186 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T34-implement",
+  "status": "DONE",
+  "summary": "GREEN phase complete for F-004, F-005, F-006 and F-007 in apps/relay. All six RED tests (11 subtests) written by 001-T34-tests now pass, unmodified, and no pre-existing test was weakened, skipped or deleted. F-004: SaveEnvelope reads the existing record inside the same optimistic transaction - byte-identical replay is a no-op, a changed body under an already-used (mailbox, envelope_id) pair returns model.ErrEnvelopeIDConflict mapped to HTTP 409 ENVELOPE_ID_CONFLICT, and badger.ErrConflict is retried up to 64 times. F-005: SendEnvelope rejects an already-expired envelope with 400 INVALID_SCHEMA before storage; SaveEnvelope writes an absolute badger Entry.ExpiresAt of min(declared expiry, now+retention cap) clamped to at least now instead of a flat 7-day WithTTL; the cap comes from cfg.MailboxTTLHours via SetRetentionCap (non-positive ignored); GetEnvelopes skips expired records without consuming the batch budget. F-006: a new decodeJSONRequest helper wraps every one of the six enumerated v1 decoder sites in http.MaxBytesReader (1 MiB for /v1/messages/send and /v1/prekeys/publish, 64 KiB for the rest) and answers 413 PAYLOAD_TOO_LARGE; envelope_ids and one_time_prekeys are length-bounded in the same contract; ValidateMailboxEnvelope keeps its two-argument signature and now checks the actual ciphertext byte length against both maxBytes and size_bytes. F-007: GetByDeviceID is removed; a new immutable device_mailbox:<mailbox_id>:<device_id> -> identity_id binding, written by both v1 Save and v2 saveSignalV2Authorization inside their own transactions, resolves authorization, with an idempotent startup backfill for pre-existing device records. Both `go -C apps/relay test -race -count=1 ./...` and the -tags relayv2 variant exit 0.",
+  "acceptance": [
+    {
+      "criterion": "F-004 (blocker): the mailbox writer reads the existing record inside the same transaction. A byte-identical envelope replay succeeds idempotently; a changed body under an already-used (recipient mailbox, envelope_id) pair returns HTTP 409 with code ENVELOPE_ID_CONFLICT and never replaces the stored envelope. Transaction conflicts are retried safely.",
+      "status": "met",
+      "evidence": "apps/relay/internal/storage/repository/mailbox_repo.go SaveEnvelope now does txn.Get(key) first: on bytes.Equal(stored, data) it returns nil without writing, otherwise it returns model.ErrEnvelopeIDConflict; the write path only runs on badger.ErrKeyNotFound. The new MailboxRepository.update helper replays the transaction while badger.ErrConflict is returned (64 attempts, mirroring updateV2). apps/relay/internal/api/handler/mailbox_handler.go maps model.ErrEnvelopeIDConflict to http.StatusConflict / ENVELOPE_ID_CONFLICT. TestSendEnvelopeRejectsConflictingEnvelopeIDWithHTTP409 PASS, including the assertion that the originally accepted body and size_bytes are unchanged."
+    },
+    {
+      "criterion": "F-005 (major): already-expired envelopes are rejected at submission; physical retention never exceeds the envelope's remaining declared lifetime nor the configured server cap; GetEnvelopes filters expired records BEFORE applying the batch limit; an identical retry does not extend expiry.",
+      "status": "met",
+      "evidence": "SendEnvelope rejects ExpiresAtMs <= nowMS() with 400 INVALID_SCHEMA (implementer note 4: INVALID_SCHEMA chosen because packages/protocol carries no expiry code and is owned by a parallel worker); the clock is an injected nowMS field so the 5-argument NewMailboxHandler signature is unchanged. retentionDeadlineSeconds sets badger.Entry.ExpiresAt to min(ExpiresAtMs/1000, now+retentionCap), floored at now so it is never 0. retentionCap defaults to DefaultMailboxRetentionCap (168h) and NewRouter applies cfg.MailboxTTLHours through SetRetentionCap, which ignores non-positive values. GetEnvelopes only increments its counter for non-expired records, so an expired record does not consume the batch budget. The identical retry returns from the F-004 replay branch before any write, so the deadline is untouched. TestSaveEnvelopeRetentionNeverExceedsDeclaredLifetime (3 subtests) and TestGetEnvelopesFiltersExpiredBeforeApplyingBatchLimit and TestSendEnvelopeRejectsAlreadyExpiredEnvelope all PASS."
+    },
+    {
+      "criterion": "F-006 (blocker): every v1 JSON decoder site bounds the request body with http.MaxBytesReader before decoding and answers with a bounded error; ValidateMailboxEnvelope verifies the ACTUAL decoded ciphertext byte length against both the declared size_bytes and the configured maximum. Other variable-length request fields/arrays are bounded in the same decoder contract.",
+      "status": "met",
+      "evidence": "New apps/relay/internal/api/handler/request_body.go defines decodeJSONRequest, which sets r.Body = http.MaxBytesReader(w, r.Body, limit) before json.NewDecoder and answers http.MaxBytesError with 413 PAYLOAD_TOO_LARGE and other decode errors with the previous 400 INVALID_JSON. All six enumerated sites use it: SendEnvelope and PublishPreKeyBundle at 1 MiB (above config.MaxMessageBytes 262144, per implementer note 3), CreateChallenge / PollMailbox / AckMailbox / PublishDeviceRecord at 64 KiB. AckMailbox bounds envelope_ids by the configured mailbox batch (fallback 1000) and PublishPreKeyBundle bounds one_time_prekeys at 1000. ValidateMailboxEnvelope keeps its two-argument signature (implementer note 2) and checks len(Ciphertext) > maxBytes -> PAYLOAD_TOO_LARGE, SizeBytes > maxBytes -> PAYLOAD_TOO_LARGE, SizeBytes != len(Ciphertext) -> INVALID_SCHEMA. TestV1JSONHandlersBoundRequestBodyBeforeDecoding (6 subtests) and TestValidateMailboxEnvelopeChecksActualCiphertextBytes (3 subtests) PASS."
+    },
+    {
+      "criterion": "F-007 (blocker): mailbox device authorization resolves the device by an immutable (mailbox identity, device UUID) binding populated by both v1 and v2 publication, never by a global first-UUID-match scan followed by an ownership comparison.",
+      "status": "met",
+      "evidence": "DeviceRecordRepository.GetByDeviceID and DeviceRecordService.GetByDeviceID are removed. A new key space device_mailbox:<mailbox_id>:<device_id> -> identity_id, where mailbox_id = cryptoutil.DeriveMailboxID(identity_id), is written by SaveDeviceMailboxBinding inside the caller's transaction and is first-writer-wins. v1 DeviceRecordRepository.Save writes record and binding in one transaction; v2 saveSignalV2Authorization writes the binding inside the bundle publication transaction on both the fresh-write and identical-replay branches. GetByMailboxAndDevice resolves the binding then loads the exact (identity, device) record and returns badger.ErrKeyNotFound when nothing is bound. authorizeMailboxDevice calls it instead of scanning. TestMailboxAuthorizationIsScopedToOwningMailboxIdentity PASS, and PASS at -count=10; the unrelated identity is still denied 403. TestSignalV2PublishAuthorizesMailboxChallengeAcrossRestart, TestFailedSignalV2PublishDoesNotAuthorizeMailboxChallenge and TestConflictingSignalV2PublishCannotReplaceMailboxAuthorization remain green."
+    },
+    {
+      "criterion": "Every test added by 001-T34-tests passes, unmodified: mailbox_envelope_lifecycle_test.go, mailbox_device_authorization_test.go, request_body_limit_test.go, mailbox_repo_test.go, mailbox_envelope_size_test.go.",
+      "status": "met",
+      "evidence": "All six tests were run by name with -v and PASS (11 subtests total). The mailbox Badger key layout was NOT changed, so the seeding helpers seedStoredEnvelope and mailboxEnvelopeKeyForTest needed no edit and implementer note 1's permitted test change was not used. mtimes confirm no test file was written after the tests-creator: the five test files were last modified 17:15:17-17:16:59, the first production edit was 17:24:59."
+    },
+    {
+      "criterion": "`go -C apps/relay test -race -count=1 ./...` and the `-tags relayv2` variant both pass, with no pre-existing test weakened, skipped or deleted.",
+      "status": "met",
+      "evidence": "go -C apps/relay build ./... exit 0; go -C apps/relay vet ./... exit 0; go -C apps/relay test -race -count=1 ./... exit 0 (handler, router, repository, validation all ok); go -C apps/relay test -race -count=1 -tags relayv2 ./... exit 0. No t.Skip was added and no test assertion was relaxed."
+    },
+    {
+      "criterion": "Existing v1 route behaviour outside these four findings is unchanged.",
+      "status": "met",
+      "evidence": "Route table, request and response shapes are untouched. The only behavioural deltas outside the four findings are the new 413 PAYLOAD_TOO_LARGE status for an over-limit body (previously 400 INVALID_JSON after streaming the whole body) and the two new array-length rejections, both of which are part of the F-006 decoder contract. writeMailboxAuthorizationError still answers 403 UNAUTHORIZED_MAILBOX_ACCESS for both authorization failure modes, so the two are still indistinguishable on the wire."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t34-implementation-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Per-finding implementation report with storage and compatibility implications (new device_mailbox binding key space, unchanged mailbox key layout, retention semantics change, startup backfill)."
+    },
+    {
+      "path": ".metaproject/data/gdctx/artifacts/2026-09-06T13-27-47-408Z_run.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Bounded GREEN evidence: go -C apps/relay test -race -count=1 ./... exit 0."
+    },
+    {
+      "path": ".metaproject/data/gdctx/artifacts/2026-09-06T13-27-57-168Z_run.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Bounded GREEN evidence: go -C apps/relay test -race -count=1 -tags relayv2 ./... exit 0."
+    },
+    {
+      "path": ".metaproject/data/gdctx/artifacts/2026-09-06T13-28-08-605Z_run.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Verbose PASS output for the four new handler-package tests."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "change": "modified"
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/device_record_repo.go",
+      "change": "modified"
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go",
+      "change": "modified"
+    },
+    {
+      "path": "apps/relay/internal/model/mailbox_envelope.go",
+      "change": "modified"
+    },
+    {
+      "path": "apps/relay/internal/service/device_record_service.go",
+      "change": "modified"
+    },
+    {
+      "path": "apps/relay/internal/validation/validate.go",
+      "change": "modified"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/request_body.go",
+      "change": "added"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "change": "modified"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/device_record_handler.go",
+      "change": "modified"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/prekey_bundle_handler.go",
+      "change": "modified"
+    },
+    {
+      "path": "apps/relay/internal/api/router/router.go",
+      "change": "modified"
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t34-implementation-report.md",
+      "change": "added"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T34-I-001",
+      "reviewer": "task-implementer",
+      "severity": "major",
+      "problem": "F-007 introduces a second key space, device_mailbox:<mailbox_id>:<device_id>. Device records written before this change carry no binding and would fail authorization on an existing data directory.",
+      "impact": "Without a migration, every already-registered device would be denied mailbox challenge, poll and ack after deploying this change.",
+      "suggested_fix": "Implemented: DeviceRecordRepository.BackfillDeviceMailboxBindings iterates the device_record prefix and derives the missing bindings, and NewRouter calls it once at construction through DeviceRecordService.BackfillMailboxBindings. It is idempotent because the binding is a pure function of the stored record, and a failure is logged rather than fatal. The verifier should confirm the startup cost is acceptable for the expected device-record count; a marker key that skips the scan once completed would remove the per-start iteration.",
+      "evidence": "apps/relay/internal/storage/repository/device_record_repo.go BackfillDeviceMailboxBindings; apps/relay/internal/api/router/router.go.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/storage/repository/device_record_repo.go:GetByMailboxAndDevice",
+          "apps/relay/internal/storage/repository/device_record_repo.go:Save",
+          "apps/relay/internal/storage/repository/device_record_repo.go:BackfillDeviceMailboxBindings",
+          "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go:saveSignalV2Authorization",
+          "apps/relay/internal/api/router/router.go:NewRouter"
+        ],
+        "enumeration_method": "Enumerated every writer and reader of the device_record / device_mailbox key spaces via `keryx ctx rg` for GetByDeviceID and device_record: across apps/relay, then read each hit. The two writers are v1 DeviceRecordRepository.Save and v2 saveSignalV2Authorization (the only two places a device_record key is written); the single reader on the mailbox authorization path is GetByMailboxAndDevice; BackfillDeviceMailboxBindings and its NewRouter call site are the migration for records written by either writer before the binding existed. DeviceRecordRepository.Get(identity, device) is unaffected because it is already identity-scoped and is not used by mailbox authorization."
+      }
+    },
+    {
+      "id": "T34-I-002",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "problem": "The per-route http.MaxBytesReader limits (1 MiB for /v1/messages/send and /v1/prekeys/publish, 64 KiB for the rest) were chosen by the implementer. The RED test asserts boundedness, not a specific limit, and no specification pins these numbers.",
+      "impact": "The send limit must stay above config.MaxMessageBytes (262144). If ECHOLET_MAX_MESSAGE_BYTES is raised above roughly 1 MiB minus the surrounding envelope JSON, legitimate maximum-size envelopes would be rejected with 413.",
+      "suggested_fix": "Consider deriving the send-route limit from cfg.MaxMessageBytes (for example a fixed multiple plus a header allowance) instead of the fixed constant, so the two cannot drift apart.",
+      "evidence": "apps/relay/internal/api/handler/request_body.go constants envelopeRequestBodyLimit and compactRequestBodyLimit; apps/relay/internal/config/config.go MaxMessageBytes.",
+      "confidence": "high"
+    },
+    {
+      "id": "T34-I-003",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "problem": "ValidateMailboxEnvelope now rejects size_bytes != len(ciphertext) with INVALID_SCHEMA. This is a stricter contract than before, when size_bytes was only compared against the maximum.",
+      "impact": "Any client that sets size_bytes to the plaintext length, or to the decoded byte length of a base64 ciphertext rather than the ciphertext string length, will now be rejected. The CLI already uses Buffer.byteLength(ciphertext) (apps/cli/src/runtime/outbound.ts) so it is unaffected, but a third-party sender might not be.",
+      "suggested_fix": "None required for this flow. Worth calling out in the protocol specification so the semantics of size_bytes are normative rather than implied by the CLI.",
+      "evidence": "apps/relay/internal/validation/validate.go ValidateMailboxEnvelope; the RED test's third subtest pins the CLI semantics.",
+      "confidence": "high"
+    },
+    {
+      "id": "T34-I-004",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "problem": "An envelope whose declared expiry is already in the past is now stored with badger Entry.ExpiresAt equal to the current second, i.e. immediately expired. This is only reachable by bypassing the handler, which rejects such envelopes; the existing test TestMailboxPollAndAckRequireVerifiedOwnershipAndSignature does exactly that by calling MailboxService.StoreEnvelope directly with ExpiresAtMs = 1770600000000.",
+      "impact": "That pre-existing test still passes because it asserts only HTTP status codes, not that the envelope is returned by the poll. A future test that stores a stale envelope directly and expects to read it back would fail.",
+      "suggested_fix": "Nothing to change. Documented so the behaviour is not mistaken for a regression. SaveEnvelope deliberately does not reject expired envelopes, because the repository has no wire contract and the existing test depends on it succeeding.",
+      "evidence": "apps/relay/internal/storage/repository/mailbox_repo.go retentionDeadlineSeconds; apps/relay/internal/api/handler/mailbox_handler_test.go:41-43.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "files_modified": 10,
+    "files_added": 1,
+    "test_files_modified": 0,
+    "findings_fixed": 4,
+    "self_fix_attempts": 0
+  },
+  "timestamp_utc": "2026-09-06T13:30:00Z"
+}

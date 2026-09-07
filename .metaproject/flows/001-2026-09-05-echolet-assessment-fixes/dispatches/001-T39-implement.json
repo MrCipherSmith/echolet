@@ -1,0 +1,56 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T39-implement",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Accept CLI option values beginning with a dash without weakening argument validation",
+    "description": "Turn the RED tests from dispatch 001-T39-tests GREEN by fixing blocker F-013 in apps/cli: Node parseArgs with strict:true rejects any option value starting with '-', so base64url identity_id values beginning with '-' (about one in 64) and dash-leading --text cannot be passed at all. The tests are the contract: make them pass without weakening them.",
+    "intent": "implement",
+    "scope": "apps/cli production code, primarily apps/cli/src/commands/cli.ts. Do not modify apps/relay or packages/**."
+  },
+  "acceptance_criteria": [
+    "F-013 (blocker): every string-valued CLI option accepts a value beginning with '-'. All nine declared string options are covered by the RED suite: --profile, --relay-url, --store-key-env, --out, --from, --to, --text, --message-id, --with. A dash-leading value reaches its intended layer verbatim - for --to that means the trust check (exit 3 CONTACT_NOT_TRUSTED), not the argument parser.",
+    "A --text value beginning with '-' is accepted as message content, including a flag-shaped value such as '--profile', and is never reinterpreted as an option.",
+    "Argument validation is NOT weakened. These must still fail closed with exit 2 INVALID_ARGUMENTS, and the RED suite already asserts them as passing guards: an unknown flag (bare and with a dash value), a missing value at the end of argv for --text/--with/--profile, a repeated option including a dash-leading repeat, an option not allowed for the given command, an unknown command, and a stray positional.",
+    "The `--` separator behaviour pinned by the tests holds: a bare trailing `--` is a no-op with exit 0, and any operand after `--` fails closed with exit 2.",
+    "Every test in apps/cli/src/commands/cli.dashOptionValues.test.ts passes, unmodified.",
+    "The exit-code contract (0/2/3/4/5), the single-JSON-object-on-stdout rule and redacted stderr diagnostics are unchanged for every other case.",
+    "The full apps/cli suite, `pnpm test` and `pnpm typecheck` pass, with no pre-existing test weakened, skipped or deleted."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T39-tests-result.json", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t37-verification-report.md", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/cli/src/commands/cli.ts",
+    "apps/cli/src/commands/cli.dashOptionValues.test.ts",
+    "apps/cli/src/commands/cli.test.ts",
+    "apps/cli/src/commands/cli.processFailures.test.ts",
+    "apps/cli/src/runtime/config.ts",
+    "apps/cli/test/e2e/two-process.test.ts"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "Load and follow the project task-implementer skill (.metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md).",
+    "Do NOT fix this by setting strict:false or by removing validation. The RED suite contains six deliberately passing guard tests precisely so that disabling strict parsing cannot satisfy it - unknown flags, missing values, repeated options and stray positionals must keep failing with exit 2.",
+    "Orchestrator finding, verified directly against node:util and offered as a non-binding hint: `parseArgs` with strict:true ACCEPTS the inline form (`--to=-AbC` parses to '-AbC', and `--to=--profile` parses to '--profile'), while still throwing ERR_PARSE_ARGS_UNKNOWN_OPTION for an unknown flag. So normalizing `--<declared-string-option> <value>` into the inline `--opt=value` form before parsing is a viable minimal fix. Careful: parseArgs raises the SAME ERR_PARSE_ARGS_INVALID_OPTION_VALUE for a dash value and for an option with no value at the end of argv, so a normalizer must handle the missing-value case explicitly to preserve exit 2; it must not attach a value to a boolean option (--json, --yes); it must not double-process an option already written in inline form; and it must respect the `--` separator. You own the design - if you find a cleaner approach that satisfies all sixteen tests, take it.",
+    "You did not write these tests and you may not weaken them. Do not edit, skip, delete or relax any test file. If a test is genuinely wrong, report it as a finding and return DONE_WITH_CONCERNS instead of changing it.",
+    "You do not accept your own work. An independent verifier reviews it afterwards.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Do not modify the T36-owned harness build sequencing in apps/cli/vitest.config.ts or apps/cli/test/globalSetup.ts.",
+    "Build on the landed T33, T34, T35 and T36 fixes; do not undo them.",
+    "Use `keryx ctx rg` for searches, never bare rg/grep. Use `keryx ctx run` for long command output.",
+    "Never print plaintext message bodies, ciphertext, profile store keys, private key material or HTTP request bodies into reports or logs. In particular, a rejected argument value must not be echoed into diagnostics.",
+    "Do not commit: this repository has an unborn untracked baseline, so partial root commits are forbidden.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T39-implement-result.json and make the final response start with STATUS:.",
+    "Also write a short implementation report to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t39-implementation-report.md describing the parsing change, why validation strength is preserved, and the separator/boolean/repeat edge cases."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T39-implement-result.json", "summary_max_tokens": 800},
+  "budget": {"max_output_tokens": 6000, "max_runtime_ms": 3000000},
+  "provenance": {"created_at": "2026-09-06T14:52:00+04:00", "created_by": "flow-orchestrator", "source_request": "T37 verification found blocker F-013; fix before the matrix can be re-taken."}
+}

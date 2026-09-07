@@ -1,0 +1,109 @@
+{
+  "generatedAt": "2026-09-05T23:56:42.739Z",
+  "scopes": {
+    "component:apps/mobile": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:apps/mobile/src/app": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:apps/mobile/src/screens": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "component:apps/mobile/src/services": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:apps/mobile/src/state": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/client-core/src": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/client-core/src/identity": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/client-core/src/messages": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/client-core/src/sessions": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/client-db/src": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/client-db/src/repositories": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/client-db/src/schema": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/crypto-core/src": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/crypto-core/src/encoding": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/crypto-core/src/identity": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/crypto-core/src/mailbox": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/crypto-core/src/session": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/crypto-core/src/signatures": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/protocol/src": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/protocol/src/constants": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/protocol/src/types": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:packages/protocol/src/validators": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "file:apps/mobile/src/screens/MessagingScreen.tsx": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "module:apps": {
+      "health_score": 94,
+      "risk_score": 5
+    },
+    "module:packages": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "project": {
+      "health_score": 97,
+      "risk_score": 5
+    }
+  }
+}

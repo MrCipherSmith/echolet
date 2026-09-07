@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-06T12:18:25.074Z",
+  "range": {
+    "toRev": "working-tree",
+    "queueEntriesConsumed": 0
+  },
+  "totals": {
+    "pagesTotal": 16,
+    "pagesFresh": 0,
+    "pagesAffected": 13,
+    "pagesUndecidable": 3,
+    "pagesNotCodeScoped": 0,
+    "filesChanged": 0,
+    "filesCosmetic": 0
+  },
+  "pages": [
+    {
+      "path": "components/apps-mobile-src-screens.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/apps-mobile-src-services.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/packages-client-core-src-identity.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/packages-client-core-src-sessions.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/packages-client-db-src.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/packages-crypto-core-src-identity.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/packages-crypto-core-src-mailbox.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/packages-crypto-core-src-session.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/packages-crypto-core-src-signatures.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/packages-protocol-src-constants.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/packages-protocol-src-types.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/packages-protocol-src-validators.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/packages-session-node-src.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    }
+  ],
+  "limitations": [
+    {
+      "code": "not-a-git-repository",
+      "detail": "No git history was available, so no revision range could be computed and freshness fell back to VerifiedScope comparison. Findings are capped at `review-suggested`."
+    },
+    {
+      "code": "page-without-describes",
+      "detail": "Pages whose describe-set resolved empty were excluded from scoring. Give them an explicit `Describes:` frontmatter list to bring them in, or `Describes: none` if the page is not about code.",
+      "affectedCount": 3
+    }
+  ]
+}

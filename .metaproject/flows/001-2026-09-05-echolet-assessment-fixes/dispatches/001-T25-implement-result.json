@@ -1,0 +1,23 @@
+{
+  "contract_version": "1.0.0", "run_id": "001", "dispatch_id": "001-T25-implement", "status": "DONE",
+  "summary": "Implemented strict signed mailbox transport, atomic native decrypt/inbox/encrypted history/pending ack, restart ack retry and exact redelivery deduplication. Added outbound history in its native/outbox transaction. All 10 unchanged T25 tests, 28 CLI tests, 73 workspace tests and workspace typechecks pass.",
+  "acceptance": [
+    {"criterion": "Ten focused T25 tests pass unchanged", "status": "met", "evidence": "Focused Vitest 10/10 PASS."},
+    {"criterion": "Signed strict mailbox transport", "status": "met", "evidence": "Tests verify all three signatures and reject unknown/malformed/expired response data."},
+    {"criterion": "Atomic decrypt/inbox/history/pending ack before HTTP", "status": "met", "evidence": "Commit failure injection verifies rollback including prekey consumption and zero acknowledgements."},
+    {"criterion": "Restart and exact redelivery avoid repeated decrypt/history", "status": "met", "evidence": "Ack-only restart and native snapshot equivalence regressions PASS."},
+    {"criterion": "Encrypted bidirectional chronological history", "status": "met", "evidence": "Real reply exchange, offline reopen, plaintext redaction and outbound commit rollback PASS."},
+    {"criterion": "Prior workspace tests and typechecks", "status": "met", "evidence": "pnpm test 73 PASS; pnpm typecheck PASS."}
+  ],
+  "artifacts": [{"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t25-implementation-report.md", "kind": "implementation-report", "exists": true}],
+  "changed_files": [
+    {"path": "apps/cli/src/runtime/inbound.ts", "change": "Added trusted atomic receive and durable acknowledgement runtime."},
+    {"path": "apps/cli/src/runtime/history.ts", "change": "Added encrypted transaction-local monotonic history helpers."},
+    {"path": "apps/cli/src/runtime/outbound.ts", "change": "Append history atomically with native state and outbox."},
+    {"path": "apps/cli/src/runtime/profile.ts", "change": "Added private-key-preserving mailbox signing boundary."},
+    {"path": "apps/cli/src/transport/relayClient.ts", "change": "Added strict challenge/poll/ack contracts."},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t25-implementation-report.md", "change": "Added implementation report."},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T25-implement-result.json", "change": "Added validated result artifact."}
+  ],
+  "findings": [], "questions": [], "errors": [], "metrics": {}, "timestamp_utc": "2026-09-06T11:34:00Z"
+}

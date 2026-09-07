@@ -1,0 +1,35 @@
+{
+  "task": {
+    "task_id": "task-25",
+    "task_name": "Implement CLI poll decrypt history and ack state machine",
+    "task_type": "mixed",
+    "complexity": "high",
+    "dependencies": ["task-24"],
+    "description": "Implement inbound mailbox transport, trusted native decrypt, encrypted monotonic history and durable post-commit acknowledgement APIs required by ten independent RED tests.",
+    "target_files": [
+      "apps/cli/src/transport/relayClient.ts",
+      "apps/cli/src/runtime/profile.ts",
+      "apps/cli/src/runtime/outbound.ts",
+      "apps/cli/src/runtime/inbound.ts",
+      "apps/cli/src/runtime/history.ts",
+      "apps/cli/src/runtime/inbound.test.ts"
+    ],
+    "acceptance_criteria": [
+      "RelayClient strictly implements challenge, poll and ack response/request contracts with the existing timeout/redaction guarantees.",
+      "Mailbox challenge/create/poll/ack signatures use the stable local device identity derived only inside the encrypted profile boundary.",
+      "Envelope recipient and imported sender pins plus strict ciphertext wrapper are checked before native mutation.",
+      "Native decrypt/session/prekey changes, inbox deduplication, pending ack and inbound history commit atomically.",
+      "Ack happens only after commit; timeout/restart retries only ack and never decrypts or duplicates history.",
+      "Exact redelivery under a new envelope is acked without decrypt; changed ciphertext under the same message id fails closed.",
+      "Outbound plaintext history is added atomically with session/outbox before HTTP and all history stays encrypted/offline/chronological.",
+      "All ten supplied T25 tests and prior workspace tests/typechecks pass unchanged."
+    ],
+    "context": "Follow inbound.test.ts exactly. Reuse the T24 ciphertext wire: base64url UTF-8 strict JSON {version:1,type:number,body:canonical-base64url}; pass outer message_id to SignalClient.decrypt so the authenticated payload binds it. Add shared history helpers with a transaction-local monotonic sequence and keys under cli:history:. Store an inbox ciphertext hash to distinguish exact redelivery from changed content and pending ack records keyed by envelope. Derive local mailbox signatures from the encrypted profile seed/device identity without returning private material. Extend RelayClient through its bounded strict request boundary. Repository is unborn main; no commits.",
+    "existing_tests": ["apps/cli/src/runtime/inbound.test.ts", "apps/cli/src/runtime/outbound.test.ts", "apps/cli/src/transport/relayClient.test.ts"],
+    "existing_stories": [],
+    "module_patterns": "ESM strict TypeScript, Zod strict schemas, injected RelayClient, serialized runtime operations, caller-owned EncryptedSqliteStore transaction and official libsignal.",
+    "test_case_specs": {"test_files": ["apps/cli/src/runtime/inbound.test.ts"], "run_command": "cd apps/cli && pnpm exec vitest run src/runtime/inbound.test.ts"}
+  },
+  "workspace": {"codebase_path": "/Users/Goodea/goodea/projects/echolet", "branch": "main", "issue_number": 1, "issue_title": "Flow 001 Echolet CLI prototype"},
+  "automation": {"skip_confirmation": true, "auto_commit": false, "verify_lint": true, "verify_types": true, "verify_tests": true, "verify_stories": false, "max_self_fix_attempts": 3, "commit_message_style": "conventional"}
+}

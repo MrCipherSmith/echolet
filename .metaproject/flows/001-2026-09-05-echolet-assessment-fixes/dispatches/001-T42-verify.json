@@ -1,0 +1,109 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T42-verify",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "code-verifier",
+  "task": {
+    "title": "Re-run the full verification matrix after the T40/T41 remediation round",
+    "description": "Independently re-execute the complete T27/T37 verification matrix on the tree that now contains the T40 per-envelope acceptance fix, the T41 test repairs and the identifier bounds. Verify and report; do not implement or repair.",
+    "intent": "verify",
+    "scope": "Read-only verification across the whole workspace. The only files you may write are your own report and result artifacts under the flow directory."
+  },
+  "acceptance_criteria": [
+    "Every check from the T27 matrix is re-run independently and reported with its exact command, status and bounded evidence: frozen install, CLI production build, workspace typecheck, focused CLI process-contract tests, full workspace tests, three-iteration real E2E, Go untagged suite, uncached relayv2-tagged race suite, `keryx test run --strict`, `keryx health run --strict`, graph rebuild, graph cycles, and wiki link check.",
+    "Additionally run the untagged Go suite under the race detector (`go -C apps/relay test -race -count=1 ./...`), which the T33-T35 concurrency and rate-limiter fixes make load-bearing.",
+    "The three-iteration end-to-end evidence is taken UNFILTERED - no test file or path exclusions of any kind. The T36 harness fix builds `apps/cli/dist/cli.js` exactly once per vitest run via globalSetup; confirm no suite rebuilds a binary another suite is executing, and state whether the previously observed `INVALID_ARGUMENTS` build race recurs.",
+    "Report the required measurements named in docs/requirements/echolet-cli-prototype/metrics-and-validation.md: clean end-to-end runs, concurrent claim winners, lost-response claim retries, reused-OTK publication rejections, offline delivery, sender restart exact retry, receiver duplicate history entries, known-plaintext-marker occurrences in relay DB/logs, and invalid contract cases rejected.",
+    "Confirm test-integrity: no test file was modified during verification, and the fix wave did not weaken, skip or delete any pre-existing test. Report the workspace test count against the 82 recorded at T27 and account for the difference.",
+    "Any failure is reported as a failure with its exact output. Do not stop at the first failure - run the whole matrix so the orchestrator sees the complete picture. Partial results are recorded as failures rather than averaged.",
+    "Use the evidence format defined in metrics-and-validation.md, and keep the limitations section honest: this gate establishes local technical-prototype behaviour only.",
+    "Confirm the HL-N-001 class is closed end to end: a permanently unacceptable envelope no longer blocks delivery of legitimate envelopes, while a transient failure still leaves its envelope queued, unacked and retriable. State how you checked, not merely that the suite is green.",
+    "Reconcile the workspace test count against the 114 recorded at the previous T37 pass and account for the difference."
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t27-verification-report.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/metrics-and-validation.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/specification.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T33-implement-result.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T34-implement-result.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T35-implement-result.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T36-tests-result.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t27-verification-report.md",
+    "docs/requirements/echolet-cli-prototype/metrics-and-validation.md",
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t33-implementation-report.md",
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t34-implementation-report.md",
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t35-implementation-report.md",
+    "apps/cli/vitest.config.ts",
+    "apps/cli/test/globalSetup.ts",
+    "apps/cli/package.json"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "THIS RUN COVERS A SECOND REMEDIATION ROUND. After T37 passed, a five-role fix review plus an independent verifier confirmed ten further findings (0 refuted). T40 fixed the major one - a single envelope from an unpinned sender permanently wedged a recipient mailbox because the whole poll batch shared one transaction and threw before ackPending - by moving to per-envelope acceptance, plus bounded relay identifier strings and a surfaced next_cursor signal. T41 repaired three regression tests that passed for the wrong reason and closed a gap where `strict:false` left the whole CLI suite green. Re-verify all of it independently.",
+    "Report explicitly whether the F-013 class is closed: that a dash-leading option value now reaches its intended layer rather than the argument parser, and that invalid input (unknown flag, missing value at end of argv, repeated option, stray positional, operand after `--`) still fails closed with exit 2. Sixteen tests in apps/cli/src/commands/cli.dashOptionValues.test.ts pin this; confirm they pass unmodified.",
+    "Load and follow the project code-verifier skill (.metaproject/skills/gdskills/orchestration/code-verifier/SKILL.md) and the project testing skill.",
+    "You are a verifier, not an implementer. Do NOT modify any source file, test file, configuration or dependency, and do NOT fix anything you find. Report it instead. If a check fails, that is the finding.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Do not stop early. Run every check even after one fails, so the orchestrator gets the complete matrix in a single pass.",
+    "Use `keryx ctx run` for every long command and `keryx ctx rg` for searches; never bare rg/grep.",
+    "Never print plaintext message bodies, ciphertext, profile store keys, private key material or HTTP request bodies. Report counts, labels, exit status and artifact paths only. For the known-plaintext-marker check, report only the number of occurrences, never the surrounding content.",
+    "Do not commit: this repository has an unborn untracked baseline, so partial root commits are forbidden. The revision identifier is the working tree, not a commit hash.",
+    "Do not claim production readiness, mobile behaviour, external audit completion or user demand. Keep the allowed-claims boundary from metrics-and-validation.md.",
+    "Write the report to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t42-verification-report.md using the evidence format from metrics-and-validation.md.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T42-verify-result.json and make the final response start with STATUS:."
+  ],
+  "allowed_actions": [
+    "read",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T42-verify-result.json",
+    "summary_max_tokens": 1200
+  },
+  "budget": {
+    "max_output_tokens": 8000,
+    "max_runtime_ms": 3600000
+  },
+  "provenance": {
+    "created_at": "2026-09-06T17:20:00+04:00",
+    "created_by": "flow-orchestrator",
+    "source_request": "Fix T28 review findings F-001..F-012 through managed flow tasks T33-T38."
+  }
+}

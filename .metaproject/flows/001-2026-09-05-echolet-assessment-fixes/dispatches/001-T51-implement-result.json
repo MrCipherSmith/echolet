@@ -1,0 +1,203 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T51-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "T49-F-001 is closed: /v1/messages/send now authenticates every sender against an already-published, root-signed DeviceRecord and refuses an unauthenticated envelope with a bounded 4xx before storage. The pinned T50-D-001 transcript is implemented verbatim in both languages, the presence/bound check lives in the handler (not ValidateMailboxEnvelope) and runs after the shape and expiry checks, sender_signature stays optional on the strict client schema with omitempty on the Go model, the CLI signs every envelope inside the same transaction that encrypts it, the mobile demo signs too (T50-F-001) and the sender-unknown condition is now reported under the relay's own UNAUTHORIZED_MAILBOX_ACCESS instead of a bare PROTOCOL_REJECTED (T50-F-002). All T50 tests pass unmodified: 158 workspace vitest tests, typecheck green on 7 projects, Go untagged and -race -tags=relayv2 green. Concerns: the mobile signing change cannot be observed by any test, and reportedRelayCodes now also names UNAUTHORIZED_MAILBOX_ACCESS on poll/ack, which is slightly wider than F-002 literally asked.",
+  "summary_markdown": "## The transcript, as pinned\n\n```\necholet-mailbox-envelope:v1:<recipient_mailbox_id>:<envelope_id>:<sender_identity_id>:<sender_device_id>:<base64url_raw(SHA-256(utf8(ciphertext)))>:<created_at_ms>:<expires_at_ms>\n```\n\nImplemented in `packages/crypto-core/src/mailbox/auth.ts` (`hashMailboxEnvelopeCiphertext`, `createMailboxEnvelopeMessage`, `signMailboxEnvelopeMessage`, `verifyMailboxEnvelopeMessage`) and in `apps/relay/internal/cryptoutil/signatures.go` (`HashMailboxEnvelopeCiphertext`, `CreateMailboxEnvelopeMessage`). The ciphertext is bound by digest, so a 256 KiB envelope still signs a few hundred bytes. ed25519 over a deterministic string, so a byte-identical retry replays byte-identical bytes and F-004's idempotent replay is untouched.\n\n## The verification point\n\n`MailboxHandler.authenticateSender`, called from `SendEnvelope` **after** `ValidateMailboxEnvelope` and the expiry check and **before** `StoreEnvelope`:\n\n| Condition | Answer |\n|---|---|\n| signature absent/empty | `400 INVALID_SCHEMA` |\n| longer than 256 bytes | `400 INVALID_SCHEMA` |\n| sender has no published DeviceRecord | `403 UNAUTHORIZED_MAILBOX_ACCESS` |\n| signature does not verify under `device_pubkey` | `403 INVALID_SIGNATURE` |\n\nThe sender is resolved by **reusing `authorizeMailboxDevice`** - the same immutable `(mailbox identity, device UUID)` binding challenge/poll/ack use - applied to `cryptoutil.DeriveMailboxID(SenderIdentityID)`. No second trust machinery. Both probe findings were honoured: the check is not in `validation.ValidateMailboxEnvelope` (T50-I-001), and length/shape checks stay ahead of it (T50-I-002), so every identifier-bound test still answers with the bound it violated.\n\n## Wire contract\n\n`sender_signature`: optional and `1..256` on the still-`.strict()` `MailboxEnvelopeSchema`, **required by the relay**, `json:\"sender_signature,omitempty\"` on the Go model so a pre-T50 record is served without the key rather than as `\"\"`. Not tightened to required on the parse schema - a poll batch the client cannot parse is the wedge this wave has been closing.\n\nThe CLI signs inside the same durable transaction that encrypts the payload: `Profile.withRuntime` gained a lazy fourth argument `signEnvelope(binding)`, which derives the device key from the profile's own seed, uses it once and zeroes it in a `finally`, exactly as `mailboxAuthorization` does. The signature is written into the outbox record, so the retry path replays it verbatim.\n\n## Verification\n\n`pnpm test` 158 passed / 0 failed (protocol 12, crypto-core 16, client-db 1, client-core 2, session-node 24, mobile 6, cli 20 files / 97). `pnpm typecheck` Done on 7 projects. `go test ./...` and `go test -race -count=1 -tags=relayv2 ./...` both all-ok, 0 data races. `go vet` clean, `gofmt -l` lists no file this task touched. All eight T50 test files verify byte-identical by SHA-256 against `001-T50-tests-result.json`; 0 skip markers repository-wide; no test, config or flow file was written.",
+  "acceptance": [
+    {
+      "criterion": "All T50 tests pass unmodified: apps/cli 20 files / 97 tests, workspace 158, typecheck green on 7 projects, Go untagged and -race -tags=relayv2 green",
+      "status": "met",
+      "evidence": "`pnpm test`: protocol 3 files/12, crypto-core 3/16, client-db 1/1, client-core 2/2, session-node 3/24, mobile 1/6, cli 20/97 = 158 passed, 0 failed. `pnpm typecheck`: Done on all 7 projects. `go -C apps/relay test ./...`: every package ok. `go -C apps/relay test -race -count=1 -tags=relayv2 ./...`: every package ok, 0 data races. Node v26.5.0, Go 1.26.1."
+    },
+    {
+      "criterion": "An envelope with a missing, malformed, oversized, wrong-key or wrong-transcript signature is refused with a bounded 4xx before it is stored",
+      "status": "met",
+      "evidence": "TestSendEnvelopeRefusesAnUnauthenticatedSender (7 subtests) and TestSendEnvelopeRefusesASignatureOverADifferentTranscript (7 subtests) pass; both assert a bounded 4xx with a client error code AND GetEnvelopes(mailbox) == 0. authenticateSender runs before mailboxService.StoreEnvelope, so nothing is written on any refusal path."
+    },
+    {
+      "criterion": "A sender whose device record is unknown to the relay is refused",
+      "status": "met",
+      "evidence": "TestSendEnvelopeRefusesASenderWithNoPublishedDeviceRecord passes. The sender is resolved through authorizeMailboxDevice(DeriveMailboxID(sender_identity_id), sender_device_id); badger.ErrKeyNotFound and errMailboxOwnershipMismatch both answer 403 UNAUTHORIZED_MAILBOX_ACCESS."
+    },
+    {
+      "criterion": "The flooding capability itself is closed: an attacker with no published root-signed device record can place no envelope at all",
+      "status": "met",
+      "evidence": "TestUnauthenticatedFloodCannotReachAMailbox passes: all 20 poison envelopes refused, mailbox empty, and the legitimate authenticated envelope delivered by one poll. The two-process E2E suite's unauthenticated re-injection is refused with a bounded 4xx across all 3 iterations."
+    },
+    {
+      "criterion": "F-004 replay/409 semantics, F-005 expiry ordering, F-006 bounds, T48 shape parity and cursor resumption, claimable required, no implicit publish rotation and the 0/2/3/4/5 exit-code contract are all preserved",
+      "status": "met",
+      "evidence": "TestAuthenticatedSendKeepsEnvelopeIDReplaySemantics passes (signed replay 200, re-signed different body 409 ENVELOPE_ID_CONFLICT, stored envelope unchanged); the whole lifecycle, poll-capacity, identifier-bounds and shape suites pass unchanged; cli.relayErrorCodes and publication-claimability pass with exit codes 0/2/3/4/5 unchanged. authenticateSender was inserted between the expiry check and StoreEnvelope and changed no existing branch."
+    },
+    {
+      "criterion": "The presence/bound check lives in the handler, not in ValidateMailboxEnvelope, and length/shape checks run before signature verification",
+      "status": "met",
+      "evidence": "T50-I-001 and T50-I-002 honoured: internal/validation is untouched and its suite is green, and authenticateSender is called after ValidateMailboxEnvelope and the expiry check, so identifier-bound and shape fixtures still answer with the bound they violated."
+    },
+    {
+      "criterion": "sender_signature stays optional on the strict client schema and required at the relay, with omitempty on the Go model",
+      "status": "met",
+      "evidence": "MailboxEnvelopeSchema keeps `.strict()` with `z.string().min(1).max(256).optional()`; all 4 protocol tests pass including 'still refuses any other unknown property' and 'keeps the field optional'. Go model carries `json:\"sender_signature,omitempty\"`; TestPollNeverServesAnEmptySenderSignature passes."
+    },
+    {
+      "criterion": "T50-F-001: the mobile demo no longer builds envelopes the relay will refuse, with the minimal change and its 6 tests still green",
+      "status": "met",
+      "evidence": "MessagingScreen.tsx signs with signMailboxEnvelopeMessage + hashMailboxEnvelopeCiphertext from the same @echolet/crypto-core module it already imports its three sibling signers from, using profile.deviceSecretKey. `pnpm --filter @echolet/mobile test` 6/6 passed; apps/mobile typecheck Done. Nothing else in apps/mobile changed. Reported as T51-F-002 that no test can observe it."
+    },
+    {
+      "criterion": "T50-F-002: the sender-unknown condition is reported distinguishably, through the allowlist and the explicit reportedRelayCodes set, not collapsed into PROTOCOL_REJECTED",
+      "status": "met",
+      "evidence": "UNAUTHORIZED_MAILBOX_ACCESS added to relayClient.ts remoteCodes and to cli.ts reportedRelayCodes, exactly as the PREKEY_BUNDLE_UNAVAILABLE fix did; exit code stays 3. cli.relayErrorCodes.test.ts (2 tests) and publication-claimability.test.ts stay green, including their assertions that the reported codes never collapse into one another."
+    },
+    {
+      "criterion": "No pre-existing test weakened, skipped or deleted; vitest.config.ts, globalSetup.ts, flow.json and acceptance-criteria.md untouched",
+      "status": "met",
+      "evidence": "All 8 T50 test files verify byte-identical by SHA-256 against the hashes in 001-T50-tests-result.json. No test file was opened for edit. 0 matches for .skip(/.only(/.todo(/xit(/xdescribe(/t.Skip(/t.Skipf( across every *.test.ts, *.test.mjs and *_test.go. apps/cli/vitest.config.ts = da0c9db0ed3b0b193e5b65b83f3b765c8ae26b88fa78744aff436a16c97c94d4, apps/cli/test/globalSetup.ts = a27ae89746a9b4d69ec17f8697ad3b67be79765c8e066b52f8bbf76de8b6cf69; neither was written. No flow file was written except this result and the implementation report."
+    },
+    {
+      "criterion": "The Go and TypeScript contracts agree and the wire change is documented",
+      "status": "met",
+      "evidence": "The transcript is pinned literally in packages/crypto-core/src/mailbox/auth.envelope.test.ts, apps/relay/internal/api/handler/mailbox_sender_authentication_test.go and apps/cli/src/runtime/outbound.senderAuthentication.test.ts, and all three suites pass against one implementation per language. specification.md (message flow step 5 + two failure rows), API-11_JSON_SCHEMAS.md (3.3, send request, poll response) and PROTOCOL-07_MVP_MESSAGE_FLOW.md (7.4 rules, send-route checks) updated."
+    },
+    {
+      "criterion": "No secret material logged; device secret keys zeroed after use",
+      "status": "met",
+      "evidence": "Profile.signEnvelopeBinding derives the device key inside the transaction and zeroes it in a `finally`, exactly as Profile.mailboxAuthorization does; only the transcript's bound fields cross the boundary. The relay's error messages name field and precondition only and echo no caller-supplied value. No plaintext, ciphertext, store key, seed or request body is printed by any changed line."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t51-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Full T51 report: the transcript, the verification point and its ordering, the wire-contract change, the mobile fix, the new reported error code, verification evidence and four findings.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T51-implement-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "packages/crypto-core/src/mailbox/auth.ts",
+      "change": "modified: adds hashMailboxEnvelopeCiphertext, createMailboxEnvelopeMessage, signMailboxEnvelopeMessage and verifyMailboxEnvelopeMessage beside the existing challenge/ack family, on the same signUtf8Message/verifyUtf8Message primitives"
+    },
+    {
+      "path": "packages/protocol/src/types/mailboxEnvelope.ts",
+      "change": "modified: sender_signature as z.string().min(1).max(256).optional(); the schema stays .strict() and still refuses every other unknown key"
+    },
+    {
+      "path": "apps/relay/internal/model/mailbox_envelope.go",
+      "change": "modified: SenderSignature with json:\"sender_signature,omitempty\", so a record stored before the field existed is served without the key rather than as an empty string the client schema refuses"
+    },
+    {
+      "path": "apps/relay/internal/cryptoutil/signatures.go",
+      "change": "modified: HashMailboxEnvelopeCiphertext and CreateMailboxEnvelopeMessage, the Go half of the shared transcript"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "change": "modified: authenticateSender + writeSenderAuthorizationError; called from SendEnvelope after ValidateMailboxEnvelope and the expiry check and before StoreEnvelope, resolving the sender through the existing authorizeMailboxDevice binding applied to DeriveMailboxID(sender_identity_id)"
+    },
+    {
+      "path": "apps/cli/src/runtime/profile.ts",
+      "change": "modified: MailboxEnvelopeBinding type and private signEnvelopeBinding (device key derived in-transaction, used once, zeroed in a finally); withRuntime gains a lazy fourth callback argument. The four existing callers are unchanged"
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.ts",
+      "change": "modified: every envelope built in sendOwned now carries a sender_signature over the pinned transcript; the value is persisted in the outbox record so the exact retry replays identical bytes"
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.ts",
+      "change": "modified: UNAUTHORIZED_MAILBOX_ACCESS added to the remoteCodes allowlist so the relay's sender-unknown code can be carried inland"
+    },
+    {
+      "path": "apps/cli/src/commands/cli.ts",
+      "change": "modified: UNAUTHORIZED_MAILBOX_ACCESS added to reportedRelayCodes so classify() names the condition instead of flattening it to PROTOCOL_REJECTED; exit code stays 3"
+    },
+    {
+      "path": "apps/mobile/src/screens/MessagingScreen.tsx",
+      "change": "modified (T50-F-001): the demo hoists envelope_id, recipient_mailbox_id and expires_at_ms and signs the transcript with profile.deviceSecretKey using the same crypto-core module it already imports its three sibling mailbox signers from. Nothing else in apps/mobile changed"
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/specification.md",
+      "change": "modified: message-flow step 5 states the transcript, the verification, the relay-publish precondition and the reported code; two rows added to the failure-behavior table"
+    },
+    {
+      "path": "docs/API-11_JSON_SCHEMAS.md",
+      "change": "modified: sender_signature documented in 3.3 MailboxEnvelope, in the /v1/messages/send request and in the /v1/mailbox/poll response"
+    },
+    {
+      "path": "docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md",
+      "change": "modified: 7.4 Mailbox Envelope gains the field and its rule; the send-route check list gains the signature check and its three refusal codes"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T51-F-001",
+      "global_id": "001-T51-implement#T51-F-001",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 48,
+      "problem": "reportedRelayCodes is consulted by classify() for every non-retryable RelayError, not only for sends. Adding UNAUTHORIZED_MAILBOX_ACCESS therefore also changes how a 403 from /v1/mailbox/challenge, /v1/mailbox/poll or /v1/mailbox/ack is reported: previously PROTOCOL_REJECTED, now the relay's own code.",
+      "impact": "Behaviour change slightly wider than T50-F-002 literally asked for. It is the same condition seen from the other side - a device the relay holds no (mailbox identity, device UUID) binding for - so naming it is strictly more informative than flattening it, the exit code is unchanged at 3, and no test asserted the old flattening. Stated rather than left for a reviewer to discover.",
+      "suggested_fix": "Accept as is, or narrow it by carrying the relay's HTTP path alongside remoteCode in RelayError and gating the report on the send route. The narrower version buys nothing measurable and adds state to the transport boundary, so it was not taken.",
+      "evidence": "apps/cli/src/commands/cli.ts:357 `classify()` has no per-route branch. cli.relayErrorCodes.test.ts (2 tests) and publication-claimability.test.ts stay green, including the assertion that the reported codes never collapse into one another.",
+      "confidence": "high"
+    },
+    {
+      "id": "T51-F-002",
+      "global_id": "001-T51-implement#T51-F-002",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "file": "apps/mobile/src/screens/MessagingScreen.tsx",
+      "line": 243,
+      "problem": "The mobile demo now signs its envelope, but nothing in apps/mobile can observe whether it signs CORRECTLY. Its 6 tests render only the double __DEV__ / EXPO_PUBLIC_ECHOLET_ENABLE_UNSAFE_DEMO gate and never reach sendMessage, and sender_signature is optional in the typed envelope, so tsc cannot catch a wrong transcript either. Carried forward from T50-F-001, which recorded the same blind spot.",
+      "impact": "If the demo's transcript diverged from the relay's, every demo send would be refused at runtime and no suite would go red. The risk is low - it calls the same crypto-core helpers the CLI and Go tests pin literally in both languages, over the same seven fields, and OnboardingScreen already publishes the device record through relayApi.publishDeviceRecord - but it is unverified rather than verified.",
+      "suggested_fix": "If the demo's runtime behaviour matters, add a mobile test that reaches sendEnvelope with the demo gate enabled and verifies the emitted sender_signature against the profile's device public key, mirroring apps/cli/src/runtime/outbound.senderAuthentication.test.ts. Deliberately not done here: mobile was scoped to the minimal change that stops it producing envelopes the relay rejects, and adding tests was not this task's mandate.",
+      "evidence": "`pnpm --filter @echolet/mobile test` 6/6 passed and apps/mobile typecheck Done both before and after the change; MessagingScreen.test.mjs renders with profile: null and asserts only the gate.",
+      "confidence": "high"
+    },
+    {
+      "id": "T51-F-003",
+      "global_id": "001-T51-implement#T51-F-003",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "line": 173,
+      "problem": "Resolving the sender through DeriveMailboxID(sender_identity_id) lets an unauthenticated caller distinguish 'this identity has a published device record' (403 INVALID_SIGNATURE, having got past resolution) from 'it has not' (403 UNAUTHORIZED_MAILBOX_ACCESS).",
+      "impact": "No new capability. The same oracle already exists on /v1/mailbox/challenge for any known mailbox id, both answers are 403 with no body distinction beyond the code, and an identity id is published in the owner's own contact card anyway. It does not help place an envelope, retarget one, or reach a mailbox.",
+      "suggested_fix": "Leave as is. Collapsing the two into one code would cost the operator the distinguishable precondition T50-F-002 exists to restore, and would not remove the timing/ordering signal. If a later round wants the oracle closed, it belongs in one decision covering challenge, poll, ack and send together.",
+      "evidence": "authenticateSender returns writeSenderAuthorizationError before signature verification; writeMailboxAuthorizationError on /v1/mailbox/challenge already answers the same code for the same class of condition (mailbox_handler.go:499).",
+      "confidence": "medium"
+    },
+    {
+      "id": "T51-F-004",
+      "global_id": "001-T51-implement#T51-F-004",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "packages/crypto-core/src/mailbox/auth.ts",
+      "line": 137,
+      "problem": "message_id, recipient_identity_id and recipient_device_id are deliberately NOT bound by the v1 transcript, exactly as the design pinned (carried from T50-I-002). An on-path attacker can rewrite those three on an otherwise valid envelope without invalidating the signature.",
+      "impact": "Blast radius excludes the T49-F-001 capability entirely: the envelope cannot be retargeted at another mailbox, its envelope_id cannot be reused, its payload cannot be swapped, its lifetime cannot be extended, and nothing can be sent from an unpublished sender. A rewritten recipient_* or message_id is refused by the recipient's own acceptOne checks or fails to decrypt.",
+      "suggested_fix": "Leave as pinned for T50/T51. If a later round wants them bound, mint a `:v2` transcript and change the Go and TypeScript sides together; do not silently add fields to the v1 string, which is pinned literally in three test files.",
+      "evidence": "apps/cli/src/runtime/inbound.ts:158-165 refuses a mismatched recipient_identity_id / recipient_device_id / recipient_mailbox_id and an unpinned sender before decrypt; the Signal ciphertext authenticates the sender end to end at client.decrypt.",
+      "confidence": "medium"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-07T00:00:00Z"
+}

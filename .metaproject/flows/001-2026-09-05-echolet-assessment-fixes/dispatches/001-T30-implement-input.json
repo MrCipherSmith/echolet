@@ -1,0 +1,33 @@
+{
+  "task": {
+    "task_id": "task-30",
+    "task_name": "Implement CLI command entrypoint and exit/error contract",
+    "task_type": "mixed",
+    "complexity": "high",
+    "dependencies": ["task-23", "task-24", "task-25"],
+    "description": "Implement the documented executable CLI surface and stable process contract required by six independent child-process RED scenarios.",
+    "target_files": [
+      "apps/cli/package.json",
+      "apps/cli/src/commands/cli.ts",
+      "apps/cli/src/commands/cli.test.ts",
+      "apps/cli/src/runtime/profile.ts",
+      "pnpm-lock.yaml"
+    ],
+    "acceptance_criteria": [
+      "Package bin resolves to a runnable built Node entrypoint on Node 22.13+.",
+      "init, contact export/import, relay publish, send, poll, history and doctor implement the reviewed flags and reject malformed arguments with exit 2.",
+      "Contact import requires --yes or explicit interactive yes; forged/trust/protocol rejection exits 3.",
+      "Temporary relay failures exit 4 and local encrypted persistence failures exit 5.",
+      "--json emits exactly one success/error object on stdout; stderr diagnostics/prompts and normal outputs redact secrets/plaintext except explicit history results.",
+      "Offline commands do no network I/O; runtime commands delegate to completed profile/outbound/inbound/RelayClient APIs.",
+      "All six process tests and all previous CLI/workspace tests/typechecks pass unchanged."
+    ],
+    "context": "Follow cli.test.ts exactly. Use node:util parseArgs or an equally strict parser. Init writes reviewed config values and calls openProfile initialize without replacement. Build/bin must be reproducible for a clean checkout; if bundling, externalize only native runtime dependencies that Node can resolve and keep source maps/secrets out of output. Read config.json through parseClientConfig to construct RelayClient for network commands. Map ConfigurationError/argument issues to 2; trust/protocol/invalid relay response to 3; retryable RelayError to 4; encrypted store/profile corruption/wrong key to 5. Never serialize underlying exception messages. Do not commit.",
+    "existing_tests": ["apps/cli/src/commands/cli.test.ts"],
+    "existing_stories": [],
+    "module_patterns": "Node ESM CLI, strict parseArgs, one JSON stdout envelope, stderr prompts, existing profile/outbound/inbound runtime APIs, process-level Vitest.",
+    "test_case_specs": {"test_files": ["apps/cli/src/commands/cli.test.ts"], "run_command": "cd apps/cli && pnpm exec vitest run src/commands/cli.test.ts"}
+  },
+  "workspace": {"codebase_path": "/Users/Goodea/goodea/projects/echolet", "branch": "main", "issue_number": 1, "issue_title": "Flow 001 Echolet CLI prototype"},
+  "automation": {"skip_confirmation": true, "auto_commit": false, "verify_lint": true, "verify_types": true, "verify_tests": true, "verify_stories": false, "max_self_fix_attempts": 3, "commit_message_style": "conventional"}
+}

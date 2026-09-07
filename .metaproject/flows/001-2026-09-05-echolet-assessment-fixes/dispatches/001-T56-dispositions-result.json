@@ -1,0 +1,222 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T56-dispositions",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Consolidated disposition table for every finding recorded in flow 001, from the original twelve through the T54 quota round: 110 rows, 51 fixed, 7 partially-fixed, 26 deliberately accepted with reasons recorded, 21 not-fixed and open, 2 open documented limitations, 0 unverifiable. One defect class blocks acceptance: the mailbox-flooding wedge (T49-F-001 -> T52-F-001 -> T53-F-001 -> T54-F-001) is bounded, not eliminated, and its root enabler - unauthenticated device-record publication - is still open. The T29 documentation list is included in the same artifact.",
+  "summary_markdown": "See `.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t56-final-dispositions.md`.\n\n- **Sections 1-6** carry one row per finding: id, severity, origin, disposition, evidence, blocks-acceptance. Deliberate acceptances are recorded as `accepted` with the reason, never as `fixed`.\n- **Section 7** carries the counts.\n- **Section 8** is the T29 documentation list: open limitations with measured cost, the structural one-published-bundle-per-first-contact-sender limitation, the bounded-not-eliminated flooding row with the attacker-cost cells left for the running-mate agent's re-measurement, the two explicit user-approved scope extensions, the unimplemented/unproven set (mobile, production deployment, external cryptographic audit, user pilot), and the Node 22.12 `node:sqlite` environment caveat.\n- **Section 9** lists what this pass found beyond the orchestrator's enumeration.\n\nNo test suite was run, nothing was built, and no source, test, configuration, `flow.json` or `acceptance-criteria.md` file was modified by this pass. Consequential closures were spot-checked at `file:line` in the current tree rather than taken from report prose.",
+  "acceptance": [
+    {
+      "criterion": "One row per finding covering the original twelve, F-013, both review rounds, verification/diagnosis findings and worker-reported findings",
+      "status": "met",
+      "evidence": "t56-final-dispositions.md sections 1-6: 110 rows, including every id in the orchestrator's enumeration plus 30 further ids found by an inventory sweep over the flow's own artifacts (listed in section 9.2)."
+    },
+    {
+      "criterion": "Deliberate acceptances are recorded as accepted with a reason, never as fixed",
+      "status": "met",
+      "evidence": "26 rows carry disposition `accepted`, each with the recorded reason - e.g. T38-L-001 (frozen eight-command surface), T34-I-001 (mis-binding not representable; absence of a completion marker permits self-healing), T43-N-001 (no config lever exists), T48-002 (a key cursor was ruled out by the F-009 constraint)."
+    },
+    {
+      "criterion": "Anything still open is reported as open, however late in the flow",
+      "status": "met",
+      "evidence": "21 not-fixed rows, 7 partially-fixed rows and 2 open documented limitations, including the terminal T54-F-001 raised in the flow's last implementation task and the four-times-raised documentation debt (R2-L-003 / T45-I-002 / T48-005 / T53-I-004)."
+    },
+    {
+      "criterion": "Consequential closures spot-checked against current source at file:line rather than trusted from prose",
+      "status": "met",
+      "evidence": "Verified in the current tree: F-004 mailbox_repo.go:79 + mailbox_handler.go:138-145; F-006 request_body.go:42-43 + validate.go:193-201; F-007 device_record_repo.go:26,85 with GetByDeviceID absent from production; F-008 outbound.ts:71; F-010/F-011 rate_limit.go:66-115; F-012 inbound.ts:163; F-013 cli.ts:133,149; HL-N-001 inbound.ts:136-152; HL-N-002 inbound.ts:118; R2-002 validate.go:30-37 + mailbox_handler.go:525-536; T51 sender auth mailbox_handler.go:113-190; T54 quota mailbox_handler.go:265-317 + config.go:24 + router.go:54. Still-open items verified negatively: HL-N-003 at mailbox_handler.go:60-65, BE-R-002 at device_record_repo.go:152-158, T48-004 (no bundle_id bound in validate.go), T49-F-002 (GetEnvelopeBatchFrom has no test reference), R2-L-003/R2-I-005 (0 matches for `claimable` under docs/), T38-L-001 (0 matches for rotateBundle/retryPending under apps/cli/src/commands/)."
+    },
+    {
+      "criterion": "T29 documentation list produced",
+      "status": "met",
+      "evidence": "t56-final-dispositions.md section 8, subsections 8.1 (nine open limitations with measured costs and a drop-in attacker-cost row), 8.2 (user-approved scope extensions), 8.3 (unimplemented/unproven), 8.4 (Node 22.12 node:sqlite caveat)."
+    },
+    {
+      "criterion": "No source, test, configuration, flow.json or acceptance-criteria.md file modified; no suites run; no commit",
+      "status": "met",
+      "evidence": "Only two files written, both new: t56-final-dispositions.md and this result. No build, no test execution, no git operation."
+    },
+    {
+      "criterion": "Every finding's disposition determined from artifacts plus targeted source reads",
+      "status": "partial",
+      "evidence": "0 rows marked unverifiable. Two rows rest on a report's prose rather than on a source read because no source read can settle them: T34-I-001's unconfirmed startup backfill cost, and T43-N-001's vitest birpc ceiling. Both are marked as such in their evidence cells."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t56-final-dispositions.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Consolidated disposition table (110 rows) plus the T29 documentation list.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-path-echolet-cli-prototype-t28/consolidated-findings.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "Source for the original twelve findings F-001..F-012.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38",
+      "kind": "review",
+      "exists": true,
+      "summary": "Round-1 fix review and its independent verifier report (confirmed 10, refuted 0, unverifiable 0).",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-round2-t38",
+      "kind": "review",
+      "exists": true,
+      "summary": "Round-2 delta review; two findings carried blocking_merge true, both since fixed.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t52-final-verification.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Measured that sender authentication did not close the wedge class; source of T52-F-001 and T52-F-002.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/journal.md",
+      "kind": "context",
+      "exists": true,
+      "summary": "Decision record, including the T49-F-001 user scope decision and the mtime-is-not-integrity method correction.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t56-final-dispositions.md",
+      "change": "created"
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T56-dispositions-result.json",
+      "change": "created"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T56-001",
+      "global_id": "001-T56-dispositions#T56-001",
+      "reviewer": "review-verifier",
+      "severity": "major",
+      "problem": "One defect class is still open at major severity at the end of the flow: the mailbox-flooding wedge, recorded successively as T49-F-001, T52-F-001, T53-F-001 and T54-F-001. Three remediation rounds each raised the attacker's price and each explicitly declared the class not closed.",
+      "impact": "T38 cannot be called clean under the flow's standing instruction to close every blocker and major finding without an explicit human decision to accept this residue as a documented prototype limitation. The current source states the residue itself: the per-sender quota raises the price from one identity to about three (byte-bounded regime) or fifty (count-bounded), which is a linear price increase rather than a structural fix.",
+      "suggested_fix": "Do not close this in code inside this flow. Put the re-measured attacker cost to the user and record either an explicit acceptance as a documented limitation or a further scope extension, exactly as was done for T49-F-001. Whichever is chosen, the change report must say bounded, not closed.",
+      "evidence": "apps/relay/internal/api/handler/mailbox_handler.go:265-269 states the residue in the source itself and names the standing regression TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk, which is kept green as the record. The root enabler is unauthenticated device-record publication: apps/relay/internal/api/handler/device_record_handler.go:38 decodes the body and apps/relay/internal/validation/validate.go:44-47 verifies the record only against its own freshly generated identity key. T52 verdict, verbatim: 'No. The wedge is not closed. It survives T51 at exactly the thresholds T49 measured.'",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/api/handler/device_record_handler.go:38",
+          "apps/relay/internal/validation/validate.go:44-47",
+          "apps/relay/internal/api/handler/mailbox_handler.go:265-317",
+          "apps/cli/src/runtime/inbound.ts:71",
+          "apps/cli/src/runtime/inbound.ts:113-127"
+        ],
+        "enumeration_method": "Followed the class through every artifact that names it (T48-003 -> T49-F-001 -> T52-F-001 -> T53-F-001 -> T54-F-001) and then read each named site in the current tree; the ingress site set is the two unauthenticated publication handlers plus the two bounds that decide the threshold (the relay's per-sender quota and the client's 16-page walk)."
+      },
+      "confidence": "high",
+      "disposition": {
+        "state": "unknown",
+        "evidence": "Open at the time of this consolidation. Recorded as partially-fixed / class open in t56-final-dispositions.md sections 5 and 6; the T29 documentation list carries a drop-in row for the re-measured attacker cost."
+      }
+    },
+    {
+      "id": "T56-002",
+      "global_id": "001-T56-dispositions#T56-002",
+      "reviewer": "review-verifier",
+      "severity": "minor",
+      "problem": "Documentation debt raised four times across the flow (R2-L-003, T45-I-002, T48-005, T53-I-004, plus R2-I-005 and the second half of T50-F-002) has never been closed: the operator-visible wire and failure contract that this flow grew is absent from docs/.",
+      "impact": "An operator reading the requirements package cannot learn what the CLI now does. T29 inherits the whole of it, and if T29 writes only a change narrative the debt survives the flow.",
+      "suggested_fix": "T29 must add to docs/requirements/echolet-cli-prototype/specification.md and the relevant docs/API-11 and docs/PROTOCOL-07 sections: the publish response field claimable, the PREKEY_BUNDLE_UNAVAILABLE code and its four conditions, the poll request cursor field and the changed meaning of next_cursor, the poll result shape {received, more, rejected[]} and that poll can exit 0 while reporting rejections, SENDER_QUOTA_EXCEEDED in the failure-behaviour table, the size_bytes == len(ciphertext) hard rejection, and the new precondition that send requires a prior relay publish.",
+      "evidence": "keryx ctx rg \"claimable\" docs/ returns 0 matches, although apps/cli/src/transport/relayClient.ts:57 makes the field required on every publish response. docs/requirements/echolet-cli-prototype/specification.md contains no mention of next_cursor, the poll result shape, or PREKEY_BUNDLE_UNAVAILABLE.",
+      "confidence": "high",
+      "disposition": {
+        "state": "unknown",
+        "evidence": "Open; assigned to T29 in t56-final-dispositions.md section 8.1 item 4."
+      }
+    },
+    {
+      "id": "T56-003",
+      "global_id": "001-T56-dispositions#T56-003",
+      "reviewer": "review-verifier",
+      "severity": "info",
+      "problem": "Production source documentation now asserts the opposite of what ships: apps/relay/internal/validation/validate.go:92 still gives '/v1/messages/send has no sender authentication' as the rationale for the MaxIdentifierBytes bound, which T51 made false.",
+      "impact": "The comment is the stated reason for a security bound, so a future reader who trusts it may conclude the bound is obsolete, or may reason about the send route's threat model from a premise that is no longer true. No behaviour is affected.",
+      "suggested_fix": "Update the comment to say that the fields are attacker-influenced up to the point sender authentication runs, and that the bound is checked before authentication precisely so malformed input answers 400 rather than 500. The same stale sentence appears at apps/relay/internal/validation/mailbox_envelope_shape_test.go:28 and packages/crypto-core/src/mailbox/auth.envelope.test.ts:13.",
+      "evidence": "keryx ctx rg \"no sender authentication|has never authenticated\" over apps, docs and packages returns the three sites above, against apps/relay/internal/api/handler/mailbox_handler.go:113-129 where authenticateSender now runs on every /v1/messages/send request.",
+      "confidence": "high",
+      "disposition": {
+        "state": "unknown",
+        "evidence": "Newly observed by this consolidation pass; not inherited from any review. Recorded in t56-final-dispositions.md section 9.1."
+      }
+    },
+    {
+      "id": "T56-004",
+      "global_id": "001-T56-dispositions#T56-004",
+      "reviewer": "review-verifier",
+      "severity": "info",
+      "problem": "Task states in flow.json do not match the record: T49 and T52 are still `todo` although their verification reports exist and every task they spawned (T50, T51, T53, T54) is `done`.",
+      "impact": "Whoever closes T38 will read a task list that says the two final verification gates never completed, which contradicts the reports they must cite.",
+      "suggested_fix": "Reconcile T49 and T52 through the keryx flow CLI when T38 is closed, recording the disposition each actually reached, rather than leaving them dangling. Do not edit flow.json by hand.",
+      "evidence": "flow.json tasks: T49 verify todo, T52 verify todo, alongside T50/T51/T53/T54 done; t49-verification-report.md and t52-final-verification.md both exist and both are cited by later tasks.",
+      "confidence": "high",
+      "disposition": {
+        "state": "unknown",
+        "evidence": "Recorded in t56-final-dispositions.md section 9.4 for the orchestrator."
+      }
+    }
+  ],
+  "questions": [
+    {
+      "id": "T56-Q1",
+      "question": "Is the residual mailbox-flooding wedge (T49-F-001 / T52-F-001 / T53-F-001 / T54-F-001) accepted as a documented prototype limitation at its re-measured cost, or does it get a further remediation round?",
+      "why": "It is the only open major finding in the flow, and it is the one thing that decides whether T38 can be closed as clean. The same conflict that produced the earlier user scope decision applies again: closing it at the root means authenticating device-record publication, which is production security the wave's scope excludes, while accepting it means documenting a cheap denial of service that no acceptance criterion forbids. The orchestrator should not decide this alone, and a verifier cannot.",
+      "options": [
+        {
+          "id": "accept",
+          "label": "Accept as a documented prototype limitation; T29 states it as bounded, not closed, with the re-measured attacker cost and the 168 h duration.",
+          "recommended": true
+        },
+        {
+          "id": "extend",
+          "label": "Second user-approved scope extension: authenticate device-record publication, closing the root enabler."
+        },
+        {
+          "id": "defer",
+          "label": "Defer to a follow-up flow, leaving T38 closed with one explicitly carried-forward major."
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T56-Q2",
+      "question": "Does T29 own the documentation debt (T56-002) as deliverable work, or is it carried forward as a separate task?",
+      "why": "Six findings across three rounds point at it and every one was deferred to 'the flow's documentation task'. If T29 writes only a change narrative, the debt survives the flow having been raised four times and closed never.",
+      "options": [
+        { "id": "t29", "label": "T29 owns and closes it as part of the documentation deliverable.", "recommended": true },
+        { "id": "new-task", "label": "Add a dedicated docs task before T29 closes." }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "rows_total": 110,
+    "fixed": 51,
+    "partially_fixed": 7,
+    "accepted": 26,
+    "not_fixed": 21,
+    "documented_limitation": 2,
+    "unverifiable": 0,
+    "cross_reference_rows": 3,
+    "blocking_rows": 4,
+    "blocking_classes": 1
+  },
+  "timestamp_utc": "2026-09-07T04:10:00Z"
+}

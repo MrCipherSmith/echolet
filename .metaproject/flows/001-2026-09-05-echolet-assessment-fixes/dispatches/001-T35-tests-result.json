@@ -1,0 +1,111 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T35-tests",
+  "status": "DONE",
+  "summary": "TDD RED phase complete. Added 3 new test files with 8 new tests pinning the intended behaviour for F-009, F-010, F-011 and the T34 hand-over item T34-I-003. 7 of the 8 fail today for the intended reason; the 8th is a deliberate GREEN guard that the byte budget must not starve delivery of a single maximum-size envelope. No implementation code was written. One minimal test seam is required by the fix and is declared below. All pre-existing Go and CLI tests remain green: relay handler package fails only on the 3 new tests, middleware package is new, and the CLI workspace run reports 50 passed / 3 failed where the 3 failures are exactly the new tests. Files: apps/relay/internal/middleware/rate_limit_test.go (TestRateLimiterReleasesSharedLockBeforeInvokingHandler, TestRateLimiterKeysQuotaByNormalizedRemoteHost, TestRateLimiterIgnoresForwardedHeadersByDefault, TestRateLimiterPrunesIdleBuckets); apps/relay/internal/api/handler/mailbox_poll_capacity_test.go (TestMailboxPollHonoursAggregateResponseByteBudget, TestMailboxPollHonoursRequestedBatchSize, TestMailboxPollAlwaysReturnsAtLeastOneMaximumSizeEnvelope, TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes); apps/cli/src/transport/relayClient.pollCapacity.test.ts (forwards the configured poll batch size to the relay poll request, drains a mailbox of maximum-size envelopes across polls without ever accepting an over-limit response); apps/cli/src/runtime/inbound.pollBatchSize.test.ts (forwards the profile's configured poll_batch_size to the relay poll request). Wire contract pinned for the implementer: the poll request carries batch_size, and data.next_cursor becomes string|null where non-null means more envelopes remain. Declared test seam: *middleware.RateLimiter must expose SetClock(func() time.Time) and TrackedClients() int so idle-bucket expiry is testable without wall-clock sleeps; the prune test asserts the seam at runtime via an any-typed assertion, so the package keeps compiling before it exists. T34-owned mailbox integrity, expiry and device-authorization semantics were not re-tested or contradicted. apps/cli/src/runtime/inbound.test.ts and the CLI test-harness build sequencing (owned by T36) were not touched.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "F-009 (major): server-side aggregate response-byte budget, at least one envelope per poll, remaining-work signal, client never receives an over-limit response, repeated polls drain, CLI poll_batch_size reaches the relay request. Must currently FAIL.",
+      "status": "met",
+      "evidence": "RED. Go: TestMailboxPollHonoursAggregateResponseByteBudget fails at mailbox_poll_capacity_test.go:87 'poll 1: response body = 2101798 bytes, want at most 1048576'. TestMailboxPollHonoursRequestedBatchSize fails at :153 'envelopes returned = 5 for a requested batch_size of 2, want 2'. The drain loop additionally asserts len(envelopes) >= 1 per poll, next_cursor non-null while envelopes remain, and polls > 1. CLI: relayClient.pollCapacity.test.ts both tests fail with RelayError INVALID_RELAY_RESPONSE raised at relayClient.ts:65 from pollMailbox (relayClient.ts:55) because the strict poll request schema rejects batch_size; the drain test's fake relay enforces the 1 MiB budget and returns a non-null cursor, which the current z.null() response schema also rejects. inbound.pollBatchSize.test.ts fails at :79 'expected { ...(4) } to match object { batch_size: 7 }' - the outgoing poll body carries only challenge_id, recipient_mailbox_id, device_id and signature. TestMailboxPollAlwaysReturnsAtLeastOneMaximumSizeEnvelope passes today and is a deliberate guard that enforcing the budget must not starve delivery."
+    },
+    {
+      "criterion": "F-010 (major): the limiter must not hold its shared lock across downstream handler execution; deterministic; clean under -race; must currently FAIL.",
+      "status": "met",
+      "evidence": "RED. TestRateLimiterReleasesSharedLockBeforeInvokingHandler fails at rate_limit_test.go:92: 'an independent request from 198.51.100.7:50002 never reached the handler while a request from 192.0.2.10:40001 was still executing: the rate limiter holds its shared mutex across next.ServeHTTP (rate_limit.go:31)'. Synchronisation is channel-driven: request A parks inside the handler on a channel and the test waits on a channel receive for B's handler entry; the 5s bound is a deadlock detector, not a correctness delay. Runs under -race with no data-race report."
+    },
+    {
+      "criterion": "F-011 (major): quota key is the normalized remote host (net.SplitHostPort), idle buckets are pruned, trusted-proxy handling explicitly asserted. Must currently FAIL.",
+      "status": "met",
+      "evidence": "RED, three tests. TestRateLimiterKeysQuotaByNormalizedRemoteHost fails for both IPv4 and IPv6 subtests at rate_limit_test.go:132: 'request 4 from host 192.0.2.10 over 4 separate connections: status = 200, want 429'. TestRateLimiterIgnoresForwardedHeadersByDefault fails at :179 with the same 200-instead-of-429, pinning the explicit declaration that untrusted X-Forwarded-For / X-Real-IP never mint a new quota bucket and that any proxy-aware behaviour must be opt-in and configured. TestRateLimiterPrunesIdleBuckets fails at :193 demanding the deterministic seam SetClock/TrackedClients, then asserts that after the injected clock advances 30 minutes at most one bucket remains."
+    },
+    {
+      "criterion": "Carried from T34 (finding T34-I-003, minor): the /v1/messages/send body limit must be DERIVED from cfg.MaxMessageBytes, asserted as a relationship rather than a literal.",
+      "status": "met",
+      "evidence": "RED. TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes fails at mailbox_poll_capacity_test.go:211: 'send of an envelope whose ciphertext is exactly the configured ECHOLET_MAX_MESSAGE_BYTES (2097152): status = 413, want 200'. The handler is built with maxMessageBytes = 2 MiB and the envelope's ciphertext length is taken from that configured value, so no literal byte count is asserted. The test also asserts that a body far above the derived limit is still refused with a 4xx, so the fix cannot simply drop the bound. T34's decodeJSONRequest/http.MaxBytesReader structure is preserved, not undone."
+    },
+    {
+      "criterion": "Tests are deterministic - no wall-clock sleeps for correctness; injected clocks or explicit synchronisation.",
+      "status": "met",
+      "evidence": "F-010 uses channel handshakes (a handler that blocks on a channel) with a timeout used only as a deadlock detector. F-011 pruning uses an injected clock closure through the declared SetClock seam. The Go poll and send tests are single-threaded request/response round trips. The CLI tests drive a deterministic in-process fetch stub; no timers are relied on for correctness."
+    },
+    {
+      "criterion": "Go tests pass under `go -C apps/relay test -race -count=1 ./...`; CLI tests pass under the workspace vitest run.",
+      "status": "partial",
+      "evidence": "Intentionally not yet green: this is the RED phase. Both suites run clean apart from the new failing assertions. `go -C apps/relay test -race -count=1 ./...` reports ok for router, storage/repository and validation; handler fails only on the 3 new tests; middleware fails only on the 4 new tests; no data races. `pnpm test` in apps/cli reports 'Test Files 2 failed | 10 passed (12), Tests 3 failed | 50 passed (53)' where all 3 failures are the new tests. `npx tsc -p tsconfig.json --noEmit` in apps/cli exits 0, so the new TypeScript tests are typecheck-clean today and remain so after the fix."
+    },
+    {
+      "criterion": "All existing tests remain green; no existing assertion is weakened or deleted.",
+      "status": "met",
+      "evidence": "Only new files were created; no existing test file was opened for editing. Baseline before the change: Go suite fully ok, CLI 49/49 passing. After: every pre-existing Go test still passes (handler package fails only on the 3 new test names) and every pre-existing CLI test still passes, including src/runtime/inbound.test.ts, which is concurrently owned by T36 and now reports 11 passing tests."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/relay/internal/middleware/rate_limit_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New. 4 RED tests for F-010 (lock not held across next.ServeHTTP) and F-011 (host-normalized quota key, forwarded headers ignored by default, idle bucket pruning via an injected clock)."
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_poll_capacity_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New. 3 RED tests for F-009 server side and T34-I-003, plus 1 GREEN guard that the byte budget never starves a single maximum-size envelope."
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.pollCapacity.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New. 2 RED tests: the poll request must carry batch_size, and a mailbox of maximum-size envelopes must drain across polls with every response at or below the 1 MiB client bound."
+    },
+    {
+      "path": "apps/cli/src/runtime/inbound.pollBatchSize.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New. 1 RED test that the profile's configured poll_batch_size actually reaches the outgoing /v1/mailbox/poll request."
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T35-tests-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This result."
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/relay/internal/middleware/rate_limit_test.go", "change": "added" },
+    { "path": "apps/relay/internal/api/handler/mailbox_poll_capacity_test.go", "change": "added" },
+    { "path": "apps/cli/src/transport/relayClient.pollCapacity.test.ts", "change": "added" },
+    { "path": "apps/cli/src/runtime/inbound.pollBatchSize.test.ts", "change": "added" },
+    { "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T35-tests-result.json", "change": "added" }
+  ],
+  "findings": [],
+  "questions": [
+    {
+      "id": "T35-Q-001",
+      "question": "Is the pinned poll wire contract acceptable: request field `batch_size`, and response `data.next_cursor` widened from always-null to string|null where non-null means more envelopes remain?",
+      "why": "The acceptance criteria require the relay to honour a client batch size and to signal remaining work, but do not name the fields. The RED tests had to fix concrete names on both sides of the wire so the Go and TypeScript tests agree. The implementer must also widen the CLI response schema at relayClient.ts:56, which currently pins next_cursor to z.null().",
+      "options": [
+        { "id": "accept", "label": "Keep batch_size + next_cursor:string|null as pinned", "recommended": true },
+        { "id": "rename", "label": "Choose different field names and update both test files consistently" }
+      ],
+      "can_be_resolved_by_agent": "task-implementer may rename the fields as long as both the Go and the TypeScript tests are updated together and no assertion is weakened."
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_added": 8,
+    "tests_red": 7,
+    "tests_green_guard": 1,
+    "test_files_added": 4,
+    "implementation_files_changed": 0,
+    "test_seams_declared": 1
+  },
+  "timestamp_utc": "2026-09-06T13:59:00Z"
+}

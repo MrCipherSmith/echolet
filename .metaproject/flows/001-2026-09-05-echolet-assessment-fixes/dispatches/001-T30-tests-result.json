@@ -1,0 +1,32 @@
+{
+  "contract_version": "1.0.0", "run_id": "001", "dispatch_id": "001-T30-tests", "status": "DONE",
+  "summary": "Created six process-level RED scenarios for the documented CLI. Real Node children use package bin metadata and a local HTTP fixture; profiles, encrypted stores and Signal runtime are real. All six currently fail because bin/entrypoint are absent; test file typechecks. No implementation or existing test edits.",
+  "acceptance": [
+    {"criterion": "All commands accept profile and reject unknown flags/missing values with exit2", "status": "met", "evidence": "Eight-command argument table, each checked in separate child processes with JSON stdout."},
+    {"criterion": "Explicit contact confirmation", "status": "met", "evidence": "EOF and no input reject without pins; --yes imports exact four identifiers; forged root signature rejects even with --yes."},
+    {"criterion": "Single JSON stdout object and secret/plaintext redaction", "status": "met", "evidence": "Entire stdout parsed once as an object; diagnostics/errors checked using boolean secret assertions; explicit history is the sole plaintext output."},
+    {"criterion": "Exit0/2/3/4/5 mapping", "status": "met", "evidence": "Success, invalid args/missing key, untrusted/forged/malformed protocol,503/disconnected relay, wrong key/corrupt database scenarios."},
+    {"criterion": "Immutable init, offline contact/doctor/history, runtime delegation", "status": "met", "evidence": "Two independent profiles; second init preserves exact DB/config bytes; local contact/doctor/history use unavailable network; live HTTP fixture sees publish/claim/send/challenge/poll and durable outbound history."},
+    {"criterion": "Runnable package bin and independent Node processes", "status": "met", "evidence": "Reads bin.echolet or string bin, invokes optional build, spawns process.execPath with resolved bin, concurrent independent init children."}
+  ],
+  "artifacts": [
+    {"path": "apps/cli/src/commands/cli.test.ts", "kind": "custom", "exists": true},
+    {"path": ".metaproject/data/gdctx/raw/2026-09-06T11-38-31-834Z_run.log", "kind": "report", "exists": true, "summary": "Focused RED6/6: missing bin and entrypoint."},
+    {"path": ".metaproject/data/gdctx/raw/2026-09-06T11-38-50-401Z_run.log", "kind": "report", "exists": true, "summary": "CLI typecheck PASS including new process tests."}
+  ],
+  "changed_files": [{"path": "apps/cli/src/commands/cli.test.ts", "change": "Six process-level RED test scenarios; no runtime changes."}],
+  "findings": [], "questions": [], "errors": [],
+  "metrics": {
+    "tests_written": 6, "tests_red": 6, "typecheck_pass": true,
+    "test_case_specs": {
+      "framework": "vitest", "test_files": ["apps/cli/src/commands/cli.test.ts"],
+      "run_command": "pnpm exec vitest run apps/cli/src/commands/cli.test.ts",
+      "expected_result": "RED6: package has no bin/entrypoint",
+      "flags": "init --profile DIR --relay-url URL --store-key-env ECHOLET_TEST_KEY; all commands --json; contact import --from FILE --yes; remaining documented command names/options unchanged",
+      "json_contract": "One stdout object with ok:true on success or ok:false,error:{code:string} on failure; prompts/diagnostics to stderr.",
+      "notes": "Build script optional if bin already runnable. No direct import of future parser. Child timeout15s, scenario timeout30s. Secrets generated at runtime and passed only through child environment. Plaintext allowed only in explicitly requested history output."
+    },
+    "routing": {"graph_used": "find apps/cli", "wiki_used": "prior index/session draft with reviewed specification as authority", "ctx_used": "read and focused command summaries", "raw_rg_used": false}
+  },
+  "timestamp_utc": "2026-09-06T11:39:00Z"
+}

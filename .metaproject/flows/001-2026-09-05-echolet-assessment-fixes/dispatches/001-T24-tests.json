@@ -1,0 +1,54 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T24-tests",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {
+    "title": "Define RED tests for CLI relay transport and durable send retry",
+    "description": "Create failing Vitest specifications for a typed timeout-bound relay client plus first-send session bootstrap, immutable encrypted outbox, ambiguous-send retry, and restart behavior.",
+    "intent": "test",
+    "scope": "apps/cli transport and outbound messaging tests only"
+  },
+  "acceptance_criteria": [
+    "The relay client strictly validates success/error response envelopes for publish, claim, and message send and maps timeout/network/HTTP failures to typed stable errors.",
+    "Publishing sends the profile's complete signed bundle v2; a first send claims with a durable claim_id and rejects a relay bundle that differs from the imported contact pin.",
+    "First send establishes the official Signal session only after verified claim, persists exact ciphertext/outbox state atomically, and wraps it in a valid MailboxEnvelope.",
+    "A timeout after relay acceptance leaves the outbox pending; retry and process restart reuse the same message_id, envelope_id, claim_id where relevant, and byte-identical ciphertext/envelope.",
+    "Reusing a message_id with changed plaintext fails locally without a network call; successful identical replay marks the durable outbox delivered idempotently.",
+    "Tests inspect relay requests but never expose store keys, device secrets, session material, or plaintext in diagnostics/errors."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/schemas/relay-v2.schema.json", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T23-implement-result.json", "kind": "report", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/cli/src/runtime/profile.ts",
+    "apps/cli/src/runtime/profile.test.ts",
+    "packages/session-node/src/SignalClient.ts",
+    "packages/session-node/src/SignalClient.test.ts",
+    "packages/session-node/src/wire.ts",
+    "packages/protocol/src/types/mailboxEnvelope.ts",
+    "packages/protocol/src/types/signalPreKeyBundleV2.ts",
+    "packages/crypto-core/src/mailbox/deriveMailboxId.ts",
+    "apps/relay/internal/api/handler/mailbox_handler.go",
+    ".metaproject/data/testing/context.md"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action.",
+    "Load and follow tests-creator and the project testing skill; preserve RED-before-GREEN evidence.",
+    "Do not write implementation code or weaken existing tests.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Do not modify apps/relay or shared package implementation.",
+    "Use keryx ctx rg for searches and apply_patch for edits.",
+    "Use deterministic fake HTTP/fetch boundaries and real encrypted SQLite plus official Signal session objects where cryptographic/durability behavior matters.",
+    "Do not commit because the repository has an unborn untracked baseline.",
+    "Write and validate a subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T24-tests-result.json; final response starts STATUS:."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T24-tests-result.json", "summary_max_tokens": 500},
+  "budget": {"max_output_tokens": 4500, "max_runtime_ms": 1200000},
+  "provenance": {"created_at": "2026-09-06T10:51:00+04:00", "created_by": "flow-orchestrator", "source_request": "Implement the approved Echolet CLI prototype through flow-orchestrator."}
+}

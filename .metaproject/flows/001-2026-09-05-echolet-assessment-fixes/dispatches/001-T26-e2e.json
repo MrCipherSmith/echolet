@@ -1,0 +1,47 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T26-e2e",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {"title": "Prove the real two-process CLI prototype", "description": "Create test-first and pass three clean real Go relay/two Node CLI runs covering offline, restart, exact retry, reply, ack recovery, duplicate suppression and plaintext absence.", "intent": "test", "scope": "apps/cli process E2E and integration fixes proven necessary by it"},
+  "acceptance_criteria": [
+    "Three clean real relay/two-process runs pass.",
+    "Mutual contact trust and v2 publication precede first message; no direct in-process session setup is used.",
+    "Offline delivery, first-message decrypt, reply, process restarts and durable history pass.",
+    "Ambiguous send and ack responses recover with exact idempotent state and no duplicates.",
+    "Relay storage/logs and normal CLI output contain no plaintext/key markers.",
+    "Empty mailbox poll is encoded as envelopes:[] and accepted by the strict client.",
+    "Focused E2E plus prior CLI/workspace/typecheck and Go race gates remain green."
+  ],
+  "context_refs": [
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/metrics-and-validation.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T30-implement-result.json", "kind": "report", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T32-implement-result.json", "kind": "report", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T26-e2e-input.json", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/cli/src/commands/cli.ts",
+    "apps/cli/src/commands/cli.test.ts",
+    "apps/cli/src/runtime/outbound.ts",
+    "apps/cli/src/runtime/inbound.ts",
+    "apps/cli/package.json",
+    "apps/relay/cmd/relay/main.go",
+    "apps/relay/internal/config/config.go",
+    "apps/relay/internal/api/router/router.go",
+    "apps/relay/internal/storage/repository/mailbox_repo.go"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; load task-implementer and testing, validate paired input.",
+    "Write the process E2E before integration code changes and preserve initial RED evidence; do not weaken existing or new assertions.",
+    "Use apply_patch and keryx ctx rg; do not edit flow.json, acceptance-criteria.md, mobile code, or commit.",
+    "Use real relay routes and separate child processes/profile stores; runtime imports may only support fixture assertions/teardown, never session setup or message processing.",
+    "Bound every child/server wait, kill all processes in finally, use loopback only, and avoid secret/plaintext values in failure messages/artifacts.",
+    "Write and validate the required subagent-result; final first line STATUS:."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T26-e2e-result.json", "summary_max_tokens": 600},
+  "budget": {"max_output_tokens": 6500, "max_runtime_ms": 1800000},
+  "provenance": {"created_at": "2026-09-06T11:52:50+04:00", "created_by": "flow-orchestrator", "source_request": "Implement and prove the approved Echolet CLI prototype through flow-orchestrator."}
+}

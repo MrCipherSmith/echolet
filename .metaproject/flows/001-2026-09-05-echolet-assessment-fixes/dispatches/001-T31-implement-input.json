@@ -1,0 +1,22 @@
+{
+  "task": {
+    "task_id": "task-31",
+    "task_name": "Align relay v2 publish response with typed CLI contract",
+    "task_type": "fix",
+    "complexity": "low",
+    "dependencies": ["task-22"],
+    "description": "Make the independently authored v2 handler response test green by returning the already validated submitted bundle_id with stored=true.",
+    "target_files": ["apps/relay/internal/api/handler/signal_prekey_bundle_v2.go", "apps/relay/internal/api/handler/signal_prekey_bundle_v2_test.go"],
+    "acceptance_criteria": [
+      "Successful POST /v2/prekeys/publish returns ok=true, stored=true, and exact bundle_id.",
+      "Existing v2 status/raw-byte/race tests and all v1 tests stay green."
+    ],
+    "context": "The typed CLI transport test requires bundle_id. The service has already validated the raw JSON before success, so the handler may safely read the bundle_id for the response without rewriting persisted raw bytes. Keep the existing service method signature required by T22 tests. Do not commit.",
+    "existing_tests": ["apps/relay/internal/api/handler/signal_prekey_bundle_v2_test.go"],
+    "existing_stories": [],
+    "module_patterns": "Go net/http handler, strict JSON boundary, additive v2 response, table/focused tests.",
+    "test_case_specs": {"test_files": ["apps/relay/internal/api/handler/signal_prekey_bundle_v2_test.go"], "run_command": "cd apps/relay && go test -race -tags=relayv2 ./internal/api/handler ./internal/api/router"}
+  },
+  "workspace": {"codebase_path": "/Users/Goodea/goodea/projects/echolet", "branch": "main", "issue_number": 1, "issue_title": "Flow 001 Echolet CLI prototype"},
+  "automation": {"skip_confirmation": true, "auto_commit": false, "verify_lint": false, "verify_types": false, "verify_tests": true, "verify_stories": false, "max_self_fix_attempts": 3, "commit_message_style": "conventional"}
+}

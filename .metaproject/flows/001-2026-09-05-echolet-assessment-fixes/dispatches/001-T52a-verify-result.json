@@ -1,0 +1,115 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T52a-verify",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Full matrix PASS on the T51 tree (18/18 checks: frozen install, CLI build, typecheck, cli_process 24, workspace tests 158 across 4 full executions incl. one under 24-worker CPU load, cli suite 97, E2E 3/3 x2, Go untagged + race + relayv2 race with 0 data races, keryx test --strict PASS, health --strict PASS score 95 gate PASS, graph 87/136 no cycles, wiki 19 pages 0 broken, integrity 61/61 OK by SHA-256). Test count is exactly the orchestrator's 158 and reconciles against T49's 139 as the +19 T50 sender-authentication test wave; no test skipped/weakened/renamed; no source, test, config or flow file modified. THE CENTRAL FINDING: T49-F-001 is NOT closed. Sender authentication is correct for unauthenticated senders (unsigned->400 INVALID_SCHEMA, wrong-key->403 INVALID_SIGNATURE, tampered->403 INVALID_SIGNATURE, unpublished-sender->403 UNAUTHORIZED_MAILBOX_ACCESS, all before storage), but device-record publication is itself unauthenticated: a fresh self-signed DeviceRecord is accepted with HTTP 200, after which the attacker signs authenticated poison and wedges the victim's mailbox at exactly the same 49 max-size (~12.8 MB) / 800 min-size thresholds T49 measured, permanent for up to 168 h. Verified by execution against the real relay binary + real dist/cli.js at default configuration. Recorded as T52-F-001 (major/HIGH). The orchestrator's hypothesis is confirmed.",
+  "summary_markdown": "## T49-F-001: the wedge survives T51\n\n**Verdict: not closed.** T51 relocated the flood behind a lock the attacker mints themselves.\n\n| Step | Observed (real relay binary, default config) |\n|---|---|\n| unsigned envelope | `400 INVALID_SCHEMA` |\n| wrong-key signature | `403 INVALID_SIGNATURE` |\n| tampered ciphertext | `403 INVALID_SIGNATURE` |\n| unpublished sender | `403 UNAUTHORIZED_MAILBOX_ACCESS` |\n| **attacker self-publishes own DeviceRecord** | **`200`** |\n| authenticated poison envelope | `200`, stored |\n| 48 max-size poison + legit | victim poll exit 0, legit delivered |\n| **49 max-size poison + legit** | **victim poll exit 3, legit never received, permanent over 3 retries** |\n| **800 min-size poison + legit** | **victim poll exit 3 (799 still delivers)** |\n\n**Attacker cost:** one unauthenticated `POST /v1/device-records/publish` (self-signed fresh ed25519 identity, one-time, reusable across victims) + 49 signed sends (~12.8 MB) or 800 (~0.7 MB) per victim; under the default 120/min limit that is <30 s (or <7 min); wedge persists up to the 168 h retention cap. Only precondition beyond the publish is the victim's mailbox id (a digest of the identity id in their own contact card).\n\n## Matrix: PASS\n\n158 workspace tests x4 executions (one under 24-worker load), 0 red, no `onTaskUpdate`/timeout/ELIFECYCLE; Go 5 packages ok untagged + `-race` + `-race -tags=relayv2` (0 data races); E2E 3/3 twice; typecheck clean; `keryx test --strict` PASS; `keryx health --strict` PASS (score 95, gate PASS, 7 P2 complexity advisories, 0 P0/P1); graph 87/136 no cycles; wiki 19 pages 0 broken; integrity 61/61 OK by SHA-256. Count reconciles to 158 exactly (+19 vs T49's 139 = T50 test wave)."
+  ,
+  "acceptance": [
+    {
+      "criterion": "An unauthenticated (unsigned/tampered/wrong-key/unpublished-sender) envelope is refused before storage; each case confirmed separately",
+      "status": "met",
+      "evidence": "Against the real relay binary: unsigned->400 INVALID_SCHEMA, wrong-key->403 INVALID_SIGNATURE, tampered (digest mismatch)->403 INVALID_SIGNATURE, unpublished sender->403 UNAUTHORIZED_MAILBOX_ACCESS. authenticateSender runs before StoreEnvelope; a subsequent legit poll delivered exactly the one legitimate message (history=1), proving the refused sends stored nothing."
+    },
+    {
+      "criterion": "Determine whether an attacker who publishes their own identity/device record can then place envelopes in a victim's mailbox, and at what cost",
+      "status": "met",
+      "evidence": "YES. POST /v1/device-records/publish with a fresh self-signed root DeviceRecord returns HTTP 200 with no credential (observed 3x). The immediately-following authenticated envelope was accepted (200). Cost: one one-time reusable publish + the per-victim flood (49 max-size ~12.8 MB or 800 min-size ~0.7 MB); precondition otherwise unchanged (victim mailbox id). Under default 120/min limit, 1+49=50 requests <30 s."
+    },
+    {
+      "criterion": "Determine whether the original wedge still occurs and at what threshold on the real relay at default configuration, using T49's method",
+      "status": "met",
+      "evidence": "YES, at the identical thresholds. Byte-bounded regime: 48 max-size poison delivers (victim poll exit 0), 49 wedges (exit 3, permanent across 3 retries, legit never received). Count-bounded regime: 799 min-size delivers (exit 0), 800 wedges (exit 3). Measured via the victim's own real CLI poll against the real relay binary at default config (only the rate limit raised to avoid confounding the count, the single deviation T49 also declared)."
+    },
+    {
+      "criterion": "Confirm the legitimate two-party flow still works end to end",
+      "status": "met",
+      "evidence": "Real CLI init/contact-exchange/relay-publish/send/poll/history: Bob poll exit 0, history length 1 (received exactly Alice's message) with an accepted attacker control envelope also present unacked. Corroborated by 3/3 clean real two-process E2E iterations (x2 suites) in the matrix."
+    },
+    {
+      "criterion": "Full matrix: frozen install, CLI build, workspace typecheck, cli_process tests, full workspace tests (>=3x incl. one under CPU load), 3-iteration unfiltered E2E, Go untagged, Go untagged race, uncached relayv2 race, keryx test --strict, keryx health --strict, graph rebuild, graph cycles, wiki link check",
+      "status": "met",
+      "evidence": "All PASS. Workspace 158/158 across 4 executions (run#2 under 24 CPU workers) with 0 onTaskUpdate/timeout/ELIFECYCLE anomalies; cli_process 2/24; cli suite 20/97 unfiltered; E2E 3/3 twice; Go 5 packages ok untagged+race+relayv2 race, 0 data races; keryx test --strict PASS (3/0); health --strict PASS score 95 gate PASS (7 P2 complexity, 0 P0/P1); graph 87 nodes/136 edges, no cycles; wiki 19 pages/38 links/0 broken."
+    },
+    {
+      "criterion": "Test count reconciled against the orchestrator's 158, every difference accounted for; integrity verified by SHA-256 not mtime",
+      "status": "met",
+      "evidence": "158 observed every run = protocol 12 + client-db 1 + crypto-core 16 + client-core 2 + session-node 24 + mobile 6 + cli 97. Delta vs T49's 139 is +19 (protocol +4, crypto-core +12, cli +3) = the T50 sender-authentication test wave. shasum -a 256 -c over a 61-file baseline (55 test + 6 config): 61/61 OK, 0 modified; vitest.config.ts and globalSetup.ts byte-identical to the T51 report; 0 real skip/only markers repo-wide."
+    },
+    {
+      "criterion": "No source/test/config/flow file modified; probes live outside the repository",
+      "status": "met",
+      "evidence": "git status: 23 untracked entries unchanged from the T48/T49 baseline, 0 tracked-file modifications. The probe lives entirely in the scratchpad (esbuild-bundled standalone Node script driving the real relay binary and real dist/cli.js) and touched no repository file. flow.json and acceptance-criteria.md were not written."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t52-final-verification.md",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "Part 1 (T49-F-001 binary probe: the wedge survives, with attacker cost) then Part 2 (full matrix, run table, 158 reconciliation, integrity, verdict).",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T52a-verify-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "T52-F-001",
+      "global_id": "001-T52a-verify#T52-F-001",
+      "reviewer": "code-verifier",
+      "severity": "major",
+      "file": "apps/relay/internal/api/handler/device_record_handler.go",
+      "line": 36,
+      "problem": "The T49-F-001 mailbox wedge is NOT closed by T51's sender authentication. /v1/messages/send now authenticates the sender against a published DeviceRecord, but device-record publication is itself unauthenticated: /v1/device-records/publish (and the record embedded in /v2/prekeys/publish) verifies a record only against its OWN freshly generated identity key (validation/validate.go:23-29 documents this as intentional, since both halves of the storage key are caller-chosen). Verified against the real relay binary: a fresh self-signed DeviceRecord is accepted with HTTP 200, after which the attacker signs authenticated poison envelopes the relay admits and wedges the victim's mailbox.",
+      "impact": "The flooding capability survives at a near-free added cost. At default configuration the wedge is reachable and permanent at exactly the T49 thresholds: 49 maximum-size poison envelopes (~12.8 MB) in the byte-bounded regime (48 still delivers) or 800 minimum-size ones (799 still delivers), each victim poll then exits 3 (INBOUND_REJECTED) and never receives the legitimate message, reproduced identically over 3 retries, for up to the 168 h retention cap. The only added precondition over T49 is one unauthenticated POST /v1/device-records/publish (self-signed, fresh ed25519 identity, one-time and reusable across every victim). Under the default 120/min rate limit the whole attack is 1+49=50 requests in under 30 seconds. T51's own suite did not catch this because its TestUnauthenticatedFloodCannotReachAMailbox exercises only the unauthenticated attacker, never one who self-publishes first.",
+      "suggested_fix": "Bind mailbox occupancy or send-rate to something the attacker cannot self-mint, or let a recipient drain permanently-unacceptable envelopes without the 16-page client cap. Options seen from the relay side: per-sender or per-recipient send-rate/occupancy limits keyed on a cost the attacker cannot cheaply refresh; a recipient-side server ack of envelopes it will never accept; or gating publication/first-send behind proof-of-work or an introduction the victim performs. This is a design decision for a follow-up task, not a gate fix; recorded OPEN.",
+      "evidence": "Standalone probe (scratchpad, outside the repo, no repo file touched) built apps/relay/cmd/relay, ran it at default config (only rate limit raised, the single deviation T49 declared), drove the real dist/cli.js for the two legitimate parties, and modelled the attacker with the real @echolet/crypto-core primitives + a DeviceRecord built exactly as the relay's own testSenderDeviceRecord. Persisted records: attacker_selfpublish {status:200} (x3); refusals {unsigned:400 INVALID_SCHEMA, wrongKey:403 INVALID_SIGNATURE, tampered:403 INVALID_SIGNATURE, unpublished:403 UNAUTHORIZED_MAILBOX_ACCESS}; authenticated_control {status:200}; legit_flow {bob_poll_exit:0, bob_history_len:1}; max_regime_48 {flooded:48, poll_exit:0, history:1}; max_regime_49 {flooded_plus:1, poll_exit:3, history:1, retry1:3, retry2:3, history_final:1}; small_regime_799 {poll_exit:0, history:1}; small_regime_800 {poll_exit:3, history:1}; leak_guard clean. Recipient-side permanence: acceptOne rejects the poison (recipient mismatch / CONTACT_NOT_TRUSTED, apps/cli/src/runtime/inbound.ts:158-165) and the 16-page walk (inbound.ts:71) re-raises before the legitimate envelope.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/api/handler/device_record_handler.go:36 (PublishDeviceRecord — stores a DeviceRecord, self-signature only)",
+          "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go / prekey_bundle_handler.go (PublishSignalPreKeyBundleV2 — embeds and stores the DeviceRecord, same self-signature trust)",
+          "apps/relay/internal/validation/validate.go:10-49 (ValidateDeviceRecord — verifies the record only against its own identity_id; validate.go:23-29 documents both key halves as caller-chosen)"
+        ],
+        "enumeration_method": "keryx ctx rg over apps/relay/internal/api/router/router.go enumerated every ingress that stores a DeviceRecord: r.Post /v1/device-records/publish (router.go:64) and r.Post /v2/prekeys/publish (router.go:68). Both resolve trust through ValidateDeviceRecord / VerifyCanonicalJSONSignature against the record's own identity_id (cryptoutil/signatures.go:108, validation/validate.go:44-47), with no external authorization. These two ingress points plus the shared validator are the complete set of places a self-signed DeviceRecord enters storage; the probe exercised the /v1 path directly (200) and the /v2 path is the same trust check."
+      }
+    },
+    {
+      "id": "T52-F-002",
+      "global_id": "001-T52a-verify#T52-F-002",
+      "reviewer": "code-verifier",
+      "severity": "info",
+      "file": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "line": 173,
+      "problem": "Confirms T51-F-003: resolving the sender through DeriveMailboxID(sender_identity_id) lets an unauthenticated caller distinguish a published identity (403 INVALID_SIGNATURE) from an unpublished one (403 UNAUTHORIZED_MAILBOX_ACCESS). The probe observed exactly these two codes for the wrong-key and unpublished-sender cases respectively.",
+      "impact": "No new capability beyond T52-F-001; it does not help place, retarget or reach a mailbox, and the same oracle already exists on /v1/mailbox/challenge. Noted only because it is now confirmed by execution rather than by reading. If the self-publication weakness (T52-F-001) is addressed, this oracle is subsumed by that work.",
+      "suggested_fix": "Leave as is for this gate; fold into whatever decision addresses T52-F-001, since collapsing the two 403 codes would cost the operator the distinguishable precondition T50-F-002 restored without removing the ordering signal.",
+      "evidence": "refusals.wrongKey = {status:403, code:INVALID_SIGNATURE}; refusals.unpublished = {status:403, code:UNAUTHORIZED_MAILBOX_ACCESS}, both against the real relay binary.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "matrix_checks_pass": 18,
+    "matrix_checks_fail": 0,
+    "workspace_test_count": 158,
+    "workspace_full_executions": 4,
+    "go_data_races": 0,
+    "integrity_files_ok": 61,
+    "integrity_files_modified": 0
+  },
+  "timestamp_utc": "2026-09-07T00:00:00Z"
+}

@@ -1,0 +1,37 @@
+{
+  "task": {
+    "task_id": "task-26",
+    "task_name": "Verify isolated two-process offline restart and idempotency scenario",
+    "task_type": "mixed",
+    "complexity": "high",
+    "dependencies": ["task-30", "task-32"],
+    "description": "Create and run a real-network E2E test with a compiled local Go relay, a controllable loopback response-loss proxy, and two separate CLI child processes/profile directories. Fix only integration defects exposed by the test.",
+    "target_files": [
+      "apps/cli/test/e2e/two-process.test.ts",
+      "apps/cli/package.json",
+      "apps/cli/src/commands/cli.ts",
+      "apps/cli/src/runtime/outbound.ts",
+      "apps/cli/src/runtime/inbound.ts",
+      "apps/cli/src/transport/relayClient.ts",
+      "apps/relay/internal/storage/repository/mailbox_repo.go"
+    ],
+    "acceptance_criteria": [
+      "Three clean E2E runs start a real Go relay with fresh on-disk Badger and two independent Node CLI child-process profiles/keys.",
+      "Both profiles mutually export/import confirmed cards and publish only through real HTTP routes before messaging.",
+      "Alice sends while Bob has no running process; Bob later polls/decrypts after restart, history contains exactly one message, and Bob replies for Alice to decrypt.",
+      "A proxy forwards a send to relay then drops the response; after sender process restart, retry with the same caller-supplied message_id reuses byte-identical serialized envelope/ciphertext and creates one receiver history entry.",
+      "A lost ack response survives receiver restart; pending ack is retried without a second decrypt/history entry.",
+      "An exact ciphertext redelivery under a new envelope_id is acknowledged without advancing native session or duplicating history; changed ciphertext under the same message_id is rejected.",
+      "Relay data/logs and all non-history CLI output contain none of the known plaintext/store-key markers.",
+      "The Go relay encodes an empty mailbox envelope collection as [] rather than null so the strict cross-language response contract remains stable.",
+      "A `test:e2e` package command is documented by package metadata and passes; prior CLI/workspace tests/typechecks and Go race suites remain green."
+    ],
+    "context": "Write the E2E test first and record its initial RED/integration failure before any production fix. Compile apps/relay/cmd/relay once to a temp binary; run it with ECHOLET_HTTP_ADDR and ECHOLET_DATA_DIR, wait on /health, and terminate cleanly. Use a local Node proxy that forwards exact bytes/status to relay and can drop the first chosen response after relay acceptance, record send bodies, drop an ack response, and replay a captured envelope. Every CLI action must be a new Node child using dist/cli.js and environment-only 32-byte keys; never import runtime APIs for session setup. Add optional `send --message-id <uuid>` only if needed for deterministic exact retry, with normal random default preserved. A proven Go empty-mailbox `null` versus strict TypeScript array mismatch must be fixed at the repository source by returning an initialized empty slice, with a focused Go regression. Repeat the clean scenario three times. Do not commit.",
+    "existing_tests": ["apps/cli/src/commands/cli.test.ts", "apps/cli/src/runtime/outbound.test.ts", "apps/cli/src/runtime/inbound.test.ts", "apps/relay/internal/api/router/signal_prekey_bundle_v2_mailbox_test.go"],
+    "existing_stories": [],
+    "module_patterns": "Vitest process E2E, spawn/execFile with timeouts, real loopback HTTP and Go binary, isolated temporary dirs, deterministic teardown in finally/afterEach.",
+    "test_case_specs": {"test_files": ["apps/cli/test/e2e/two-process.test.ts"], "run_command": "cd apps/cli && pnpm run test:e2e"}
+  },
+  "workspace": {"codebase_path": "/Users/Goodea/goodea/projects/echolet", "branch": "main", "issue_number": 1, "issue_title": "Flow 001 Echolet CLI prototype"},
+  "automation": {"skip_confirmation": true, "auto_commit": false, "verify_lint": true, "verify_types": true, "verify_tests": true, "verify_stories": false, "max_self_fix_attempts": 3, "commit_message_style": "conventional"}
+}

@@ -1,0 +1,61 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T34-tests",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {
+    "title": "Define RED tests for relay mailbox immutability, envelope expiry, request bounds and identity-scoped mailbox authorization",
+    "description": "Write failing (RED) Go tests that pin the intended behaviour for review findings F-004, F-005, F-006 and F-007 in apps/relay. Do NOT write implementation code.",
+    "intent": "test",
+    "scope": "apps/relay Go tests only (*_test.go). Do not modify apps/cli or packages/**."
+  },
+  "acceptance_criteria": [
+    "F-004 (blocker): a test proves that saving a DIFFERENT envelope body under an already-used (recipient mailbox, envelope_id) pair is rejected as a conflict and mapped to HTTP 409, and that the originally accepted envelope is still retrievable unchanged. A byte-identical replay of the same envelope must still succeed idempotently. The conflict case must currently FAIL.",
+    "F-005 (major): tests prove that (a) an envelope whose declared expires_at_ms is already in the past is rejected at submission, (b) stored retention never exceeds the envelope's remaining declared lifetime (and the configured server cap), and (c) GetEnvelopes filters expired records BEFORE applying the batch limit, so a stale expired envelope cannot block delivery of newer valid envelopes in the same poll. An identical retry must not extend expiry. These must currently FAIL.",
+    "F-006 (blocker): tests prove that (a) every v1 JSON handler bounds the request body before decoding and rejects an over-limit body with a bounded error rather than reading it fully, and (b) mailbox envelope validation verifies the ACTUAL decoded ciphertext byte length against both the declared size_bytes and the configured maximum, so a small declared size_bytes cannot smuggle oversized ciphertext past the limit. Enumerate the v1 decoder sites named in the finding. These must currently FAIL.",
+    "F-007 (blocker): a test proves that mailbox device authorization resolves the device by (mailbox identity, device UUID) binding, so that a device UUID registered under an UNRELATED identity cannot be selected first and cannot cause the legitimate recipient's mailbox operations (challenge, poll, ack) to fail. Construct two device records sharing a device UUID under different identities and assert the legitimate owner still authorizes successfully. It must currently FAIL.",
+    "Tests must run under `go -C apps/relay test -race -count=1 ./...` and, where the v2 surface is involved, the `relayv2` build tag suite; they must be deterministic and not depend on wall-clock sleeps beyond injected/controlled clocks.",
+    "All existing relay tests remain green; no existing assertion is weakened or deleted."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/plan.md", "kind": "plan", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/HANDOFF-CLI-PROTOTYPE-2026-09-06.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-path-echolet-cli-prototype-t28/consolidated-findings.json", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/data/testing/context.md", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/relay/internal/storage/repository/mailbox_repo.go",
+    "apps/relay/internal/storage/repository/device_record_repo.go",
+    "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go",
+    "apps/relay/internal/storage/repository/prekey_bundle_v2_test.go",
+    "apps/relay/internal/api/handler/mailbox_handler.go",
+    "apps/relay/internal/api/handler/mailbox_handler_test.go",
+    "apps/relay/internal/api/handler/device_record_handler.go",
+    "apps/relay/internal/api/handler/prekey_bundle_handler.go",
+    "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go",
+    "apps/relay/internal/validation/validate.go",
+    "apps/relay/internal/validation/validate_test.go",
+    "apps/relay/internal/service/cleanup_service.go",
+    "apps/relay/internal/config/config.go"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "Load and follow the project tests-creator skill (.metaproject/skills/gdskills/quality/tests-creator/SKILL.md) and the project testing skill; preserve explicit RED-before-GREEN evidence with recorded command output.",
+    "Do NOT write implementation code. A minimal exported test seam is allowed only if unavoidable; name it explicitly in the result findings.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Do not modify apps/cli or packages/**; another worker owns those scopes in parallel.",
+    "Do not weaken or delete existing assertions; preserve v1 route behaviour that is not part of a finding.",
+    "Use `keryx ctx rg` for searches, never bare rg/grep. Use `keryx ctx run` for long command output.",
+    "Never print ciphertext, plaintext, key material or HTTP request bodies into reports or logs.",
+    "Do not commit: this repository has an unborn untracked baseline, so partial root commits are forbidden.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T34-tests-result.json and make the final response start with STATUS:.",
+    "In the result, list every added test by file and test name, and state per finding (F-004, F-005, F-006, F-007) whether the RED demonstration succeeded, with the exact failing assertion."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T34-tests-result.json", "summary_max_tokens": 900},
+  "budget": {"max_output_tokens": 6000, "max_runtime_ms": 2400000},
+  "provenance": {"created_at": "2026-09-06T13:15:00+04:00", "created_by": "flow-orchestrator", "source_request": "Fix T28 review findings F-001..F-012 through managed flow tasks T33-T38."}
+}

@@ -1,0 +1,43 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T25-implement",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {"title": "Implement atomic inbound messaging and encrypted history", "description": "Make ten independent real-Signal/SQLite T25 tests green, including signed poll, fail-closed trust, rollback, deduplication, ack retry, and bidirectional history.", "intent": "implement", "scope": "apps/cli inbound/history plus relay mailbox transport extensions"},
+  "acceptance_criteria": [
+    "Ten focused T25 tests pass unchanged.",
+    "Signed challenge/poll/ack requests and strict response validation match the Go relay.",
+    "Decrypt, inbox, history and pending ack commit atomically before network acknowledgement.",
+    "Ack timeout/restart and duplicate delivery never repeat native decrypt or history insertion.",
+    "Outbound/inbound plaintext history is encrypted, chronological and absent from diagnostics/network/disk plaintext.",
+    "All prior CLI/workspace tests and typechecks remain green."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T25-tests-result.json", "kind": "report", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T25-implement-input.json", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t24-implementation-report.md", "kind": "report", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/cli/src/runtime/inbound.test.ts",
+    "apps/cli/src/runtime/outbound.ts",
+    "apps/cli/src/runtime/profile.ts",
+    "apps/cli/src/transport/relayClient.ts",
+    "packages/session-node/src/SignalClient.ts",
+    "packages/crypto-core/src/mailbox/auth.ts",
+    "apps/relay/internal/api/handler/mailbox_handler.go"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; load task-implementer and validate paired input.",
+    "Confirm focused RED, then make tests GREEN without weakening/deleting them.",
+    "Use apply_patch and keryx ctx rg; do not edit apps/relay, flow.json, acceptance-criteria.md, or commit.",
+    "Private seed/device secret/store/transaction must never escape public runtime APIs or diagnostics.",
+    "Every ack must correspond to committed durable state; no ack on trust, wrapper, decrypt or commit failure.",
+    "Write and validate the required subagent-result; final first line STATUS:."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T25-implement-result.json", "summary_max_tokens": 500},
+  "budget": {"max_output_tokens": 5500, "max_runtime_ms": 1500000},
+  "provenance": {"created_at": "2026-09-06T11:28:00+04:00", "created_by": "flow-orchestrator", "source_request": "Implement the approved Echolet CLI prototype through flow-orchestrator."}
+}

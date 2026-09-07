@@ -1,0 +1,63 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T35-implement",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Fix poll response capacity, relay rate limiting and the derived send-route body limit",
+    "description": "Turn the RED tests from dispatch 001-T35-tests GREEN by implementing review findings F-009, F-010 and F-011 plus the handed-over T34-I-003, across apps/relay and the apps/cli transport. The tests are the contract: make them pass without weakening them.",
+    "intent": "implement",
+    "scope": "apps/relay production code and apps/cli transport/runtime/config. Do not modify apps/cli/src/runtime/inbound.test.ts or the CLI test-harness build sequencing - a parallel worker owns those."
+  },
+  "acceptance_criteria": [
+    "F-009 (major): mailbox poll selection enforces a shared aggregate response-byte budget server-side, always returns at least one valid envelope even when that single envelope is at the maximum size, honours the client's requested batch size, and signals remaining work so repeated polls drain the mailbox instead of returning the same over-limit batch forever. The CLI's configured poll_batch_size actually reaches the relay request, and the CLI response-byte bound is never exceeded by a valid batch.",
+    "F-010 (major): the rate-limiting middleware updates quota counters under its lock, computes the allow/deny decision, releases the lock, and only then writes the rejection or calls next.ServeHTTP. An independent request from another host reaches the handler while a slow request is still executing.",
+    "F-011 (major): the quota key is the normalized remote host via net.SplitHostPort, so connection churn from one host shares one bucket; untrusted X-Forwarded-For / X-Real-IP never mint a bucket and trusted-proxy handling is explicit opt-in; idle buckets are pruned. Expose the declared deterministic seam `SetClock(func() time.Time)` and `TrackedClients() int` on *middleware.RateLimiter.",
+    "T34-I-003 (minor, handed over): the /v1/messages/send request-body limit is derived from cfg.MaxMessageBytes rather than the hand-chosen 1 MiB constant, so an envelope whose ciphertext is exactly the configured maximum is accepted while a body far above the derived limit is still rejected with a bounded 4xx. T34's decodeJSONRequest / http.MaxBytesReader structure is preserved.",
+    "Every test added by 001-T35-tests passes, unmodified: rate_limit_test.go, mailbox_poll_capacity_test.go, relayClient.pollCapacity.test.ts, inbound.pollBatchSize.test.ts.",
+    "`go -C apps/relay test -race -count=1 ./...` and the `-tags relayv2` variant pass; the focused apps/cli transport and runtime vitest files pass; `pnpm typecheck` passes. No pre-existing test is weakened, skipped or deleted."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/plan.md", "kind": "plan", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T35-tests-result.json", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-path-echolet-cli-prototype-t28/consolidated-findings.json", "kind": "custom", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/relay/internal/middleware/rate_limit.go",
+    "apps/relay/internal/middleware/rate_limit_test.go",
+    "apps/relay/internal/api/handler/mailbox_handler.go",
+    "apps/relay/internal/api/handler/mailbox_poll_capacity_test.go",
+    "apps/relay/internal/api/handler/request_body.go",
+    "apps/relay/internal/storage/repository/mailbox_repo.go",
+    "apps/relay/internal/config/config.go",
+    "apps/relay/internal/api/router/router.go",
+    "apps/cli/src/transport/relayClient.ts",
+    "apps/cli/src/transport/relayClient.pollCapacity.test.ts",
+    "apps/cli/src/runtime/inbound.ts",
+    "apps/cli/src/runtime/inbound.pollBatchSize.test.ts",
+    "apps/cli/src/runtime/config.ts"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "Load and follow the project task-implementer skill (.metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md).",
+    "ORCHESTRATOR DECISION on the test author's question T35-Q-001: option `accept`. Keep the pinned wire contract - request field `batch_size`, and response `data.next_cursor` widened from always-null to string|null where non-null means more envelopes remain. Rationale: the F-009 suggested fix explicitly requires honouring a bounded client batch preference or supporting progress through pagination; `poll_batch_size` already exists in the CLI configuration and the finding itself notes it is validated but never forwarded; `next_cursor` already exists in the response contract and is merely hardcoded null today. This uses declared surface as designed rather than inventing protocol.",
+    "Widening next_cursor must NOT weaken the schema. Keep it strictly typed and closed: a union of a bounded non-empty string and null, no `.optional()`, no passthrough, no `any`. Unknown fields must still be rejected on both sides of the wire, and the Go and TypeScript contracts must agree.",
+    "You did not write these tests and you may not weaken them. Do not edit, skip, delete or relax any test file to make the suite pass. If a test is genuinely wrong, report it as a finding and return DONE_WITH_CONCERNS instead of changing it. Renaming the pinned wire fields is permitted ONLY if the Go and TypeScript tests are updated together and no assertion is weakened - but the orchestrator decision above is to keep them.",
+    "You do not accept your own work. An independent verifier reviews it afterwards.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Build on the already-landed T33 and T34 fixes; do not undo them. T34: handler/request_body.go decodeJSONRequest with http.MaxBytesReader at all six v1 sites, absolute Badger ExpiresAt = min(declared, now+cap) with expired records excluded from the batch count, model.ErrEnvelopeIDConflict -> HTTP 409, and the device_mailbox:<mailbox_id>:<device_id> binding resolved by GetByMailboxAndDevice. T33: typed PersistenceError behind Profile.transact() mapping to exit 5, publication-bundle reuse with rotateBundle(), bounded stdin confirmation, and the in-transaction outbox recheck.",
+    "A parallel worker (flow task T36) currently owns apps/cli/src/runtime/inbound.test.ts and the CLI test-harness build sequencing. Do not modify those files. Because that worker is fixing a concurrent-build race in the CLI E2E harness, do NOT run `pnpm test` or apps/cli/test/e2e/two-process.test.ts while it is in flight: run the Go race suites plus focused vitest files for the transport/runtime tests you touch, and say so in your result. The orchestrator runs the full matrix at acceptance.",
+    "Use `keryx ctx rg` for searches, never bare rg/grep. Use `keryx ctx run` for long command output.",
+    "Never print ciphertext, plaintext, key material or HTTP request bodies into reports or logs. Do not log envelope contents when implementing the byte budget.",
+    "Do not commit: this repository has an unborn untracked baseline, so partial root commits are forbidden.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T35-implement-result.json and make the final response start with STATUS:.",
+    "Also write a short implementation report to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t35-implementation-report.md covering the poll byte budget and pagination contract, the rate-limiter lock and keying change, bucket pruning, and the derived body limit."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T35-implement-result.json", "summary_max_tokens": 900},
+  "budget": {"max_output_tokens": 8000, "max_runtime_ms": 3600000},
+  "provenance": {"created_at": "2026-09-06T14:02:00+04:00", "created_by": "flow-orchestrator", "source_request": "Fix T28 review findings F-001..F-012 through managed flow tasks T33-T38."}
+}

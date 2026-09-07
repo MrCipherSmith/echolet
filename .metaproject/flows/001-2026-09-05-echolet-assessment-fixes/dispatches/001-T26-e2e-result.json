@@ -1,0 +1,28 @@
+{
+  "contract_version": "1.0.0", "run_id": "001", "dispatch_id": "001-T26-e2e", "status": "DONE_WITH_CONCERNS",
+  "summary": "Real Go relay/two-profile CLI E2E passes3/3 clean runs; full workspace regression passes82 tests including another3 E2E runs. Added optional message-id retry flag and corrected empty relay mailbox arrays. Typechecks and tagged Go race suite pass; lint unavailable and health auto-skips compiler/lint sources.",
+  "acceptance": [
+    {"criterion": "Three clean real relay/two-process runs pass", "status": "met", "evidence": "Focused E2E3/3 PASS41.29s; workspace repeats3/3 successfully."},
+    {"criterion": "Mutual trust and v2 publication precede messaging", "status": "met", "evidence": "Each run imports both cards via CLI and asserts two real HTTP200 v2 publications before first send."},
+    {"criterion": "Offline delivery, first decrypt, reply, restarts and durable history", "status": "met", "evidence": "Fresh child per command; both histories hold exactly two chronological first/reply entries."},
+    {"criterion": "Ambiguous send/ack recover exactly without duplicates", "status": "met", "evidence": "Proxy drops successful responses; same caller message ID reuses exact bytes/one claim; pending ack retry preserves native state/history; new envelope ID redelivery deduplicates; changed ciphertext rejects."},
+    {"criterion": "No known plaintext/key markers in relay data/logs or normal outputs", "status": "met", "evidence": "Boolean marker checks on HTTP traffic, relay logs/on-disk data and all non-history CLI outputs."},
+    {"criterion": "Focused/regression/typecheck/Go race gates green", "status": "met", "evidence": "82 workspace tests PASS; seven package typechecks plus standalone E2E strict tsc PASS; Go race tagged relayv2 PASS; no graph cycles."},
+    {"criterion": "Empty mailbox returns envelopes:[]", "status": "met", "evidence": "Real empty poll after lost successful ack now passes strict TS response validation; allocated Go slice fixes null mismatch."}
+  ],
+  "artifacts": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t26-e2e-report.md", "kind": "implementation-report", "exists": true},
+    {"path": ".metaproject/data/gdctx/raw/2026-09-06T12-00-40-906Z_run.log", "kind": "report", "exists": true},
+    {"path": ".metaproject/data/gdctx/raw/2026-09-06T12-02-51-210Z_rg.log", "kind": "report", "exists": true},
+    {"path": ".metaproject/data/gdctx/raw/2026-09-06T12-01-35-426Z_run.log", "kind": "report", "exists": true}
+  ],
+  "changed_files": [
+    {"path": "apps/cli/test/e2e/two-process.test.ts", "change": "New bounded real relay/proxy/two-profile E2E scenario repeated3 times."},
+    {"path": "apps/cli/src/commands/cli.ts", "change": "Optional validated --message-id for exact retry; random default retained."},
+    {"path": "apps/cli/package.json", "change": "Add test:e2e script."},
+    {"path": "apps/relay/internal/storage/repository/mailbox_repo.go", "change": "Serialize empty mailbox as[] instead of null."}
+  ],
+  "findings": [], "questions": [], "errors": [],
+  "metrics": {"focused_e2e_passed": 3, "workspace_tests_passed": 82, "workspace_cli_tests_passed": 37, "workspace_typechecked_packages": 7, "go_race_pass": true, "lint_available": false, "health_sources_skipped": ["eslint", "typescript"], "cycles": 0},
+  "timestamp_utc": "2026-09-06T12:03:00Z"
+}

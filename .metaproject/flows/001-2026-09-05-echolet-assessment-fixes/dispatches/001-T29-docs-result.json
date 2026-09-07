@@ -1,0 +1,109 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T29-docs",
+  "status": "DONE",
+  "summary": "Final documentation task of flow 001. (1) docs/STATUS_CURRENT.md rewritten to the verified state: git exists on an unborn main with no commit and no remote (AC6 unmet, no result pinnable to a hash, PR/merge path unavailable); the computer CLI technical prototype, the relay v2 network path and the two-process end-to-end scenario are implemented and locally verified; T55 measurements and T56 disposition counts carried in full; open limitations, environment caveat and the three user decisions stated; mobile, production deployment, external cryptographic audit and user pilot named explicitly as unimplemented and unproven. (2) docs/requirements/echolet-cli-prototype/README.md and specification.md no longer say 'spec ready' or describe the networked CLI as planned. (3) DOCUMENTATION DEBT CLOSED, raised four times across the wave and never closed before: 'claimable' had ZERO matches under docs/ while the CLI requires it on every publish response; now documented across API-11, PROTOCOL-07 and specification.md together with the poll request 'cursor' field, next_cursor as a resume position, the poll result shape {received, more, rejected[{envelopeId, code}]} with poll exiting 0 while reporting rejections, sender_signature and its transcript, the per-sender unacked quota, the size_bytes == len(ciphertext) rejection, and PREKEY_BUNDLE_UNAVAILABLE / UNAUTHORIZED_MAILBOX_ACCESS / SENDER_QUOTA_EXCEEDED with their exit-3 mapping and the reason 403 was chosen over 429. (4) The stale comment '/v1/messages/send has no sender authentication', still standing as the RATIONALE for a security bound after T51 made it false, corrected at five sites, comment text only. Two of the five (validation/mailbox_envelope_shape_test.go, api/handler/mailbox_envelope_identifier_test.go) were not on the dispatch's list of three but carry the identical false sentence. No assertion, test name, behaviour or configuration was touched. (5) final-change-report.md written; (6) journal.md closed with six entries including the third user decision. Also propagated one numeric correction the tree was inconsistent on: the byte-bounded flooding residue is 4 self-published identities + 49 max-size POSTs (T55, measured on the real binary), not the 3 + 48 the T54 report and the defaultSenderUnackedQuota comment state. Re-verification after the edits on Node v26.5.0: pnpm test 162 passed (exactly the expected 162: cli 101, session-node 24, crypto-core 16, protocol 12, mobile 6, client-core 2, client-db 1), pnpm typecheck PASS all projects, go -C apps/relay test ./... PASS 5 packages. No commit, branch, PR or remote created; flow.json, acceptance-criteria.md, apps/cli/vitest.config.ts and apps/cli/test/globalSetup.ts untouched.",
+  "summary_markdown": "## What changed\n\n| File | Change |\n|---|---|\n| `docs/STATUS_CURRENT.md` | Rewritten to the verified state; the stale 'no git repository' and 'relay v2 / CLI are upcoming gates' text is gone |\n| `docs/requirements/echolet-cli-prototype/README.md` | 'spec ready' -> implemented and locally verified, with what that does not mean, the two approved scope extensions, and the entry point repointed |\n| `docs/requirements/echolet-cli-prototype/specification.md` | Implementation-state table, frozen 8-command surface, reported relay codes + exit mapping, `poll` result shape, bounded 16-page cursor walk, `claimable`, the four `PREKEY_BUNDLE_UNAVAILABLE` conditions, the one-bundle first-contact limitation, five new failure-behaviour rows |\n| `docs/API-11_JSON_SCHEMAS.md` | poll request `cursor`; `next_cursor` as a resume position; `size_bytes` measured not trusted; new section 12 for the v2 prekey routes carrying `claimable`; `PREKEY_BUNDLE_UNAVAILABLE` added to the code list; exit-code table for the three reported codes; residue corrected 3 -> 4 |\n| `docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md` | Same cursor semantics; `size_bytes == len(ciphertext)`; residue corrected 3 -> 4; error-code section extended with the three codes and their exit mapping |\n| 5 source files | Comment text only: the false '`/v1/messages/send` has no sender authentication' rationale |\n| `final-change-report.md`, `journal.md` | Written / closed |\n\n## Documentation debt: closed\n\nBefore this task `keryx ctx rg \"claimable\" docs/` returned **0 matches** while `relayClient.ts` requires the field on every publish response. Raised as R2-L-003, R2-I-005, T45-I-002, T48-005, T53-I-004, T50-F-002 (second half) and T34-I-003, and never closed until now.\n\n## The limitations, stated without softening\n\n- **Mailbox flooding is bounded, not eliminated.** 48 maximum-size poison deliver, **49 wedge**; wedging now needs **4 self-published identities** (up from 1) plus 49 POSTs, about **12.85 MB**, under 30 s inside the default 120/min limit, held up to the **168 h** retention cap. Count-bounded: 50 identities, 800 envelopes. Root enabler open: `POST /v1/device-records/publish` is itself unauthenticated. **The user was shown these numbers and chose to record this as a documented limitation rather than extend scope further.**\n- **Sender authentication and the per-sender quota were explicit user-approved scope extensions**, decided after the orchestrator flagged that they push past the prototype's stated scope.\n- **One published bundle serves exactly one first-contact sender.** `rotateBundle()` / `retryPending()` have no CLI entry point (frozen surface), so a second distinct sender gets `PREKEY_BUNDLE_UNAVAILABLE` and a republish reports `claimable: false`.\n- **Node 22.12 lacks `node:sqlite`**, which makes most CLI suites fail to collect in a way indistinguishable from a broken implementation. Node 22.13+ required; verification ran on Node 26.5.0.\n- Mobile, production deployment, external cryptographic audit and user pilot remain unimplemented and unproven; the mobile signing change is correct by construction but unobservable by any test.\n\n## Re-verification after the edits\n\n`pnpm test` **162 passed** (cli 101, session-node 24, crypto-core 16, protocol 12, mobile 6, client-core 2, client-db 1), exit 0; `pnpm typecheck` PASS every project; `go -C apps/relay test ./...` PASS (handler, router, middleware, repository, validation). Node v26.5.0. Nothing broke.",
+  "acceptance": [
+    {
+      "criterion": "docs/STATUS_CURRENT.md reflects the true current state: unborn main with no commits and no remote; CLI prototype, relay v2 network path and two-process E2E implemented and locally verified; review findings and fix status from the final round",
+      "status": "met",
+      "evidence": "Rewritten. States git on an unborn main with no commit and no remote and that AC6 is therefore unmet; a capability table marking relay v2, the CLI, the two-process E2E, sender authentication and the per-sender quota as implemented; the T55 measurement block (162 tests over four unfiltered executions, cli 22 files/101, E2E 3/3, Go untagged + race + relayv2 race with 0 data races, typecheck, health gate PASS score 95, graph 89/139 no cycles, wiki 19/38/0, integrity 59/59 by SHA-256); the T56 disposition counts (51/7/26/21/2/3, 4 blocking rows in one defect class, no finding refuted)."
+    },
+    {
+      "criterion": "Mobile, production deployment, external cryptographic audit and user pilot are stated plainly as unimplemented and unproven, not omitted",
+      "status": "met",
+      "evidence": "docs/STATUS_CURRENT.md carries a dedicated section listing production security, mobile delivery (apps/mobile's 6 tests render only the disabled-state gate; flow task T10 open), public deployment, independent cryptographic audit (T11 open), user demand and pilot (T12 open, PILOT-29 empty evidence fields) and the prototype-only status of the pinned @signalapp/libsignal-client@0.102.0; the allowed claim ceiling is quoted with T52's exclusion attached. The same list appears in final-change-report.md section 4.6."
+    },
+    {
+      "criterion": "The requirements package no longer says 'spec ready' or describes the networked CLI as planned",
+      "status": "met",
+      "evidence": "README.md status replaced with 'implemented and locally verified as a computer technical prototype (2026-09-07)' plus what that does not mean, the two approved scope extensions, the Node 22.13+ requirement, and an entry point repointed from the implementation plan to the shipped contract. specification.md: status line rewritten, 'Existing versus planned' replaced by a two-column implementation-state table, and 'All commands are planned until their acceptance tests pass' replaced by the frozen-surface statement."
+    },
+    {
+      "criterion": "The documentation debt is closed: claimable, poll cursor and next_cursor semantics, the poll result shape with rejected entries, sender_signature and its transcript, the per-sender unacked quota, and PREKEY_BUNDLE_UNAVAILABLE / UNAUTHORIZED_MAILBOX_ACCESS / SENDER_QUOTA_EXCEEDED with exit-code mapping",
+      "status": "met",
+      "evidence": "claimable: API-11 new section 12.2 (required on every publish response, negation of the stored claimed flag, why it exists, republish returns claimable:false) and specification.md Relay v2 Publish. cursor / next_cursor: API-11 section 10 request and response, PROTOCOL-07 section 9.7, specification.md step 6a — resume position, position-not-key rationale, skip/repeat consequence, outside the signed challenge, 15-digit bound, INVALID_SCHEMA. poll result shape: specification.md 'poll result' subsection with {received, more, rejected[{envelopeId, code}]}, exit 0 with rejections and the one deliberate exception; five new failure-behaviour rows. sender_signature and transcript: already present at API-11 3.3 / section 8 and PROTOCOL-07 7.4 / 9.5 from T54; extended here with the size_bytes == len(ciphertext) rejection. Quota: already present; extended with the corrected residue figure. Error codes: PREKEY_BUNDLE_UNAVAILABLE added to both code lists, and both documents plus specification.md now carry a table of the three codes the CLI reports under their own name, all at exit 3, with the 403-not-429 reason."
+    },
+    {
+      "criterion": "The stale 'no sender authentication' rationale is corrected in all named sites, comment text only, no behaviour and no assertion changes",
+      "status": "met",
+      "evidence": "Corrected at apps/relay/internal/validation/validate.go (the MaxIdentifierBytes rationale), apps/relay/internal/api/handler/mailbox_envelope_shape_test.go, packages/crypto-core/src/mailbox/auth.envelope.test.ts, and additionally at apps/relay/internal/validation/mailbox_envelope_shape_test.go and apps/relay/internal/api/handler/mailbox_envelope_identifier_test.go, which carry the identical false sentence and were found by search rather than named in the dispatch. Each replacement keeps the reason the bound is still needed (a sender identity costs one unauthenticated /v1/device-records/publish, T52-F-001), so the justification is true rather than merely reworded. Only comment lines changed; no assertion, test name, fixture or production statement was touched, proven by the post-edit runs below."
+    },
+    {
+      "criterion": "The final change report states the wave's changes, evidence, disposition summary and limitations, linking durable artifacts rather than restating them",
+      "status": "met",
+      "evidence": "final-change-report.md: section 1 change table with one artifact link per area plus the id-collision and T40/T41 crossing hazards; section 2 the T55 evidence table and the post-edit re-verification; section 3 the T56 disposition counts; section 4 the limitations (flooding bounded not eliminated with the measured table; scope extensions as user decisions; one bundle per first-contact sender; the Node 22.12 caveat; a row-by-row table of every other open item with measured cost where one exists; what remains unimplemented and unproven); section 5 exactly what this task changed; section 6 the T49/T52 flow.json loose end; routing audit."
+    },
+    {
+      "criterion": "The three explicit user decisions are recorded and the scope extensions are not presented as scope the wave grew into on its own",
+      "status": "met",
+      "evidence": "STATUS_CURRENT.md has a dedicated 'user decisions' section; final-change-report.md section 4.2 states the conflict between the two standing instructions, that the four options were put to the user with the measured attacker cost, and that the user chose the full fix; journal.md's closing entries record the third decision (documented limitation over further scope) alongside the two earlier ones."
+    },
+    {
+      "criterion": "pnpm test, pnpm typecheck and go -C apps/relay test ./... pass after the edits, at the expected 162 workspace tests",
+      "status": "met",
+      "evidence": "Node v26.5.0. pnpm test exit 0, per-package totals 12 + 1 + 16 + 2 + 24 + 6 + 101 = 162 passed, cli 22 files / 101 tests including both E2E suites (3/3 real two-process runs). pnpm typecheck exit 0, every project Done. go -C apps/relay test ./... exit 0: handler, router, middleware, repository, validation all ok. keryx wiki check-links: 19 pages, 38 internal links, 0 broken; every relative markdown link added by this task was additionally verified to resolve on disk."
+    },
+    {
+      "criterion": "No behaviour change, no forbidden file touched, no git commit/branch/PR/remote",
+      "status": "met",
+      "evidence": "Changed files are five documentation files, five source files (comment lines only), one new flow report and journal.md. apps/cli/vitest.config.ts, apps/cli/test/globalSetup.ts, flow.json and acceptance-criteria.md were not opened for writing. No git command that mutates history was run; main remains unborn with no remote."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/final-change-report.md",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "The wave's final change report: changes, evidence, disposition summary, limitations, what this task changed, loose ends, routing audit."
+    },
+    {
+      "path": "docs/STATUS_CURRENT.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Project status rewritten to the verified state, with the open limitations, the environment caveat, the user decisions and what remains unproven."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/README.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Requirements package status corrected from 'spec ready' to implemented and locally verified, with the approved scope extensions named."
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/journal.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Closing entries: status correction, documentation debt closed, the third user decision, the residue numeric correction, the comment fix, and the post-edit re-verification."
+    }
+  ],
+  "changed_files": [
+    { "path": "docs/STATUS_CURRENT.md", "change": "rewritten to the verified state of the wave" },
+    { "path": "docs/requirements/echolet-cli-prototype/README.md", "change": "status corrected; scope extensions and verification caveats added" },
+    { "path": "docs/requirements/echolet-cli-prototype/specification.md", "change": "implementation state, reported relay codes and exit mapping, poll result shape, cursor walk, claimable, PREKEY_BUNDLE_UNAVAILABLE conditions, one-bundle limitation, five failure-behaviour rows" },
+    { "path": "docs/API-11_JSON_SCHEMAS.md", "change": "poll cursor; next_cursor resume semantics; size_bytes measured; new v2 prekey section with claimable; PREKEY_BUNDLE_UNAVAILABLE; exit-code table; residue corrected 3 -> 4" },
+    { "path": "docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md", "change": "poll cursor and next_cursor resume semantics; size_bytes rule; residue corrected 3 -> 4; error-code section extended with the three reported codes and their exit mapping" },
+    { "path": "apps/relay/internal/validation/validate.go", "change": "comment only: the MaxIdentifierBytes rationale no longer asserts that /v1/messages/send has no sender authentication" },
+    { "path": "apps/relay/internal/validation/mailbox_envelope_shape_test.go", "change": "comment only: same stale sentence corrected" },
+    { "path": "apps/relay/internal/api/handler/mailbox_envelope_shape_test.go", "change": "comment only: same stale sentence corrected" },
+    { "path": "apps/relay/internal/api/handler/mailbox_envelope_identifier_test.go", "change": "comment only: same stale sentence corrected" },
+    { "path": "packages/crypto-core/src/mailbox/auth.envelope.test.ts", "change": "comment only: 'has never authenticated the sender' rewritten as the pre-T51 state" },
+    { "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/final-change-report.md", "change": "created" },
+    { "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/journal.md", "change": "closing entries appended" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "retries": 0,
+    "workspace_tests_after_edits": 162,
+    "go_packages_ok_after_edits": 5,
+    "docs_files_changed": 5,
+    "source_files_comment_only_changed": 5,
+    "documentation_debt_items_closed": 9,
+    "claimable_matches_in_docs_before": 0
+  },
+  "timestamp_utc": "2026-09-07T05:00:00Z"
+}

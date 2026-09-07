@@ -1,0 +1,51 @@
+{
+  "task": {
+    "task_id": "task-23",
+    "task_name": "Implement CLI profile configuration and mutually pinned contact cards",
+    "task_type": "mixed",
+    "complexity": "high",
+    "dependencies": ["task-20", "task-21"],
+    "description": "Implement the new apps/cli runtime configuration and profile APIs required by the reviewed CLI prototype and the existing RED tests.",
+    "target_files": [
+      "apps/cli/package.json",
+      "apps/cli/tsconfig.json",
+      "apps/cli/src/runtime/config.ts",
+      "apps/cli/src/runtime/profile.ts",
+      "apps/cli/src/runtime/config.test.ts",
+      "apps/cli/src/runtime/profile.test.ts"
+    ],
+    "acceptance_criteria": [
+      "A profile initializes once with stable public identities and encrypted persistent state.",
+      "Wrong store keys fail without replacing the database.",
+      "Configuration is strict and allows plaintext HTTP only on loopback hosts.",
+      "Contact cards carry complete signed Signal bundle v2 and no private material.",
+      "Both peers explicitly confirm and durably pin all four identifiers before messaging.",
+      "Forged or changed identities fail without trust mutation, and normal diagnostics redact secrets/plaintext.",
+      "All nine provided RED tests pass without weakening their assertions."
+    ],
+    "context": "Use existing createIdentityProfile/createSignedDeviceRecord and session-node EncryptedSqliteStore, SignalClient, exportSignedSignalBundleV2/importVerifiedSignalBundleV2. Store private identity metadata and contacts inside the encrypted transactional store. The database key comes only from the configured environment variable. The repository is on unborn main; do not commit.",
+    "existing_tests": ["apps/cli/src/runtime/config.test.ts", "apps/cli/src/runtime/profile.test.ts"],
+    "existing_stories": [],
+    "module_patterns": "ESM TypeScript, strict compiler settings inherited from tsconfig.base.json, Vitest colocated tests, named exports, workspace dependencies.",
+    "test_case_specs": {
+      "test_files": ["apps/cli/src/runtime/config.test.ts", "apps/cli/src/runtime/profile.test.ts"],
+      "run_command": "pnpm exec vitest run apps/cli/src/runtime/config.test.ts apps/cli/src/runtime/profile.test.ts"
+    }
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/goodea/projects/echolet",
+    "branch": "main",
+    "issue_number": 1,
+    "issue_title": "Flow 001 Echolet CLI prototype"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "verify_stories": false,
+    "max_self_fix_attempts": 3,
+    "commit_message_style": "conventional"
+  }
+}

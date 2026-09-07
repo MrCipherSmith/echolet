@@ -1,0 +1,64 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-specs",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Correct protocol and security documentation",
+    "description": "Own docs/SEC-01_IDENTITY.md, REP-02_REPEATER_NODE.md, PROTOCOL-07_MVP_MESSAGE_FLOW.md, API-11_JSON_SCHEMAS.md, THREAT-08_MODEL.md only. Read actual client and relay auth code to align signing inputs and ownership guarantees. Correct metadata and HTTP transport claims. No runtime edits. Write scoped report specs-report.md in flow.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC1",
+    "AC2"
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "docs/SEC-01_IDENTITY.md",
+    "docs/REP-02_REPEATER_NODE.md",
+    "docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md",
+    "docs/API-11_JSON_SCHEMAS.md",
+    "docs/THREAT-08_MODEL.md"
+  ],
+  "constraints": [
+    "Root is /Users/Goodea/goodea/projects/echolet. Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md BEFORE searching or reading project code.",
+    "Use local skills, gdgraph first, keryx ctx searches; wiki index and testing context before respective work.",
+    "No flow state/AC edits, no git or remote writes. Other agents work disjoint scopes.",
+    "User authorizes fixes; no further approval questions for reversible edits. No tests for docs-only changes; verify actual source and links.",
+    "Write report with exact modified files and evidence; final response starts STATUS:."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command",
+    "network"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/specs-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-05T23:50:00Z",
+    "created_by": "flow-orchestrator"
+  }
+}

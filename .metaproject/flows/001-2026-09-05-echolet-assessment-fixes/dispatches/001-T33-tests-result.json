@@ -1,0 +1,147 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T33-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "RED phase complete for F-001, F-002, F-003 and F-008. Three new test files were added under apps/cli (no implementation code, no existing test weakened, apps/relay untouched). 9 new assertions/tests are RED for the intended behaviour and 3 new control tests are GREEN; all 34 pre-existing apps/cli tests and all 39 package tests still pass, and apps/cli typecheck is clean. F-003 and F-008, previously marked unverifiable by the T28 verifier, now have real deterministic hooks: F-003 uses a second SQLite connection holding BEGIN IMMEDIATE against the same profile database (the store opens with busy_timeout=0) acquired from inside the relay HTTP handler or from the interactive confirmation prompt, so the fault lands strictly AFTER the profile store opened; F-008 uses an explicit test-only synchronisation barrier that holds the first runtime instance immediately after the transaction in which it read the outbox record for the target message id and found nothing, letting the second independent runtime/store instance run to completion before the first resumes. No sleeps and no timing races are used anywhere. Concerns: (1) the F-001 rotation test prescribes a public API name (rotateBundle) and requires a genuinely fresh one-time prekey, which may need a prekey-rotation capability in packages/session-node that does not exist today; (2) the F-002 fix must also release stdin so the process exits while the parent still holds the pipe open.",
+  "acceptance": [
+    {
+      "criterion": "F-001: repeated relay publish submits the byte-identical previously signed bundle (same bundle_id, same one-time prekey) and fresh allocation is a separate explicit operation; must currently FAIL.",
+      "status": "met",
+      "evidence": "apps/cli/src/runtime/outbound.publish.test.ts, 3 tests, all RED. Lost-response retry after restart: 'expected 095961e3-9ca2-4186-8fb9-8e1015fc7c14 to be 1781a6ef-a19c-4ebf-a435-0bfc27e95da0' at outbound.publish.test.ts:98 (expect(retry.bundle.bundle_id).toBe(original.bundle.bundle_id)). Repeat of a successful publish: same assertion at :117. Explicit rotation: 'expected undefined to be function' at :132 (expect(typeof rotate).toBe('function')). The one-time prekey key_id/public_key equality assertions at :96-:97 already hold, which is exactly the relay-rejection condition."
+    },
+    {
+      "criterion": "F-002: interactive confirmation settles on a completed newline-terminated line (yes\\n and n\\n) with stdin never closed, and still settles on EOF without a newline and on an overlong answer; the complete-line case must currently FAIL.",
+      "status": "met",
+      "evidence": "apps/cli/src/commands/cli.processFailures.test.ts, describe 'interactive contact-import confirmation (F-002)'. RED: 'yes\\n' without EOF -> received { code: null, errorCode: 'no-output', timedOut: true }, expected { code: 0, errorCode: 'ok', timedOut: false } at :171; 'n\\n' without EOF -> same timeout, expected { code: 3, errorCode: 'CONTACT_NOT_CONFIRMED' } at :181. GREEN controls that must keep passing: EOF without a trailing newline settles with exit 0; a 64-character overlong answer without EOF settles with exit 3 CONTACT_NOT_CONFIRMED."
+    },
+    {
+      "criterion": "F-003: deterministic persistence fault after the profile store opened proves exit 5 / PERSISTENCE_FAILURE for the outbound send commit, inbound poll commit and contact import commit, while typed validation, trust and native decrypt failures stay on exit 3.",
+      "status": "met",
+      "evidence": "apps/cli/src/commands/cli.processFailures.test.ts, describe 'runtime persistence failure classification (F-003)'. RED: post-send delivery commit -> received { code: 3, errorCode: 'OUTBOUND_REJECTED' }, expected { code: 5, errorCode: 'PERSISTENCE_FAILURE' } at :221; inbound poll commit -> received { code: 3, errorCode: 'INBOUND_REJECTED' } at :237; contact-import commit -> received { code: 3, errorCode: 'INVALID_CONTACT_CARD' } at :259. GREEN control 'keeps typed validation, trust and native decrypt failures on exit 3' passes today: forged device-record signature -> 3/INVALID_CONTACT_CARD, unpinned recipient send -> 3/CONTACT_NOT_TRUSTED, undecryptable envelope from a pinned contact -> 3/INBOUND_REJECTED, so widening exit 5 cannot satisfy the suite. Fault injection: lockProfileDatabase() opens a second node:sqlite connection, sets busy_timeout=0 and holds BEGIN IMMEDIATE; readers are unaffected so the profile still opens, and every later BEGIN IMMEDIATE fails at once."
+    },
+    {
+      "criterion": "F-008: two independent runtime/store instances sending the same message id concurrently must produce exactly one outbox envelope, one envelope_id and one history entry; determinism from an explicit barrier; must currently FAIL.",
+      "status": "met",
+      "evidence": "apps/cli/src/runtime/outbound.concurrentSend.test.ts, 1 test, RED with three soft assertions failing in a single run: history entries for the message id 'expected [ ... ] to have a length of 1 but got 2' at :180; distinct relayed envelope ids for that message id 'expected [ ... ] to have a length of 1 but got 2' at :182; 'expected aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa to be bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' at :183. Both messengers are separate openOutboundMessenger instances with separate EncryptedSqliteStore connections on the same profile database, a peer session is pre-established so the concurrent window is purely local, and the barrier is holdFirstMissingOutboxRead(): the first transaction that reads cli:outbox:<message-id> and finds nothing is held after it commits until the second instance's send resolves."
+    },
+    {
+      "criterion": "All new tests are RED for the intended behaviour and GREEN for assertions that already hold; every currently-passing test in the workspace stays green.",
+      "status": "met",
+      "evidence": "apps/cli full src run (parallel, 9 files): 'Test Files 3 failed | 6 passed (9)', 'Tests 9 failed | 37 passed (46)'; the only failures are the new intended-RED assertions. Pre-existing apps/cli suite run in isolation: 34 passed / 34. Workspace packages (pnpm --filter ./packages/* -r test): protocol 8, client-db 1, crypto-core 4, client-core 2, session-node 24 - all passed. apps/cli 'tsc -p tsconfig.json --noEmit' exits 0. apps/cli/test/e2e/two-process.test.ts was not run here because it builds and starts the Go relay, which the parallel apps/relay worker owns."
+    },
+    {
+      "criterion": "No test is weakened, deleted or made less strict to accommodate a future fix.",
+      "status": "met",
+      "evidence": "Only three new files were created; no existing test file, schema, flow.json or acceptance-criteria.md was modified. git status for apps/cli shows the three new test files as the only additions and no deletions."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/src/runtime/outbound.publish.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "F-001 RED: publish idempotence across a lost response and a restart, repeat of a successful publish, and explicit bundle rotation."
+    },
+    {
+      "path": "apps/cli/src/commands/cli.processFailures.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "F-002 and F-003 RED plus exit-3 controls, driven through the built CLI entrypoint with a private esbuild bundle, a loopback relay and a deterministic SQLite BEGIN IMMEDIATE fault."
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.concurrentSend.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "F-008 RED: two independent runtime/store instances, same message id, explicit synchronisation barrier."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T13-24-23-727Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Recorded full apps/cli src run: 3 failed files (all new), 6 passed files, 9 failed / 37 passed tests."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T13-24-43-677Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Recorded workspace package suites: all green."
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/runtime/outbound.publish.test.ts", "change": "added" },
+    { "path": "apps/cli/src/commands/cli.processFailures.test.ts", "change": "added" },
+    { "path": "apps/cli/src/runtime/outbound.concurrentSend.test.ts", "change": "added" },
+    { "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T33-tests-result.json", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "T33-N1",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "problem": "The F-008 barrier is test-only instrumentation on EncryptedSqliteStore.prototype.transaction, not a production seam.",
+      "impact": "No production file was modified, but the barrier wraps the StoreTransaction handed to the operation and holds the first transaction that reads cli:outbox:<message-id> and finds nothing. A reviewer should confirm this is acceptable instrumentation rather than a hidden coupling.",
+      "suggested_fix": "Keep the barrier anchored to the semantic event (the stale outbox read) rather than to a transaction index. Under the intended fix the read moves inside the mutation transaction, the barrier then holds the first instance after that transaction has already committed, and the second instance observes the persisted record - so the same test turns green without editing the barrier.",
+      "evidence": "apps/cli/src/runtime/outbound.concurrentSend.test.ts holdFirstMissingOutboxRead(); it uses vi.spyOn on the imported class prototype and is restored by vi.restoreAllMocks() in afterEach. No file outside apps/cli test files was touched.",
+      "confidence": "high"
+    },
+    {
+      "id": "T33-N2",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "problem": "The RED phase had to choose a public API name and semantics for explicit publication-bundle rotation.",
+      "impact": "The test asserts that the outbound messenger exposes rotateBundle() and that the rotated bundle carries both a different bundle_id and a different one_time_prekey public key. A different name or shape chosen during T34 will require editing this one assertion block, and a genuine one-time prekey rotation may need a new capability in packages/session-node (SignalClient currently only ever reads the fixed pre:1 record and has no rotation entry point).",
+      "suggested_fix": "Confirm the rotation API name before implementation, and treat the session-node prekey rotation capability as an explicit part of the F-001 fix rather than discovering it during implementation. Rotating the bundle_id without rotating the one-time prekey would still be rejected by the relay's permanent OTK uniqueness contract, so the OTK assertion should not be relaxed.",
+      "evidence": "apps/cli/src/runtime/outbound.publish.test.ts test 'allocates a fresh bundle and one-time prekey only through an explicit rotation operation'; packages/session-node/src/SignalClient.ts:228 reads pre:1 unconditionally and exposes no rotation method.",
+      "confidence": "high"
+    },
+    {
+      "id": "T33-N3",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "problem": "Fixing F-002 requires releasing stdin, not only reading one line.",
+      "impact": "The RED test writes a complete line and deliberately keeps the parent end of the pipe open, exactly like a terminal. A fix that reads the line but leaves the flowing stdin stream referenced will keep the process alive and the test will stay red even though the answer was parsed.",
+      "suggested_fix": "Close the bounded reader and stop referencing stdin once the answer or the bounded limit is reached, so the process exits on its own.",
+      "evidence": "apps/cli/src/commands/cli.processFailures.test.ts 'settles on a completed affirmative line without waiting for stdin to close' asserts timedOut === false with an 8s SIGKILL guard; apps/cli/src/commands/cli.ts:144 currently iterates process.stdin until end of stream.",
+      "confidence": "high"
+    },
+    {
+      "id": "T33-N4",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "problem": "The new process-level suite builds its own CLI bundle instead of reusing dist/cli.js.",
+      "impact": "apps/cli/src/commands/cli.test.ts already runs 'pnpm run build' in beforeAll and vitest runs test files in parallel, so a second concurrent build writing the same dist/cli.js could be read while partially written.",
+      "suggested_fix": "Keep the private per-process bundle (dist/cli.red-<pid>.js, removed in afterAll) or introduce a shared build fixture if more process-level suites are added.",
+      "evidence": "apps/cli/src/commands/cli.processFailures.test.ts beforeAll uses the esbuild API with the same options as apps/cli/build.mjs; the full parallel src run produced no build-related failure and apps/cli/dist contains only cli.js afterwards.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Is `rotateBundle()` on the outbound messenger the intended public name for explicit publication-bundle allocation, and is a one-time prekey rotation capability in packages/session-node in scope for the F-001 fix?",
+      "why": "The RED test for the 'separate explicit operation' half of F-001 has to name an API. Implementing it faithfully also needs a way to allocate a fresh one-time prekey, which packages/session-node does not expose today and which is outside this dispatch's write scope.",
+      "options": [
+        { "id": "a", "label": "Keep rotateBundle() and allow the F-001 fix to add prekey rotation to packages/session-node", "recommended": true },
+        { "id": "b", "label": "Rename the operation and update the single assertion block in outbound.publish.test.ts" },
+        { "id": "c", "label": "Defer the rotation half of F-001 to a separate flow task and keep only the retry-idempotence assertions" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "test_files_added": 3,
+    "tests_added": 12,
+    "tests_red": 9,
+    "tests_green_controls": 3,
+    "preexisting_cli_tests_passing": 34,
+    "package_tests_passing": 39,
+    "production_files_modified": 0
+  },
+  "timestamp_utc": "2026-09-06T13:26:00Z"
+}

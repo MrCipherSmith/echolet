@@ -1,0 +1,33 @@
+{
+  "task": {
+    "task_id": "task-24",
+    "task_name": "Integrate CLI relay transport and durable send retry",
+    "task_type": "mixed",
+    "complexity": "high",
+    "dependencies": ["task-22", "task-23", "task-31"],
+    "description": "Implement the strict relay client and outbound messenger APIs declared by the independently authored nine-test RED suite.",
+    "target_files": [
+      "apps/cli/src/transport/relayClient.ts",
+      "apps/cli/src/runtime/outbound.ts",
+      "apps/cli/src/runtime/profile.ts",
+      "apps/cli/src/transport/relayClient.test.ts",
+      "apps/cli/src/runtime/outbound.test.ts"
+    ],
+    "acceptance_criteria": [
+      "RelayClient uses bounded requests, strict schemas, stable redacted typed errors, and exact documented endpoint bodies.",
+      "Outbound publish exports the complete local signed bundle v2.",
+      "First send claims using a durable id, verifies the returned bundle against all contact pins and official Signal signatures, establishes the trusted session, and sends a valid mailbox envelope.",
+      "The encrypted store durably retains immutable message content identity, exact ciphertext/envelope bytes, and pending/delivered state.",
+      "Timeout and restart retry the exact serialized send body without a second claim or new IDs.",
+      "Changed plaintext under the same message_id fails locally; identical delivered replay performs no network call.",
+      "All nine supplied T24 tests and all prior workspace tests/typechecks pass without weakening assertions."
+    ],
+    "context": "Implement the exact public APIs used in relayClient.test.ts and outbound.test.ts. Use SignalClient.retry for durable ciphertext replay and importVerifiedSignalBundleV2 for native verification. Compare claimed identity_id, device_id, device_pubkey and signal_identity_key with the imported contact before establish. Derive recipient mailbox ID with the existing crypto-core helper. Persist CLI outbox records under cli:outbox: inside EncryptedSqliteStore; keep exact serialized request bytes or an object whose JSON serialization is provably stable. Never include remote error messages, plaintext, ciphertext, secrets or request bodies in public errors/diagnostics. Repository is unborn main; do not commit.",
+    "existing_tests": ["apps/cli/src/transport/relayClient.test.ts", "apps/cli/src/runtime/outbound.test.ts"],
+    "existing_stories": [],
+    "module_patterns": "ESM strict TypeScript, Zod strict schemas, injected fetch/clock/id factories, real encrypted SQLite and official libsignal, colocated Vitest.",
+    "test_case_specs": {"test_files": ["apps/cli/src/transport/relayClient.test.ts", "apps/cli/src/runtime/outbound.test.ts"], "run_command": "cd apps/cli && pnpm exec vitest run src/transport/relayClient.test.ts src/runtime/outbound.test.ts"}
+  },
+  "workspace": {"codebase_path": "/Users/Goodea/goodea/projects/echolet", "branch": "main", "issue_number": 1, "issue_title": "Flow 001 Echolet CLI prototype"},
+  "automation": {"skip_confirmation": true, "auto_commit": false, "verify_lint": true, "verify_types": true, "verify_tests": true, "verify_stories": false, "max_self_fix_attempts": 3, "commit_message_style": "conventional"}
+}

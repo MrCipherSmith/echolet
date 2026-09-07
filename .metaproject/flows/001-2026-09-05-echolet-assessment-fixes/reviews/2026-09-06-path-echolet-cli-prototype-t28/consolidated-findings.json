@@ -1,0 +1,277 @@
+[
+  {
+    "id": "F-001",
+    "severity": "major",
+    "file": "apps/cli/src/runtime/outbound.ts",
+    "line": 33,
+    "problem": "Repeated relay publication creates a different signed bundle for the same reserved one-time prekey.",
+    "impact": "After relay publish commits but its response is lost, rerunning the CLI command submits a new bundle ID containing the same OTK. The relay rejects the retry under its permanent OTK uniqueness contract, so the user cannot recover a successful publication result. Even repeating a successful publish fails.",
+    "suggested_fix": "Persist the exact signed publication bundle before the first network call and reuse it across attempts and process restarts. Keep allocation of a fresh OTK and a fresh bundle as a separate explicit operation.",
+    "evidence": "outbound.ts:33 calls profile.exportContact on every attempt; profile.ts:89 calls exportSignedSignalBundleV2; wire.ts:51 assigns randomUUID; SignalClient.ts:228 reads the unchanged pre:1. Specification Relay v2 Publish permits idempotence only for identical stored bundle bytes and forbids OTK reuse under a new ID. This is a source-derived reproduction; no relay mutation was performed.",
+    "class_scope": {
+      "sites": [
+        "apps/cli/src/runtime/outbound.ts:33",
+        "apps/cli/src/runtime/profile.ts:89",
+        "packages/session-node/src/wire.ts:51",
+        "packages/session-node/src/SignalClient.ts:228"
+      ],
+      "enumeration_method": "Enumerated the single runtime publish producer and its export/publicBundle call chain; keryx ctx rg for publish, bundle_id: randomUUID, and preBytes verifies the producer and reuse sites."
+    },
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "dedupe_key": "F-001-logic",
+    "blocking_merge": false,
+    "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-001"
+  },
+  {
+    "id": "F-002",
+    "severity": "major",
+    "file": "apps/cli/src/commands/cli.ts",
+    "line": 144,
+    "problem": "Interactive contact confirmation waits for stdin EOF instead of accepting a completed input line.",
+    "impact": "A user entering yes followed by Enter at the displayed [y/N] prompt remains blocked; contact import does not finish until the user supplies EOF. A negative line also waits for EOF.",
+    "suggested_fix": "Read one bounded line using a readline interface or stop at the first newline, close the reader, and settle on EOF or an overlong answer without requiring stdin to close after a valid line.",
+    "evidence": "cli.ts:144-148 iterates until stdin ends, with only an overlength early return. A read-only probe extracted the exact function and supplied a PassThrough: settledAfterCompleteLine=false after a yes newline, acceptedAfterEOF=true only after input.end(). cli.test.ts:29 always ends stdin, masking terminal behavior.",
+    "class_scope": {
+      "sites": [
+        "apps/cli/src/commands/cli.ts:144"
+      ],
+      "enumeration_method": "keryx ctx rg readConfirmation found its single definition and sole contact-import caller at cli.ts:199; no other interactive reader exists in the CLI command implementation."
+    },
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "dedupe_key": "F-002-logic",
+    "blocking_merge": false,
+    "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-002"
+  },
+  {
+    "id": "F-003",
+    "severity": "major",
+    "file": "apps/cli/src/runtime/outbound.ts",
+    "line": 28,
+    "problem": "Runtime database failures are converted into trust/protocol errors and exit code 3.",
+    "impact": "For example, let send finish its HTTP request while another SQLite connection holds BEGIN IMMEDIATE; the post-send delivery-state transaction fails with SQLITE_BUSY. Outbound serial rewrites it to OUTBOUND_REJECTED and classify returns 3, although the documented result for local persistence failure is 5. Inbound history/poll and contact-import commits similarly hide database failures as protocol or invalid-card errors.",
+    "suggested_fix": "Introduce a typed persistence failure at the store boundary and preserve it through runtime and contact-import catch blocks; map it to redacted PERSISTENCE_FAILURE/exit 5. Keep typed validation, trust and native decrypt failures mapped to exit 3.",
+    "evidence": "EncryptedSqliteStore.ts:25 uses busy_timeout=0 and :61 begins each transaction with BEGIN IMMEDIATE. Outbound.ts:26-28 and inbound.ts:23-25 replace all non-domain/non-relay errors; cli.ts:201 catches all import errors as INVALID_CONTACT_CARD, and :252-253 maps domain errors to trustFailure. Wrong-key open failures are handled correctly, but failures after opening are not. Reproduction is source-derived, not executed.",
+    "class_scope": {
+      "sites": [
+        "apps/cli/src/runtime/outbound.ts:28",
+        "apps/cli/src/runtime/inbound.ts:25",
+        "apps/cli/src/commands/cli.ts:201",
+        "apps/cli/src/commands/cli.ts:252"
+      ],
+      "enumeration_method": "Enumerated catch blocks with keryx ctx rg catch|OUTBOUND_REJECTED|INBOUND_REJECTED|PERSISTENCE_FAILURE across command and runtime files, then followed every store-transaction caller into the single CLI classify function; these runtime/import catch boundaries erase persistence errors while profile-open boundaries preserve exit 5."
+    },
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "dedupe_key": "F-003-logic",
+    "blocking_merge": false,
+    "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-003"
+  },
+  {
+    "id": "F-004",
+    "severity": "blocker",
+    "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+    "line": 30,
+    "problem": "Saving an existing envelope ID silently replaces the accepted mailbox record.",
+    "impact": "Submit envelope A, then a different otherwise accepted envelope B with the same recipient mailbox and envelope ID before the receiver polls. Both sends succeed, but B overwrites A; the original accepted message is irretrievably lost. Sequential requests suffice.",
+    "suggested_fix": "Read the existing record inside the same transaction. Return success only for an identical envelope; reject changed content with a conflict error and map it to HTTP 409. Retry transaction conflicts safely.",
+    "evidence": "mailbox_repo.go:28-31 constructs mailbox:<recipient>:<envelope-id> and calls SetEntry without reading old content. mailbox_handler.go:66-79 returns success for both writes. ValidateMailboxEnvelope does not enforce envelope identity uniqueness. Unlike SaveSignalV2, no mailbox equality/conflict check exists. Source-derived reproduction; no live writes performed.",
+    "class_scope": {
+      "sites": [
+        "apps/relay/internal/storage/repository/mailbox_repo.go:30",
+        "apps/relay/internal/api/handler/mailbox_handler.go:66"
+      ],
+      "enumeration_method": "keryx ctx rg ENVELOPE_ID_CONFLICT|WithTTL|ExpiresAtMs|DeleteEnvelope across apps/relay/internal plus full MailboxService read enumerates the single mailbox writer and its single send-handler path; no existing conflict branch."
+    },
+    "blocking_merge": true,
+    "reviewer": "review-backend",
+    "confidence": "high",
+    "dedupe_key": "backend-F-001",
+    "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-004"
+  },
+  {
+    "id": "F-005",
+    "severity": "major",
+    "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+    "line": 30,
+    "problem": "Mailbox retention and selection ignore the envelope expiry time.",
+    "impact": "A normal CLI send expires after 24 hours, but SaveEnvelope retains it for 7 days. If the recipient returns after 24 hours, GetEnvelopes still returns the expired envelope; inbound rejects the entire batch before ack. Repeated polls remain blocked by that expired record, including new valid messages selected in the same batch, until physical TTL expiry.",
+    "suggested_fix": "Reject already-expired envelopes, retain each envelope no longer than its remaining declared lifetime (and configured server cap), and filter expiry during retrieval before applying the batch limit. Do not extend expiry on identical retries.",
+    "evidence": "outbound.ts:79 sets expires_at_ms to created+86400000; mailbox_repo.go:30 assigns fixed WithTTL(7*24*time.Hour), and :47-55 appends stored records without checking ExpiresAtMs. cleanup_service.go:43-45 relies solely on Badger TTL. inbound.ts:46 rejects expires_at_ms<=now before any pending ack is recorded. This is a normal delayed-receiver scenario, not a malicious-input claim.",
+    "class_scope": {
+      "sites": [
+        "apps/relay/internal/storage/repository/mailbox_repo.go:30",
+        "apps/relay/internal/storage/repository/mailbox_repo.go:53",
+        "apps/relay/internal/service/cleanup_service.go:43",
+        "apps/relay/internal/validation/validate.go:85"
+      ],
+      "enumeration_method": "keryx ctx rg WithTTL|ExpiresAtMs|DeleteEnvelope across relay internal code enumerates the only mailbox writer, reader, cleanup and lifetime validation boundaries; none uses current time to enforce envelope lifetime."
+    },
+    "blocking_merge": false,
+    "reviewer": "review-backend",
+    "confidence": "high",
+    "dedupe_key": "backend-F-002",
+    "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-005"
+  },
+  {
+    "id": "F-006",
+    "severity": "blocker",
+    "file": "apps/relay/internal/validation/validate.go",
+    "line": 82,
+    "problem": "V1 request bodies are unbounded and send-envelope limits trust attacker-supplied size_bytes.",
+    "impact": "The configured message-byte limit is bypassed, accepted oversized records make a mailbox unreadable through the CLI, and parsing permits memory exhaustion. No signature or victim key is needed for the send path.",
+    "suggested_fix": "Apply explicit MaxBytesReader limits before every v1 decoder, reject over-limit bodies with a bounded error, and validate actual ciphertext bytes against both size_bytes and the configured maximum before persistence. Bound other variable-length request fields/arrays as part of the same decoder contract.",
+    "evidence": "MailboxHandler.SendEnvelope at mailbox_handler.go:46 decodes r.Body directly. ValidateMailboxEnvelope at validate.go:82 only compares the supplied SizeBytes with maxBytes, never len(Ciphertext); MailboxRepository.SaveEnvelope persists the result. RelayClient.request at relayClient.ts:86 rejects cumulative response bytes over 1 MiB. Other v1 handlers decode before authorization or signature validation. V2 alone uses MaxBytesReader at signal_prekey_bundle_v2.go:31.",
+    "class_scope": {
+      "sites": [
+        "apps/relay/internal/api/handler/mailbox_handler.go:46",
+        "apps/relay/internal/api/handler/mailbox_handler.go:96",
+        "apps/relay/internal/api/handler/mailbox_handler.go:149",
+        "apps/relay/internal/api/handler/mailbox_handler.go:225",
+        "apps/relay/internal/api/handler/device_record_handler.go:38",
+        "apps/relay/internal/api/handler/prekey_bundle_handler.go:28",
+        "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go:31",
+        "apps/relay/internal/validation/validate.go:82"
+      ],
+      "enumeration_method": "keryx ctx rg json.NewDecoder across handler files enumerated seven decoder sites: six unbounded v1 sites and one bounded v2 sibling. keryx ctx rg SizeBytes|maxMessageBytes identified the sole claimed-size comparison before mailbox persistence."
+    },
+    "reviewer": "review-security-code",
+    "confidence": "high",
+    "blocking_merge": true,
+    "dedupe_key": "security-F-001",
+    "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-006"
+  },
+  {
+    "id": "F-007",
+    "severity": "blocker",
+    "file": "apps/relay/internal/storage/repository/device_record_repo.go",
+    "line": 68,
+    "problem": "Mailbox authorization selects a device UUID globally rather than within its owning mailbox identity.",
+    "impact": "An unrelated identity can disable a legitimate recipient mailbox until the conflicting record is removed. This is denial of service; the subsequent ownership comparison still prevents the attacker from reading the victim mailbox.",
+    "suggested_fix": "Resolve authorization by mailbox identity plus device UUID, using an immutable indexed mailbox/device binding populated by both v1 and v2 publication. Never select a global first UUID match and only then test mailbox ownership.",
+    "evidence": "DeviceRecordRepository.Save keys records by identity+device, allowing same device UUID under different identities. GetByDeviceID scans device_record keys and stops at first candidate.DeviceID match (device_record_repo.go:68-79). authorizeMailboxDevice calls that method at mailbox_handler.go:267 and only afterward compares the derived mailbox at :275-277. Root/device signature validation authenticates the attacker own identity, not global UUID uniqueness. V2 saveSignalV2Authorization uses the same identity/device key convention.",
+    "class_scope": {
+      "sites": [
+        "apps/relay/internal/storage/repository/device_record_repo.go:68",
+        "apps/relay/internal/api/handler/mailbox_handler.go:267",
+        "apps/relay/internal/storage/repository/device_record_repo.go:29",
+        "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go:79"
+      ],
+      "enumeration_method": "keryx ctx rg GetByDeviceID|candidate.DeviceID|derivedMailboxID identified the sole global selector and shared authorization helper. Full Save and saveSignalV2Authorization reads enumerate both publication writers that permit identity-scoped duplicate UUIDs. The helper serves challenge, poll and ack."
+    },
+    "reviewer": "review-security-code",
+    "confidence": "high",
+    "blocking_merge": true,
+    "dedupe_key": "security-F-002",
+    "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-007"
+  },
+  {
+    "id": "F-008",
+    "severity": "blocker",
+    "file": "apps/cli/src/runtime/outbound.ts",
+    "line": 68,
+    "problem": "Concurrent same-ID sends can create duplicate outbound history and replace the CLI outbox envelope.",
+    "impact": "With an existing peer session, two messenger instances/processes can both read no CLI outbox record, then commit sequentially. The second native encrypt returns the prior ciphertext, but the outer transaction creates a new envelope and appends history again. One logical message gets two local history entries and two envelope IDs.",
+    "suggested_fix": "Re-read and validate the CLI outbox inside the transaction that encrypts and writes history. If it already exists, return the persisted record without regenerating the envelope or appending history; retain the outer lookup only as an optimization.",
+    "evidence": "outbound.ts:41 performs prior lookup separately from mutation transaction at :68. Native SignalClient.encrypt returns the existing ciphertext at SignalClient.ts:308, but outbound.ts:82-83 still writes the new outer record/history. serial queue at outbound.ts:23 is per messenger, not cross-process. SQLite transaction serialization prevents simultaneous writes but not this stale check.",
+    "class_scope": {
+      "sites": [
+        "apps/cli/src/runtime/outbound.ts:41",
+        "apps/cli/src/runtime/outbound.ts:68",
+        "apps/cli/src/runtime/outbound.ts:82",
+        "apps/cli/src/runtime/outbound.ts:83"
+      ],
+      "enumeration_method": "keryx ctx rg prior|profile.withRuntime|client.encrypt|appendHistory|tx.set(keyFor enumerated the sole outbound producer, separate read and enclosing mutation. Native idempotent encrypt inspected; inbound checks duplicates inside its mutation transaction and is not affected."
+    },
+    "reviewer": "review-highload",
+    "confidence": "high",
+    "blocking_merge": true,
+    "dedupe_key": "highload-F-001",
+    "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-008"
+  },
+  {
+    "id": "F-009",
+    "severity": "major",
+    "file": "apps/cli/src/transport/relayClient.ts",
+    "line": 86,
+    "problem": "The valid relay poll batch can exceed the CLI response-byte limit and cannot be drained.",
+    "impact": "Ten valid messages each carrying 64 KiB plaintext produce over 1 MiB of doubly base64-encoded ciphertext even before envelopes/native overhead. The server default batch100 returns all ten, but the client rejects the response before decrypt/ack. Every retry returns the same batch.",
+    "suggested_fix": "Define a shared aggregate response-byte budget and enforce it server-side while selecting a batch, ensuring at least one valid envelope fits. Honor a bounded client batch preference or support progress through pagination; keep client response validation bounded.",
+    "evidence": "config.go:16 defaults MaxMailboxBatch=100; mailbox_handler.go:199 fetches that many and :211 returns next_cursor=null. relayClient.ts:86 rejects responses above1048576 bytes. Outbound accepts65536 plaintext bytes and base64-encodes native ciphertext twice. Numeric-only lower-bound probe measured10*ceil(ceil(65536*4/3)*4/3)=1165100 bytes, without any payload output. CLI poll_batch_size is validated but never forwarded.",
+    "class_scope": {
+      "sites": [
+        "apps/cli/src/transport/relayClient.ts:86",
+        "apps/relay/internal/api/handler/mailbox_handler.go:199",
+        "apps/relay/internal/config/config.go:16",
+        "apps/cli/src/runtime/config.ts:14"
+      ],
+      "enumeration_method": "keryx ctx rg maxMailboxBatch|next_cursor|size >|poll_batch_size enumerated producer batch limit, consumer byte bound and unused client batch setting; only poll produces a valid multi-envelope response."
+    },
+    "reviewer": "review-highload",
+    "confidence": "high",
+    "blocking_merge": false,
+    "dedupe_key": "highload-F-002",
+    "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-009"
+  },
+  {
+    "id": "F-010",
+    "severity": "major",
+    "file": "apps/relay/internal/middleware/rate_limit.go",
+    "line": 31,
+    "problem": "The rate limiter holds its global mutex while invoking downstream handlers.",
+    "impact": "A slow body read, storage operation or response write in one request blocks every other route/client at the same mutex, including health checks. Independent requests cannot progress concurrently.",
+    "suggested_fix": "Update quota counters under the mutex, compute allow/deny, unlock, then write the rejection or invoke next.ServeHTTP. Never hold the shared limiter lock across request processing.",
+    "evidence": "rate_limit.go:30 locks, :31 defers unlock until the entire middleware returns, and both allowed paths call next.ServeHTTP at :37 and :48. Router installs this single limiter globally before all routes.",
+    "class_scope": {
+      "sites": [
+        "apps/relay/internal/middleware/rate_limit.go:37",
+        "apps/relay/internal/middleware/rate_limit.go:48"
+      ],
+      "enumeration_method": "keryx ctx rg mu.Lock|mu.Unlock|next.ServeHTTP enumerated the single shared lock and both downstream calls; both calls execute under the deferred unlock."
+    },
+    "reviewer": "review-highload",
+    "confidence": "high",
+    "blocking_merge": false,
+    "dedupe_key": "highload-F-003",
+    "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-010"
+  },
+  {
+    "id": "F-011",
+    "severity": "major",
+    "file": "apps/relay/internal/middleware/rate_limit.go",
+    "line": 29,
+    "problem": "Quota accounting uses the TCP source port as part of the client key and never removes old entries.",
+    "impact": "Fresh connections from one host obtain fresh per-minute quotas. The normal one-command-per-process CLI also creates separate buckets, so the configured host limit is not enforced across commands; retained connection buckets accumulate across hosts and ports.",
+    "suggested_fix": "Normalize RemoteAddr to its host with net.SplitHostPort, define trusted-proxy handling explicitly, and expire/prune idle buckets. Preserve per-host quota across connection churn.",
+    "evidence": "rate_limit.go:29 assigns the full r.RemoteAddr string to ip, :34 indexes clients by it, and :36 replaces only the bucket for that exact address. Full RateLimiter implementation contains no deletion or expiry sweep. This report makes no unmeasured OOM timing claim.",
+    "class_scope": {
+      "sites": [
+        "apps/relay/internal/middleware/rate_limit.go:29",
+        "apps/relay/internal/middleware/rate_limit.go:34",
+        "apps/relay/internal/middleware/rate_limit.go:36"
+      ],
+      "enumeration_method": "keryx ctx rg RemoteAddr|clients[ and full file read enumerate the single key derivation and map access/update paths; no other quota store or pruning implementation exists."
+    },
+    "reviewer": "review-highload",
+    "confidence": "high",
+    "blocking_merge": false,
+    "dedupe_key": "highload-F-004",
+    "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-011"
+  },
+  {
+    "id": "F-012",
+    "severity": "minor",
+    "file": "apps/cli/src/runtime/inbound.test.ts",
+    "line": 167,
+    "problem": "Unknown-sender rejection test does not pin the explicit CONTACT_NOT_TRUSTED guard.",
+    "impact": "Deleting the dedicated missing-contact guard still leaves the nearest suite green: the later decode of a missing value rejects, satisfying rejects.toThrow. A future edit can remove the intended typed trust rejection unnoticed, although the current mutant still fails closed.",
+    "suggested_fix": "Assert the public rejection code CONTACT_NOT_TRUSTED for the unknown-sender fixture, while retaining unchanged-state and no-ack assertions. Keep changed-device and malformed-data cases distinct so each names its own intended failure.",
+    "evidence": "Isolated deletion of inbound.ts:50 ran inbound.test.ts with exit0 and10/10 tests passing; unmodified baseline also10/10. Test at inbound.test.ts:167 only asserts rejects.toThrow. Removing confirmation, duplicate-hash and batch-minimum gates in the same bounded pass caused1 focused failure each, demonstrating the harness detects real assertion failures.",
+    "confidence": "high",
+    "reviewer": "review-testing-practices",
+    "dedupe_key": "testing-unknown-sender-guard",
+    "blocking_merge": false,
+    "global_id": "2026-09-06-path-echolet-cli-prototype-t28#F-012"
+  }
+]

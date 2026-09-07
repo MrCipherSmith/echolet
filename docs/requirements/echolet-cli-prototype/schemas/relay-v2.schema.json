@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://echolet.local/schemas/cli-prototype/relay-v2.schema.json",
+  "title": "Echolet relay Signal bundle v2 exchange",
+  "$comment": "JSON Schema covers structure. Runtime validators must additionally enforce canonical unpadded base64url pad bits, EC/Kyber prefixes, bundle lifetime <= 7 days, current-time validity, and all Echolet/native signatures at their specified boundaries.",
+  "$defs": {
+    "uuid": { "type": "string", "format": "uuid", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "timestamp": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "base64url32": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" },
+    "base64url33": { "type": "string", "pattern": "^[A-Za-z0-9_-]{44}$" },
+    "base64url64": { "type": "string", "pattern": "^[A-Za-z0-9_-]{86}$" },
+    "deviceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "version", "identity_id", "device_id", "device_pubkey", "capabilities", "created_at_ms", "signature"],
+      "properties": {
+        "type": { "const": "device_record" },
+        "version": { "const": 1 },
+        "identity_id": { "$ref": "#/$defs/base64url32" },
+        "device_id": { "$ref": "#/$defs/uuid" },
+        "device_pubkey": { "$ref": "#/$defs/base64url32" },
+        "device_label": { "type": "string", "maxLength": 256 },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mailbox_poll": { "type": "boolean" },
+            "receipts": { "type": "boolean" },
+            "attachments": { "type": "boolean" }
+          }
+        },
+        "created_at_ms": { "$ref": "#/$defs/timestamp" },
+        "signature": { "$ref": "#/$defs/base64url64" }
+      }
+    },
+    "signalBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "version", "suite", "bundle_id", "created_at_ms", "expires_at_ms", "device_record", "registration_id", "signal_identity_key", "signed_prekey", "kyber_prekey", "one_time_prekey", "signature"],
+      "properties": {
+        "type": { "const": "signal_prekey_bundle" },
+        "version": { "const": 2 },
+        "suite": { "const": "libsignal-pq-v1" },
+        "bundle_id": { "$ref": "#/$defs/uuid" },
+        "created_at_ms": { "$ref": "#/$defs/timestamp" },
+        "expires_at_ms": { "$ref": "#/$defs/timestamp" },
+        "device_record": { "$ref": "#/$defs/deviceRecord" },
+        "registration_id": { "type": "integer", "minimum": 1, "maximum": 16380 },
+        "signal_identity_key": { "$ref": "#/$defs/base64url33" },
+        "signed_prekey": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key_id", "public_key", "signature"],
+          "properties": {
+            "key_id": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+            "public_key": { "$ref": "#/$defs/base64url33" },
+            "signature": { "$ref": "#/$defs/base64url64" }
+          }
+        },
+        "kyber_prekey": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key_id", "public_key", "signature"],
+          "properties": {
+            "key_id": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+            "public_key": { "type": "string", "pattern": "^[A-Za-z0-9_-]{2092}$" },
+            "signature": { "$ref": "#/$defs/base64url64" }
+          }
+        },
+        "one_time_prekey": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key_id", "public_key"],
+          "properties": {
+            "key_id": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+            "public_key": { "$ref": "#/$defs/base64url33" }
+          }
+        },
+        "signature": { "$ref": "#/$defs/base64url64" }
+      }
+    },
+    "publishRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundle"],
+      "properties": { "bundle": { "$ref": "#/$defs/signalBundle" } }
+    },
+    "claimRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_id", "identity_id"],
+      "properties": {
+        "claim_id": { "$ref": "#/$defs/uuid" },
+        "identity_id": { "$ref": "#/$defs/base64url32" },
+        "device_id": { "oneOf": [{ "$ref": "#/$defs/uuid" }, { "type": "null" }] }
+      }
+    },
+    "claimResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "data"],
+      "properties": {
+        "ok": { "const": true },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["bundle"],
+          "properties": { "bundle": { "$ref": "#/$defs/signalBundle" } }
+        }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/publishRequest" },
+    { "$ref": "#/$defs/claimRequest" },
+    { "$ref": "#/$defs/claimResponse" }
+  ]
+}

@@ -1,0 +1,155 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T48-implement",
+  "status": "DONE",
+  "summary": "T48 is the GREEN phase for the round-2 residual of HL-N-001 (R2-001 paths A and B), the identifier-bound class (R2-002) and the reportedRelayCodes docstring (R2-L-002). All five T47 test files pass unmodified: apps/cli is 19 files / 94 tests green, pnpm test and pnpm typecheck are green, and go test -race -count=1 ./... is green both plain and with -tags relayv2. Path A: ValidateMailboxEnvelope now refuses by shape as well as by length, requiring UUID envelope_id/message_id/sender_device_id/recipient_device_id and the ciphertext_message literal, using a regexp transcribed from the zod 4.0.0 z.string().uuid() the client actually resolves (version 1-8, variant 8/9/a/b, either hex case, nil UUID accepted, max UUID refused - each nibble probed rather than assumed). The three controls hold: a CLI-shaped envelope validates, base64url identity/mailbox ids stay free strings, and the T41 length bound still runs first. Path B was closed properly rather than by the client-side shortcut T47-TP-001 warned about: the relay's next_cursor is no longer the fixed token 'more' but a server-issued resume position that PollMailbox accepts back as 'cursor' and GetEnvelopeBatchFrom honours by skipping the envelopes it already returned, and the CLI walks pages inside one poll() while every page so far yielded nothing, bounded at 16 pages. The cursor is derived from a server-computed count, never from the sender-supplied envelope_id, so the original F-009 constraint still holds; an unusable cursor is 400 INVALID_SCHEMA, never 500 and never a silent fallback to position zero. F-012 was not weakened: the re-raise moved from 'this batch yielded nothing' to 'no page this walk reached yielded anything' and still throws before ackPending(). Path B is proved closed against the REAL relay binary end to end (section 4 of the report): with ECHOLET_MAX_MAILBOX_BATCH=2 and three poison envelopes sorting ahead of the legitimate one, poll #1 walks past the poison-filled window and delivers and acks exactly the legitimate envelope on exit 0, while poll #2's cursorless first page returns the byte-identical poison page - head-of-prefix re-selection observed on the real binary, which is exactly the shortcut T47-TP-001 predicted would have passed the fixture and left the wedge open. R2-002 closes the two remaining routes with the now-exported validation.MaxIdentifierBytes: device_id 64960 bytes on /v1/device-records/publish and a 65000-byte envelope_ids element on /v1/mailbox/ack both went from HTTP 500 INTERNAL_ERROR to HTTP 400 INVALID_SCHEMA against the real relay, with the RED suite's ordinary-UUID controls still passing. No test file was edited: 52 test files, plus apps/cli/vitest.config.ts and apps/cli/test/globalSetup.ts, verify byte-identical by SHA-256 after the run.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "R2-001 path A: the relay refuses what its own client's wire schema refuses, without over-correcting",
+      "status": "met",
+      "evidence": "apps/relay/internal/validation/validate.go now applies clientMailboxUUID to envelope_id, message_id, sender_device_id and recipient_device_id and requires payload_type == \"ciphertext_message\", after the T41 length bound. TestValidateMailboxEnvelopeAgreesWithTheClientWireSchema and TestPollNeverReturnsAnEnvelopeTheClientSchemaRefuses pass, including all three controls. The regexp was derived by probing the resolved zod (4.0.0) nibble by nibble: version 1-8, variant 8/9/a/b, either hex case, nil UUID accepted, max UUID refused. Against the real relay: envelope_id='poison-not-a-uuid' and payload_type='not_ciphertext_message' both answer 400 INVALID_SCHEMA, and all 7 envelopes any poll handed back in that run match the client's uuid shape."
+    },
+    {
+      "criterion": "R2-001 path B: the relay gained real resumption and the client walks pages, rather than a client-side page-walk over a relay that re-selects from the head",
+      "status": "met",
+      "evidence": "EnvelopeBatch gained NextCursor; GetEnvelopeBatchFrom(mailboxID, limit, byteBudget, cursor) decodes the cursor to a position and skips exactly that many non-expired envelopes before selecting; PollRequest gained `cursor` and PollMailbox returns batch.NextCursor; the fixed constant pollMoreEnvelopesCursor = \"more\" is gone. inbound.ts poll() loops over pages while received === 0 && more, bounded by maxPollPagesPerPoll = 16, creating a fresh challenge per page because a challenge is single-use. inbound.pollProgress.test.ts passes with 2 HTTP polls (the test allows at most 4)."
+    },
+    {
+      "criterion": "Path B demonstrated closed against the real relay binary, not only against the T47 fixture (T47-TP-001)",
+      "status": "met",
+      "evidence": "Scratchpad script built apps/relay/cmd/relay, ran it with ECHOLET_MAX_MAILBOX_BATCH=2 and drove the real dist/cli.js through a recording proxy. poll #1: page 1 (no cursor) = the two head poison envelopes with next_cursor present; page 2 (cursor echoed) = [poison-3, legitimate]; exit 0, received=1, exactly one ack carrying only the legitimate envelope_id, history 1 entry. poll #2: page 1 (no cursor) returns the IDENTICAL poison page - head-of-prefix re-selection on the real binary, so a purely client-side loop could not have made progress; page 2 (cursor) = [poison-3], next_cursor null; exit 3 INBOUND_REJECTED, zero acks, history unchanged. All checks passed; nothing was written into the repository and no plaintext, ciphertext, key or HTTP body was printed."
+    },
+    {
+      "criterion": "F-012 preserved, not relaxed: a poison-only mailbox still raises the typed InboundError, acks nothing and mutates nothing",
+      "status": "met",
+      "evidence": "inbound.test.ts:177-183 and inbound.batchIsolation.test.ts:262-275 pass unmodified (SHA-256 identical). inbound.pollProgress.test.ts:228-252, the across-pages counterpart guard, passes: the walk reaches the last page and then still throws InboundError INBOUND_REJECTED with fake.acks() === [] and a byte-identical store. Confirmed again against the real relay by poll #2 (exit 3, acks=0, history unchanged)."
+    },
+    {
+      "criterion": "R2-002: the identifier-bound class is closed on both remaining routes with a bounded 4xx, and the controls still pass",
+      "status": "met",
+      "evidence": "maxEnvelopeIdentifierBytes became the exported validation.MaxIdentifierBytes. ValidateDeviceRecord bounds identity_id and device_id; AckMailbox bounds each envelope_ids element before signature verification. TestPublishDeviceRecordRejectsOversizedDeviceIDWithClientError and TestAckMailboxRejectsOversizedEnvelopeIDWithClientError pass with their ordinary-UUID controls. Against the real relay: device_id 64960 bytes -> 400 INVALID_SCHEMA and envelope_ids[0] 65000 bytes -> 400 INVALID_SCHEMA, both previously 500 INTERNAL_ERROR."
+    },
+    {
+      "criterion": "R2-L-002: the reportedRelayCodes docstring describes the actual set of conditions",
+      "status": "met",
+      "evidence": "apps/cli/src/commands/cli.ts now names all four conditions ClaimSignalV2 reports under PREKEY_BUNDLE_UNAVAILABLE - already claimed, never published, outside the validity window, and no bundle matching the device_id selector - and says why none is a trust violation. No behaviour changed; the code still resolves to the same one-element allowlist and exit 3."
+    },
+    {
+      "criterion": "No test weakened, skipped or deleted; vitest.config.ts and test/globalSetup.ts untouched",
+      "status": "met",
+      "evidence": "shasum -a 256 -c over 52 files (every *_test.go and *.test.ts under apps and packages, plus apps/cli/vitest.config.ts and apps/cli/test/globalSetup.ts) reports zero mismatches after the run. Integrity was verified by hash, not mtime (R2-I-004). changed_files below contains production sources only."
+    },
+    {
+      "criterion": "All required gates green",
+      "status": "met",
+      "evidence": "apps/cli vitest: 19 files / 94 tests passed. pnpm test: protocol 8, client-db 1, crypto-core 4, client-core 2, session-node 24, mobile 6, cli 94 - all green. pnpm typecheck: 7 projects green. go -C apps/relay test -race -count=1 ./...: green. Same with -tags relayv2: green. Node v26.5.0."
+    },
+    {
+      "criterion": "Wire-contract changes stay strict and closed on both sides, and nothing landed in T33-T46 was undone",
+      "status": "met",
+      "evidence": "`cursor` is a new OPTIONAL request field on the still-.strict() pollRequestSchema, bounded by the same closed string(1..256) shape as the response's next_cursor; the client never constructs or interprets the token, only echoes it. next_cursor stays the closed string|null union. No schema was loosened, no implicit publish rotation reintroduced, claimable is still a required z.boolean(), and the 0/2/3/4/5 exit-code contract, the poll_batch_size forwarding, the 1 MiB response bound and the { received, more, rejected } result shape are unchanged."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t48-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Shape parity, the cursor/resumption design and its honest cost, the identifier bounds, the docstring, the real-relay path B evidence, verification table and handover.",
+      "hash": "516dfbff003554c45dca08415889b43317410cf73581a38eda04091407a59490"
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/relay/internal/validation/validate.go", "change": "modified" },
+    { "path": "apps/relay/internal/model/mailbox_envelope.go", "change": "modified" },
+    { "path": "apps/relay/internal/storage/repository/mailbox_repo.go", "change": "modified" },
+    { "path": "apps/relay/internal/service/mailbox_service.go", "change": "modified" },
+    { "path": "apps/relay/internal/api/handler/mailbox_handler.go", "change": "modified" },
+    { "path": "apps/cli/src/transport/relayClient.ts", "change": "modified" },
+    { "path": "apps/cli/src/runtime/inbound.ts", "change": "modified" },
+    { "path": "apps/cli/src/commands/cli.ts", "change": "modified" },
+    { "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t48-implementation-report.md", "change": "added" },
+    { "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T48-implement-result.json", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "T48-001",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 153,
+      "problem": "The cursor-honouring selection had to be added as GetEnvelopeBatchFrom, with the existing three-argument GetEnvelopeBatch retained as a two-line delegation meaning 'from the head of the mailbox', because mailbox_repo_test.go:183 calls the three-argument form and is a test file this dispatch forbids editing. The dispatch's wording was 'a cursor that GetEnvelopeBatch accepts and honours'.",
+      "impact": "None behaviourally: there is exactly one implementation and the poll route uses only the cursor-aware form. Recorded so the verifier can see the naming was forced by the no-test-edits rule rather than chosen, and can fold the two together in a later round if it prefers.",
+      "suggested_fix": "If a later round is allowed to touch mailbox_repo_test.go:183, collapse GetEnvelopeBatch into the four-argument form and update that one call.",
+      "evidence": "keryx ctx rg 'GetEnvelopeBatch\\(' over apps/relay: the only non-production call site is repository/mailbox_repo_test.go:183, repo.GetEnvelopeBatch(mailboxID, 1, 0).",
+      "confidence": "high"
+    },
+    {
+      "id": "T48-002",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 187,
+      "problem": "A position cursor is not immune to concurrent mutation the way a key cursor is: if an envelope is acknowledged or reaches its declared expiry BETWEEN two pages of one walk, every later position shifts by one, so a single envelope can be skipped or repeated on the following page. A key-based cursor would not have this property, but it was ruled out because the mailbox key's second half is the sender-supplied envelope_id and the F-009 constraint forbids deriving the wire token from it.",
+      "impact": "No message is lost. A skipped envelope is offered again by the next poll, because every walk restarts at the head; a repeated one is idempotent at the client through the cli:inbox: dedupe entry, which is already exercised by inbound.test.ts's exact-redelivery case. Within one poll() no acknowledgement happens until the walk ends, so the window is narrow.",
+      "suggested_fix": "None required. If a durable resume is ever wanted, store the resume key server-side under a random opaque token so the wire value stays server-controlled while the position becomes deletion-proof.",
+      "evidence": "GetEnvelopeBatchFrom skips `position` non-expired envelopes in key order; the expiry skip runs before the cursor is consumed, so expiry alone cannot shift the position, but a delete between pages can. Documented in the function's own comment.",
+      "confidence": "high"
+    },
+    {
+      "id": "T48-003",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "line": 60,
+      "problem": "maxPollPagesPerPoll = 16 bounds how much of a flooded mailbox one poll() will consult. An attacker who fills more than 16 pages ahead of the legitimate traffic still wedges that poll, because a permanently rejected envelope is deliberately never acknowledged (F-012) and therefore never leaves the queue.",
+      "impact": "The wedge is now bounded rather than absolute: at the wire maximum batch size the walk consults 1600 envelopes before giving up, far beyond any legitimate backlog the 24h declared expiry and the 7-day retention cap produce. Fully removing the residue needs a way to make progress past an envelope that will never be accepted, which is the quarantine design inbound.test.ts:177-183 rules out and which remains a test-author decision.",
+      "suggested_fix": "None within the current test contract. If a later round revisits F-012's snapshot assertion, a durable local quarantine set excluded from the walk would remove the bound entirely.",
+      "evidence": "The constant and its reasoning are documented at inbound.ts. The real-relay run exercised a 2-page walk; the bound is not reachable by any test in the suite.",
+      "confidence": "high"
+    },
+    {
+      "id": "T48-004",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/relay/internal/validation/validate.go",
+      "line": 34,
+      "problem": "ValidatePreKeyBundle's bundle_id is the third member of the R2-002 class the security reviewer enumerated (validate.go:34-70, key built at prekey_bundle_repo.go:28) and it is still unbounded. It was left alone: no RED test covers it, it sits under a 1 MiB body limit rather than the 64 KiB compact limit, and this flow's rule is that a fix is pinned by a test.",
+      "impact": "The v1 prekey publish route can still, in principle, answer 500 for an oversized bundle_id. All /v2/* paths are safe by construction (validation/signal_prekey_bundle_v2.go requires a UUID bundle_id), and the CLI uses only v2 endpoints.",
+      "suggested_fix": "If the flow wants the class fully closed, ask tests-creator for a RED test on /v1/prekeys/publish and bound bundle_id with validation.MaxIdentifierBytes in the same shape as the other two.",
+      "evidence": "review-security-code-report.md R2-002 class scope names the site; validate.go:34-70 inspects bundle_id's emptiness only.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T48-005",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "docs/requirements/echolet-cli-prototype/specification.md",
+      "line": 74,
+      "problem": "The operator-visible and wire-visible contract has grown again and is still undocumented: R2-L-003 already listed the poll result shape, exit 0 with rejections, claimable and PREKEY_BUNDLE_UNAVAILABLE; this dispatch adds the poll request's `cursor` field and the changed meaning of next_cursor (a resume position the client must echo, not an opaque 'there is more' flag).",
+      "impact": "Documentation only. schemas/relay-v2.schema.json carries no mailbox poll definition, so nothing contradicts the code; but a required round trip of the wire contract now lives only in two source comments.",
+      "suggested_fix": "Add the cursor/next_cursor sentence to whatever documentation task picks up R2-L-003 and R2-I-005.",
+      "evidence": "specification.md:74 documents exit codes only and enumerates no machine-readable poll contract.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "cli_test_files": 19,
+    "cli_tests_passed": 94,
+    "workspace_tests_passed": 139,
+    "go_packages_green": 5,
+    "production_files_modified": 8,
+    "test_files_modified": 0,
+    "test_files_hash_verified": 52,
+    "self_fix_attempts": 0
+  },
+  "timestamp_utc": "2026-09-07T00:40:00Z"
+}

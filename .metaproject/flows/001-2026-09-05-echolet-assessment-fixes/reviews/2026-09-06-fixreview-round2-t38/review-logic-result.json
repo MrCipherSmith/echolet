@@ -1,0 +1,151 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T38r2-review-logic",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Round-2 logic review of the CLI delta (T39 argument parsing, T41 per-envelope acceptance, T45 exhausted-prekey surfacing, T46 required claimable). T39, T45 and T46 are correct and introduce no new defect; T46 tightens rather than loosens the wire contract and the relay emits `claimable` unconditionally on every publish success path. T41 is internally correct: the permanent/transient classification is right in both directions (PersistenceError/RelayError/ProfileError are the only non-verdicts and none can be raised as a verdict about envelope content; the default-to-permanent direction is safe because a permanent verdict never writes a pending ack, so the envelope stays queued and retriable exactly as specification.md:133 requires), and acceptOne() cannot leave partial state because EncryptedSqliteStore.perform mutates an in-memory Map that is persisted only at COMMIT. HOWEVER, the finding T41 was written to close is only partially closed. Two paths reach the same harm outside per-envelope isolation: (A) relayClient.ts:80 parses the whole batch with z.array(MailboxEnvelopeSchema.strict()), which requires UUID envelope_id/message_id/sender_device_id/recipient_device_id and the payload_type literal, while the Go relay checks none of those (validate.go:110-142, model/mailbox_envelope.go:20) - so ONE unauthenticated POST with payload_type:\"x\" is stored and makes every subsequent poll fail with INVALID_RELAY_RESPONSE before accept() is entered and before ackPending() is reached, restoring the pre-fix wedge at the pre-fix cost; (B) GetEnvelopeBatch re-selects unacked envelopes in key order under a limit (mailbox_repo.go:169-173) and rejected envelopes are deliberately never acked, so poll_batch_size (default 50) poison envelopes with low-sorting ids monopolise every batch, received===0, and inbound.ts:87 re-raises before ackPending(). Verified mechanism A by probe: the shipped schema REFUSED all five shapes the relay accepts. HL-N-001 is therefore partially-fixed; HL-N-002, SEC-R-001 and T44-001 are fixed with evidence. Two minors (a docstring that names one of four conditions the relay reports as PREKEY_BUNDLE_UNAVAILABLE; the delta's operator-visible contract - poll's {received,more,rejected} shape, poll now exiting 0 with rejections, claimable, PREKEY_BUNDLE_UNAVAILABLE - undocumented in specification.md) and two infos. All five non-negotiable criteria re-checked over the delta: no test weakened (one test edited post-implementation at inbound.batchIsolation.test.ts:330 was independently re-derived as a corrected unsatisfiable fixture artefact that GAINS an assertion; five publish stubs gained claimable:true; zero skip/only/todo), no strict schema loosened (claimable tightened to required on a still-strict object; nextCursor still a closed union; .extend() preserves strictness), no secret leakage (rejected carries a UUID and a literal code only; the relay's error message is never carried inland), exit-code contract intact for failures though poll's success contract changed undocumented, prototype scope respected. No source, test or configuration file was modified; the one probe ran outside the repository.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Each change in the assigned delta is judged for correctness and for whether it introduced a new defect",
+      "status": "met",
+      "evidence": "T39: the branch space of inlineStringOptionValues (cli.ts:112-125) was enumerated over eleven input shapes including `--`, trailing option, embedded `=`, empty value, repetition, `---foo` and a positional consumed as a value; every diversion still lands on exit 2 through parseCommand's catch at cli.ts:131. T41: classification checked in both directions and the transaction boundary traced to EncryptedSqliteStore.perform:60-83. T45: ErrV2Unavailable enumerated to its single emission site (repository/signal_prekey_bundle_v2.go:196) and v2Error:14 confirmed as the complete v2 error set. T46: handler/signal_prekey_bundle_v2.go:96-99 emits claimable on the only success path, sourced from SaveSignalV2's two legs at :54 and :89 with the conflict-retry reset at :45."
+    },
+    {
+      "criterion": "The round-1 open findings touching this area are confirmed closed or reported as still open, with evidence",
+      "status": "partial",
+      "evidence": "HL-N-002 fixed (inbound.ts:89 returns more from next_cursor; relay sets it iff HasMore at mailbox_handler.go:266-270, HasMore set at mailbox_repo.go:171 and :191). SEC-R-001 fixed (cli.ts:92-98 states the changed class, the escape and the four narrowness bullets, each re-verified against the code). T44-001 fixed (relayClient.ts:17 allowlist, request() carrying remoteCode at :117-120, cli.ts:353 reporting via reportedRelayCodes at :36, exit 3 unchanged on both branches). HL-N-001 partially-fixed - reported as R2-L-001."
+    },
+    {
+      "criterion": "The five non-negotiable criteria are re-checked over the delta",
+      "status": "met",
+      "evidence": "1. No test weakened: inbound.batchIsolation.test.ts:330 edited post-implementation, unsatisfiability of the original re-derived independently from the fixture (requests recorded at :131 before intercept at :134; ackedIds flat-maps all ack requests at :149; queuedIds shrinks only in the ack branch at :138-141), replacement adds not.toContain(poison) at :331. Five publish stubs are stubs not assertions. Zero skip/only/todo across apps/cli/**/*.test.ts and apps/relay/**/*_test.go. 2. No strict schema loosened: claimableSchema z.boolean() on a .strict() object, nextCursorSchema still string(1..256)|null, authorizationSchema.extend() preserves strictness. 3. No secret leakage: every InboundError construction site (inbound.ts:68,76,108,121,123,125,129,136,143) uses a literal; envelopeId is UUID-constrained by MailboxEnvelopeSchema:6; relayClient.ts:119 reads error.code only against a fixed allowlist. 4. Exit codes: T45 keeps 3/3 and 4; T39 lands on 2; poll's SUCCESS contract changed (exit 0 with rejections) and is undocumented - R2-L-003. 5. Prototype scope: R2-L-001 is the prototype's own poll contract failing to an unauthenticated request the round-1 verifier already established is issuable; no finding demands hardening, deployment, mobile or audit."
+    },
+    {
+      "criterion": "Any new defect is reported with severity, file:line and a concrete failure scenario, and states whether it blocks acceptance",
+      "status": "met",
+      "evidence": "R2-L-001 (major, blocking acceptance of HL-N-001 as fixed) carries both mechanisms with file:line, a control-flow argument through all five gates an envelope crosses, a probe result, and three alternative fixes. R2-L-002 and R2-L-003 (minor) and R2-L-004/R2-L-005 (info) each name file:line and impact."
+    },
+    {
+      "criterion": "No source, test or configuration file was modified; the verification matrix was not re-run",
+      "status": "met",
+      "evidence": "The only files written are this result and review-logic-report.md under the round-2 review directory, plus a probe script in the session scratchpad outside the repository. No vitest, go test or pnpm test run was performed; the single execution was `node scratchpad/probe.ts` under Node v26 parsing the shipped MailboxEnvelopeSchema."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-round2-t38/review-logic-report.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full round-2 logic review: per-change verdicts for T39/T41/T45/T46, the four round-1 dispositions, five findings, the probe transcript, and the five-criteria table.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-round2-t38/review-logic-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This result contract.",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "R2-L-001",
+      "global_id": "2026-09-06-fixreview-round2-t38#R2-L-001",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "apps/cli/src/transport/relayClient.ts",
+      "line": 80,
+      "symbol": "RelayClient.pollMailbox",
+      "problem": "T41's per-envelope acceptance isolates only failures raised INSIDE accept(). Two paths reach the identical HL-N-001 harm outside it. (A) The poll response is schema-parsed as a whole batch: relayClient.ts:80 uses z.array(MailboxEnvelopeSchema.strict()), and that schema requires UUID envelope_id/message_id/sender_device_id/recipient_device_id and the literal payload_type \"ciphertext_message\" (packages/protocol/src/types/mailboxEnvelope.ts:6-13). The Go relay enforces none of them - ValidateMailboxEnvelope bounds identifier strings at 256 bytes and checks no format (validation/validate.go:110-142), model.MailboxEnvelope is a plain struct with no custom unmarshaller and payload_type is a free string (model/mailbox_envelope.go:20). Since /v1/messages/send has no sender authentication and the mailbox id is derivable from a published contact card, ONE unauthenticated POST carrying payload_type:\"x\" is accepted (200), stored, returned by every later GetEnvelopeBatch, and makes the victim's poll throw INVALID_RELAY_RESPONSE at relayClient.ts:89 - before accept() is entered and before ackPending() at inbound.ts:88 is reached. (B) GetEnvelopeBatch scans the mailbox prefix in badger key order and stops at limit (mailbox_repo.go:163, :169-173, key built at :261-263), never skipping an envelope returned before; a rejected envelope is deliberately never acked, so it keeps its position. poll_batch_size envelopes (default 50, cli.ts:265; wire max 100, relayClient.ts:25) with ids sorting ahead of any UUID fill every batch, received===0, and inbound.ts:87 re-raises before ackPending().",
+      "impact": "Both mechanisms restore the pre-fix wedge exactly: nothing is acked, the victim's poll fails at exit 3, and their legitimate queued messages are never delivered and are lost when they age out at the 24h declared expiry (outbound.ts:83, filtered at mailbox_repo.go:183). Mechanism A costs a single unauthenticated POST - the same cost as before the fix - so HL-N-001 cannot be accepted as fixed. This is a functional defect in the prototype's own documented poll contract, not production hardening.",
+      "suggested_fix": "Any one of three, in increasing completeness. (1) Parse the poll response per envelope: keep the array as z.array(z.unknown()) at the transport boundary and apply MailboxEnvelopeSchema.strict() inside accept()'s loop, so a schema-invalid envelope becomes one more `rejected` entry instead of a whole-batch INVALID_RELAY_RESPONSE. Closes A. (2) Give the CLI a way to make progress past an envelope it will never accept - a durable local quarantine set excluded from the next batch, or acking permanently rejected envelope ids once the quarantine record has committed. Closes B, but requires the F-012 assertion at inbound.test.ts:177-183 to be re-expressed as \"no history, no session mutation, no inbox entry\" rather than \"no store change at all\", which is a test-author decision. (3) Independently: make ValidateMailboxEnvelope agree with MailboxEnvelopeSchema on the four UUID fields and the payload_type literal - roughly three lines - which stops the divergent-contract class at its source.",
+      "evidence": "Probe executed with Node v26 against the shipped schema (no repository file created or changed): control envelope ACCEPTED; payload_type=\"x\", envelope_id=\"a\", message_id=\"a\", sender_device_id=\"a\", recipient_device_id=\"a\" each REFUSED. All five refused shapes pass ValidateMailboxEnvelope (validate.go:110-142 checks only type, version, identifier length <=256, ciphertext presence, the two size comparisons and expires>created) and SendEnvelope's one extra check (mailbox_handler.go:97, expires_at_ms>now), so each is storable by an unauthenticated POST. Control flow for the wedge: relayClient.ts:89 invalid() -> RelayError(\"INVALID_RELAY_RESPONSE\", false) -> thrown from inbound.ts:81 -> classify() cli.ts:350-354 -> PROTOCOL_REJECTED/exit 3, with accept() and ackPending() unreached. For (B): mailbox_repo.go:170-173 sets HasMore and returns at limit without any notion of previously-delivered envelopes, and inbound.ts:87 throws whenever received===0 and any rejection occurred. The round-1 verifier established the absence of sender authentication on /v1/messages/send and the 24h loss deadline.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/transport/relayClient.ts:80",
+          "apps/cli/src/runtime/inbound.ts:87",
+          "apps/relay/internal/validation/validate.go:110-142",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:169-173"
+        ],
+        "enumeration_method": "Walked the complete ordered set of gates an envelope crosses between an unauthenticated /v1/messages/send and a committed local history entry: relay ingest validation (validate.go), relay batch selection (mailbox_repo.go GetEnvelopeBatch), client transport parse (relayClient.pollMailbox), accept()'s per-envelope loop, acceptOne()'s transaction. Exactly two of those five are per-envelope after T41; the other three are the sites listed. The schema divergence was then enumerated field-by-field by running MailboxEnvelopeSchema against each field the Go validator does not constrain."
+      }
+    },
+    {
+      "id": "R2-L-002",
+      "global_id": "2026-09-06-fixreview-round2-t38#R2-L-002",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 31,
+      "symbol": "reportedRelayCodes",
+      "problem": "The docstring says PREKEY_BUNDLE_UNAVAILABLE means \"once it is claimed a further sender gets the relay's 404\". ClaimSignalV2 returns model.ErrV2Unavailable whenever its availability scan finds nothing usable (storage/repository/signal_prekey_bundle_v2.go:155-196), which also covers a recipient who has never published, a recipient whose bundles are all outside their validity window (:172), and a device_id selector matching no available bundle (:172).",
+      "impact": "No behavioural defect - none of the four conditions is a trust violation, so reporting the relay's own code is correct for all of them and the exit code is 3 either way. The cost is to the next author, who will reason about a narrower condition than the code denotes. Same shape as SEC-R-001, which this flow accepted as a finding.",
+      "suggested_fix": "Replace \"once it is claimed\" with \"when the relay has no unexpired, unclaimed bundle matching the selector - because it was already claimed, because none was ever published, or because they have expired\".",
+      "evidence": "handler/signal_prekey_bundle_v2.go:14 enumerates the complete v2 error set and :20-21 is the only mapping to 404/PREKEY_BUNDLE_UNAVAILABLE; repository/signal_prekey_bundle_v2.go:196 is the only site returning ErrV2Unavailable, reached after the loop at :158-195 whose continue condition at :172 is `bundle.Claimed || nowMS < bundle.CreatedAtMS || nowMS >= bundle.ExpiresAtMS || deviceID != nil && bundle.DeviceID != *deviceID`, and whose prefix scan at :155 finds nothing at all when the identity never published.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "R2-L-003",
+      "global_id": "2026-09-06-fixreview-round2-t38#R2-L-003",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "docs/requirements/echolet-cli-prototype/specification.md",
+      "line": 74,
+      "problem": "The delta adds five operator-visible facts that appear nowhere in the requirements: poll now emits { received, more, rejected[] }; poll now exits 0 while some envelopes were rejected, where before the fix any poison made the command exit 3; relay publish now emits claimable; send can now report PREKEY_BUNDLE_UNAVAILABLE. specification.md:74 documents exit codes only and enumerates no machine-readable error codes, and schemas/relay-v2.schema.json carries no response contract.",
+      "impact": "The exit-code table is intact in the sense criterion 4 asks about - no documented code changed meaning - but poll's SUCCESS contract did change. An operator scripting `echolet poll` and checking only $? will now silently miss rejected envelopes, which is precisely the condition the new `rejected` array exists to surface.",
+      "suggested_fix": "One paragraph in the CLI-surface section covering the poll result shape and the exit-0-with-rejections consequence, joined to the two sentences t45-implementation-report.md:167-171 already drafted for claimable and PREKEY_BUNDLE_UNAVAILABLE. specification.md is change-controlled, so this belongs to the flow's documentation task rather than to an implementer.",
+      "evidence": "inbound.ts:89 returns { received, more, rejected }; cli.ts:327 returns it verbatim and cli.ts:361 stringifies it whole, with main() at :368-369 returning 0. Before T41, a batch containing any permanently unacceptable envelope threw and reached classify() -> exit 3. A routed search of specification.md for next_cursor|rejected|claimable|more|PROTOCOL_REJECTED|exit returns three matches, none of which describes a command's JSON result.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "R2-L-004",
+      "global_id": "2026-09-06-fixreview-round2-t38#R2-L-004",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "line": 87,
+      "symbol": "InboundMessenger.poll",
+      "problem": "When received === 0, poll() throws accepted.firstRejection and discards accepted.rejected - the envelope ids and every other code in the batch. The operator sees only {\"ok\":false,\"error\":{\"code\":\"CONTACT_NOT_TRUSTED\"}} and cannot tell whether one envelope or fifty were rejected. The path is asymmetric with received > 0, where the same information is returned. Secondarily, because the throw precedes ackPending() at :88, a stale pending-ack key left by an earlier lost ack response is not retried while every batch is poison.",
+      "impact": "No correctness property depends on the discarded data: a rejected envelope stays queued regardless, and no CLI command could act on an envelope id. The cost is diagnostic, and it compounds R2-L-001 mechanism B - the wedged operator receives an exit-3 code indistinguishable from the pre-fix one with no hint that N envelopes were rejected. The stale-ack half is harmless: it clears on the next poll that accepts anything, and retryPendingAcks() is deliberately library-only (T38-L-001).",
+      "suggested_fix": "None within the current test contract - inbound.test.ts:177-183 requires the throw and requires nothing be mutated, and the implementers were right not to weaken it. If R2-L-001 is addressed, carry the rejections on the thrown error (an InboundError subclass with a rejected array) so the throw stays type-compatible with classify() at cli.ts:356.",
+      "evidence": "inbound.ts:87 `if (accepted.received === 0 && accepted.firstRejection) throw accepted.firstRejection;` sits ahead of `await this.ackPending()` at :88 and the result construction at :89. accept() at :99-113 builds the full rejected array but only firstRejection escapes. classify() at cli.ts:356 maps InboundError to trustFailure(error.code), so only the code reaches stdout.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "R2-L-005",
+      "global_id": "2026-09-06-fixreview-round2-t38#R2-L-005",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "apps/cli/src/runtime/inbound.batchIsolation.test.ts",
+      "line": 330,
+      "problem": "t40-implementation-report.md:177-217 reported this assertion RED and argued it unsatisfiable; the tree now carries T40's own suggested repair, so a test was changed after the code it tests. Non-negotiable criterion 1 requires this be checked rather than assumed.",
+      "impact": "None - it is not a weakening. Recorded so the orchestrator and any later verifier can see the check was made rather than skipped, since the mtime ordering that protects the rest of the suite does not hold for this one file.",
+      "suggested_fix": "No change needed. The comment at :326-329 already records why the request count is a fixture artefact rather than a contract.",
+      "evidence": "I re-derived the unsatisfiability independently from the fixture rather than trusting the report: mailbox() records every request at :131, before consulting state.intercept at :134; ackedIds() flat-maps envelope_ids over ALL recorded ack requests at :149; and queuedIds() can only shrink inside the /v1/mailbox/ack branch at :138-141. So line 320's RELAY_TIMEOUT forces one recorded ack attempt and line 334's queuedIds()===[poison] forces a second, successful one - two entries necessarily, whatever the implementation does. The replacement preserves what the test pins (which envelopes were ever offered for acknowledgement) and ADDS a guard the original lacked: expect(fake.ackedIds()).not.toContain(poison.envelope_id) at :331. Also checked in the delta: apps/cli/vitest.config.ts gained testTimeout/hookTimeout 30_000 (T43), harness headroom rather than an assertion change, with T43 measuring that a hung test still fails at 30s.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_modified": 0,
+    "test_files_modified": 0,
+    "probes_executed": 1,
+    "findings_major": 1,
+    "findings_minor": 2,
+    "findings_info": 2
+  },
+  "timestamp_utc": "2026-09-06T19:45:00Z"
+}

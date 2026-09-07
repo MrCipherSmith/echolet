@@ -1,0 +1,100 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T38r2-review-testing-practices",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Executed a 17-mutation bounded pass over the round-2 delta (15 applied and run, 2 aborted by a pattern-count guard before touching the tree); 14 killed, 1 survivor. Every mutation reverted and all five mutated files verified byte-identical by SHA-256; dist/cli.js rebuilt from canonical sources; git status identical to session start. T38-TP-001 CLOSED: the barrier is re-anchored through the idFactory('envelope') seam and races arrival against the first send's settlement, so R2-M1 (the exact round-1 MC3b that survived) is now RED in 251 ms on 'first send finished without ever opening a concurrency window', R2-M2 (round-1 MC3) is RED in 296 ms on that same real assertion instead of a 60 s timeout, and R2-M3 (round-1 MC2) fires 5 soft assertions instead of 3. T38-TP-002 3-of-4 CLOSED: the new TestGetEnvelopeBatchFiltersExpiredBeforeApplyingBatchLimit kills both the expiry skip (R2-M5, round-1 MG4) and the first-envelope byte-budget exemption (R2-M16, round-1 MG3, now reachable because the new test drives byteBudget=1 at the repository level); the strict:true gate is killed by R2-M6. The one residual is SetRetentionCap, which survives being made a no-op (R2-M17) and has no test caller - raised as T38r2-TP-001 (minor), a coverage gap on correct code, not a defect. T38-TP-003 CLOSED: outboxKeys now scans the 'cli:outbox:' PREFIX against an exact expected set and R2-M4 (a message_id/envelope_id confusion in deliver) makes it the ONLY assertion that fires; the pollCapacity fixture-grading line is now bracketed by two cases either side of the client's 1 MiB reader bound, and R2-M15 (widen to 1 GiB) kills one of them. MC10 GAP CLOSED: strict:false now fails 2 of 18 in cli.dashOptionValues.test.ts, and only the two new boolean-inline-value cases, with exactly the predicted degradations - 'doctor --json=please' exits 0 instead of 2, 'contact import --yes=maybe' exits 3 (the confirmation prompt) instead of 2 - and the same test carries a positive control so it cannot be satisfied by refusing valid input. TIMEOUT HEADROOM: acceptable, masks nothing detectable. Every process-spawning suite has its own watchdog BELOW 30 s (8 s in cli.processFailures, 15 s in cli.test/dashOptionValues/relayErrorCodes, 20 s per child in both e2e suites) and asserts timedOut:false, so a hang surfaces as a named assertion, not as the vitest timeout; a rg for elapsed/performance.now/Date.now() differences over every apps/cli test file returns ZERO matches, so no timing assertion exists to be flipped; and 30000 was already a declared per-test timeout in cli.test.ts while the genuinely long waits (40000-90000) are pre-existing per-test overrides the config does not touch. NEW T45/T46 TESTS: real constraints in both directions. R2-M9 (claimable back to .optional()) and R2-M10 (return claimable:true hard-coded) each kill relayClient.claimable.test.ts - the false half of the round-trip guard is what kills the hard-coding, so that claim is verified rather than asserted. R2-M11 (drop PREKEY_BUNDLE_UNAVAILABLE from remoteCodes) and R2-M12 (bypass the allowlist entirely) each kill relayClient.prekeyUnavailable.test.ts. R2-M7 (T44-001 CLI half reverted) kills cli.relayErrorCodes.test.ts, and R2-M8 - the rename-instead-of-fix mutant, renaming the generic code to PREKEY_BUNDLE_PROBLEM with the allowlist still empty - turns BOTH tests red on 'expected PREKEY_BUNDLE_PROBLEM not to match /PREKEY/', so the /PREKEY/ matcher paired with the two-sided must-not-share-a-code assertions is a genuine constraint. R2-M13 (relay always claimable on re-store) and R2-M14 (relay never claimable on re-store, the naive rule the test's header warns about) each kill the e2e publication-claimability suite, on step 4 and step 2 respectively. FIVE STUBS: a tightening, not a weakening - a required z.boolean() accepts strictly fewer responses than z.boolean().optional() inside a .strict() object, and relayClient.test.ts:41 lands the added field inside a toEqual. Each value checked against SaveSignalV2: in all five the published bundle belongs to a different identity from the one being claimed, so the relay would answer true; none is blanket-set. A rg over prekeys/publish finds exactly these five success stubs plus one error-only route and the real-relay e2e, so no suite is left sending a publish success the new schema would refuse. NO TEST WEAKENED, SKIPPED OR DELETED: 45 test files (38 + 7 new, nothing removed), zero skip/only/todo/t.Skip markers, non-wave files still on April mtimes, and every round-2 edit to a pre-existing file adds assertions or the newly required field. No schema loosened, exit-code contract intact, no secret leakage in the new tests, prototype scope respected. Caveat: the repo is on an unborn main, so a file deleted before this session leaves no detectable trace.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Each change in your assigned delta is judged for correctness and for whether it introduced a new defect.",
+      "status": "met",
+      "evidence": "T40's three repairs, the MC10 closure, T43's timeout headroom, the four new T45/T46 suites and the five tightened stubs were each judged, and every judgement rests on an executed mutation or a named file:line control-flow argument (report sections 2-5). No new defect was introduced by any change in the delta: all touched suites are green after revert (7 files / 32 tests, plus pollCapacity 4/4, plus go test ./... all ok), and the only behavioural widening in the delta - claimableSchema - narrows rather than widens the accepted response set."
+    },
+    {
+      "criterion": "The round-1 open findings touching your area are confirmed closed or reported as still open, with evidence.",
+      "status": "met",
+      "evidence": "T38-TP-001 closed (R2-M1 now RED 251 ms where round-1 MC3b was green; R2-M2 RED 296 ms on a real assertion where round-1 MC3 needed a 60 s timeout; R2-M3 fires 5 soft assertions vs 3). T38-TP-002 closed for 3 of 4 gates (R2-M5 kills the GetEnvelopeBatch expiry skip, R2-M16 kills the first-envelope byte-budget exemption, R2-M6 kills strict:true) with one residual: R2-M17 shows SetRetentionCap still survives being made a no-op, reported as T38r2-TP-001. T38-TP-003 closed (R2-M4 makes the repaired outboxKeys assertion the sole firing assertion; R2-M15 kills the pollCapacity case that now makes responseByteBound load-bearing). T38-TP-004 remains an accepted, restated cap: F-002, F-006, F-007, F-010 and F-011 are outside this delta and were not mutated in either round."
+    },
+    {
+      "criterion": "The five non-negotiable criteria are re-checked over the delta: no test weakened, no strict schema loosened, no secret leakage, exit-code contract intact, prototype scope respected.",
+      "status": "met",
+      "evidence": "No test weakened: 45 test files (round 1's 38 plus 7 new, none removed), zero skip/only/todo/xit/xdescribe/t.Skip markers across all of them, non-wave files still carrying April mtimes, and each round-2 edit to a pre-existing file verified per file to add assertions or the newly required claimable field only. No schema loosened: claimableSchema went z.boolean().optional() to z.boolean(), a narrowing, inside a .strict() object with no passthrough and no any, and the Go handler always emits the field, so the two contracts agree; nextCursorSchema is unchanged. No secret leakage: all four new suites assert redaction as booleans over stdout+stderr and never render bodies, ciphertext, store keys or request bodies; outbound.concurrentSend projects the stored record to an envelope id and history to sequence numbers. Exit-code contract intact: the only mapping the delta touches is classify's reportedRelayCodes branch, which stays inside trustFailure (exit 3), and cli.relayErrorCodes.test.ts pins 0/2/3/4 explicitly with R2-M7 and R2-M8 proving those assertions live. Prototype scope respected: the single finding is a one-case coverage gap, not a demand for CI or coverage thresholds."
+    },
+    {
+      "criterion": "Any new defect is reported with severity, file:line and a concrete failure scenario, and states whether it blocks acceptance.",
+      "status": "met",
+      "evidence": "One finding, T38r2-TP-001 (minor), at apps/relay/internal/storage/repository/mailbox_repo.go:42, carried forward from round-1 T38-TP-002 item 3 rather than newly introduced. Evidence is the executed mutation R2-M17 (body replaced by '_ = retentionCap', go test ./internal/... green) plus a keryx ctx rg showing three SetRetentionCap references, all production, none in a test. It does not block acceptance: the code is correct, the gap is that the next edit to the TTL plumbing at router.go:32 is unprotected. No other defect was found in the delta."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-round2-t38/review-testing-practices-report.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full round-2 report: the 17-mutation table with per-mutation results and timings, the three repair verdicts, the MC10 result, the timeout-headroom judgement with its three executed checks, the T45/T46 and five-stub assessments, the SHA-256 revert table and the no-weakened-test verification."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/runtime/outbound.ts",
+      "change": "Temporarily mutated four times (R2-M1 to R2-M4) for the bounded mutation pass and fully reverted. SHA-256 3720f372cb40931fee19bad5cc4c8378815f11ba29e8200397ef37077e8bba0f before and after."
+    },
+    {
+      "path": "apps/cli/src/commands/cli.ts",
+      "change": "Temporarily mutated three times (R2-M6, R2-M7, R2-M8) and fully reverted. SHA-256 8081207205678fe69be2b9816273f65cf31e35ae779fc0761fa29434c1f76c1f before and after. dist/cli.js was rebuilt from the canonical source by test/globalSetup.ts on the final green run."
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.ts",
+      "change": "Temporarily mutated four times (R2-M9 to R2-M12, R2-M15) and fully reverted. SHA-256 94f93198e8c201969e0612a9419308e059ce835e12220e19be06fd350eafefd9 before and after."
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "change": "Temporarily mutated three times (R2-M5, R2-M16, R2-M17) and fully reverted. SHA-256 d598cbe175d2bd33142765a10ca995bc070fa582af21142cb89d69f07fc36ef7 before and after."
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go",
+      "change": "Temporarily mutated twice (R2-M13, R2-M14) and fully reverted by the exact reverse of the same unique string; post-revert content re-read and matched the canonical text, go vet passes. SHA-256 48f02d2d03fc9ba04b1c3adbdae5ba483d7d1fe1e41fd774427006b7bef44096 after revert."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T38r2-TP-001",
+      "global_id": "2026-09-06-fixreview-round2-t38#T38r2-TP-001",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 42,
+      "symbol": "SetRetentionCap",
+      "problem": "SetRetentionCap is the one gate this fix wave added or relied on that still survives deletion with the suite green. Only the default retention clamp is covered, by TestSaveEnvelopeRetentionNeverExceedsDeclaredLifetime; the configurability half of the F-005 cap is unpinned.",
+      "impact": "The code is correct today. The cost is that the next edit to the ECHOLET_MAILBOX_TTL_HOURS plumbing - router.go:32 is the only production caller - is unprotected, and a regression there would silently keep the default cap.",
+      "suggested_fix": "Add one case that calls SetRetentionCap(1 * time.Hour), saves an envelope declaring a longer lifetime, and asserts the stored retention deadline is clamped to the configured cap rather than to the default.",
+      "evidence": "Bounded mutation pass, reverted and SHA-verified. R2-M17: the SetRetentionCap body replaced by '_ = retentionCap'; go test ./internal/... under apps/relay stays GREEN. keryx ctx rg 'SetRetentionCap' apps/relay returns 3 matches - the doc comment and the definition in mailbox_repo.go, and the single call at router.go:32 - and none in any _test.go file. This is round-1 finding T38-TP-002 item 3, carried forward unchanged; items 1, 2 and 4 of that finding are now closed by R2-M5, R2-M16 and R2-M6 respectively.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "dedupe_key": "testing-setretentioncap-unpinned"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "mutations_attempted": 17,
+    "mutations_applied_and_run": 15,
+    "mutations_aborted_before_write": 2,
+    "mutations_killed": 14,
+    "mutations_survived": 1,
+    "test_files_inventoried": 45,
+    "test_files_new_since_round_1": 7,
+    "test_files_deleted_since_round_1": 0,
+    "skip_only_todo_markers_found": 0,
+    "files_mutated_and_reverted": 5,
+    "files_verified_byte_identical": 5,
+    "round1_findings_closed": 3,
+    "round1_findings_partially_closed": 1
+  },
+  "timestamp_utc": "2026-09-06T19:45:00Z"
+}

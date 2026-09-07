@@ -1,0 +1,50 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-signal-wire-v2-review",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-security-code",
+  "task": {
+    "title": "Review strict Signal wire v2 and Node adapter",
+    "description": "Independent scoped review against signal-wire-v2-spec.md, then verify workspace after workers stabilize; no source edits.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "Signature transcript covers all nested signatures",
+    "Import verifies independently expected root/device and changes no trust",
+    "Legacy v1 behavior preserved",
+    "Node tests and typecheck pass; no mobile or relay readiness claim"
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/signal-wire-v2-spec.md",
+      "kind": "context",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "packages/protocol/src",
+    "packages/session-node/src"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/projects/echolet; read .metaproject/index.md before actions",
+    "No source, Git or flow-state edits",
+    "Await stable workers before final checks"
+  ],
+  "allowed_actions": [
+    "read",
+    "run-command",
+    "write"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/signal-wire-v2-verification-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T08:38:27.325189+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

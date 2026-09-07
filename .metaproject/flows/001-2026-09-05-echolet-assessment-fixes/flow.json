@@ -1,0 +1,2362 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "001",
+  "slug": "echolet-assessment-fixes",
+  "title": "Echolet: resolve project assessment findings",
+  "status": "in-progress",
+  "createdAt": "2026-09-05T23:48:19.650Z",
+  "updatedAt": "2026-09-07T04:51:28.761Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:ad4efa00529147bc9c8fb48cd093306aac048775d7996b74bdcc2b5d6d6bc341",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-06T00:01:45.154Z",
+      "note": "specs-report.md: HTTP/TLS consistent; unsupported metadata benefit removed"
+    },
+    "AC2": {
+      "at": "2026-09-06T00:01:45.236Z",
+      "note": "Source-verified signing inputs and ownership; atomic consume docs updated; independent Go review"
+    },
+    "AC3": {
+      "at": "2026-09-06T00:01:45.320Z",
+      "note": "planning-report.md and PILOT-29: G0 first, early independent review, proposed measurable pilot gates"
+    },
+    "AC4": {
+      "at": "2026-09-06T00:01:45.402Z",
+      "note": "STATUS_CURRENT dated evidence and blockers; legacy entrypoints link to it; preserved snapshots"
+    },
+    "AC5": {
+      "at": "2026-09-06T00:01:45.482Z",
+      "note": "crypto-report.md and executable spike reproduce installed candidate trust bypass; no production approval"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Assessment and initial repository routing captured in context.md"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Replaced by scoped documentation and runtime tasks"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Replaced by explicit scoped verification and device-validation tasks"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Replaced by independent review; no Git repository or PR destination exists"
+    },
+    {
+      "id": "T5",
+      "title": "Align security transport and mailbox auth specifications",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-05T23:50:55.513Z",
+            "outcome": "started",
+            "detail": "001-specs"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "specs-report.md source-verified contracts and five corrected docs"
+    },
+    {
+      "id": "T6",
+      "title": "Reorder roadmap and define evidence-based pilot gates",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-05T23:50:55.602Z",
+            "outcome": "started",
+            "detail": "001-planning"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "planning-report.md: feasibility-first ordering and pending evidence pilot plan"
+    },
+    {
+      "id": "T7",
+      "title": "Verify mature session integration feasibility",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-05T23:50:55.696Z",
+            "outcome": "started",
+            "detail": "001-crypto"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "crypto-report.md and reproducible spike identify installed candidate trust bypass"
+    },
+    {
+      "id": "T8",
+      "title": "Consolidate status and verify documentation consistency",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "STATUS_CURRENT authoritative; historical snapshots preserved; 34 docs links and 52 JSON fences verified"
+    },
+    {
+      "id": "T9",
+      "title": "Implement validated production session and contact messaging path",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-05T23:56:08.677Z",
+            "outcome": "blocked",
+            "detail": "Installed Signal-compatible candidate fails inbound identity trust rejection; native bridge, wire mapping and durable store not validated. See crypto-report.md"
+          },
+          {
+            "at": "2026-09-06T07:51:51.902Z",
+            "outcome": "started",
+            "detail": "Resume: different approach official libsignal 0.102.0, isolated reference runtime and encrypted transactional persistence"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Verify real-device messaging restart and background delivery",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Obtain independent security review before sensitive use",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Run user pilot and record demand go/no-go evidence",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Prevent unvalidated demo crypto use in production mobile runtime",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-05T23:53:49.811Z",
+            "outcome": "started",
+            "detail": "Fail closed demo entry; explicit dev opt-in; integration rendering tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "6 RED-to-GREEN component regressions; independent APPROVE; see runtime-guard-spec and verification-report"
+    },
+    {
+      "id": "T14",
+      "title": "Atomically consume mailbox challenges to prevent concurrent replay",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-05T23:56:08.330Z",
+            "outcome": "started",
+            "detail": "Go transactional consume with concurrent regression tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Atomic consume regression and full Go race tests PASS; independent APPROVE"
+    },
+    {
+      "id": "T15",
+      "title": "Independent review of remediation changes",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T8",
+        "T13",
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "independent-review.md: mobile and Go fixes approved; verification-report PASS_WITH_WARNINGS"
+    },
+    {
+      "id": "T16",
+      "title": "Implement encrypted atomic session/outbox storage reference",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T07:52:51.666Z",
+            "outcome": "started",
+            "detail": "Encrypted SQLite snapshot transaction and crash/rollback/concurrency tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Integrate official libsignal with pinned trust and persistence tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T07:52:51.749Z",
+            "outcome": "started",
+            "detail": "Official 0.102.0 spike passed async trust rejection; implementing reference runtime"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Verify and independently review official session reference",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T16",
+        "T17"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T08:15:21.516Z",
+            "outcome": "started",
+            "detail": "Resumed independent review and final workspace verification after usage limits reset"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Define and validate versioned Signal wire bundle and identity binding",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T08:36:52.665Z",
+            "outcome": "started",
+            "detail": "Strict v2 schema and domain-separated full signing transcript, preserving v1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Implement official Signal wire export and verified identity-bound import",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T19"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T08:36:52.836Z",
+            "outcome": "started",
+            "detail": "Native bundle JSON export/import with root-device-Signal trust chain"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Independently review and verify Signal wire v2 integration",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T19",
+        "T20"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T08:39:19.900Z",
+            "outcome": "started",
+            "detail": "Review spec trust chain, then final code and regression verification"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "Implement separate relay v2 publication and atomic one-time prekey claims with JS-Go fixtures",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T19",
+        "T20",
+        "T21"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-06T10:32:13.463Z",
+            "outcome": "started",
+            "detail": "001-T22-tests: RED fixtures and relay v2 concurrency/idempotency tests"
+          },
+          {
+            "at": "2026-09-06T10:49:10.359Z",
+            "outcome": "started",
+            "detail": "001-T22-implement: independent implementer after validated RED fixtures; strategy changed from tests to service/storage/HTTP implementation; attempt count below repetition threshold"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Validated DONE result: full tagged Go race suite, untagged Go suite, eight protocol tests and protocol typecheck pass; additive v2 publish/claim plus HTTP contracts implemented."
+    },
+    {
+      "id": "T23",
+      "title": "Implement CLI profile configuration and mutually pinned contact cards",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T20",
+        "T21"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-06T10:32:13.711Z",
+            "outcome": "started",
+            "detail": "001-T23-tests: RED CLI profile and mutual trust tests"
+          },
+          {
+            "at": "2026-09-06T10:39:20.634Z",
+            "outcome": "started",
+            "detail": "001-T23-implement: make independently authored CLI profile tests green"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Validated task-implementer result: 9/9 focused tests and 54/54 workspace tests pass; seven package typechecks pass; encrypted profile and confirmed durable trust implemented. Lint unavailable and changed-test router defect recorded; full suite substituted."
+    },
+    {
+      "id": "T24",
+      "title": "Integrate CLI relay transport and durable send retry",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T22",
+        "T23",
+        "T31"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-06T10:59:34.421Z",
+            "outcome": "started",
+            "detail": "001-T24-tests: RED typed relay transport, first-send bootstrap, durable outbox and exact ambiguous retry tests"
+          },
+          {
+            "at": "2026-09-06T11:13:04.455Z",
+            "outcome": "started",
+            "detail": "001-T24-implement: independent implementer makes nine relay/outbound RED tests green after T31 contract alignment; no repetition, strategy moves tests to implementation"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Validated DONE: nine focused and 18 CLI tests pass; 63 workspace tests and seven-package typecheck pass; pinned official Signal bootstrap, atomic encrypted outbox and byte-identical restart retry implemented."
+    },
+    {
+      "id": "T25",
+      "title": "Implement CLI poll decrypt history and ack state machine",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T24"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-06T11:21:27.225Z",
+            "outcome": "started",
+            "detail": "001-T25-tests: RED signed poll, trusted decrypt, atomic inbox/history and post-commit ack retry tests"
+          },
+          {
+            "at": "2026-09-06T11:30:00.705Z",
+            "outcome": "started",
+            "detail": "001-T25-implement: independent implementer makes ten inbound/history RED scenarios green; strategy moves from tests to runtime, below repetition threshold"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Validated DONE: 10/10 focused, 28/28 CLI and 73 workspace tests plus workspace typechecks pass; signed poll, atomic decrypt/inbox/history, post-commit durable ack recovery and outbound history implemented."
+    },
+    {
+      "id": "T26",
+      "title": "Verify isolated two-process offline restart and idempotency scenario",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T30",
+        "T32"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T11:53:49.420Z",
+            "outcome": "started",
+            "detail": "001-T26-e2e: test-first three clean real relay/two-process offline/restart/idempotency scenarios with bounded integration fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T27",
+      "title": "Run full prototype verification and Code Health gates",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T22",
+        "T23",
+        "T24",
+        "T25",
+        "T26"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T12:05:10.014Z",
+            "outcome": "started",
+            "detail": "001-T27-verify: independent full CLI/relay/E2E/workspace/Metaproject quality gate"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T28",
+      "title": "Independently review CLI prototype implementation",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T27"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T12:13:42.611Z",
+            "outcome": "started",
+            "detail": "001-T28-review: managed path-scoped independent logic/backend/security/highload/testing review with verifier"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T29",
+      "title": "Update prototype status and write change report",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T38"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T04:34:10.660Z",
+            "outcome": "started",
+            "detail": "001-T29-docs"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T30",
+      "title": "Implement CLI command entrypoint and exit/error contract",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T23",
+        "T24",
+        "T25"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-06T11:34:58.195Z",
+            "outcome": "started",
+            "detail": "001-T30-tests: RED child-process CLI command, JSON/stdout, confirmation and exit-code contract tests"
+          },
+          {
+            "at": "2026-09-06T11:41:18.486Z",
+            "outcome": "started",
+            "detail": "001-T30-implement: independent implementer makes six process-level CLI RED scenarios green; strategy moves tests to entrypoint/build/runtime wiring"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Validated DONE: 6/6 process and 34/34 CLI tests pass; full workspace tests/typechecks and health PASS; reproducible Node 22.13 ESM bin implements strict eight-command surface with stable exits and redaction."
+    },
+    {
+      "id": "T31",
+      "title": "Align relay v2 publish response with typed CLI contract",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T22"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-06T11:08:38.985Z",
+            "outcome": "started",
+            "detail": "001-T31-tests: RED real-handler response contract for stored and bundle_id"
+          },
+          {
+            "at": "2026-09-06T11:11:17.852Z",
+            "outcome": "started",
+            "detail": "001-T31-implement: independent one-field response fix after focused RED contract"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Validated DONE: focused RED reproduced; publish now returns exact validated bundle_id; focused/full tagged race and untagged Go suites pass."
+    },
+    {
+      "id": "T32",
+      "title": "Register v2 published devices for mailbox authorization",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T22",
+        "T31"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-06T11:28:56.593Z",
+            "outcome": "started",
+            "detail": "001-T32-tests: RED real-router v2 publish to signed mailbox challenge authorization and restart integration"
+          },
+          {
+            "at": "2026-09-06T11:36:14.435Z",
+            "outcome": "started",
+            "detail": "001-T32-implement: independent implementer makes three real-router tests green with atomic verified DeviceRecord persistence"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Validated DONE: embedded root-verified DeviceRecord now persists atomically with v2 bundle/OTK; idempotent backfill and conflict non-replacement verified; focused router, full tagged race and untagged Go suites pass."
+    },
+    {
+      "id": "T33",
+      "title": "Fix CLI publish retry confirmation persistence mapping and concurrent send",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T28"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-06T13:08:09.931Z",
+            "outcome": "started",
+            "detail": "001-T33-tests"
+          },
+          {
+            "at": "2026-09-06T13:28:59.617Z",
+            "outcome": "started",
+            "detail": "001-T33-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T34",
+      "title": "Fix relay mailbox immutability expiry request bounds and identity-scoped auth",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T28"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-06T13:08:10.023Z",
+            "outcome": "started",
+            "detail": "001-T34-tests"
+          },
+          {
+            "at": "2026-09-06T13:21:14.367Z",
+            "outcome": "started",
+            "detail": "001-T34-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T35",
+      "title": "Fix poll response capacity and relay rate limiting",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T28"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-06T13:46:09.486Z",
+            "outcome": "started",
+            "detail": "001-T35-tests"
+          },
+          {
+            "at": "2026-09-06T14:01:16.840Z",
+            "outcome": "started",
+            "detail": "001-T35-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T36",
+      "title": "Pin typed unknown-sender rejection regression",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T28"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T13:46:09.567Z",
+            "outcome": "started",
+            "detail": "001-T36-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T37",
+      "title": "Re-run full prototype verification after review fixes",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T33",
+        "T34",
+        "T35",
+        "T36",
+        "T39"
+      ],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-06T14:15:00.571Z",
+            "outcome": "started",
+            "detail": "001-T37-verify"
+          },
+          {
+            "at": "2026-09-06T14:39:28.079Z",
+            "outcome": "failed",
+            "detail": "Matrix FAIL: pnpm test intermittently red and keryx test run --strict exit 1, both traced to new blocker F-013 (parseArgs strict rejects option values starting with '-'; base64url identity_id hits this ~1/64)"
+          },
+          {
+            "at": "2026-09-06T15:04:06.644Z",
+            "outcome": "started",
+            "detail": "001-T37-verify re-run after F-013 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T38",
+      "title": "Run managed fix review and close F-001 through F-012 dispositions",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T52"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-06T15:19:25.728Z",
+            "outcome": "started",
+            "detail": "001-T38-fixreview wave A: logic/backend/security/highload"
+          },
+          {
+            "at": "2026-09-06T19:29:56.319Z",
+            "outcome": "started",
+            "detail": "001-T38 round 2: delta review of T39/T40/T41/T43/T45/T46 plus final dispositions"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T39",
+      "title": "Fix CLI option-value parsing for base64url identities and leading-dash text (F-013)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-06T14:39:37.267Z",
+            "outcome": "started",
+            "detail": "001-T39-tests"
+          },
+          {
+            "at": "2026-09-06T14:51:03.275Z",
+            "outcome": "started",
+            "detail": "001-T39-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T40",
+      "title": "Repair and re-anchor fix-wave regression tests and add RED tests for confirmed T38 findings",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T16:46:04.679Z",
+            "outcome": "started",
+            "detail": "001-T40-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T41",
+      "title": "Fix confirmed T38 findings: mailbox poison-envelope wedge, unbounded identifier strings, cursor signal and docstring",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T40"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-06T16:19:46.941Z",
+            "outcome": "started",
+            "detail": "001-T41-tests"
+          },
+          {
+            "at": "2026-09-06T17:03:09.056Z",
+            "outcome": "started",
+            "detail": "001-T41-tests-repair: over-pinned ack-attempt-count assertion (T40-N-001)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T42",
+      "title": "Re-run full verification matrix after the T40/T41 remediation round",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T40",
+        "T41"
+      ],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-06T17:12:43.014Z",
+            "outcome": "started",
+            "detail": "001-T42-verify"
+          },
+          {
+            "at": "2026-09-06T17:49:31.214Z",
+            "outcome": "failed",
+            "detail": "T42-F-001: inbound.test.ts declares no timeout and hits vitest's 5000ms default under load; 2 of 7 workspace runs red"
+          },
+          {
+            "at": "2026-09-06T19:01:27.547Z",
+            "outcome": "started",
+            "detail": "001-T42-verify re-run after T43/T45/T46"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T43",
+      "title": "Give the CLI suite deterministic timeout headroom (T42-F-001)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T17:49:44.714Z",
+            "outcome": "started",
+            "detail": "001-T43-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T44",
+      "title": "Diagnose second-sender prekey claim failure and characterise the multi-sender limitation",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T17:49:44.799Z",
+            "outcome": "started",
+            "detail": "001-T44-investigate"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T45",
+      "title": "Report exhausted prekey and no-op republish honestly (T44-001, T44-002)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T18:17:26.916Z",
+            "outcome": "started",
+            "detail": "001-T45-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T46",
+      "title": "Close the claimable field: reject a publish response that omits it (T45 optional-field compromise)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-06T18:47:06.718Z",
+            "outcome": "started",
+            "detail": "001-T46-tests"
+          },
+          {
+            "at": "2026-09-06T18:54:02.979Z",
+            "outcome": "started",
+            "detail": "001-T46-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T47",
+      "title": "RED tests for the round-2 findings: envelope shape parity, batch-fill wedge, unbounded v1 identifiers",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T19:49:47.949Z",
+            "outcome": "started",
+            "detail": "001-T47-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T48",
+      "title": "Close the round-2 findings: R2-001 shape parity and drain progress, R2-002 identifier bounds",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T47"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T20:13:25.865Z",
+            "outcome": "started",
+            "detail": "001-T48-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T49",
+      "title": "Final verification matrix after the round-2 remediation",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T47",
+        "T48"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T20:40:43.469Z",
+            "outcome": "started",
+            "detail": "001-T49-verify"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T50",
+      "title": "RED tests for sender authentication on /v1/messages/send (T49-F-001, user-approved scope extension)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T21:14:06.010Z",
+            "outcome": "started",
+            "detail": "001-T50-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T51",
+      "title": "Implement sender authentication on /v1/messages/send",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T50"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T21:48:47.491Z",
+            "outcome": "started",
+            "detail": "001-T51-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T52",
+      "title": "Final verification and consolidated fix-review dispositions",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T53",
+        "T54"
+      ],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-06T22:07:38.558Z",
+            "outcome": "started",
+            "detail": "001-T52-final"
+          },
+          {
+            "at": "2026-09-06T22:54:24.874Z",
+            "outcome": "failed",
+            "detail": "Agent terminated on session rate limit mid-probe; partial unverified signal that the wedge may remain reachable"
+          },
+          {
+            "at": "2026-09-06T22:54:24.960Z",
+            "outcome": "started",
+            "detail": "001-T52a-verify (split: matrix + T49-F-001 binary probe)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded and split after a session rate limit: the measurement half became T55 and the disposition half T56, both delivered"
+    },
+    {
+      "id": "T53",
+      "title": "RED tests for per-sender unacked-envelope quota (T52-F-001)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T03:19:19.676Z",
+            "outcome": "started",
+            "detail": "001-T53-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T54",
+      "title": "Implement per-sender unacked-envelope quota on the mailbox",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T53"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T03:40:55.086Z",
+            "outcome": "started",
+            "detail": "001-T54-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-05T23:48:19.650Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-05T23:50:44.376Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-05T23:50:44.468Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-05T23:50:44.552Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-05T23:50:44.640Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-05T23:50:44.729Z",
+      "event": "task-added",
+      "detail": "T5: Align security transport and mailbox auth specifications"
+    },
+    {
+      "at": "2026-09-05T23:50:44.813Z",
+      "event": "task-added",
+      "detail": "T6: Reorder roadmap and define evidence-based pilot gates"
+    },
+    {
+      "at": "2026-09-05T23:50:44.897Z",
+      "event": "task-added",
+      "detail": "T7: Verify mature session integration feasibility"
+    },
+    {
+      "at": "2026-09-05T23:50:44.993Z",
+      "event": "task-added",
+      "detail": "T8: Consolidate status and verify documentation consistency"
+    },
+    {
+      "at": "2026-09-05T23:50:45.083Z",
+      "event": "task-added",
+      "detail": "T9: Implement validated production session and contact messaging path"
+    },
+    {
+      "at": "2026-09-05T23:50:45.167Z",
+      "event": "task-added",
+      "detail": "T10: Verify real-device messaging restart and background delivery"
+    },
+    {
+      "at": "2026-09-05T23:50:45.253Z",
+      "event": "task-added",
+      "detail": "T11: Obtain independent security review before sensitive use"
+    },
+    {
+      "at": "2026-09-05T23:50:45.337Z",
+      "event": "task-added",
+      "detail": "T12: Run user pilot and record demand go/no-go evidence"
+    },
+    {
+      "at": "2026-09-05T23:50:45.427Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-05T23:50:45.513Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-05T23:50:55.513Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 001-specs"
+    },
+    {
+      "at": "2026-09-05T23:50:55.602Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 001-planning"
+    },
+    {
+      "at": "2026-09-05T23:50:55.696Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 001-crypto"
+    },
+    {
+      "at": "2026-09-05T23:53:49.673Z",
+      "event": "task-added",
+      "detail": "T13: Prevent unvalidated demo crypto use in production mobile runtime"
+    },
+    {
+      "at": "2026-09-05T23:53:49.812Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — Fail closed demo entry; explicit dev opt-in; integration rendering tests"
+    },
+    {
+      "at": "2026-09-05T23:56:08.241Z",
+      "event": "task-added",
+      "detail": "T14: Atomically consume mailbox challenges to prevent concurrent replay"
+    },
+    {
+      "at": "2026-09-05T23:56:08.330Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — Go transactional consume with concurrent regression tests"
+    },
+    {
+      "at": "2026-09-05T23:56:08.421Z",
+      "event": "task-done",
+      "detail": "T5: Align security transport and mailbox auth specifications"
+    },
+    {
+      "at": "2026-09-05T23:56:08.504Z",
+      "event": "task-done",
+      "detail": "T6: Reorder roadmap and define evidence-based pilot gates"
+    },
+    {
+      "at": "2026-09-05T23:56:08.595Z",
+      "event": "task-done",
+      "detail": "T7: Verify mature session integration feasibility"
+    },
+    {
+      "at": "2026-09-05T23:56:08.677Z",
+      "event": "task-attempt",
+      "detail": "T9: blocked (attempt 1) — Installed Signal-compatible candidate fails inbound identity trust rejection; native bridge, wire mapping and durable store not validated. See crypto-report.md"
+    },
+    {
+      "at": "2026-09-05T23:56:08.758Z",
+      "event": "task-added",
+      "detail": "T15: Independent review of remediation changes"
+    },
+    {
+      "at": "2026-09-06T00:01:44.815Z",
+      "event": "task-done",
+      "detail": "T8: Consolidate status and verify documentation consistency"
+    },
+    {
+      "at": "2026-09-06T00:01:44.906Z",
+      "event": "task-done",
+      "detail": "T13: Prevent unvalidated demo crypto use in production mobile runtime"
+    },
+    {
+      "at": "2026-09-06T00:01:44.988Z",
+      "event": "task-done",
+      "detail": "T14: Atomically consume mailbox challenges to prevent concurrent replay"
+    },
+    {
+      "at": "2026-09-06T00:01:45.074Z",
+      "event": "task-done",
+      "detail": "T15: Independent review of remediation changes"
+    },
+    {
+      "at": "2026-09-06T00:01:45.154Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: specs-report.md: HTTP/TLS consistent; unsupported metadata benefit removed"
+    },
+    {
+      "at": "2026-09-06T00:01:45.236Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Source-verified signing inputs and ownership; atomic consume docs updated; independent Go review"
+    },
+    {
+      "at": "2026-09-06T00:01:45.320Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: planning-report.md and PILOT-29: G0 first, early independent review, proposed measurable pilot gates"
+    },
+    {
+      "at": "2026-09-06T00:01:45.402Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: STATUS_CURRENT dated evidence and blockers; legacy entrypoints link to it; preserved snapshots"
+    },
+    {
+      "at": "2026-09-06T00:01:45.482Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: crypto-report.md and executable spike reproduce installed candidate trust bypass; no production approval"
+    },
+    {
+      "at": "2026-09-06T07:51:51.903Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 2) — Resume: different approach official libsignal 0.102.0, isolated reference runtime and encrypted transactional persistence"
+    },
+    {
+      "at": "2026-09-06T07:51:51.995Z",
+      "event": "task-added",
+      "detail": "T16: Implement encrypted atomic session/outbox storage reference"
+    },
+    {
+      "at": "2026-09-06T07:51:52.091Z",
+      "event": "task-added",
+      "detail": "T17: Integrate official libsignal with pinned trust and persistence tests"
+    },
+    {
+      "at": "2026-09-06T07:51:52.188Z",
+      "event": "task-added",
+      "detail": "T18: Verify and independently review official session reference"
+    },
+    {
+      "at": "2026-09-06T07:52:51.666Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — Encrypted SQLite snapshot transaction and crash/rollback/concurrency tests"
+    },
+    {
+      "at": "2026-09-06T07:52:51.749Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — Official 0.102.0 spike passed async trust rejection; implementing reference runtime"
+    },
+    {
+      "at": "2026-09-06T08:15:21.516Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — Resumed independent review and final workspace verification after usage limits reset"
+    },
+    {
+      "at": "2026-09-06T08:15:28.168Z",
+      "event": "task-done",
+      "detail": "T17: Integrate official libsignal with pinned trust and persistence tests"
+    },
+    {
+      "at": "2026-09-06T08:17:00.141Z",
+      "event": "task-done",
+      "detail": "T16: Implement encrypted atomic session/outbox storage reference"
+    },
+    {
+      "at": "2026-09-06T08:17:00.568Z",
+      "event": "task-done",
+      "detail": "T18: Verify and independently review official session reference"
+    },
+    {
+      "at": "2026-09-06T08:35:02.677Z",
+      "event": "task-added",
+      "detail": "T19: Define and validate versioned Signal wire bundle and identity binding"
+    },
+    {
+      "at": "2026-09-06T08:36:26.793Z",
+      "event": "task-added",
+      "detail": "T20: Implement official Signal wire export and verified identity-bound import"
+    },
+    {
+      "at": "2026-09-06T08:36:26.958Z",
+      "event": "task-added",
+      "detail": "T21: Independently review and verify Signal wire v2 integration"
+    },
+    {
+      "at": "2026-09-06T08:36:52.665Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — Strict v2 schema and domain-separated full signing transcript, preserving v1"
+    },
+    {
+      "at": "2026-09-06T08:36:52.837Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — Native bundle JSON export/import with root-device-Signal trust chain"
+    },
+    {
+      "at": "2026-09-06T08:39:19.558Z",
+      "event": "task-depends-set",
+      "detail": "T20: dependsOn T19 (was empty) — Adapter imports strict schema and signing transcript"
+    },
+    {
+      "at": "2026-09-06T08:39:19.737Z",
+      "event": "task-depends-set",
+      "detail": "T21: dependsOn T19, T20 (was empty) — Review final schema and native wire integration together"
+    },
+    {
+      "at": "2026-09-06T08:39:19.900Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — Review spec trust chain, then final code and regression verification"
+    },
+    {
+      "at": "2026-09-06T08:42:22.730Z",
+      "event": "task-done",
+      "detail": "T19: Define and validate versioned Signal wire bundle and identity binding"
+    },
+    {
+      "at": "2026-09-06T08:44:28.158Z",
+      "event": "task-added",
+      "detail": "T22: Implement separate relay v2 publication and atomic one-time prekey claims with JS-Go fixtures"
+    },
+    {
+      "at": "2026-09-06T08:44:28.307Z",
+      "event": "task-depends-set",
+      "detail": "T22: dependsOn T19, T20, T21 (was empty) — Relay v2 must consume reviewed wire contract and preserve signed immutable records"
+    },
+    {
+      "at": "2026-09-06T08:44:54.805Z",
+      "event": "task-done",
+      "detail": "T20: Implement official Signal wire export and verified identity-bound import"
+    },
+    {
+      "at": "2026-09-06T08:44:54.966Z",
+      "event": "task-done",
+      "detail": "T21: Independently review and verify Signal wire v2 integration"
+    },
+    {
+      "at": "2026-09-06T10:29:32.954Z",
+      "event": "task-added",
+      "detail": "T23: Implement CLI profile configuration and mutually pinned contact cards"
+    },
+    {
+      "at": "2026-09-06T10:29:33.189Z",
+      "event": "task-added",
+      "detail": "T24: Integrate CLI relay transport and durable send retry"
+    },
+    {
+      "at": "2026-09-06T10:29:33.418Z",
+      "event": "task-added",
+      "detail": "T25: Implement CLI poll decrypt history and ack state machine"
+    },
+    {
+      "at": "2026-09-06T10:29:33.650Z",
+      "event": "task-added",
+      "detail": "T26: Verify isolated two-process offline restart and idempotency scenario"
+    },
+    {
+      "at": "2026-09-06T10:29:33.880Z",
+      "event": "task-added",
+      "detail": "T27: Run full prototype verification and Code Health gates"
+    },
+    {
+      "at": "2026-09-06T10:29:34.158Z",
+      "event": "task-added",
+      "detail": "T28: Independently review CLI prototype implementation"
+    },
+    {
+      "at": "2026-09-06T10:29:34.386Z",
+      "event": "task-added",
+      "detail": "T29: Update prototype status and write change report"
+    },
+    {
+      "at": "2026-09-06T10:32:13.463Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 001-T22-tests: RED fixtures and relay v2 concurrency/idempotency tests"
+    },
+    {
+      "at": "2026-09-06T10:32:13.711Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 001-T23-tests: RED CLI profile and mutual trust tests"
+    },
+    {
+      "at": "2026-09-06T10:39:20.634Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 2) — 001-T23-implement: make independently authored CLI profile tests green"
+    },
+    {
+      "at": "2026-09-06T10:49:10.063Z",
+      "event": "task-done",
+      "detail": "T23: Implement CLI profile configuration and mutually pinned contact cards"
+    },
+    {
+      "at": "2026-09-06T10:49:10.359Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 2) — 001-T22-implement: independent implementer after validated RED fixtures; strategy changed from tests to service/storage/HTTP implementation; attempt count below repetition threshold"
+    },
+    {
+      "at": "2026-09-06T10:53:01.705Z",
+      "event": "task-added",
+      "detail": "T30: Implement CLI command entrypoint and exit/error contract"
+    },
+    {
+      "at": "2026-09-06T10:53:02.303Z",
+      "event": "task-depends-set",
+      "detail": "T26: dependsOn T30 (was T25) — The isolated child-process scenario requires the reviewed CLI command surface and stable exit/error mapping, which were not owned by T23-T25 runtime tasks."
+    },
+    {
+      "at": "2026-09-06T10:59:34.176Z",
+      "event": "task-done",
+      "detail": "T22: Implement separate relay v2 publication and atomic one-time prekey claims with JS-Go fixtures"
+    },
+    {
+      "at": "2026-09-06T10:59:34.421Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 001-T24-tests: RED typed relay transport, first-send bootstrap, durable outbox and exact ambiguous retry tests"
+    },
+    {
+      "at": "2026-09-06T11:08:13.494Z",
+      "event": "task-added",
+      "detail": "T31: Align relay v2 publish response with typed CLI contract"
+    },
+    {
+      "at": "2026-09-06T11:08:14.033Z",
+      "event": "task-depends-set",
+      "detail": "T24: dependsOn T22, T23, T31 (was T22, T23) — T24 strict client requires the relay publish success response to echo the validated bundle_id; current T22 handler returns only stored."
+    },
+    {
+      "at": "2026-09-06T11:08:38.985Z",
+      "event": "task-attempt",
+      "detail": "T31: started (attempt 1) — 001-T31-tests: RED real-handler response contract for stored and bundle_id"
+    },
+    {
+      "at": "2026-09-06T11:11:17.852Z",
+      "event": "task-attempt",
+      "detail": "T31: started (attempt 2) — 001-T31-implement: independent one-field response fix after focused RED contract"
+    },
+    {
+      "at": "2026-09-06T11:13:04.146Z",
+      "event": "task-done",
+      "detail": "T31: Align relay v2 publish response with typed CLI contract"
+    },
+    {
+      "at": "2026-09-06T11:13:04.455Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 2) — 001-T24-implement: independent implementer makes nine relay/outbound RED tests green after T31 contract alignment; no repetition, strategy moves tests to implementation"
+    },
+    {
+      "at": "2026-09-06T11:21:26.949Z",
+      "event": "task-done",
+      "detail": "T24: Integrate CLI relay transport and durable send retry"
+    },
+    {
+      "at": "2026-09-06T11:21:27.225Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 001-T25-tests: RED signed poll, trusted decrypt, atomic inbox/history and post-commit ack retry tests"
+    },
+    {
+      "at": "2026-09-06T11:28:26.981Z",
+      "event": "task-added",
+      "detail": "T32: Register v2 published devices for mailbox authorization"
+    },
+    {
+      "at": "2026-09-06T11:28:27.477Z",
+      "event": "task-depends-set",
+      "detail": "T26: dependsOn T30, T32 (was T30) — Real mailbox challenge/poll requires the DeviceRecord embedded in a successful v2 publish to be durably available to mailbox authorization."
+    },
+    {
+      "at": "2026-09-06T11:28:56.594Z",
+      "event": "task-attempt",
+      "detail": "T32: started (attempt 1) — 001-T32-tests: RED real-router v2 publish to signed mailbox challenge authorization and restart integration"
+    },
+    {
+      "at": "2026-09-06T11:30:00.705Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 2) — 001-T25-implement: independent implementer makes ten inbound/history RED scenarios green; strategy moves from tests to runtime, below repetition threshold"
+    },
+    {
+      "at": "2026-09-06T11:34:57.708Z",
+      "event": "task-done",
+      "detail": "T25: Implement CLI poll decrypt history and ack state machine"
+    },
+    {
+      "at": "2026-09-06T11:34:58.195Z",
+      "event": "task-attempt",
+      "detail": "T30: started (attempt 1) — 001-T30-tests: RED child-process CLI command, JSON/stdout, confirmation and exit-code contract tests"
+    },
+    {
+      "at": "2026-09-06T11:36:14.435Z",
+      "event": "task-attempt",
+      "detail": "T32: started (attempt 2) — 001-T32-implement: independent implementer makes three real-router tests green with atomic verified DeviceRecord persistence"
+    },
+    {
+      "at": "2026-09-06T11:39:10.090Z",
+      "event": "task-done",
+      "detail": "T32: Register v2 published devices for mailbox authorization"
+    },
+    {
+      "at": "2026-09-06T11:41:18.486Z",
+      "event": "task-attempt",
+      "detail": "T30: started (attempt 2) — 001-T30-implement: independent implementer makes six process-level CLI RED scenarios green; strategy moves tests to entrypoint/build/runtime wiring"
+    },
+    {
+      "at": "2026-09-06T11:52:40.886Z",
+      "event": "task-done",
+      "detail": "T30: Implement CLI command entrypoint and exit/error contract"
+    },
+    {
+      "at": "2026-09-06T11:53:49.421Z",
+      "event": "task-attempt",
+      "detail": "T26: started (attempt 1) — 001-T26-e2e: test-first three clean real relay/two-process offline/restart/idempotency scenarios with bounded integration fixes"
+    },
+    {
+      "at": "2026-09-06T12:05:09.913Z",
+      "event": "task-done",
+      "detail": "T26: Verify isolated two-process offline restart and idempotency scenario"
+    },
+    {
+      "at": "2026-09-06T12:05:10.014Z",
+      "event": "task-attempt",
+      "detail": "T27: started (attempt 1) — 001-T27-verify: independent full CLI/relay/E2E/workspace/Metaproject quality gate"
+    },
+    {
+      "at": "2026-09-06T12:13:42.478Z",
+      "event": "task-done",
+      "detail": "T27: Run full prototype verification and Code Health gates"
+    },
+    {
+      "at": "2026-09-06T12:13:42.612Z",
+      "event": "task-attempt",
+      "detail": "T28: started (attempt 1) — 001-T28-review: managed path-scoped independent logic/backend/security/highload/testing review with verifier"
+    },
+    {
+      "at": "2026-09-06T12:49:31.984Z",
+      "event": "task-added",
+      "detail": "T33: Fix CLI publish retry confirmation persistence mapping and concurrent send"
+    },
+    {
+      "at": "2026-09-06T12:49:32.180Z",
+      "event": "task-added",
+      "detail": "T34: Fix relay mailbox immutability expiry request bounds and identity-scoped auth"
+    },
+    {
+      "at": "2026-09-06T12:49:32.348Z",
+      "event": "task-added",
+      "detail": "T35: Fix poll response capacity and relay rate limiting"
+    },
+    {
+      "at": "2026-09-06T12:49:32.539Z",
+      "event": "task-added",
+      "detail": "T36: Pin typed unknown-sender rejection regression"
+    },
+    {
+      "at": "2026-09-06T12:49:32.704Z",
+      "event": "task-added",
+      "detail": "T37: Re-run full prototype verification after review fixes"
+    },
+    {
+      "at": "2026-09-06T12:49:32.893Z",
+      "event": "task-added",
+      "detail": "T38: Run managed fix review and close F-001 through F-012 dispositions"
+    },
+    {
+      "at": "2026-09-06T12:49:40.410Z",
+      "event": "task-depends-set",
+      "detail": "T29: dependsOn T38 (was T28) — Status and final change report must reflect implemented review fixes, fresh verification and explicit dispositions for F-001 through F-012."
+    },
+    {
+      "at": "2026-09-06T12:52:01.142Z",
+      "event": "task-done",
+      "detail": "T28: Independently review CLI prototype implementation"
+    },
+    {
+      "at": "2026-09-06T13:08:09.931Z",
+      "event": "task-attempt",
+      "detail": "T33: started (attempt 1) — 001-T33-tests"
+    },
+    {
+      "at": "2026-09-06T13:08:10.024Z",
+      "event": "task-attempt",
+      "detail": "T34: started (attempt 1) — 001-T34-tests"
+    },
+    {
+      "at": "2026-09-06T13:21:14.367Z",
+      "event": "task-attempt",
+      "detail": "T34: started (attempt 2) — 001-T34-implement"
+    },
+    {
+      "at": "2026-09-06T13:28:59.617Z",
+      "event": "task-attempt",
+      "detail": "T33: started (attempt 2) — 001-T33-implement"
+    },
+    {
+      "at": "2026-09-06T13:32:50.400Z",
+      "event": "task-done",
+      "detail": "T34: Fix relay mailbox immutability expiry request bounds and identity-scoped auth"
+    },
+    {
+      "at": "2026-09-06T13:46:09.401Z",
+      "event": "task-done",
+      "detail": "T33: Fix CLI publish retry confirmation persistence mapping and concurrent send"
+    },
+    {
+      "at": "2026-09-06T13:46:09.486Z",
+      "event": "task-attempt",
+      "detail": "T35: started (attempt 1) — 001-T35-tests"
+    },
+    {
+      "at": "2026-09-06T13:46:09.567Z",
+      "event": "task-attempt",
+      "detail": "T36: started (attempt 1) — 001-T36-tests"
+    },
+    {
+      "at": "2026-09-06T14:01:16.840Z",
+      "event": "task-attempt",
+      "detail": "T35: started (attempt 2) — 001-T35-implement"
+    },
+    {
+      "at": "2026-09-06T14:04:11.447Z",
+      "event": "task-done",
+      "detail": "T36: Pin typed unknown-sender rejection regression"
+    },
+    {
+      "at": "2026-09-06T14:15:00.483Z",
+      "event": "task-done",
+      "detail": "T35: Fix poll response capacity and relay rate limiting"
+    },
+    {
+      "at": "2026-09-06T14:15:00.571Z",
+      "event": "task-attempt",
+      "detail": "T37: started (attempt 1) — 001-T37-verify"
+    },
+    {
+      "at": "2026-09-06T14:39:28.079Z",
+      "event": "task-attempt",
+      "detail": "T37: failed (attempt 2) — Matrix FAIL: pnpm test intermittently red and keryx test run --strict exit 1, both traced to new blocker F-013 (parseArgs strict rejects option values starting with '-'; base64url identity_id hits this ~1/64)"
+    },
+    {
+      "at": "2026-09-06T14:39:28.251Z",
+      "event": "task-added",
+      "detail": "T39: Fix CLI option-value parsing for base64url identities and leading-dash text (F-013)"
+    },
+    {
+      "at": "2026-09-06T14:39:37.267Z",
+      "event": "task-attempt",
+      "detail": "T39: started (attempt 1) — 001-T39-tests"
+    },
+    {
+      "at": "2026-09-06T14:39:47.104Z",
+      "event": "task-depends-set",
+      "detail": "T37: dependsOn T33, T34, T35, T36, T39 (was T33, T34, T35, T36) — T37 verification failed on new blocker F-013 (parseArgs strict rejects option values starting with '-'); the matrix can only be re-taken after the CLI option-value parsing fix lands"
+    },
+    {
+      "at": "2026-09-06T14:51:03.275Z",
+      "event": "task-attempt",
+      "detail": "T39: started (attempt 2) — 001-T39-implement"
+    },
+    {
+      "at": "2026-09-06T15:04:06.559Z",
+      "event": "task-done",
+      "detail": "T39: Fix CLI option-value parsing for base64url identities and leading-dash text (F-013)"
+    },
+    {
+      "at": "2026-09-06T15:04:06.644Z",
+      "event": "task-attempt",
+      "detail": "T37: started (attempt 3) — 001-T37-verify re-run after F-013 fix"
+    },
+    {
+      "at": "2026-09-06T15:19:08.929Z",
+      "event": "task-done",
+      "detail": "T37: Re-run full prototype verification after review fixes"
+    },
+    {
+      "at": "2026-09-06T15:19:25.728Z",
+      "event": "task-attempt",
+      "detail": "T38: started (attempt 1) — 001-T38-fixreview wave A: logic/backend/security/highload"
+    },
+    {
+      "at": "2026-09-06T16:19:36.963Z",
+      "event": "task-added",
+      "detail": "T40: Repair and re-anchor fix-wave regression tests and add RED tests for confirmed T38 findings"
+    },
+    {
+      "at": "2026-09-06T16:19:37.057Z",
+      "event": "task-added",
+      "detail": "T41: Fix confirmed T38 findings: mailbox poison-envelope wedge, unbounded identifier strings, cursor signal and docstring"
+    },
+    {
+      "at": "2026-09-06T16:19:46.632Z",
+      "event": "task-depends-set",
+      "detail": "T41: dependsOn T38 (was empty) — Test repairs and new RED tests follow from the verified T38 fix-review findings"
+    },
+    {
+      "at": "2026-09-06T16:19:46.738Z",
+      "event": "task-depends-set",
+      "detail": "T40: dependsOn T41 (was empty) — Implementation follows the RED tests written in T41"
+    },
+    {
+      "at": "2026-09-06T16:19:46.837Z",
+      "event": "task-depends-set",
+      "detail": "T29: dependsOn T38, T40, T41 (was T38) — Documentation must reflect the completed fix-review remediation round, not only the first fix wave"
+    },
+    {
+      "at": "2026-09-06T16:19:46.942Z",
+      "event": "task-attempt",
+      "detail": "T41: started (attempt 1) — 001-T41-tests"
+    },
+    {
+      "at": "2026-09-06T16:46:04.679Z",
+      "event": "task-attempt",
+      "detail": "T40: started (attempt 1) — 001-T40-implement"
+    },
+    {
+      "at": "2026-09-06T17:03:09.056Z",
+      "event": "task-attempt",
+      "detail": "T41: started (attempt 2) — 001-T41-tests-repair: over-pinned ack-attempt-count assertion (T40-N-001)"
+    },
+    {
+      "at": "2026-09-06T17:12:34.581Z",
+      "event": "task-done",
+      "detail": "T41: Fix confirmed T38 findings: mailbox poison-envelope wedge, unbounded identifier strings, cursor signal and docstring"
+    },
+    {
+      "at": "2026-09-06T17:12:34.676Z",
+      "event": "task-done",
+      "detail": "T40: Repair and re-anchor fix-wave regression tests and add RED tests for confirmed T38 findings"
+    },
+    {
+      "at": "2026-09-06T17:12:34.761Z",
+      "event": "task-added",
+      "detail": "T42: Re-run full verification matrix after the T40/T41 remediation round"
+    },
+    {
+      "at": "2026-09-06T17:12:42.695Z",
+      "event": "task-depends-set",
+      "detail": "T42: dependsOn T40, T41 (was empty) — Verification must run on the tree containing the remediation round"
+    },
+    {
+      "at": "2026-09-06T17:12:42.921Z",
+      "event": "task-depends-set",
+      "detail": "T29: dependsOn T38 (was T38, T40, T41) — Documentation depends on a clean fix review; T40/T41 already feed T38"
+    },
+    {
+      "at": "2026-09-06T17:12:43.014Z",
+      "event": "task-attempt",
+      "detail": "T42: started (attempt 1) — 001-T42-verify"
+    },
+    {
+      "at": "2026-09-06T17:12:56.545Z",
+      "event": "task-depends-set",
+      "detail": "T41: dependsOn cleared (was T38) — T41 was authored from the T38 findings, but that is provenance, not scheduling; keeping it as a dependsOn creates a cycle once T38 waits on the verification of the round T41 belongs to"
+    },
+    {
+      "at": "2026-09-06T17:12:56.745Z",
+      "event": "task-depends-set",
+      "detail": "T38: dependsOn T37, T42 (was T37) — The fix review can only close after the remediation round it produced has itself been verified"
+    },
+    {
+      "at": "2026-09-06T17:49:31.214Z",
+      "event": "task-attempt",
+      "detail": "T42: failed (attempt 2) — T42-F-001: inbound.test.ts declares no timeout and hits vitest's 5000ms default under load; 2 of 7 workspace runs red"
+    },
+    {
+      "at": "2026-09-06T17:49:44.390Z",
+      "event": "task-added",
+      "detail": "T43: Give the CLI suite deterministic timeout headroom (T42-F-001)"
+    },
+    {
+      "at": "2026-09-06T17:49:44.506Z",
+      "event": "task-added",
+      "detail": "T44: Diagnose second-sender prekey claim failure and characterise the multi-sender limitation"
+    },
+    {
+      "at": "2026-09-06T17:49:44.623Z",
+      "event": "task-depends-set",
+      "detail": "T38: dependsOn T37, T42, T43, T44 (was T37, T42) — The fix review closes only after the verification gate is green and the multi-sender observation is characterised"
+    },
+    {
+      "at": "2026-09-06T17:49:44.714Z",
+      "event": "task-attempt",
+      "detail": "T43: started (attempt 1) — 001-T43-tests"
+    },
+    {
+      "at": "2026-09-06T17:49:44.799Z",
+      "event": "task-attempt",
+      "detail": "T44: started (attempt 1) — 001-T44-investigate"
+    },
+    {
+      "at": "2026-09-06T17:57:53.900Z",
+      "event": "task-done",
+      "detail": "T44: Diagnose second-sender prekey claim failure and characterise the multi-sender limitation"
+    },
+    {
+      "at": "2026-09-06T17:57:55.715Z",
+      "event": "task-added",
+      "detail": "T45: Report exhausted prekey and no-op republish honestly (T44-001, T44-002)"
+    },
+    {
+      "at": "2026-09-06T17:58:04.369Z",
+      "event": "task-depends-set",
+      "detail": "T38: dependsOn T37, T42, T43, T44, T45 (was T37, T42, T43, T44) — The fix review closes only after the T44 follow-up findings are addressed"
+    },
+    {
+      "at": "2026-09-06T17:58:28.613Z",
+      "event": "task-depends-set",
+      "detail": "T40: dependsOn cleared (was T41) — Correcting an inverted dependency: T40 is the TEST task and must not depend on the implement task"
+    },
+    {
+      "at": "2026-09-06T17:58:28.870Z",
+      "event": "task-depends-set",
+      "detail": "T41: dependsOn T40 (was empty) — Correcting an inverted dependency: T41 is the IMPLEMENT task and follows the RED tests recorded under T40"
+    },
+    {
+      "at": "2026-09-06T18:17:26.829Z",
+      "event": "task-done",
+      "detail": "T43: Give the CLI suite deterministic timeout headroom (T42-F-001)"
+    },
+    {
+      "at": "2026-09-06T18:17:26.916Z",
+      "event": "task-attempt",
+      "detail": "T45: started (attempt 1) — 001-T45-tests"
+    },
+    {
+      "at": "2026-09-06T18:47:06.482Z",
+      "event": "task-done",
+      "detail": "T45: Report exhausted prekey and no-op republish honestly (T44-001, T44-002)"
+    },
+    {
+      "at": "2026-09-06T18:47:06.563Z",
+      "event": "task-added",
+      "detail": "T46: Close the claimable field: reject a publish response that omits it (T45 optional-field compromise)"
+    },
+    {
+      "at": "2026-09-06T18:47:06.641Z",
+      "event": "task-depends-set",
+      "detail": "T38: dependsOn T37, T42, T43, T44, T45, T46 (was T37, T42, T43, T44, T45) — The optional-field compromise from T45 must be closed before the fix review can be clean"
+    },
+    {
+      "at": "2026-09-06T18:47:06.719Z",
+      "event": "task-attempt",
+      "detail": "T46: started (attempt 1) — 001-T46-tests"
+    },
+    {
+      "at": "2026-09-06T18:54:02.979Z",
+      "event": "task-attempt",
+      "detail": "T46: started (attempt 2) — 001-T46-implement"
+    },
+    {
+      "at": "2026-09-06T19:01:27.456Z",
+      "event": "task-done",
+      "detail": "T46: Close the claimable field: reject a publish response that omits it (T45 optional-field compromise)"
+    },
+    {
+      "at": "2026-09-06T19:01:27.547Z",
+      "event": "task-attempt",
+      "detail": "T42: started (attempt 3) — 001-T42-verify re-run after T43/T45/T46"
+    },
+    {
+      "at": "2026-09-06T19:29:56.235Z",
+      "event": "task-done",
+      "detail": "T42: Re-run full verification matrix after the T40/T41 remediation round"
+    },
+    {
+      "at": "2026-09-06T19:29:56.319Z",
+      "event": "task-attempt",
+      "detail": "T38: started (attempt 2) — 001-T38 round 2: delta review of T39/T40/T41/T43/T45/T46 plus final dispositions"
+    },
+    {
+      "at": "2026-09-06T19:49:40.514Z",
+      "event": "task-added",
+      "detail": "T47: RED tests for the round-2 findings: envelope shape parity, batch-fill wedge, unbounded v1 identifiers"
+    },
+    {
+      "at": "2026-09-06T19:49:40.599Z",
+      "event": "task-added",
+      "detail": "T48: Close the round-2 findings: R2-001 shape parity and drain progress, R2-002 identifier bounds"
+    },
+    {
+      "at": "2026-09-06T19:49:47.775Z",
+      "event": "task-depends-set",
+      "detail": "T48: dependsOn T47 (was empty) — Implementation follows the RED tests"
+    },
+    {
+      "at": "2026-09-06T19:49:47.860Z",
+      "event": "task-depends-set",
+      "detail": "T38: dependsOn T37, T42, T43, T44, T45, T46, T47, T48 (was T37, T42, T43, T44, T45, T46) — The fix review closes only after the round-2 findings are remediated"
+    },
+    {
+      "at": "2026-09-06T19:49:47.949Z",
+      "event": "task-attempt",
+      "detail": "T47: started (attempt 1) — 001-T47-tests"
+    },
+    {
+      "at": "2026-09-06T20:13:25.865Z",
+      "event": "task-attempt",
+      "detail": "T48: started (attempt 1) — 001-T48-implement"
+    },
+    {
+      "at": "2026-09-06T20:40:34.415Z",
+      "event": "task-done",
+      "detail": "T47: RED tests for the round-2 findings: envelope shape parity, batch-fill wedge, unbounded v1 identifiers"
+    },
+    {
+      "at": "2026-09-06T20:40:34.507Z",
+      "event": "task-done",
+      "detail": "T48: Close the round-2 findings: R2-001 shape parity and drain progress, R2-002 identifier bounds"
+    },
+    {
+      "at": "2026-09-06T20:40:34.629Z",
+      "event": "task-added",
+      "detail": "T49: Final verification matrix after the round-2 remediation"
+    },
+    {
+      "at": "2026-09-06T20:40:43.170Z",
+      "event": "task-depends-set",
+      "detail": "T49: dependsOn T47, T48 (was empty) — Final verification runs on the tree containing the round-2 remediation"
+    },
+    {
+      "at": "2026-09-06T20:40:43.293Z",
+      "event": "task-depends-set",
+      "detail": "T38: dependsOn T37, T42, T43, T44, T45, T46, T47, T48, T49 (was T37, T42, T43, T44, T45, T46, T47, T48) — The fix review closes after the final verification of the round-2 remediation"
+    },
+    {
+      "at": "2026-09-06T20:40:43.469Z",
+      "event": "task-attempt",
+      "detail": "T49: started (attempt 1) — 001-T49-verify"
+    },
+    {
+      "at": "2026-09-06T21:14:05.659Z",
+      "event": "task-added",
+      "detail": "T50: RED tests for sender authentication on /v1/messages/send (T49-F-001, user-approved scope extension)"
+    },
+    {
+      "at": "2026-09-06T21:14:05.747Z",
+      "event": "task-added",
+      "detail": "T51: Implement sender authentication on /v1/messages/send"
+    },
+    {
+      "at": "2026-09-06T21:14:05.832Z",
+      "event": "task-depends-set",
+      "detail": "T51: dependsOn T50 (was empty) — Implementation follows the RED tests"
+    },
+    {
+      "at": "2026-09-06T21:14:05.921Z",
+      "event": "task-depends-set",
+      "detail": "T38: dependsOn T37, T42, T43, T44, T45, T46, T47, T48, T49, T50, T51 (was T37, T42, T43, T44, T45, T46, T47, T48, T49) — User decided to fully close T49-F-001 with sender authentication rather than document it"
+    },
+    {
+      "at": "2026-09-06T21:14:06.010Z",
+      "event": "task-attempt",
+      "detail": "T50: started (attempt 1) — 001-T50-tests"
+    },
+    {
+      "at": "2026-09-06T21:48:47.491Z",
+      "event": "task-attempt",
+      "detail": "T51: started (attempt 1) — 001-T51-implement"
+    },
+    {
+      "at": "2026-09-06T22:07:38.118Z",
+      "event": "task-done",
+      "detail": "T50: RED tests for sender authentication on /v1/messages/send (T49-F-001, user-approved scope extension)"
+    },
+    {
+      "at": "2026-09-06T22:07:38.205Z",
+      "event": "task-done",
+      "detail": "T51: Implement sender authentication on /v1/messages/send"
+    },
+    {
+      "at": "2026-09-06T22:07:38.299Z",
+      "event": "task-added",
+      "detail": "T52: Final verification and consolidated fix-review dispositions"
+    },
+    {
+      "at": "2026-09-06T22:07:38.386Z",
+      "event": "task-depends-set",
+      "detail": "T52: dependsOn T50, T51 (was empty) — Final gate runs on the tree containing sender authentication"
+    },
+    {
+      "at": "2026-09-06T22:07:38.476Z",
+      "event": "task-depends-set",
+      "detail": "T38: dependsOn T52 (was T37, T42, T43, T44, T45, T46, T47, T48, T49, T50, T51) — The managed fix review closes on the consolidated disposition table produced by the final independent verifier"
+    },
+    {
+      "at": "2026-09-06T22:07:38.558Z",
+      "event": "task-attempt",
+      "detail": "T52: started (attempt 1) — 001-T52-final"
+    },
+    {
+      "at": "2026-09-06T22:54:24.874Z",
+      "event": "task-attempt",
+      "detail": "T52: failed (attempt 2) — Agent terminated on session rate limit mid-probe; partial unverified signal that the wedge may remain reachable"
+    },
+    {
+      "at": "2026-09-06T22:54:24.960Z",
+      "event": "task-attempt",
+      "detail": "T52: started (attempt 3) — 001-T52a-verify (split: matrix + T49-F-001 binary probe)"
+    },
+    {
+      "at": "2026-09-07T03:19:19.337Z",
+      "event": "task-added",
+      "detail": "T53: RED tests for per-sender unacked-envelope quota (T52-F-001)"
+    },
+    {
+      "at": "2026-09-07T03:19:19.427Z",
+      "event": "task-added",
+      "detail": "T54: Implement per-sender unacked-envelope quota on the mailbox"
+    },
+    {
+      "at": "2026-09-07T03:19:19.513Z",
+      "event": "task-depends-set",
+      "detail": "T54: dependsOn T53 (was empty) — Implementation follows the RED tests"
+    },
+    {
+      "at": "2026-09-07T03:19:19.594Z",
+      "event": "task-depends-set",
+      "detail": "T52: dependsOn T53, T54 (was T50, T51) — The final gate re-measures the wedge threshold after the quota lands"
+    },
+    {
+      "at": "2026-09-07T03:19:19.676Z",
+      "event": "task-attempt",
+      "detail": "T53: started (attempt 1) — 001-T53-tests"
+    },
+    {
+      "at": "2026-09-07T03:40:55.086Z",
+      "event": "task-attempt",
+      "detail": "T54: started (attempt 1) — 001-T54-implement"
+    },
+    {
+      "at": "2026-09-07T03:56:51.116Z",
+      "event": "task-done",
+      "detail": "T53: RED tests for per-sender unacked-envelope quota (T52-F-001)"
+    },
+    {
+      "at": "2026-09-07T03:56:51.199Z",
+      "event": "task-done",
+      "detail": "T54: Implement per-sender unacked-envelope quota on the mailbox"
+    },
+    {
+      "at": "2026-09-07T04:14:47.134Z",
+      "event": "task-done",
+      "detail": "T49: Final verification matrix after the round-2 remediation"
+    },
+    {
+      "at": "2026-09-07T04:14:47.226Z",
+      "event": "task-done",
+      "detail": "T52: Final verification and consolidated fix-review dispositions"
+    },
+    {
+      "at": "2026-09-07T04:34:10.576Z",
+      "event": "task-done",
+      "detail": "T38: Run managed fix review and close F-001 through F-012 dispositions"
+    },
+    {
+      "at": "2026-09-07T04:34:10.661Z",
+      "event": "task-attempt",
+      "detail": "T29: started (attempt 1) — 001-T29-docs"
+    },
+    {
+      "at": "2026-09-07T04:51:28.761Z",
+      "event": "task-done",
+      "detail": "T29: Update prototype status and write change report"
+    }
+  ]
+}

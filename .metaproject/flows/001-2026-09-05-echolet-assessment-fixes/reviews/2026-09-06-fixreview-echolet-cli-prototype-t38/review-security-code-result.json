@@ -1,0 +1,139 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T38-review-security-code",
+  "status": "DONE",
+  "summary": "F-006 fixed: all six v1 decoder sites bound the body with http.MaxBytesReader before encoding/json (request_body.go:42-56, six call sites plus the pre-existing v2 site; router.go:64-79 registers no other POST route), the send bound is derived from cfg.MaxMessageBytes (mailbox_handler.go:67-73, resolving T34-I-003), and validate.go:85-94 makes the actual ciphertext length the authority, checked against both the attacker-supplied size_bytes and the configured maximum, with Go and TypeScript agreeing that size_bytes counts base64url string bytes. F-007 fixed: GetByDeviceID and the global device_record:* scan are gone; authorization is a point lookup through device_mailbox:<mailbox_id>:<device_id> (device_record_repo.go:85-120) used by challenge, poll and ack alike, the binding is first-writer-wins (SaveDeviceMailboxBinding:170-185) and populated by both v1 (Save:49-54) and v2 (saveSignalV2Authorization:91,:103) publication. An attacker cannot pre-empt a foreign mailbox binding: the key's mailbox half is derived from the record's own identity via SHA-256 (signatures.go:14-17), so the slot can only ever hold the identity whose hash it is, and reaching it at all requires a root signature verified under identity_id as the public key (validate.go:27; signal_prekey_bundle_v2.go:227). Secret-leakage audit clean across all four fix waves: the persisted publication bundle (cli:publication) holds public bundle material inside the AES-256-GCM store and is never printed; the poll byte-budget code logs nothing and consumes only len(val); the CLI emits an error code literal and never error.message, a stack, or the rejected argument. Exit-code contract intact: ExitCode is the closed union 2|3|4|5 with 0 on success, classify is total, and the new exit-5 path is confined to store-boundary failures (profile.ts:76-85) while typed trust and decrypt rejections keep exit 3. Five findings, highest severity minor, none blocking: R-001 the F-013 argument rewrite makes --<string option> consume a following flag token, so a formerly exit-2 invocation now exits 0 (deliberate, test-pinned, GNU convention, but the docstring's claim to the contrary is inaccurate); R-002 ProfileError maps to 5 inside openProfile and 3 elsewhere; R-003 a non-positive maxMessageBytes is defaulted for the body bound but not for validation (fail-closed, unreachable via config default); R-004 dispositions T34-I-001; R-005 dispositions T35-I-001. All five non-negotiable criteria met, verified independently by mtime, by grep for skip/only/todo markers (zero repo-wide), and by reading the schema on both sides of the wire.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Every finding in the assigned set (F-006, F-007 plus secret-leakage and exit-code integrity across all fixes) receives an explicit disposition of fixed, partially-fixed, not-fixed or fixed-with-new-risk, each with concrete evidence.",
+      "status": "met",
+      "evidence": "F-006 fixed, F-007 fixed, secret leakage fixed (no leakage found), exit-code integrity fixed. Each carries file:line evidence and a control-flow argument in review-security-code-report.md; the F-013 parser premise was additionally settled with a bounded read-only node:util.parseArgs probe."
+    },
+    {
+      "criterion": "Any new defect introduced by a fix is reported with severity, file:line and a concrete failure scenario, including defects outside the assigned set that are encountered in the changed code.",
+      "status": "met",
+      "evidence": "R-001 (minor, cli.ts:89-102) is the one behavioural change a fix introduced, with the exact invocation that now exits 0 instead of 2. R-002..R-005 record four info-level observations, three of them outside the assigned finding set."
+    },
+    {
+      "criterion": "The five non-negotiable criteria in the shared review context are checked and reported on: no test weakened, no strict schema loosened, no secret leakage, exit-code contract intact, prototype scope respected.",
+      "status": "met",
+      "evidence": "Reported in the report's 'Non-negotiable criteria' section: mtime ordering per test/implementation pair, zero skip/only/todo markers repo-wide, next_cursor verified as a closed union on a .strict() object matching the Go *string that is always emitted, the leakage audit, the exit-code table, and explicit prototype-scope dispositions for R-004 and R-005."
+    },
+    {
+      "criterion": "Findings are ranked by severity and each states whether it blocks acceptance of the fix wave.",
+      "status": "met",
+      "evidence": "R-001 minor (does not block), R-002..R-005 info (do not block). No blocker or major found; nothing in this reviewer's set blocks acceptance."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-security-code-report.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full fix-review report: dispositions for F-006 and F-007, the secret-leakage and exit-code-integrity audits, five findings and the five non-negotiable criteria."
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "R-001",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#R-001",
+      "reviewer": "review-security-code",
+      "severity": "minor",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 89,
+      "symbol": "inlineStringOptionValues",
+      "problem": "The F-013 fix rewrites `--<declared string option> <next token>` into the inline form unconditionally whenever a next token exists and is not `--`, so a following flag is consumed as the option's value. `echolet send --profile p --to X --text --json` previously exited 2 INVALID_ARGUMENTS and now exits 0, having silently taken the user's `--json` flag as the message body. The docstring at cli.ts:77-84 claims that everything parseArgs and parseCommand reject today keeps reaching them unchanged, which is not accurate for this class.",
+      "impact": "A mistyped invocation succeeds and sends unintended content instead of failing closed, narrowing the exit-2 surface. Bounded in practice: values.json is never read so output is unaffected, a missing value at the end of the argument list still fails closed, and the behaviour is the standard GNU/POSIX option-argument convention and the unavoidable cost of supporting base64url values that begin with '-'. Not attacker-reachable: the CLI is local and the argument vector is the user's own.",
+      "suggested_fix": "No code change required; the behaviour is deliberate and pinned by cli.dashOptionValues.test.ts:286. Correct the docstring at cli.ts:77-84 to state the trade-off explicitly: a declared string option consumes the next token unconditionally, so `--<string option> --<flag>` is a value, not an error.",
+      "evidence": "cli.ts:95-99 makes rewritability depend only on the option being a declared string option and the next token existing and not being `--`. Bounded read-only probe against node:util.parseArgs (node v26.5.0): [\"--text\",\"--json\"] raises ERR_PARSE_ARGS_INVALID_OPTION_VALUE, while [\"--text=--json\"] yields text: \"--json\". Tracing the rewrite over [\"send\",\"--to\",\"X\",\"--text\",\"--json\",\"--profile\",\"p\"] leaves positionals [\"send\"] and a values object that parseCommand:110-121 accepts, so execute() reaches the send path. cli.dashOptionValues.test.ts:286 pins the same shape deliberately with --text \"--profile\".",
+      "confidence": "high",
+      "dedupe_key": "t38-security-exitcode-argrewrite",
+      "blocking_merge": false,
+      "source": "internal"
+    },
+    {
+      "id": "R-002",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#R-002",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 158,
+      "symbol": "openExistingProfile",
+      "problem": "ProfileError raised inside openProfile is converted to persistenceFailure() and exit 5 at six call sites (cli.ts:158-161, 247-250, 284-285, 293-294, 302-303, 309-310), while the same class raised from a Profile method reaches classify (cli.ts:329) and becomes exit 3. classify's trailing return persistenceFailure() also makes exit 5 the residual bucket for any error that escapes the typed boundaries.",
+      "impact": "Diagnostic precision only. 'Profile database is missing', 'Incomplete profile' and 'Database belongs to another profile' are all local-store conditions, so exit 5 is defensible; the inconsistency matters only when reading exit codes in the field. Pre-existing shape, not introduced by this wave: the T28 F-003 evidence already recorded profile-open failures as correctly mapping to 5.",
+      "suggested_fix": "None required for the prototype. If tightened later, decide once whether a profile-identity mismatch is 2, 3 or 5 and apply that decision at both the openProfile catch sites and classify.",
+      "evidence": "profile.ts:217, :222 and :229 raise ProfileError inside openProfile; every CLI call site wraps it with `catch { if (error instanceof ConfigurationError) throw error; throw persistenceFailure(); }`. cli.ts:329 maps ProfileError to trustFailure(error.code) / exit 3 for every other origin.",
+      "confidence": "high",
+      "dedupe_key": "t38-security-profileerror-exit",
+      "blocking_merge": false,
+      "source": "internal"
+    },
+    {
+      "id": "R-003",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#R-003",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "line": 67,
+      "symbol": "MailboxHandler.envelopeBodyLimit",
+      "problem": "envelopeBodyLimit substitutes defaultMaxMessageBytes (262144) when the handler was constructed with a non-positive maximum, but ValidateMailboxEnvelope is handed the raw h.maxMessageBytes at mailbox_handler.go:86. With a zero maximum the route accepts a ~326 KiB body and then rejects every envelope, because actualCiphertextBytes > 0 always exceeds it.",
+      "impact": "Fail-closed, and unreachable through NewRouter because config.go:13 gives MaxMessageBytes an envDefault of 262144. It only affects a MailboxHandler constructed directly, as several tests do.",
+      "suggested_fix": "Resolve the default once behind a maxMessageBytes() accessor and use it at both mailbox_handler.go:72 and :86, so the body bound and the validation bound can never disagree.",
+      "evidence": "mailbox_handler.go:68-71 defaults the value; mailbox_handler.go:86 passes h.maxMessageBytes unmodified into validation.ValidateMailboxEnvelope, whose first check at validate.go:86 is actualCiphertextBytes > maxBytes.",
+      "confidence": "high",
+      "dedupe_key": "t38-security-maxmessagebytes-default",
+      "blocking_merge": false,
+      "source": "internal"
+    },
+    {
+      "id": "R-004",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#R-004",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "apps/relay/internal/storage/repository/device_record_repo.go",
+      "line": 125,
+      "symbol": "DeviceRecordRepository.BackfillDeviceMailboxBindings",
+      "problem": "Disposition of worker concern T34-I-001. The backfill reads the entire device_record:* key space into a pending slice before writing any binding, with no completion marker, so startup cost and peak memory grow linearly with the number of published devices. Device-record publication requires owning some identity but not a specific one, so the key space is inflatable by anyone who can generate keypairs, bounded only by RateLimitPerMinute (default 120/min).",
+      "impact": "Accepted at prototype scale. Correctness is unaffected: the binding is a pure function of the stored record and SaveDeviceMailboxBinding is first-writer-wins over a key whose mailbox half is derived from that record's own identity, so re-running can never rebind anything or bind a foreign identity. A failure is logged, not fatal (router.go:39-41). The only cost is startup time and transient memory.",
+      "suggested_fix": "None required now. If it ever matters, write each binding inside the iteration instead of buffering the records, and record a completion marker keyed by the binding schema version so a clean store skips the pass entirely.",
+      "evidence": "device_record_repo.go:126-153 accumulates every decoded record into `pending` inside a single db.View before the write loop at :155-162; router.go:39 invokes it unconditionally from NewRouter. SaveDeviceMailboxBinding:175-184 derives the key from cryptoutil.DeriveMailboxID(record.IdentityID) and returns early when the key already exists.",
+      "confidence": "high",
+      "dedupe_key": "t38-security-backfill-scope",
+      "blocking_merge": false,
+      "source": "internal"
+    },
+    {
+      "id": "R-005",
+      "global_id": "2026-09-06-fixreview-echolet-cli-prototype-t38#R-005",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "line": 52,
+      "symbol": "pollEnvelopeByteBudget",
+      "problem": "Disposition of worker concern T35-I-001. pollEnvelopeByteBudget is the fixed constant 1 MiB minus a 4 KiB wrapper reserve, and the first envelope of a batch is deliberately exempt from it (mailbox_repo.go:190 requires len(batch.Envelopes) > 0 before the budget can stop selection). If ECHOLET_MAX_MESSAGE_BYTES is raised above roughly 1 MiB, one stored envelope produces a poll response that the CLI's hard 1 MiB bound at relayClient.ts:96 refuses, and that mailbox cannot drain.",
+      "impact": "Unreachable at the shipped default of 262144, where the worst single envelope is about 256 KiB against a roughly 1020 KiB budget. The first-envelope exemption itself is correct and necessary: without it a maximum-size envelope would wedge the mailbox permanently, which is what mailbox_poll_capacity_test.go:166-191 pins. mailbox_poll_capacity_test.go:202 shows the 2 MiB configuration is constructible.",
+      "suggested_fix": "Derive pollEnvelopeByteBudget and the CLI's response bound from one shared limits constant, or refuse to start when cfg.MaxMessageBytes plus the envelope wrapper exceeds the client's response bound, so the two settings can no longer drift apart silently.",
+      "evidence": "mailbox_handler.go:52 fixes the budget as (1 << 20) - pollResponseWrapperBytes independently of cfg.MaxMessageBytes; mailbox_repo.go:190 applies the budget only when a previous envelope is already selected; relayClient.ts:96 aborts the read and throws INVALID_RELAY_RESPONSE above 1024 * 1024 bytes.",
+      "confidence": "high",
+      "dedupe_key": "t38-security-poll-budget-independence",
+      "blocking_merge": false,
+      "source": "internal"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "findings_reviewed": 2,
+    "audits_performed": 2,
+    "new_defects_reported": 1,
+    "raw_rg_used": false
+  },
+  "timestamp_utc": "2026-09-06T15:35:00Z"
+}

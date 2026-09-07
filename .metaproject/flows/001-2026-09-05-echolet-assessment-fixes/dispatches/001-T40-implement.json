@@ -1,0 +1,91 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T40-implement",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Fix the confirmed T38 findings: poison-envelope mailbox wedge, unbounded identifier strings, discarded cursor signal and inaccurate docstring",
+    "description": "Turn the RED tests from dispatch 001-T41-tests GREEN by fixing HL-N-001, BE-R-001 and HL-N-002, and correct the SEC-R-001 docstring. The tests are the contract: make them pass without weakening them.",
+    "intent": "implement",
+    "scope": "apps/cli runtime/commands and apps/relay validation. Do not modify any test file."
+  },
+  "acceptance_criteria": [
+    "HL-N-001 (major): a permanently unacceptable envelope no longer blocks delivery of legitimate envelopes in the same batch or in later batches. Permanent rejections (untrusted sender, malformed ciphertext, wrong recipient - retrying can never succeed) are isolated per envelope; transient failures (persistence error, relay unavailable) still leave the envelope queued, unacked and retriable, exactly as the specification requires.",
+    "The F-012 guarantees survive unchanged: an unpinned sender is still rejected with CONTACT_NOT_TRUSTED, is never accepted into history, and a batch containing only that envelope still acks nothing and mutates nothing.",
+    "BE-R-001 (minor): oversized envelope identifier strings - at minimum recipient_mailbox_id and envelope_id - are refused by validation with a bounded 4xx, not by the store with an HTTP 500. The green control tests must keep passing, so the bound may not be met by refusing everything.",
+    "HL-N-002 (minor): the poll result surfaces remaining work to the caller, derived from the relay's next_cursor signal that the F-009 fix added.",
+    "SEC-R-001 (minor): the docstring at apps/cli/src/commands/cli.ts is corrected. It currently claims nothing formerly rejected changed behaviour, but `send --text --json` moved from exit 2 to swallowing the flag as content. Document the actual rule; do not change the behaviour, which is standard GNU semantics and is test-pinned.",
+    "Every test added or repaired by 001-T41-tests passes, unmodified.",
+    "The full apps/cli suite, `pnpm test`, `pnpm typecheck`, `go -C apps/relay test -race -count=1 ./...` and the `-tags relayv2` variant all pass. No pre-existing test is weakened, skipped or deleted."
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/inputs/review-context.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-verifier-report.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T41-tests-result.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/specification.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "apps/cli/src/runtime/inbound.ts",
+    "apps/cli/src/runtime/inbound.batchIsolation.test.ts",
+    "apps/cli/src/runtime/inbound.test.ts",
+    "apps/cli/src/commands/cli.ts",
+    "apps/cli/src/transport/relayClient.ts",
+    "apps/cli/src/runtime/profile.ts",
+    "apps/relay/internal/validation/validate.go",
+    "apps/relay/internal/validation/mailbox_envelope_identifier_test.go",
+    "apps/relay/internal/api/handler/mailbox_envelope_identifier_test.go",
+    "apps/relay/internal/api/handler/mailbox_handler.go"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "Load and follow the project task-implementer skill (.metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md).",
+    "You did not write these tests and you may not weaken them. Do not edit, skip, delete or relax any test file. If a test is genuinely wrong, report it as a finding and return DONE_WITH_CONCERNS instead of changing it.",
+    "TEST-AUTHOR CONSTRAINT T41-N-001: inbound.test.ts:177 asserts full-store snapshot equality and acks() == [] for a batch containing only a poison envelope, which RULES OUT the 'quarantine locally and include in the ack set' design. The workable design is per-envelope acceptance, acking only what was accepted, and rethrowing the first rejection when nothing was accepted.",
+    "TEST-AUTHOR CONSTRAINT T41-N-002: cli.ts:304 returns the poll result verbatim to stdout, so any `rejected` collection becomes process output. Entries must carry only { envelopeId, code } - never envelope content, ciphertext, plaintext or sender-supplied strings beyond the identifier.",
+    "The specification is explicit that a decrypt or database commit failure must NOT be acked and must stay retriable. Isolating permanent rejections must not turn a transient failure into a discarded message.",
+    "You do not accept your own work. An independent verifier reviews it afterwards.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Build on the landed T33, T34, T35, T36 and T39 fixes; do not undo them.",
+    "Use `keryx ctx rg` for searches, never bare rg/grep. Use `keryx ctx run` for long command output.",
+    "Never log or print plaintext message bodies, ciphertext, profile store keys, private key material or HTTP request bodies.",
+    "Do not commit: this repository has an unborn untracked baseline, so partial root commits are forbidden.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T40-implement-result.json and make the final response start with STATUS:.",
+    "Also write a short implementation report to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t40-implementation-report.md covering the per-envelope acceptance model, the permanent-vs-transient classification, the identifier bounds and the cursor signal."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T40-implement-result.json",
+    "summary_max_tokens": 1000
+  },
+  "budget": {
+    "max_output_tokens": 8000,
+    "max_runtime_ms": 3600000
+  },
+  "provenance": {
+    "created_at": "2026-09-06T16:50:00+04:00",
+    "created_by": "flow-orchestrator",
+    "source_request": "T38 fix review confirmed ten open findings; T40 closes the code half."
+  }
+}

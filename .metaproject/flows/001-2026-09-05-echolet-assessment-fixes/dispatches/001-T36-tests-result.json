@@ -1,0 +1,93 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T36-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "F-012 is closed: the unknown-sender inbound regression now pins the public rejection code CONTACT_NOT_TRUSTED on the exit-3 InboundError trust channel instead of accepting any throw, and the changed-device and malformed-ciphertext cases are separate tests that each pin their own typed code. Bounded mutation proves the assertion kills the mutant: with the dedicated missing-contact guard at inbound.ts:50 removed, the strengthened test FAILS with 'expected INBOUND_REJECTED to be CONTACT_NOT_TRUSTED', while the previous generic rejects.toThrow() assertion stayed GREEN under the identical mutation. The mutation was reverted and inbound.ts is byte-identical to its pre-mutation state. The harness build race (T33-I1) is removed: dist/cli.js is now built exactly once per vitest run by a new globalSetup, and neither the command suite nor the two-process E2E suite rebuilds it. Anti-flake evidence: three consecutive independent invocations of the CLI suite all passed 10/10 files and 50/50 tests with the two-process E2E green in each. Concern: a parallel worker (T35) added two F-009 test files to apps/cli mid-session that are currently RED because their implementation has not landed, so the unfiltered package suite is not green for reasons outside this task's scope.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "F-012 (minor): the unknown-sender fixture test asserts the public rejection code CONTACT_NOT_TRUSTED specifically, not a generic rejects.toThrow.",
+      "status": "met",
+      "evidence": "apps/cli/src/runtime/inbound.test.ts: new test 'rejects an envelope from an unpinned sender with CONTACT_NOT_TRUSTED before mutation' calls the rejectsWith() helper, which asserts the rejection is an InboundError (exit-3 trust channel, not PersistenceError/exit 5) and that its code is exactly CONTACT_NOT_TRUSTED."
+    },
+    {
+      "criterion": "The same test still asserts that persisted state is unchanged and that no acknowledgement is sent for the rejected envelope.",
+      "status": "met",
+      "evidence": "The test keeps expect(fake.acks()).toEqual([]) and expect(await snapshot(bob)).toEqual(before) around the strengthened rejection; no pre-existing assertion was weakened or deleted."
+    },
+    {
+      "criterion": "The changed-device case and the malformed-ciphertext case remain distinct tests, each asserting its own intended typed failure, so one guard cannot mask another.",
+      "status": "met",
+      "evidence": "The old combined test was split. 'rejects a changed sender device and envelopes addressed to another recipient with their own typed failures' pins CONTACT_PIN_MISMATCH for the changed sender_device_id and INVALID_ENVELOPE for each mis-addressed recipient field. 'rejects malformed native wrappers, tampering and authenticated message-ID mismatch while preserving a valid retry' pins INBOUND_REJECTED per variant and keeps the valid-retry tail assertion."
+    },
+    {
+      "criterion": "Bounded mutation evidence: with the dedicated missing-contact guard removed, the inbound suite now FAILS on the CONTACT_NOT_TRUSTED assertion (previously it stayed green). The mutation is reverted afterwards and no canonical source file is left modified.",
+      "status": "met",
+      "evidence": "Baseline before the change: 10/10 inbound tests passed. Strengthened suite before mutation: 11/11 passed. Mutation (delete `if (!contactBytes) throw new InboundError(\"CONTACT_NOT_TRUSTED\")` at inbound.ts:50): strengthened test FAILED at inbound.test.ts:125 with AssertionError 'expected INBOUND_REJECTED to be CONTACT_NOT_TRUSTED'. Control with the same mutation and the ORIGINAL test file: 1/1 passed (the old rejects.toThrow assertion did not kill the mutant). Revert verified by byte diff against the pre-mutation copy: inbound.ts identical, CONTACT_NOT_TRUSTED guard present at line 50."
+    },
+    {
+      "criterion": "The full CLI test suite and the workspace suite are green with the strengthened test in place.",
+      "status": "partial",
+      "evidence": "CLI package: 10/10 files, 50/50 tests green on three consecutive invocations, plus a fully unfiltered green run (10 files / 50 tests) taken before the parallel T35 worker added its files. Workspace packages other than @echolet/cli: protocol, client-db, crypto-core, client-core, session-node and mobile all green. apps/cli typecheck green. NOT green unfiltered right now only because T35 added src/transport/relayClient.pollCapacity.test.ts and src/runtime/inbound.pollBatchSize.test.ts (F-009, 3 tests) at 17:55:56 and 17:56:12 local; those are that worker's not-yet-implemented RED tests and are out of scope here."
+    },
+    {
+      "criterion": "Carried from the completed T33 fix (finding T33-I1): remove the test-harness build race.",
+      "status": "met",
+      "evidence": "New apps/cli/vitest.config.ts registers apps/cli/test/globalSetup.ts, which spawns build.mjs once per vitest run before any suite starts. apps/cli/src/commands/cli.test.ts no longer runs `pnpm run build` in beforeAll and instead asserts the binary exists; apps/cli/test/e2e/two-process.test.ts no longer runs `pnpm --filter @echolet/cli build` and instead asserts the binary exists (its Go relay build is unchanged). No CLI behaviour or exit-code mapping was touched."
+    },
+    {
+      "criterion": "Anti-flake evidence: after the harness fix, `pnpm --filter @echolet/cli test` passes on three consecutive independent invocations, with the two-process E2E green in each.",
+      "status": "met",
+      "evidence": "Three consecutive independent invocations, each exit 0: run 1 = 10 files / 50 tests passed, two-process E2E 3/3; run 2 = 10 files / 50 tests passed, two-process E2E 3/3; run 3 = 10 files / 50 tests passed, two-process E2E 3/3. The two in-flight T35 F-009 files were excluded from these three runs so the evidence reflects this task's scope; three earlier fully unfiltered invocations were also green before those files existed."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/src/runtime/inbound.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Strengthened inbound regression with typed rejection-code assertions and split guard cases."
+    },
+    {
+      "path": "apps/cli/vitest.config.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Registers the single-build globalSetup for the CLI package test run."
+    },
+    {
+      "path": "apps/cli/test/globalSetup.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Builds dist/cli.js exactly once per vitest run, before any suite spawns it."
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/runtime/inbound.test.ts", "change": "Added a rejectsWith() helper that pins the InboundError type and exact public code; split the combined unknown-sender/changed-device test into two tests; pinned CONTACT_NOT_TRUSTED, CONTACT_PIN_MISMATCH, INVALID_ENVELOPE and INBOUND_REJECTED per case. No existing assertion removed or weakened." },
+    { "path": "apps/cli/vitest.config.ts", "change": "New file: vitest config registering test/globalSetup.ts as globalSetup." },
+    { "path": "apps/cli/test/globalSetup.ts", "change": "New file: builds the CLI bundle once per vitest run via build.mjs and fails the run if the build fails." },
+    { "path": "apps/cli/src/commands/cli.test.ts", "change": "beforeAll no longer runs `pnpm run build`; it now asserts the pre-built binary exists. Removed the now-unused scripts.build field from the manifest type." },
+    { "path": "apps/cli/test/e2e/two-process.test.ts", "change": "beforeAll no longer runs `pnpm --filter @echolet/cli build`; it now asserts the pre-built binary exists. Added existsSync to the node:fs import. Go relay build left unchanged." },
+    { "path": "apps/cli/src/runtime/inbound.ts", "change": "Temporarily mutated for the kill-the-mutant check and fully reverted; byte-identical to its pre-mutation state." }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "inbound_tests_baseline_pass": 10,
+    "inbound_tests_after_strengthening_pass": 11,
+    "mutation_failed_test": "rejects an envelope from an unpinned sender with CONTACT_NOT_TRUSTED before mutation",
+    "mutation_failure_message": "expected 'INBOUND_REJECTED' to be 'CONTACT_NOT_TRUSTED'",
+    "mutation_control_old_assertion_result": "passed (mutant survived the original rejects.toThrow assertion)",
+    "mutation_reverted": true,
+    "clean_runs": 3,
+    "clean_run_tests_per_run": 50,
+    "clean_run_files_per_run": 10,
+    "two_process_e2e_green_per_run": 3
+  },
+  "timestamp_utc": "2026-09-06T14:05:00Z"
+}

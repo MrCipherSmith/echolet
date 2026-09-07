@@ -1,0 +1,144 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T47-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "T47 is the RED phase for the round-2 residual of HL-N-001 plus the two smaller round-2 findings. Five test files were added and nothing existing was touched: all 68 pre-existing source and test files under apps/cli, apps/relay and packages/protocol verify byte-identical by SHA-256 after the run, including apps/cli/vitest.config.ts, apps/cli/test/globalSetup.ts and inbound.test.ts. R2-001 path A is pinned as the relay/CLI contract disagreement the reviewers named as the root cause: ValidateMailboxEnvelope must refuse the five fields MailboxEnvelopeSchema constrains by shape (envelope_id, message_id, sender_device_id, recipient_device_id as UUIDs and payload_type as the ciphertext_message literal), and a victim's poll must never hand back an envelope the client's wire schema refuses. Today all five shapes are accepted with HTTP 200 and the victim's poll returns 6 envelopes, 5 of which fail the client parse. R2-001 path B is pinned at the CLI as an outcome: a selection window filled entirely with permanently rejected envelopes must not prevent delivery of the legitimate envelope behind it; today the first poll throws CONTACT_NOT_TRUSTED before ackPending() and the legitimate envelope is never reached. R2-002 reproduces both HTTP 500s (device_id 64960 bytes on /v1/device-records/publish, envelope_ids element 65000 bytes on /v1/mailbox/ack) and requires a bounded 4xx. T38r2-TP-001 is a coverage guard, green today by design and shown to fail under two independent mutations of SetRetentionCap. Every RED test was proved satisfiable by a temporary probe implementation that was reverted and hash-verified: with it, the whole Go suite and all 23 inbound CLI tests pass, so no new test forces weakening an existing assertion.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "R2-001 path A: a malformed-by-shape envelope cannot wedge a mailbox, and the relay and the CLI agree on what a valid envelope is",
+      "status": "met",
+      "evidence": "RED. apps/relay/internal/validation/mailbox_envelope_shape_test.go:73 - 'ValidateMailboxEnvelope(malformed envelope_id) = nil, want a rejection' (and the same for message_id, sender_device_id, recipient_device_id, payload_type). apps/relay/internal/api/handler/mailbox_envelope_shape_test.go:88 - 'SendEnvelope(envelope_id is not a uuid) status = 200, want a 4xx rejection'; :105 'stored envelopes after 5 poison attempts = 5, want 0'; :124 'delivered envelope envelope_id = \"poison-not-a-uuid\", which MailboxEnvelopeSchema refuses as a uuid'; :127 'poll returned 6 envelopes, want exactly the 1 legitimate envelope'. Controls pass today: a CLI-shaped envelope validates, base64url identity/mailbox identifiers are still accepted, and the T41 length bound still holds."
+    },
+    {
+      "criterion": "R2-001 path B: a batch filled entirely with permanently rejected envelopes still makes progress toward the legitimate ones behind them",
+      "status": "met",
+      "evidence": "RED. apps/cli/src/runtime/inbound.pollProgress.test.ts:212 - expect(outcome.error).toBeUndefined() fails with InboundError CONTACT_NOT_TRUSTED. The test polls through a relay whose selection window (2) is smaller than the queue (2 poison + 1 legitimate) and requires the legitimate envelope to be delivered, acknowledged and readable, with the poison never acked and still queued. It admits both sanctioned designs: poll() walking the pages itself, or poll() returning { received: 0, more: true } and the caller polling again."
+    },
+    {
+      "criterion": "F-012 is preserved, not relaxed",
+      "status": "met",
+      "evidence": "inbound.test.ts:177-183 and inbound.batchIsolation.test.ts:262-275 were not modified (SHA-256 identical) and both still pass. A new counterpart guard, inbound.pollProgress.test.ts:231-249, extends the requirement across pages: when no page yields anything, poll() must still raise the typed InboundError, ack nothing and leave the store byte-identical. It passes today and under the probe implementation, so 're-raise only when there are no further pages' cannot become 'never re-raise'."
+    },
+    {
+      "criterion": "R2-002: the identifier-bound class is closed on the two remaining routes",
+      "status": "met",
+      "evidence": "RED. apps/relay/internal/api/handler/identifier_bounds_test.go:54 - 'PublishDeviceRecord(device_id_len=64960) status = 500, want a bounded 4xx ... (error code \"INTERNAL_ERROR\")'; :93 - 'AckMailbox(envelope_id_len=65000) status = 500, want a bounded 4xx ... (error code \"INTERNAL_ERROR\")'. Both reproduce the reviewer's probe exactly. Controls (an ordinary UUID device_id publishes, an ordinary UUID envelope_id acks) pass today."
+    },
+    {
+      "criterion": "T38r2-TP-001: SetRetentionCap has a test caller that fails when it is neutered",
+      "status": "met",
+      "evidence": "apps/relay/internal/storage/repository/mailbox_retention_cap_test.go passes today (the code is correct) and fails under both mutations: making the body a no-op gives ':49 stored retention deadline = <now+24h>, want the configured 2h0m0s cap'; deleting the non-positive guard gives ':70 read stored envelope ... Key not found' because a zero cap stores every envelope as already expired. mailbox_repo.go was restored byte-identically after each mutation (SHA-256 d598cbe175d2bd33142765a10ca995bc070fa582af21142cb89d69f07fc36ef7, the round-1 verifier's recorded baseline)."
+    },
+    {
+      "criterion": "No existing assertion weakened, deleted or relaxed; vitest.config.ts and test/globalSetup.ts untouched",
+      "status": "met",
+      "evidence": "shasum -a 256 -c over 68 pre-existing files (all apps/cli/src TS and test files, apps/cli/test/globalSetup.ts, apps/cli/vitest.config.ts, apps/relay validation/handler/repository Go sources, packages/protocol mailboxEnvelope.ts): zero mismatches. No .skip/.only/.todo in any new file. Only additions; no existing file was edited at all."
+    },
+    {
+      "criterion": "The rest of the suite is unaffected",
+      "status": "met",
+      "evidence": "apps/cli baseline 18 files / 92 tests green; after: 19 files / 94 tests with exactly 1 failing (the new path B RED) and all 92 baseline tests still passing. Workspace baseline 137 green; after: 139 tests, 138 passing, 1 failing. Go baseline all packages ok; after: exactly the 4 new tests fail (TestValidateMailboxEnvelopeAgreesWithTheClientWireSchema, TestPollNeverReturnsAnEnvelopeTheClientSchemaRefuses, TestPublishDeviceRecordRejectsOversizedDeviceIDWithClientError, TestAckMailboxRejectsOversizedEnvelopeIDWithClientError) and internal/api/router, internal/middleware and internal/storage/repository stay green. tsc --noEmit clean. Node v26.5.0 (/opt/homebrew/bin/node)."
+    },
+    {
+      "criterion": "Every RED test is satisfiable without violating the dispatch's design directions",
+      "status": "met",
+      "evidence": "Two temporary probe implementations, both reverted and hash-verified. (1) apps/cli/src/runtime/inbound.ts: adding `&& batch.next_cursor === null` to the re-raise at :87 turned the path B test green while inbound.test.ts and inbound.batchIsolation.test.ts stayed green (23/23). Restored to 4c9ff5c87de492b51b3ec6594f953622dc49d211d511e8accb95ac8854ab191f. (2) validate.go (UUID + literal shape checks, device_id length bound) and mailbox_handler.go (envelope_ids element bound): the entire Go suite went green. Restored to 1232aab7fead2f904da4fe0cefedeebd8e5079c3d56b7538efb8419564317825 and f33c306efba14fbfd3380f1bca5867ec049739026cd78ac7b7ffe0b50dc1f012."
+    },
+    {
+      "criterion": "No implementation code delivered",
+      "status": "met",
+      "evidence": "changed_files contains five new *_test.go / *.test.ts files only. The three probe mutations were transient verification steps, each reverted in the same session and confirmed byte-identical by SHA-256."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/src/runtime/inbound.pollProgress.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "R2-001 path B: RED outcome test plus the across-pages F-012 guard.",
+      "hash": "13aef67a4e06119dec0fa950be6e4119d778027df8ee77f12881ca200ac605a9"
+    },
+    {
+      "path": "apps/relay/internal/validation/mailbox_envelope_shape_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "R2-001 path A: ValidateMailboxEnvelope must agree with MailboxEnvelopeSchema on the five shape-constrained fields.",
+      "hash": "48f14a85e303074a0132b5def1deb2c88bfefd80d3709161c3c01af15a129b35"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_envelope_shape_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "R2-001 path A at the route: the poison POST must be refused, never persisted, and the victim's poll must return only client-parsable envelopes.",
+      "hash": "5540852ec9b8db7e5234f05f113709a3fa0024a328b1755883ab55cecb7012e8"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/identifier_bounds_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "R2-002: bounded 4xx required on /v1/device-records/publish device_id and /v1/mailbox/ack envelope_ids elements.",
+      "hash": "6e7dc2e845c2a64bd0fae4e52a7d4430145b47227aa0f4e06a3e5458debabc52"
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/mailbox_retention_cap_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "T38r2-TP-001: coverage guard for SetRetentionCap, both the applied cap and the non-positive guard.",
+      "hash": "6e61579fadd986fc847586691e478d394de2bed4bd2fe75755fdefe9a7847224"
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/runtime/inbound.pollProgress.test.ts", "change": "added" },
+    { "path": "apps/relay/internal/validation/mailbox_envelope_shape_test.go", "change": "added" },
+    { "path": "apps/relay/internal/api/handler/mailbox_envelope_shape_test.go", "change": "added" },
+    { "path": "apps/relay/internal/api/handler/identifier_bounds_test.go", "change": "added" },
+    { "path": "apps/relay/internal/storage/repository/mailbox_retention_cap_test.go", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "T47-TP-001",
+      "reviewer": "tests-creator",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/inbound.pollProgress.test.ts",
+      "line": 118,
+      "problem": "The path B fixture models a relay whose consecutive polls resume at the undelivered set, which is what apps/relay/internal/api/handler/mailbox_handler.go:58-62 documents next_cursor to mean. The production GetEnvelopeBatch does not do that: it re-selects from the head of the mailbox prefix in key order every poll (mailbox_repo.go:169-173), so against the real relay a client that simply polls again receives the identical poison page. A client-side page-walking fix therefore satisfies this test but does not on its own close path B end to end unless the relay also advances past envelopes it has already returned.",
+      "impact": "A green pollProgress suite is necessary but not sufficient evidence that the mailbox cannot be wedged by batch-fill. The verifier should check the relay side explicitly.",
+      "suggested_fix": "Either give GetEnvelopeBatch a resume position for the undelivered set, or state in the implementation report why head-of-prefix re-selection is acceptable given the chosen client behaviour. Pinning the relay's paging was deliberately left out of T47 because the dispatch named the client-side loop as the workable design and forbade pinning an implementation.",
+      "evidence": "Read apps/relay/internal/storage/repository/mailbox_repo.go:153-213: GetEnvelopeBatch seeks the mailbox prefix from its start on every call and takes no cursor argument; mailbox_handler.go:266-270 emits a fixed 'more' token that the client never echoes back. The fixture at inbound.pollProgress.test.ts:118-160 therefore models the documented contract, not the implemented one.",
+      "confidence": "high"
+    },
+    {
+      "id": "T47-TP-002",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/relay/internal/validation/mailbox_envelope_shape_test.go",
+      "line": 39,
+      "problem": "Path A is pinned only on the relay side, as the dispatch's 'pin that the relay and the CLI agree' instruction requires. A purely client-side fix (parsing envelopes individually at the transport boundary) would not turn these tests green.",
+      "impact": "The implementer's choice for path A is effectively narrowed to 'fix the relay, optionally also the client'. That is the option both reviewers recommended as the smallest one and the one the v2 validator already precedents, and it costs nothing legitimate: outbound.ts only ever emits these shapes.",
+      "suggested_fix": "No action. Recorded so the choice is visible rather than implicit.",
+      "evidence": "The probe implementation adding UUID and literal checks to ValidateMailboxEnvelope turned all four Go RED tests green with the whole relay suite still passing, confirming the relay-side option is sufficient and breaks no existing fixture (every relay test envelope already uses UUID identifiers and the ciphertext_message literal).",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_added": 5,
+    "test_files_added": 5,
+    "cli_tests_before": 92,
+    "cli_tests_after": 94,
+    "workspace_tests_before": 137,
+    "workspace_tests_after": 139,
+    "red_tests": 4,
+    "coverage_guard_tests": 1,
+    "existing_files_modified": 0,
+    "existing_files_hash_verified": 68
+  },
+  "timestamp_utc": "2026-09-06T20:15:00Z"
+}

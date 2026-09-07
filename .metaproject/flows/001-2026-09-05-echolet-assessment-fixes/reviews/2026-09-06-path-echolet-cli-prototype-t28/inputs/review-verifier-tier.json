@@ -1,0 +1,19 @@
+{
+  "model": {
+    "tier": "light",
+    "tier_reasons": [
+      "base:standard",
+      "light:verifier-execution"
+    ],
+    "provider": "openai",
+    "model": "GPT-6",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "openai",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"openai\""
+    }
+  }
+}

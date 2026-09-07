@@ -1,0 +1,24 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T24-implement",
+  "status": "DONE",
+  "summary": "Strict relay transport and encrypted durable outbound messaging implemented. All 9 unchanged T24 tests and 18 CLI tests pass; workspace 63 tests and typechecks pass. No commits or out-of-scope edits.",
+  "acceptance": [
+    {"criterion": "Nine focused T24 tests pass unchanged", "status": "met", "evidence": "Final CLI suite 18/18 includes transport 3/3 and outbound 6/6."},
+    {"criterion": "Strict redacted relay boundary", "status": "met", "evidence": "Typed bounded fetch, strict schemas, correlated bundle/envelope IDs, allowlisted remote error codes."},
+    {"criterion": "Pinned official Signal bootstrap and atomic durable outbox", "status": "met", "evidence": "Verified claim pins before establish; native encryption and cli:outbox commit in one transaction."},
+    {"criterion": "Exact restart retry and local message ID conflict rejection", "status": "met", "evidence": "Regression verifies byte-identical body after reopen, no claim/ID allocation, no network for delivered replay."},
+    {"criterion": "Workspace regression and typechecks", "status": "met", "evidence": "pnpm test and pnpm typecheck passed; final CLI test/typecheck passed after scoped refinements."}
+  ],
+  "artifacts": [{"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t24-implementation-report.md", "kind": "implementation-report", "exists": true}],
+  "changed_files": [
+    {"path": "apps/cli/src/transport/relayClient.ts", "change": "Created strict bounded redacted publish/claim/send transport."},
+    {"path": "apps/cli/src/runtime/outbound.ts", "change": "Created durable verified Signal send and exact restart retry runtime."},
+    {"path": "apps/cli/src/runtime/profile.ts", "change": "Added internal transactional runtime composition boundary."},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t24-implementation-report.md", "change": "Created implementation report and inbound wire integration notes."},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T24-implement-result.json", "change": "Created structured result."}
+  ],
+  "findings": [], "questions": [], "errors": [], "metrics": {},
+  "timestamp_utc": "2026-09-06T11:20:00Z"
+}

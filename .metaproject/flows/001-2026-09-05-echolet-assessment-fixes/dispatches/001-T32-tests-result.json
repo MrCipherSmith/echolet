@@ -1,0 +1,68 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T32-tests",
+  "status": "DONE",
+  "summary": "Added focused Go integration tests using the production router, handlers, on-disk Badger storage, and the shared relay-v2 signed fixture. The RED tests prove successful v2 publish must authorize the embedded device for signed mailbox challenges and persist that authorization across restart; failed publish remains unauthorized, and a conflicting valid replacement must not replace the authorized device key. No production changes or commits.",
+  "summary_markdown": "Run `go test ./internal/api/router -run '^(TestSignalV2PublishAuthorizesMailboxChallengeAcrossRestart|TestFailedSignalV2PublishDoesNotAuthorizeMailboxChallenge|TestConflictingSignalV2PublishCannotReplaceMailboxAuthorization)$' -count=1` from `apps/relay`. The success and conflict cases are RED because mailbox challenge returns `403 UNAUTHORIZED_MAILBOX_ACCESS` after a successful v2 publish; the failed-publish isolation case passes.",
+  "acceptance": [
+    {
+      "criterion": "After only POST /v2/prekeys/publish, the embedded device can create a correctly signed mailbox challenge without separate v1 device-record publish.",
+      "status": "met",
+      "evidence": "TestSignalV2PublishAuthorizesMailboxChallengeAcrossRestart posts a current-time, correctly re-signed shared fixture through NewRouter, then posts the mailbox challenge signed by the fixture device key and expects HTTP 200. It is RED at the missing authorization boundary."
+    },
+    {
+      "criterion": "Authorization survives Badger close/reopen and invalid device signatures remain rejected.",
+      "status": "met",
+      "evidence": "The same test closes and reopens the exact Badger directory, reconstructs NewRouter, expects a wrong-key challenge to return 403 INVALID_SIGNATURE, and expects the fixture-key challenge to remain HTTP 200."
+    },
+    {
+      "criterion": "Failed or conflicting v2 publish cannot create or replace the authorized DeviceRecord.",
+      "status": "met",
+      "evidence": "TestFailedSignalV2PublishDoesNotAuthorizeMailboxChallenge proves an invalid outer signature yields 400 INVALID_SIGNATURE followed by 403 UNAUTHORIZED_MAILBOX_ACCESS. TestConflictingSignalV2PublishCannotReplaceMailboxAuthorization submits a second root-valid/device-valid bundle with the same bundle_id but a different device key, expects 409 BUNDLE_ID_CONFLICT, then requires the original key to work and replacement key to return 403 INVALID_SIGNATURE."
+    },
+    {
+      "criterion": "Focused integration coverage is RED only at the missing v2-to-DeviceRecord persistent index, while unchanged focused routing behavior remains green.",
+      "status": "met",
+      "evidence": "The focused run reports successful publish followed by 403 UNAUTHORIZED_MAILBOX_ACCESS in both RED cases. The failed-publish case and unchanged TestSignalV2RoutesAreAdditive each pass independently."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-33-26-402Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Focused RED evidence: two successful v2 publishes are followed by 403 UNAUTHORIZED_MAILBOX_ACCESS; the failed-publish isolation case passes."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-33-40-908Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Focused green evidence for failed v2 publish creating no mailbox authorization."
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-33-41-442Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Unchanged focused v2/v1 additive route test remains green."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/relay/internal/api/router/signal_prekey_bundle_v2_mailbox_test.go",
+      "change": "add focused production-router and persistent-Badger RED tests for v2 publish mailbox authorization, restart persistence, invalid publish isolation, and conflict non-replacement"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "tests_written": 3,
+    "red_tests": 2,
+    "green_error_path_tests": 1,
+    "unchanged_focused_tests_passed": 1,
+    "implementation_files_written": 0,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T11:34:00Z"
+}

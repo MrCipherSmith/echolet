@@ -1,0 +1,50 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T23-implement",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Implement CLI profile configuration and mutually pinned contact cards",
+    "description": "Make the nine existing RED tests green by implementing strict configuration, encrypted profile identity persistence, contact bundle export/import, explicit confirmation, and durable Signal pinning.",
+    "intent": "implement",
+    "scope": "apps/cli runtime and package configuration"
+  },
+  "acceptance_criteria": [
+    "The focused T23 Vitest command passes all nine tests.",
+    "Profile identity and contacts persist only inside the encrypted store and wrong keys do not modify it.",
+    "Contact import validates all signatures before confirmation and trust mutation.",
+    "No secret or plaintext is emitted by summary/diagnostic surfaces.",
+    "Package typecheck passes and existing workspace tests remain green."
+  ],
+  "context_refs": [
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md", "kind": "context", "exists": true},
+    {"path": "docs/requirements/echolet-cli-prototype/specification.md", "kind": "custom", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T23-tests-result.json", "kind": "report", "exists": true},
+    {"path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T23-implement-input.json", "kind": "custom", "exists": true}
+  ],
+  "files_to_read": [
+    "apps/cli/src/runtime/config.test.ts",
+    "apps/cli/src/runtime/profile.test.ts",
+    "packages/client-core/src/identity/createIdentityProfile.ts",
+    "packages/client-core/src/identity/createSignedDeviceRecord.ts",
+    "packages/session-node/src/EncryptedSqliteStore.ts",
+    "packages/session-node/src/SignalClient.ts",
+    "packages/session-node/src/wire.ts",
+    "packages/protocol/src/types/signalPreKeyBundleV2.ts"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action.",
+    "Load task-implementer and validate the paired task-implementer input before editing.",
+    "Confirm the supplied focused tests are RED, then make them GREEN without weakening/deleting tests.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Do not modify apps/relay or packages/protocol.",
+    "Use keryx ctx rg for searches and apply_patch for edits.",
+    "Do not commit because the repository has an unborn untracked baseline.",
+    "Write and validate a subagent-result at the output artifact path; final response starts STATUS:."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {"schema": "subagent-result", "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T23-implement-result.json", "summary_max_tokens": 500},
+  "budget": {"max_output_tokens": 5000, "max_runtime_ms": 1200000},
+  "provenance": {"created_at": "2026-09-06T10:38:30+04:00", "created_by": "flow-orchestrator", "source_request": "Implement the approved Echolet CLI prototype through flow-orchestrator."}
+}

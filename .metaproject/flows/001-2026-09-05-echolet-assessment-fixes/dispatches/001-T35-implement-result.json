@@ -1,0 +1,95 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T35-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "GREEN phase complete. All 8 tests from 001-T35-tests pass unmodified; no test file was edited, skipped or deleted. F-009: PollMailbox now selects through MailboxRepository.GetEnvelopeBatch(mailboxID, limit, byteBudget), which applies an envelope-count bound and an aggregate encoded-byte budget DURING Badger iteration (the stored value is the envelope's own JSON, so len(val)+1 is exactly its contribution to the response body), skips expired records before either bound is consumed, and reports HasMore. The byte budget is 1 MiB minus a 4 KiB wrapper reservation, matching the CLI's hard response bound, and is deliberately allowed to be exceeded by the FIRST envelope only so a single maximum-size envelope can never wedge the mailbox. The pinned wire contract was implemented as decided: request batch_size (optional, 1..MaxMailboxBatch, a preference clamped by the server cap and the byte budget; negative is 400 INVALID_SCHEMA) and response data.next_cursor widened to string|null. next_cursor carries a fixed server-controlled token, never anything derived from sender-supplied envelope fields, because envelope_id is unvalidated for length and echoing it would re-break the client bound. The TypeScript contract was widened without weakening: next_cursor is a closed union z.union([z.string().min(1).max(256), z.null()]) with no .optional()/passthrough/any, the response object keeps .strict() so unknown fields are still rejected, and the request schema is a .strict() extension with batch_size: z.number().int().min(1).max(100) matching the Go and client-config bounds. CLI wiring: Profile exposes get pollBatchSize(), InboundMessenger.poll() forwards it, RelayClient.pollMailbox requires batch_size in its input type. F-010: quota accounting moved into RateLimiter.allow(key) which locks, prunes, accounts, decides and unlocks; Middleware only then calls next.ServeHTTP or writes the 429. F-011: quotaKey strips the TCP port with net.SplitHostPort and canonicalizes IP literals via net.ParseIP; X-Forwarded-For/X-Real-IP are never read and the type documents that proxy awareness must be explicit opt-in with configured trusted proxies; idle buckets are swept by pruneLocked, amortized to one sweep per minute of limiter time; SetClock/TrackedClients declared and mutex-guarded. T34-I-003: SendEnvelope derives its bound from MailboxHandler.envelopeBodyLimit() = cfg.MaxMessageBytes + 64 KiB, falling back to 262144 when unconfigured; T34's decodeJSONRequest/http.MaxBytesReader structure is untouched and all six v1 sites still bound the body before decoding. envelopeRequestBodyLimit remains as the prekey-bundle bound only. Docs updated for the changed wire contract (API-11 section 10, PROTOCOL-07 section 9.7). Verification: go -C apps/relay test -race -count=1 ./... and the -tags relayv2 variant both pass; go vet clean; npx vitest run src/transport src/runtime in apps/cli passes 36 tests across 9 files including the 11 unmodified T36-owned inbound.test.ts tests; pnpm typecheck passes across all 7 projects. DEFERRED to the orchestrator per dispatch: pnpm test, apps/cli/test/e2e/two-process.test.ts and apps/cli/src/commands/*.test.ts were not run because T36 is concurrently fixing the CLI E2E build race those tests depend on. One residual concern recorded as T35-I-001: setting ECHOLET_MAX_MESSAGE_BYTES above about 1 MiB now yields envelopes the relay stores but the CLI cannot read, because the at-least-one-envelope rule correctly refuses to starve the mailbox; nothing enforces the relationship between the two configured limits.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "F-009 (major): mailbox poll selection enforces a shared aggregate response-byte budget server-side, always returns at least one valid envelope even when that single envelope is at the maximum size, honours the client's requested batch size, and signals remaining work so repeated polls drain the mailbox. The CLI's configured poll_batch_size actually reaches the relay request, and the CLI response-byte bound is never exceeded by a valid batch.",
+      "status": "met",
+      "evidence": "GREEN. Go: TestMailboxPollHonoursAggregateResponseByteBudget, TestMailboxPollHonoursRequestedBatchSize and TestMailboxPollAlwaysReturnsAtLeastOneMaximumSizeEnvelope all PASS under `go -C apps/relay test -race -count=1 -run 'TestMailboxPoll|TestSendEnvelopeBodyLimit' -v ./internal/api/handler/`. CLI: `npx vitest run src/transport/relayClient.pollCapacity.test.ts src/runtime/inbound.pollBatchSize.test.ts` reports 2 files / 3 tests passed. Implementation: apps/relay/internal/storage/repository/mailbox_repo.go GetEnvelopeBatch applies both bounds during iteration and returns HasMore; apps/relay/internal/api/handler/mailbox_handler.go pollEnvelopeByteBudget = (1<<20) - 4 KiB, pollBatchSize() clamps the client preference, next_cursor is non-null exactly when HasMore; apps/cli/src/runtime/inbound.ts forwards Profile.pollBatchSize."
+    },
+    {
+      "criterion": "F-010 (major): the rate-limiting middleware updates quota counters under its lock, computes the allow/deny decision, releases the lock, and only then writes the rejection or calls next.ServeHTTP.",
+      "status": "met",
+      "evidence": "GREEN. TestRateLimiterReleasesSharedLockBeforeInvokingHandler passes under `go -C apps/relay test -race -count=1 ./internal/middleware/...` with no data-race report. apps/relay/internal/middleware/rate_limit.go: RateLimiter.allow(key) holds rl.mu for accounting only and performs no I/O; Middleware calls next.ServeHTTP or writes the 429 body strictly after allow returns."
+    },
+    {
+      "criterion": "F-011 (major): the quota key is the normalized remote host via net.SplitHostPort; untrusted X-Forwarded-For / X-Real-IP never mint a bucket and trusted-proxy handling is explicit opt-in; idle buckets are pruned; *middleware.RateLimiter exposes SetClock(func() time.Time) and TrackedClients() int.",
+      "status": "met",
+      "evidence": "GREEN. TestRateLimiterKeysQuotaByNormalizedRemoteHost (both IPv4 and IPv6 subtests), TestRateLimiterIgnoresForwardedHeadersByDefault and TestRateLimiterPrunesIdleBuckets all pass under -race. quotaKey() uses net.SplitHostPort plus net.ParseIP canonicalization; no forwarding header is read anywhere in the package and the RateLimiter doc comment states that proxy awareness requires explicit opt-in configured with trusted proxies; pruneLocked() deletes expired buckets, amortized by idleBucketPruneInterval; SetClock and TrackedClients are declared and mutex-guarded so the runtime seam assertion in the test succeeds."
+    },
+    {
+      "criterion": "T34-I-003 (minor, handed over): the /v1/messages/send request-body limit is derived from cfg.MaxMessageBytes rather than a hand-chosen 1 MiB constant, while a body far above the derived limit is still rejected with a bounded 4xx, preserving T34's decodeJSONRequest / http.MaxBytesReader structure.",
+      "status": "met",
+      "evidence": "GREEN. TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes passes: an envelope whose ciphertext is exactly the configured 2 MiB is accepted with 200 and a body four times the derived limit is refused with 413. MailboxHandler.envelopeBodyLimit() returns cfg.MaxMessageBytes + envelopeJSONOverheadBytes (64 KiB), with defaultMaxMessageBytes as the fallback for a non-positive configuration. The pre-existing TestV1JSONHandlersBoundRequestBodyBeforeDecoding still passes at all six v1 sites, so the MaxBytesReader-before-decode structure is intact."
+    },
+    {
+      "criterion": "Every test added by 001-T35-tests passes, unmodified: rate_limit_test.go, mailbox_poll_capacity_test.go, relayClient.pollCapacity.test.ts, inbound.pollBatchSize.test.ts.",
+      "status": "met",
+      "evidence": "All four files pass and none was opened for editing. Production identifiers were deliberately chosen to avoid colliding with the test files' package-level declarations (the test file already declares maxPollResponseBytes in package handler, so the production constant is named pollEnvelopeByteBudget)."
+    },
+    {
+      "criterion": "`go -C apps/relay test -race -count=1 ./...` and the `-tags relayv2` variant pass; the focused apps/cli transport and runtime vitest files pass; `pnpm typecheck` passes. No pre-existing test is weakened, skipped or deleted.",
+      "status": "partial",
+      "evidence": "Both Go race suites pass on every package; `npx vitest run src/transport src/runtime` in apps/cli reports 9 files / 36 tests passed, including the 11 unmodified T36-owned inbound.test.ts tests; `pnpm typecheck` passes across 7 projects; `go vet ./...` is clean. Partial only because the dispatch forbids running `pnpm test`, apps/cli/test/e2e/two-process.test.ts and (by extension) the apps/cli/src/commands/*.test.ts process-driving tests while T36 fixes the CLI E2E build race - those are deferred to the orchestrator's acceptance matrix. No pre-existing test was weakened, skipped or deleted; only new production code and two wire-contract docs were changed."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t35-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Implementation report: poll byte budget and pagination contract, rate-limiter lock and keying change, bucket pruning, derived send body limit, verification matrix and the residual concern."
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T35-implement-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This result."
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/relay/internal/middleware/rate_limit.go", "change": "modified" },
+    { "path": "apps/relay/internal/storage/repository/mailbox_repo.go", "change": "modified" },
+    { "path": "apps/relay/internal/service/mailbox_service.go", "change": "modified" },
+    { "path": "apps/relay/internal/api/handler/mailbox_handler.go", "change": "modified" },
+    { "path": "apps/relay/internal/api/handler/request_body.go", "change": "modified" },
+    { "path": "apps/cli/src/transport/relayClient.ts", "change": "modified" },
+    { "path": "apps/cli/src/runtime/inbound.ts", "change": "modified" },
+    { "path": "apps/cli/src/runtime/profile.ts", "change": "modified" },
+    { "path": "docs/API-11_JSON_SCHEMAS.md", "change": "modified" },
+    { "path": "docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md", "change": "modified" },
+    { "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t35-implementation-report.md", "change": "added" },
+    { "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/dispatches/001-T35-implement-result.json", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "T35-I-001",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "file": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "problem": "The relay's configured maximum message size (ECHOLET_MAX_MESSAGE_BYTES) and the poll response-byte budget (fixed at 1 MiB to match the CLI's hard response bound) are independent settings, and nothing enforces a relationship between them. With the T34-I-003 fix the send route now correctly accepts an envelope of any configured maximum size, so configuring the maximum above roughly 1 MiB produces envelopes the relay stores but the current CLI cannot read.",
+      "impact": "In such a configuration the poll response containing that single envelope exceeds the client's 1 MiB streaming bound and the CLI rejects it with INVALID_RELAY_RESPONSE. Delivery is still the correct behaviour - starving the mailbox to satisfy the budget would wedge it permanently - so the failure surfaces at the client rather than the relay, with no operator-visible warning at startup. Not reachable with the default 262144 configuration, which is why this is minor.",
+      "suggested_fix": "Either validate at startup that MaxMessageBytes plus the envelope JSON overhead fits inside the poll response budget and refuse to start (or log a loud warning) otherwise, or make the response budget a configured value the CLI can negotiate rather than a constant duplicated on both sides of the wire.",
+      "evidence": "apps/relay/internal/api/handler/mailbox_handler.go: pollEnvelopeByteBudget is the constant (1<<20) - pollResponseWrapperBytes, while envelopeBodyLimit() and validation.ValidateMailboxEnvelope are driven by cfg.MaxMessageBytes. apps/relay/internal/storage/repository/mailbox_repo.go GetEnvelopeBatch guards the byte check with len(batch.Envelopes) > 0, so the first envelope is delivered regardless of size - the property TestMailboxPollAlwaysReturnsAtLeastOneMaximumSizeEnvelope pins. The client bound is the streaming size check in apps/cli/src/transport/relayClient.ts.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_added": 0,
+    "tests_modified": 0,
+    "implementation_files_changed": 8,
+    "docs_files_changed": 2,
+    "self_fix_attempts": 0
+  },
+  "timestamp_utc": "2026-09-06T14:12:00Z"
+}

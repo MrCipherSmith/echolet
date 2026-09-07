@@ -1,0 +1,63 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-planning",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Correct feasibility-first roadmap and pilot plan",
+    "description": "Own docs/PLAN-05_ROADMAP.md, DELIVERY-13_SPRINT_PLAN.md, BOARD-27_EXECUTION_ORDER.md, RFC-18_CRYPTO_SELECTION.md, STORY-04_USER_SCENARIOS.md; create docs/PILOT-29_VALIDATION_PLAN.md. Put session library spike and device/background feasibility first, early independent security review, measurable proposed pilot gates with pending evidence. Remove contradictions in ordering, no invented research or library validation. Write planning-report.md in flow.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC3"
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "docs/PLAN-05_ROADMAP.md",
+    "docs/DELIVERY-13_SPRINT_PLAN.md",
+    "docs/BOARD-27_EXECUTION_ORDER.md",
+    "docs/RFC-18_CRYPTO_SELECTION.md",
+    "docs/STORY-04_USER_SCENARIOS.md"
+  ],
+  "constraints": [
+    "Root is /Users/Goodea/goodea/projects/echolet. Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md BEFORE searching or reading project code.",
+    "Use local skills, gdgraph first, keryx ctx searches; wiki index and testing context before respective work.",
+    "No flow state/AC edits, no git or remote writes. Other agents work disjoint scopes.",
+    "User authorizes fixes; no further approval questions for reversible edits. No tests for docs-only changes; verify actual source and links.",
+    "Write report with exact modified files and evidence; final response starts STATUS:."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command",
+    "network"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/projects/echolet/.metaproject/flows/001-2026-09-05-echolet-assessment-fixes/planning-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-05T23:50:00Z",
+    "created_by": "flow-orchestrator"
+  }
+}

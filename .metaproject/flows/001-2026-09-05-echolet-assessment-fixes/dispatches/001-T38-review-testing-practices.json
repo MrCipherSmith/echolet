@@ -1,0 +1,93 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T38-review-testing-practices",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-testing-practices",
+  "task": {
+    "title": "Fix review: test quality of the F-001..F-013 regression suite",
+    "description": "Judge whether the tests added by T33, T34, T35, T36 and T39 genuinely constrain the fixed behaviour, or whether any of them can pass vacuously.",
+    "intent": "review",
+    "scope": "Read-only review of the new and changed test files across apps/cli, apps/relay and packages."
+  },
+  "acceptance_criteria": [
+    "Every new test file added in this fix wave is assessed for whether it would still fail if its fix were reverted - not merely whether it passes today.",
+    "The two deterministic hooks that closed the previously unverifiable findings are scrutinised: the F-003 persistence fault (a second node:sqlite connection holding BEGIN IMMEDIATE against the same profile database with busy_timeout=0) and the F-008 concurrency barrier (test-only instrumentation on EncryptedSqliteStore.prototype.transaction, anchored to the stale outbox read). State whether each is anchored to the semantic event or to an implementation detail that a future refactor would silently break.",
+    "The deliberately-green guard tests are assessed for whether they actually constrain the fix: the F-009 single-maximum-size-envelope guard, the F-003 exit-3 control, the six F-013 invalid-input guards, and the F-005 server-cap subtest.",
+    "The F-012 mutation evidence is assessed, including the control showing the ORIGINAL test survived the same mutation.",
+    "Any test that is over-fitted to the current implementation, asserts on incidental values, or would pass vacuously is reported as a finding with its file and test name.",
+    "Confirm no pre-existing test was weakened, skipped or deleted, independently of the orchestrator's mtime checks and T37's hash verification."
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/inputs/review-context.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-path-echolet-cli-prototype-t28/consolidated-findings.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/t37-verification-report.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/data/testing/context.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "apps/cli/src/runtime/outbound.publish.test.ts",
+    "apps/cli/src/runtime/outbound.concurrentSend.test.ts",
+    "apps/cli/src/commands/cli.processFailures.test.ts",
+    "apps/cli/src/commands/cli.dashOptionValues.test.ts",
+    "apps/cli/src/runtime/inbound.test.ts",
+    "apps/cli/src/runtime/inbound.pollBatchSize.test.ts",
+    "apps/cli/src/transport/relayClient.pollCapacity.test.ts",
+    "apps/cli/test/globalSetup.ts",
+    "apps/cli/vitest.config.ts",
+    "apps/relay/internal/middleware/rate_limit_test.go",
+    "apps/relay/internal/api/handler/mailbox_poll_capacity_test.go",
+    "apps/relay/internal/api/handler/mailbox_envelope_lifecycle_test.go",
+    "apps/relay/internal/api/handler/mailbox_device_authorization_test.go",
+    "apps/relay/internal/api/handler/request_body_limit_test.go",
+    "apps/relay/internal/storage/repository/mailbox_repo_test.go",
+    "apps/relay/internal/validation/mailbox_envelope_size_test.go"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md before any repository action; project root is /Users/Goodea/goodea/projects/echolet.",
+    "Load and follow .metaproject/skills/gdskills/review/review-testing-practices/SKILL.md.",
+    "Read .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/inputs/review-context.md FIRST for the disposition vocabulary and the five non-negotiable criteria.",
+    "You are a reviewer. Do NOT modify any source or test file permanently. A bounded mutation pass is allowed ONLY to answer 'would this test still fail if the fix were reverted', and every mutation MUST be reverted, with the file verified byte-identical afterwards. Report exactly which mutations you ran.",
+    "Do not re-run the full verification matrix; T37 already did and passed.",
+    "Do not edit flow.json or acceptance-criteria.md.",
+    "Use `keryx ctx rg` for searches, never bare rg/grep. Use `keryx ctx run` for long command output.",
+    "Never print plaintext message bodies, ciphertext, profile store keys, private key material or HTTP request bodies.",
+    "Do not commit and do not create a branch, PR or remote.",
+    "Respect prototype scope: do not demand production-grade test infrastructure, CI, or coverage thresholds that this prototype never claimed.",
+    "Write a valid subagent-result to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-testing-practices-result.json and a report to .metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-testing-practices-report.md, and make the final response start with STATUS:."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-fixreview-echolet-cli-prototype-t38/review-testing-practices-result.json",
+    "summary_max_tokens": 1000
+  },
+  "budget": {
+    "max_output_tokens": 7000,
+    "max_runtime_ms": 3000000
+  },
+  "provenance": {
+    "created_at": "2026-09-06T15:20:00+04:00",
+    "created_by": "flow-orchestrator",
+    "source_request": "T38 managed fix review: assess whether the regression suite genuinely constrains the fixes."
+  }
+}

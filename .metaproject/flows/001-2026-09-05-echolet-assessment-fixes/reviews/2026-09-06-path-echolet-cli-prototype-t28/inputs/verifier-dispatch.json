@@ -1,0 +1,74 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T28-verifier",
+  "orchestrator": "review-orchestrator",
+  "target_skill": "review-verifier",
+  "task": {
+    "title": "Independently verify T28 findings",
+    "description": "Execute bounded checks against the 12 consolidated findings; no finding author may verify these.",
+    "intent": "review",
+    "scope": "12 findings only"
+  },
+  "acceptance_criteria": [
+    "Every finding receives an empirical verification claim or explicit unverifiable outcome",
+    "No source/test modifications or finding severity/text changes",
+    "Output conforms to verification-claim schema"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-path-echolet-cli-prototype-t28/inputs/verification-input.json",
+      "kind": "review",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-path-echolet-cli-prototype-t28/inputs/verification-input.json",
+    ".metaproject/skills/gdskills/review/review-verifier/SKILL.md"
+  ],
+  "constraints": [
+    "First read /Users/Goodea/goodea/projects/echolet/.metaproject/index.md",
+    "Independent non-author actor only",
+    "No canonical source/test edits",
+    "Temporary isolated copies and synthetic fixtures only; bounded execution",
+    "Never emit secrets/plaintext/ciphertext/request bodies",
+    "Use strongest available empirical method; site-check if execution unavailable; reasoning must be unverifiable",
+    "No new findings/severity changes/rewrites"
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "verification-claim",
+    "artifact_path": ".metaproject/flows/001-2026-09-05-echolet-assessment-fixes/reviews/2026-09-06-path-echolet-cli-prototype-t28/review-verifier-result.json",
+    "summary_max_tokens": 600
+  },
+  "budget": {
+    "max_output_tokens": 7000,
+    "max_runtime_ms": 600000
+  },
+  "provenance": {
+    "created_at": "2026-09-06T12:38:08.613331+00:00",
+    "created_by": "review-orchestrator"
+  },
+  "parent_dispatch_id": "001-T28-review",
+  "model": {
+    "tier": "light",
+    "tier_reasons": [
+      "base:standard",
+      "light:verifier-execution"
+    ],
+    "provider": "openai",
+    "model": "GPT-6",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "openai",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"openai\""
+    }
+  }
+}

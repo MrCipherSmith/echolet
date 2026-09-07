@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "pre_run_command": [
+      {
+        "command": "keryx ctx hook windsurf",
+        "show_output": true,
+        "_keryxManaged": "ctx-agent-hooks"
+      }
+    ]
+  },
+  "_keryxManaged": [
+    "ctx-agent-hooks"
+  ]
+}

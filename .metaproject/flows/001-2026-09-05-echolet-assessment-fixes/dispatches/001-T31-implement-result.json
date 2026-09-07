@@ -1,0 +1,49 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "001",
+  "dispatch_id": "001-T31-implement",
+  "status": "DONE",
+  "summary": "V2 publish success now echoes exact validated bundle_id with stored=true. Only handler changed; raw claim output, storage/service and tests untouched. RED missing bundle_id reproduced; focused race, full tagged race and untagged Go suites GREEN.",
+  "acceptance": [
+    {
+      "criterion": "Focused handler/router race tests pass.",
+      "status": "met",
+      "evidence": "2026-09-06T11-12-05-779Z_run.log"
+    },
+    {
+      "criterion": "Publish success echoes exact validated bundle_id with stored=true.",
+      "status": "met",
+      "evidence": "TestSignalV2PublishResponseIncludesValidatedBundleID now passes"
+    },
+    {
+      "criterion": "Full tagged and untagged Go suites remain green.",
+      "status": "met",
+      "evidence": "go test -race -tags=relayv2 ./... and go test ./... both exit 0"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-11-48-474Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "RED missing response bundle_id"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T11-12-10-353Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Full tagged race suite GREEN"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go",
+      "change": "After successful validation/publication, read bundle_id into response-only struct and encode success metadata."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {},
+  "timestamp_utc": "2026-09-06T11:12:20Z"
+}
