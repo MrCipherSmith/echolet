@@ -1,0 +1,137 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T19-tests",
+  "status": "DONE",
+  "summary": "Tests only. One new RED file, apps/cli/src/runtime/outbound.publicationPrecondition.test.ts (4 tests), pins that `send` presupposes `relay publish`: an unpublished profile's send is refused LOCALLY, before any relay request is issued, so the recipient's single first-contact one-time prekey is never spent by a send the relay is certain to refuse; the error is a typed OutboundError named SENDER_NOT_PUBLISHED, ordered after the pre-existing CONTACT_NOT_TRUSTED check; and the refused send leaves no claim id, no session and no outbox record behind. Every test asserts on the requests actually ISSUED, not only on the thrown error. test/e2e/publication-claimability.test.ts step 5 was not deleted but strengthened: the unpublished sender's attempt now happens BEFORE the bundle is consumed, and the real relay binary is the witness - `relay publish` must still report the recipient's bundle as claimable afterwards. Its original /PREKEY/ exhausted-prekey assertion is kept verbatim, moved behind a `relay publish` for that same sender. Ten fixture files that encoded a starting state which cannot succeed anyway were corrected by making the sending profile publish first; none was weakened, skipped, narrowed or deleted. Correctness of the corrections was established by a throwaway product probe (Profile.hasPublication + one guard in sendOwned) which took the whole apps/cli suite to 45 files / 253 tests / 0 failures; the probe was then fully reverted and both product files are byte-identical to baseline (outbound.ts 337031b1..., profile.ts 29c654f2...).",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "New RED tests pin that a send from an unpublished profile refuses before issuing any claim, that no claim request reaches the relay, that the recipient's bundle stays claimable, and that the error is typed and actionable",
+      "status": "met",
+      "evidence": "apps/cli/src/runtime/outbound.publicationPrecondition.test.ts, 4 tests, all RED on their own assertion: (1) 'a send that cannot be accepted must refuse before it issues any request, above all the claim: expected [ /v2/prekeys/claim, /v1/messages/send ] to deeply equal []'; (2) 'a refused send must not have claimed anything: expected 1 to be +0'; (3) 'a refused send must not commit an outbox envelope: expected [ cli:outbox:... ] to deeply equal []'; (4) 'expected UNAUTHORIZED_MAILBOX_ACCESS to be SENDER_NOT_PUBLISHED'."
+    },
+    {
+      "criterion": "Assertions are on the requests actually issued, not only on the thrown error",
+      "status": "met",
+      "evidence": "Tests 1 and 4 assert relay.paths() === [] and relay.claimsIssued() === 0; test 2 asserts exactly one claim in total and that it belongs to the sender that delivered; test 3 asserts the durable store carries no cli:claim:, cli:outbox: or session: key. Test 1 additionally asserts the relay fake's remaining available bundle is non-null."
+    },
+    {
+      "criterion": "e2e step 5 re-stated as the stronger property rather than deleted",
+      "status": "met",
+      "evidence": "publication-claimability.test.ts now runs carol's unpublished send at step 3, BEFORE anything has consumed bob's bundle, then asserts at step 4 that bob's `relay publish` still reports claimable === true with the identical bundleId - the real relay binary attesting that no claim reached it. The original assertions (not PROTOCOL_REJECTED, matches /PREKEY/) are kept verbatim as step 7, from a carol who has published. RED on the load-bearing assertion: 'an unpublished sender's refused send must leave the recipient's first-contact bundle intact: expected false to be true'."
+    },
+    {
+      "criterion": "Blocked fixtures corrected minimally and without weakening",
+      "status": "met",
+      "evidence": "10 fixture files corrected. In every case the correction is either (a) the sending profile calling publish()/`relay publish` before it sends, or (b) adding a /v2/prekeys/publish route to a relay fake that previously threw on it. No assertion was removed or relaxed; two request-sequence assertions in outbound.test.ts were extended to include the new publish request, which pins strictly more than before. Measured: under the throwaway guard probe the full suite is 45 files / 253 tests / 0 failures."
+    },
+    {
+      "criterion": "No production file changed",
+      "status": "met",
+      "evidence": "apps/cli/src/runtime/outbound.ts sha256 337031b1540c87b956f420cb42eead8cb123e7a7b7a33dfd9f81cfc3fab1fd5e and apps/cli/src/runtime/profile.ts sha256 29c654f22cea55d525e7b6caf544dd18b2efc52e794b571e0220cefec15a851e, both identical to the T13 baseline. Nothing under apps/relay, packages/ or docs/ was touched. No connection was made to geekom or depr. `tsc -p apps/cli/tsconfig.json --noEmit` exits 0."
+    },
+    {
+      "criterion": "No test weakened, skipped, narrowed or deleted",
+      "status": "met",
+      "evidence": "No `it.skip`, `it.todo`, `.only` or deleted case anywhere. Test counts rose from 249 to 253 (the 4 new tests); every pre-existing case survives with at least its original assertions."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/src/runtime/outbound.publicationPrecondition.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New RED test file: send presupposes relay publish. 4 tests.",
+      "hash": "1b8e41b48adfbe47e99a78655b6e26b895c3dac29bc2670647b92307c48e4324"
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T19-tests-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This result document.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/runtime/outbound.publicationPrecondition.test.ts",
+      "change": "ADDED. sha256 before: absent. after: 1b8e41b48adfbe47e99a78655b6e26b895c3dac29bc2670647b92307c48e4324. Four RED tests pinning the publication precondition, each asserting on the requests actually issued."
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.test.ts",
+      "change": "FIXTURE. sha256 before: de0b4877d5af612bae352eba217250e1a646aa497933d2e11d5036d0218c7d98. after: 58d0dd98cdb94c8122eabdb7f204f3784bbf81be95d49d1fa6156d5c1f0c0921. Four tests now call publish() before sending. Not a weakening: their subjects are a SUCCESSFUL send, a trust decision on a CLAIMED bundle, an AMBIGUOUS deposit and an IDEMPOTENT replay - all of which require the send to reach the relay. The two request-sequence assertions were extended from [claim, send] to [publish, claim, send] and from [claim] to [publish, claim], which pins strictly more of the traffic than before; the claim and send bodies are now located by path rather than by index, so the same bodies are asserted."
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.senderAuthentication.test.ts",
+      "change": "FIXTURE. sha256 before: a6953606c1d1fd8351fa780c7aff3b4dfedf5a50e5dbc52b438d61c59d00242c. after: cec9cc7e3f91fc49a82cb5b67066614bea8a5948e2c7794e806ae6665302dd88. The relay fake gained a /v2/prekeys/publish route and each of the three tests publishes before sending. Not a weakening: the fake still throws on every OTHER unexpected path, and this file's subject is T50 sender authentication - the envelope signature verifying against the profile's own PUBLISHED device record - so publishing first is the scenario, not a concession. All signature, binding-tamper and replay assertions are untouched."
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.concurrentSend.test.ts",
+      "change": "FIXTURE. sha256 before: 4abdca389610306eae14229cf1acfa708144123473f7dab975bc14959c972e7d. after: c0fbb8d4b3786ed9d17b8afad636b4f0e885020f15bed5f3a825b3dc3c436321. The relay fake gained a /v2/prekeys/publish route and the warm-up messenger publishes once. Not a weakening: the subject is the concurrency window between two runtime instances sharing one profile; the publication is durable and shared by both, so neither racing send is refused and the race is unaffected. The barrier, the ordering assertions and all five soft assertions are untouched."
+    },
+    {
+      "path": "apps/cli/src/runtime/inbound.test.ts",
+      "change": "FIXTURE. sha256 before: ddc55d63e5b58de5d922385a656cef84f5aafb684f9b7b2e814b18f8678a2cba. after: 15122e939361c5b3410d15fa2a75b579953092b226e09ac75dd3c95f2d9dc1ee. Only the shared send() helper changed: a /v2/prekeys/publish route plus messenger.publish() before the send. Not a weakening: this file's subject is the RECIPIENT's mailbox, and the helper exists solely to produce one real, fully valid envelope; nothing about the recipient's behaviour or any assertion changed. The helper still throws on any other sender request."
+    },
+    {
+      "path": "apps/cli/src/runtime/inbound.batchIsolation.test.ts",
+      "change": "FIXTURE. sha256 before: a32e028366e7b128b20edd9cf7230e82d3c46d62ffc4103b794c4745f7213683. after: e1d36ae61a854c8565fec463cd96c85973b9bd80ba1eda46b8485547c8a740ad. Identical correction to the shared send() helper, for the identical reason."
+    },
+    {
+      "path": "apps/cli/src/runtime/inbound.pollProgress.test.ts",
+      "change": "FIXTURE. sha256 before: 13aef67a4e06119dec0fa950be6e4119d778027df8ee77f12881ca200ac605a9. after: 088f53ae4aff5c134379934264e32a4fba4e3d53237a0e07fff65e674b017875. Identical correction to the shared send() helper, for the identical reason."
+    },
+    {
+      "path": "apps/cli/src/runtime/inbound.readMark.test.ts",
+      "change": "FIXTURE. sha256 before: eed38d69e6248ea73da7f34e9f5789836308c7bd3514eb84e2b41b9e30b30a2c. after: ef23b69343818cacefaeba527adae40de0f06b26b692809d986856db80bf18f1. Identical correction to the shared send() helper, for the identical reason."
+    },
+    {
+      "path": "apps/cli/src/commands/cli.senderQuota.test.ts",
+      "change": "FIXTURE. sha256 before: 4bd55ed77477bb17438e60de6e321f20cb7499d64ba896bed8df93bb2a902875. after: e193d625836cf6f5754e0d267fdb6a25a5e58ce80f6eb39a6b3622e71d303709. Alice's relay fake gained a /v2/prekeys/publish route and she runs `relay publish` after importing bob. Not a weakening: the whole subject is the code the CLI reports for a rejection ON /v1/messages/send, a route the send has to actually reach. All three exit-code/error-code assertions (SENDER_QUOTA_EXCEEDED on exit 3, INVALID_SIGNATURE distinct from it, RATE_LIMITED on exit 4) and both redaction checks are untouched."
+    },
+    {
+      "path": "apps/cli/src/commands/cli.relayErrorCodes.test.ts",
+      "change": "FIXTURE. sha256 before: c160eb38b796f15305e593b443f4098348cf2a363868f7ccfe950347b6b20ef9. after: d54c319f90a83ca357e0a96b689b5ade811a64ab099e29156d1867b805d41a4d. In the first test the /v2/prekeys/publish route became a mutable handler: alice's own publish succeeds first, then it is flipped to 400 INVALID_SIGNATURE for the contrast run. Not a weakening: the genuine protocol violation is still raised on the same non-retryable 4xx path, from the same profile, moments later, and every assertion (exhausted not PROTOCOL_REJECTED, exhausted matches /PREKEY/, violation not /PREKEY/, the two codes distinct) is untouched. The second test needed no change: by the time it sends, alice has already ATTEMPTED a publish."
+    },
+    {
+      "path": "apps/cli/src/commands/cli.processFailures.test.ts",
+      "change": "FIXTURE. sha256 before: 482727b1d01e247b3e49e323299dce2a26c21d3fa3a5f13178bcb643ed8969b2. after: e89f96a6d7be009a345ec94ba260fee47ba69eb941b8a163558f14be3c344ec6. Only the post-send-commit test changed: a /v2/prekeys/publish route plus one `relay publish` for alice. Not a weakening: the failure under test is the store commit that follows an ACCEPTED deposit, so the send must reach /v1/messages/send, and the database lock is still armed only by that route - never by the publish. The CONTACT_NOT_TRUSTED case in the same file deliberately needed no change: the new guard is ordered AFTER the contact-trust check, which the new test 'keeps CONTACT_NOT_TRUSTED for an unpinned recipient' now pins explicitly."
+    },
+    {
+      "path": "apps/cli/test/e2e/publication-claimability.test.ts",
+      "change": "FIXTURE + STRENGTHENED. sha256 before: c591666924a86acec6dfeff819f78cefed108e7c4da2e34d55283208da37ef3b. after: a8037c56cc054b26d006d8ec7a75a1de7af1a4f8747966b902f59c35352a2b24. Carol's unpublished send moved from after the bundle was consumed to before it (new step 3), where the relay binary itself can witness the outcome: bob's `relay publish` must still report claimable === true with the identical bundleId (new step 4). The original step-5 assertions were kept verbatim as step 7, now issued by a carol who has published, so they still measure the exhausted-prekey vocabulary rather than the precondition. Nothing was deleted; the file now pins one strictly stronger property plus everything it pinned before."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "new_tests": 4,
+    "fixture_files_corrected": 11,
+    "suite_before": "apps/cli 249 tests: 248 passed / 1 failed",
+    "suite_after_red": "apps/cli 253 tests: 247 passed / 6 failed (45 files)",
+    "suite_under_reverted_probe": "apps/cli 253 tests: 253 passed / 0 failed (45 files)",
+    "failures_after": [
+      "src/runtime/outbound.publicationPrecondition.test.ts > refuses locally, issuing no relay request at all, when the profile has never published (NEW, mine)",
+      "src/runtime/outbound.publicationPrecondition.test.ts > leaves the recipient claimable by a different, properly published sender (NEW, mine)",
+      "src/runtime/outbound.publicationPrecondition.test.ts > leaves no durable trace of the refused send, so publishing and retrying starts clean (NEW, mine)",
+      "src/runtime/outbound.publicationPrecondition.test.ts > keeps CONTACT_NOT_TRUSTED for an unpinned recipient, and still issues no request (NEW, mine)",
+      "test/e2e/publication-claimability.test.ts > reports whether a republished bundle is still claimable, and names an exhausted prekey for a later sender (RE-STATED, mine)",
+      "src/runtime/outbound.claimResidual.test.ts > does not spend the recipient's one-time prekey on a send the relay is certain to refuse (PRE-EXISTING, the T13 baseline failure this work makes implementable)"
+    ],
+    "go_suite": "not run and not touched; no Go file was changed. The known RI-09 poll-byte-budget failure is unrelated.",
+    "typecheck": "tsc -p apps/cli/tsconfig.json --noEmit exits 0",
+    "routing_audit": {
+      "graph_used": "no (not-relevant - every file under change was named in the dispatch or found through the T12/T13 reports and keryx ctx rg)",
+      "wiki_used": "no (not-relevant - T12's analysis and T13's implementation report are the authority for this behaviour and cite specification.md directly)",
+      "ctx_used": "yes (keryx ctx run for every test run, typecheck, listing and digest; keryx ctx rg for every search; keryx ctx read for large logs)",
+      "raw_rg_used": "no"
+    }
+  },
+  "timestamp_utc": "2026-09-08T22:15:00Z"
+}

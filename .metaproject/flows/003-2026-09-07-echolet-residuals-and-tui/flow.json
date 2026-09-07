@@ -9,7 +9,7 @@
   "title": "Echolet: close the recorded residuals and make the operator TUI usable",
   "status": "in-progress",
   "createdAt": "2026-09-07T19:26:13.895Z",
-  "updatedAt": "2026-09-07T20:18:09.226Z",
+  "updatedAt": "2026-09-07T22:15:24.679Z",
   "source": {
     "type": "description",
     "ref": null
@@ -90,7 +90,7 @@
       "id": "T5",
       "title": "RED tests for the TUI concurrency defect, silent row dropping, and viewport/legend correctness",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -104,23 +104,33 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "18 RED tests across 7 files, all failing on their own assertions; 15 verified by the orchestrator's own run (apps/cli 15 failed / 228 passed) and 3 more added for the ordering half of AC7. D-1's non-event is settled by a causal barrier rather than a timer: a Node parent cannot exit while a child it spawned is alive, so counting the children that announced their argv after the console has closed is exact. Anti-vacuity shown by a throwaway 4-line patch turning the D-1 and D-4 tests green, then reverted with digests re-verified. The contact roster is deliberately left without a pinned ordering, and the reason is right: ContactView carries no time at all, and the roster is a selection surface whose display order cannot be decided apart from the cycle order."
     },
     {
       "id": "T6",
       "title": "Fix the TUI concurrency defect, row dropping, and viewport/legend correctness",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T20:42:50.742Z",
+            "outcome": "started",
+            "detail": "003-T6-tui-implement"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "All 18 TUI tests green; verified by the orchestrator. The seven test-file digests match T5's record exactly, so the specification was not edited to fit the fix. My first full-suite run showed three extra failures; re-running the affected file in isolation gives 8/8 in 1.7s against 8.9s under load, so those were contention from concurrently running agents driving real processes, not regressions - and the other two belong to the T12 agent's in-progress exploration file. The fix was made at the impure seam rather than in the pure layer: renderFrame was already total at 40x10, and it was runTuiShell.viewport() raising 40 to 72 before calling it. One property was strengthened beyond the brief: the modal's painted-at record is now written only when the viewport was not below the minimum, without which unclamping the width would have made a trust confirmation answerable for identifiers never shown on screen."
     },
     {
       "id": "T7",
@@ -148,7 +158,7 @@
       "id": "T8",
       "title": "RED tests for the relay FIX NOW items: cleanup timer, backfill skip-and-count, poll byte budget, v1 identifier bounds, shutdown escalation",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -162,19 +172,231 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "9 Go tests across 6 new files; RED confirmed by the orchestrator's own run: cleanup Stop, relay stops cleanup before closing storage, backfill skip-and-count (2 tests), pre-binding authorization, poll byte budget, and the identifier bounds, with a green control that the bound does not close the route. RI-31's two escalation paths could not be RED because they are untested rather than wrong; the agent proved non-vacuity instead by three out-of-tree mutations of main.go, each killed by exactly one new test and by none of the four pre-existing ones. It also caught two of its own tests passing vacuously because t.TempDir() puts the test name into the logged data-dir path, and narrowed both. Two findings raised: RI-19 was wrong in both directions (device_id accepted and stored unbounded, never a 500; identity_id already refused incidentally), and RI-09 is a two-sided change rather than relay-internal."
     },
     {
       "id": "T9",
       "title": "Implement the relay FIX NOW items",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
       "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T20:42:05.388Z",
+            "outcome": "started",
+            "detail": "003-T9-relay-implement (four items; RI-09 split out)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Four items implemented; re-verified by the orchestrator under -race -tags relayv2: exactly one failure, the RI-09 test that was deliberately left red, every other package ok, 0 data races. All six test-file digests unchanged from T8. The cleanup service is now stopped between the drain and the Badger close, its Stop() joins the goroutine rather than only signalling it, and all four post-router storage-close paths go through the same helper. NewRouter keeps a single return value with chi.Mux embedded rather than the two-value shape the tests-creator's throwaway patch used, because that shape would have broken four existing call sites the implementer may not edit."
+    },
+    {
+      "id": "T10",
+      "title": "RED tests for the two-sided max-message-size derivation (RI-09)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T20:57:04.608Z",
+            "outcome": "started",
+            "detail": "003-T10-ri09-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Implement the two-sided max-message-size derivation (RI-09)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
         "count": 0,
         "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "RED test: a failed mailbox deposit must not permanently consume the recipient's one-time prekey bundle",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T20:57:04.720Z",
+            "outcome": "started",
+            "detail": "003-T12-prekey-rollback-test"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Three RED client-side tests, and an analysis that REFUTED the orchestrator's framing of the finding. Established by measurement: the claim and the deposit are two separate client-issued requests with no shared transaction; the T11 failure was server-side on the second request (403 UNAUTHORIZED_MAILBOX_ACCESS, because the sender had never run relay publish); the same-sender retry is already correct, running off the durable outbox and reusing an identical claim_id, and the T11 retry failed only because it came from a fresh profile, i.e. a genuinely different sender; and relay-side replenishment already works end to end against real Badger. The claim is legitimately permanent - a rollback would hand one Signal one-time prekey to two senders, and the relay cannot know the deposit failed because the sender may still deliver from its durable outbox. The agent therefore added no Go test and touched none of the three existing guards. What remains are two client-side bounds and one genuine security finding."
+    },
+    {
+      "id": "T13",
+      "title": "Fix the unrolled-back prekey claim, or bound it explicitly",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T21:25:06.249Z",
+            "outcome": "started",
+            "detail": "003-T13-claim-bounds-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Two of three green; the third is not implementable without a decision above the task, and the agent proved that rather than asserting it: it implemented the guard predicate, measured 36 failures across nine files including an e2e test that pins the current behaviour against the real relay binary, reverted fully and edited no test. Test file digest unchanged. apps/cli 248 passed / 1 failed of 249 across 44 files including the real-relay e2e suites. A dead stored claim is now recovered by one retry, with a fresh claim id written durably BEFORE the second claim - the same ordering that made the first recoverable - and the caller sees claimReplaced: true, absent on every ordinary send. A pin failure is still CONTACT_PIN_MISMATCH; an expired bundle is no longer mislabelled as one."
+    },
+    {
+      "id": "T14",
+      "title": "Install certificate renewal on depr, matching geekom",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T20:50:43.810Z",
+            "outcome": "started",
+            "detail": "003-T14-depr-renewal"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Renewal is automated on both hosts; verified by the orchestrator directly: geekom's user-scope timer and depr's root-scope timer both report enabled and active, and both relays answer 200 over HTTPS with ssl_verify_result=0. depr was deliberately NOT converted to geekom's volume arrangement: that would mean replacing a running container today to make two hosts look alike, against an expiry nine months out, and the volume route exists only to work around a privilege depr already has. The repository's committed systemd units were used byte-for-byte on depr, so the artifact is now proven somewhere rather than dead code everywhere. Delivery to the running container was proven positively rather than by a tautological digest comparison: the agent perturbed the PUBLIC cert file to a strictly more restrictive mode, confirmed the container saw it, ran the unit, and confirmed the container saw the restoration - a state only the unit could produce. The private key was never touched and never world-readable."
+    },
+    {
+      "id": "T15",
+      "title": "Correct deploy/relay/README.md: the committed systemd units are root-and-host-path only",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T16",
+      "title": "Record that the process-spawning CLI tests fail under CPU contention and decide whether to harden or serialise them",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T17",
+      "title": "Add a CLI entry point for bundle rotation so a consumed bundle is recoverable",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T18",
+      "title": "Design: authenticate /v2/prekeys/claim to close the denial-of-first-contact primitive",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T19",
+      "title": "RED tests: send must refuse before claiming when the sender has not published",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T21:48:31.670Z",
+            "outcome": "started",
+            "detail": "003-T19-publish-before-send-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Four new RED tests plus a strengthened e2e case, and eleven fixture files corrected without weakening any. Every new test asserts on the requests actually issued and on the durable store keys, not only on the thrown error, because the load-bearing property is that the network call never happens. The e2e case was moved earlier so the real relay binary witnesses that the recipient's bundle survives an unpublished sender's attempt: the old form could only observe what the sender was told, the new form observes what the sender cost a third party, and the original PREKEY assertions were kept verbatim as a later step issued by a published sender. Achievability proved with a throwaway probe that first reproduced T13's exact 36-failure damage and then went fully green after the corrections, reverted with both product files hashing to baseline."
+    },
+    {
+      "id": "T20",
+      "title": "Implement: send presupposes relay publish",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T19"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T22:15:24.679Z",
+            "outcome": "started",
+            "detail": "003-T20-publish-before-send-implement"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -264,6 +486,151 @@
       "at": "2026-09-07T20:18:09.226Z",
       "event": "task-done",
       "detail": "T7: Reconcile every document with the tree: stale deletions, the shutdown fix, AC4, and the e2e labelling"
+    },
+    {
+      "at": "2026-09-07T20:42:05.078Z",
+      "event": "task-done",
+      "detail": "T8: RED tests for the relay FIX NOW items: cleanup timer, backfill skip-and-count, poll byte budget, v1 identifier bounds, shutdown escalation"
+    },
+    {
+      "at": "2026-09-07T20:42:05.389Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 003-T9-relay-implement (four items; RI-09 split out)"
+    },
+    {
+      "at": "2026-09-07T20:42:05.547Z",
+      "event": "task-added",
+      "detail": "T10: RED tests for the two-sided max-message-size derivation (RI-09)"
+    },
+    {
+      "at": "2026-09-07T20:42:05.677Z",
+      "event": "task-added",
+      "detail": "T11: Implement the two-sided max-message-size derivation (RI-09)"
+    },
+    {
+      "at": "2026-09-07T20:42:50.629Z",
+      "event": "task-done",
+      "detail": "T5: RED tests for the TUI concurrency defect, silent row dropping, and viewport/legend correctness"
+    },
+    {
+      "at": "2026-09-07T20:42:50.742Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 003-T6-tui-implement"
+    },
+    {
+      "at": "2026-09-07T20:50:36.795Z",
+      "event": "task-added",
+      "detail": "T12: RED test: a failed mailbox deposit must not permanently consume the recipient's one-time prekey bundle"
+    },
+    {
+      "at": "2026-09-07T20:50:36.915Z",
+      "event": "task-added",
+      "detail": "T13: Fix the unrolled-back prekey claim, or bound it explicitly"
+    },
+    {
+      "at": "2026-09-07T20:50:37.109Z",
+      "event": "task-added",
+      "detail": "T14: Install certificate renewal on depr, matching geekom"
+    },
+    {
+      "at": "2026-09-07T20:50:43.711Z",
+      "event": "task-depends-set",
+      "detail": "T13: dependsOn T12 (was empty) — Implementation follows the RED test"
+    },
+    {
+      "at": "2026-09-07T20:50:43.810Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 003-T14-depr-renewal"
+    },
+    {
+      "at": "2026-09-07T20:57:04.441Z",
+      "event": "task-done",
+      "detail": "T9: Implement the relay FIX NOW items"
+    },
+    {
+      "at": "2026-09-07T20:57:04.608Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 003-T10-ri09-tests"
+    },
+    {
+      "at": "2026-09-07T20:57:04.720Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 003-T12-prekey-rollback-test"
+    },
+    {
+      "at": "2026-09-07T21:05:52.300Z",
+      "event": "task-done",
+      "detail": "T14: Install certificate renewal on depr, matching geekom"
+    },
+    {
+      "at": "2026-09-07T21:05:52.392Z",
+      "event": "task-added",
+      "detail": "T15: Correct deploy/relay/README.md: the committed systemd units are root-and-host-path only"
+    },
+    {
+      "at": "2026-09-07T21:14:29.529Z",
+      "event": "task-done",
+      "detail": "T6: Fix the TUI concurrency defect, row dropping, and viewport/legend correctness"
+    },
+    {
+      "at": "2026-09-07T21:14:29.611Z",
+      "event": "task-added",
+      "detail": "T16: Record that the process-spawning CLI tests fail under CPU contention and decide whether to harden or serialise them"
+    },
+    {
+      "at": "2026-09-07T21:25:05.974Z",
+      "event": "task-done",
+      "detail": "T12: RED test: a failed mailbox deposit must not permanently consume the recipient's one-time prekey bundle"
+    },
+    {
+      "at": "2026-09-07T21:25:06.060Z",
+      "event": "task-added",
+      "detail": "T17: Add a CLI entry point for bundle rotation so a consumed bundle is recoverable"
+    },
+    {
+      "at": "2026-09-07T21:25:06.153Z",
+      "event": "task-added",
+      "detail": "T18: Design: authenticate /v2/prekeys/claim to close the denial-of-first-contact primitive"
+    },
+    {
+      "at": "2026-09-07T21:25:06.249Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 003-T13-claim-bounds-implement"
+    },
+    {
+      "at": "2026-09-07T21:48:22.792Z",
+      "event": "task-done",
+      "detail": "T13: Fix the unrolled-back prekey claim, or bound it explicitly"
+    },
+    {
+      "at": "2026-09-07T21:48:22.889Z",
+      "event": "task-added",
+      "detail": "T19: RED tests: send must refuse before claiming when the sender has not published"
+    },
+    {
+      "at": "2026-09-07T21:48:23.001Z",
+      "event": "task-added",
+      "detail": "T20: Implement: send presupposes relay publish"
+    },
+    {
+      "at": "2026-09-07T21:48:30.673Z",
+      "event": "task-depends-set",
+      "detail": "T20: dependsOn T19 (was empty) — Implementation follows the RED tests"
+    },
+    {
+      "at": "2026-09-07T21:48:31.670Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 003-T19-publish-before-send-tests"
+    },
+    {
+      "at": "2026-09-07T22:15:24.580Z",
+      "event": "task-done",
+      "detail": "T19: RED tests: send must refuse before claiming when the sender has not published"
+    },
+    {
+      "at": "2026-09-07T22:15:24.679Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 003-T20-publish-before-send-implement"
     }
   ]
 }

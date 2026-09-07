@@ -1,25 +1,39 @@
 # Echolet Relay Deployment Runbook
-Version: 0.4.0
+Version: 0.5.0
 
 Copyable commands for standing up a relay on a tailnet host, and for standing it
 up again on a clean one. Companion to
 [runbook.md](runbook.md), which reproduces the **local** prototype; that document
 is the one to read first, and every command here assumes the relay it describes.
 
-**Status of this document: partly executed, and the two hosts are no longer in
-the same state.**
+**Status of this document: executed on both hosts. Both relays serve TLS, both
+certificates renew themselves — but the two hosts renew by different mechanisms,
+and §4.1 says plainly why.**
 
 - **`depr` is on the TLS path.** Since 2026-09-07 19:36 UTC it publishes HTTPS on
   its tailnet address `100.100.188.64:8443`, with a real Let's Encrypt
   certificate for `depr.tail5a88fb.ts.net` terminated by the relay process
   itself. Recorded in
   [`t11-tls-report.md`](../../../.metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t11-tls-report.md).
-  **Its renewal timer (§4) is not installed** — see the warning in §4.
-- **`geekom` is still on the loopback-only path of §6.5**, plain HTTP on
-  `127.0.0.1`, awaiting the one privileged step (`sudo tailscale cert`, §4) that
-  only the user can run there. The original two-host loopback deployment is
+  **Renewal is installed**: the committed `systemd/` units, verbatim, as a
+  root-scope timer — §4.1.
+- **`geekom` is on the TLS path too.** Since 2026-09-07 20:41 UTC it publishes
+  HTTPS on `100.116.255.111:8443` for `geekom.tail5a88fb.ts.net`. It differs from
+  `depr` in two ways that matter operationally: its certificate pair lives in a
+  **named Docker volume** (`echolet-relay-tls`) rather than in `/etc/echolet/tls`,
+  and its renewal is a **`systemctl --user` timer**, because that host's operator
+  has no usable root. Recorded in
+  [`t11-geekom-tls-report.md`](../../../.metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t11-geekom-tls-report.md).
+  The original two-host loopback deployment, which both hosts have now left, is
   recorded in
   [`t11-deployment-report.md`](../../../.metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t11-deployment-report.md).
+
+**The committed `deploy/relay/systemd/` units work as written on `depr` and are
+unusable as written on `geekom`.** They assume a root install into
+`/etc/systemd/system`, a root-owned `/etc/echolet/tls`, a root `chown` to uid
+10001, and they know nothing about a Docker volume. Every one of those
+assumptions holds on `depr` and fails on `geekom`. §4.1 gives both routes. Do
+not copy the five-line recipe onto a host without checking which case it is.
 
 No image has been pushed to a registry; both hosts were loaded from a `docker
 save` tarball as §3 describes.
@@ -28,10 +42,11 @@ save` tarball as §3 describes.
 
 - **§2 → §3 → §3.1 → §4 → §5 → §6 → §7 → §8** is the TLS path. It is the
   intended production route and it is **no longer blocked**: HTTPS Certificates
-  are enabled for the tailnet and `depr` completed this path end to end. Follow
-  it on `geekom` too, once someone can run §4's `sudo` there.
-- **§2 → §3 → §6.5 → §7.5** is the loopback-only path. It is what `geekom` runs
-  today. It needs no certificate, no `sudo` on the host and no firewall change,
+  are enabled for the tailnet and both hosts completed this path end to end.
+  `depr` took it as written. `geekom` took the **no-root variant** in §4.1, which
+  needs no `sudo` at any point.
+- **§2 → §3 → §6.5 → §7.5** is the loopback-only path. **Neither host runs it any
+  more.** It needs no certificate, no `sudo` on the host and no firewall change,
   and it publishes plain HTTP on `127.0.0.1` and nowhere else. It is a
   deliberate second path, not a fallback, and it never establishes AC4 (§7.5).
 
@@ -124,15 +139,26 @@ It is a record, not an expectation: you do not need to re-discover any of it.
 | Callsign | `RPT-GEEKOM-01` | `RPT-DEPR-01` |
 
 That last row is a record of the survey, taken before the deployment. **Both
-hosts now run one `echolet-relay` container each** on the §6.5 path, with a
-named volume `echolet-relay-data` and nothing outside Docker — still no
-`/etc/echolet`, no `/var/lib/echolet`, no systemd unit and no firewall rule. A
-genuinely clean host matches the row as written.
+hosts now run one `echolet-relay` container each on the TLS path**, both against
+the named volume `echolet-relay-data`, and neither has `/var/lib/echolet`. What
+they no longer have in common:
+
+| | `geekom` | `depr` |
+|---|---|---|
+| Certificate pair | named volume `echolet-relay-tls` | host directory `/etc/echolet/tls` |
+| `/etc/echolet` on the host | absent | present, root-owned, files owned `10001:10001` |
+| Renewal timer | `systemctl --user`, owned by `altsay`, lingering | `systemctl`, root, `/etc/systemd/system` |
+| `sudo` used, ever | none | yes, throughout |
+
+A genuinely clean host matches the survey row as written; neither of these two
+does any more.
 
 Neither host has Go, Node (as a build toolchain), a checkout or an active
 reverse proxy, and nothing listens on 80, 443 or 8443. The image is therefore
-built on the operator's machine and carried over; `sudo` is needed on the host
-only for `tailscale cert`, the two directories and the renewal timer.
+built on the operator's machine and carried over. On a host with usable root,
+`sudo` is needed only for `tailscale cert`, the two directories and the renewal
+timer; on a host without it, §4.1's no-root variant needs none at all, because
+the Docker daemon is already root.
 
 ### 1.1 What the survey settled, so you do not re-check it
 
@@ -342,30 +368,114 @@ logged, so a renewal cannot become an outage.
 
 That reload path is covered by an automated test
 (`apps/cli/test/e2e/relay-tls.test.ts`, "picks up a renewed certificate without a
-restart"), but it has **never been exercised on `depr`**: doing so means
+restart"), but it has **never been exercised on either host**: doing so means
 re-issuing the certificate, and Let's Encrypt rate-limits duplicates for one name
-at roughly five per week. Treat hot reload on that host as unproven rather than
-as demonstrated.
+at roughly five per week. Treat hot reload on both hosts as unproven rather than
+as demonstrated. What *is* proven on both hosts is the other half — that a
+renewal's bytes land at the path the running container reads (§4.1).
 
-Install the timer that does it. **This step has not been performed on `depr`.**
-`depr` serves a certificate valid `Sep 7 2026 → Dec 6 2026` and **nothing on that
-host renews it**: without the timer the relay will keep serving an expired
-certificate after 6 December 2026 until someone re-runs `tailscale cert` by
-hand. A manual renewal needs no restart (the reloader picks the new bytes up
-within `ECHOLET_TLS_RELOAD_INTERVAL_SECONDS`), but nothing schedules one. Run
-these five lines on `depr` before that deployment is left unattended.
+### 4.1 Renewal is installed on both hosts, by two different mechanisms
+
+**Both hosts renew themselves. They do not do it the same way, and an operator
+must know which host is which before touching either.** The difference is not
+taste: it follows from whether the host's operator has usable root.
+
+| | `depr` | `geekom` |
+|---|---|---|
+| Operator's `sudo` | passwordless | **password-gated** — unusable from a non-interactive session |
+| Certificate pair lives in | `/etc/echolet/tls` on the host, bind-mounted `:ro` | named volume `echolet-relay-tls` |
+| Timer scope | **system** — `/etc/systemd/system`, run as root | **user** — `~/.config/systemd/user`, run as `altsay`, `Linger=yes` |
+| Uses the committed units? | **yes, byte-for-byte** (`sha256 2711142b…` / `c18f0395…`) plus a per-host drop-in | **no** — see below |
+| Schedule | `OnCalendar=daily`, `RandomizedDelaySec=6h`, `Persistent=true` | identical |
+| Restarts the relay? | **no** | **no** |
+| Status command | `systemctl status echolet-cert-renew.timer` | `systemctl --user status echolet-cert-renew.timer` |
+| History | `journalctl -u echolet-cert-renew` | `journalctl --user -u echolet-cert-renew` |
+
+Everything an operator normally cares about is the same on both hosts — unit
+name, schedule, the no-restart guarantee, and the shape of the status output. The
+only thing that differs is the `--user` flag. That is the uniformity that was
+worth having; forcing `geekom`'s volume layout onto `depr` (or the reverse) would
+have meant restructuring a running TLS relay for symmetry alone, and was
+deliberately not done.
+
+**On `depr` — the committed units, unmodified.** They were installed verbatim;
+the only per-host value is supplied by a drop-in, which is what
+`systemctl edit` writes:
 
 ```sh
-sudo cp deploy/relay/systemd/echolet-cert-renew.service /etc/systemd/system/
-sudo cp deploy/relay/systemd/echolet-cert-renew.timer   /etc/systemd/system/
-sudo systemctl edit echolet-cert-renew.service   # add: Environment=ECHOLET_TLS_HOSTNAME=<host>.tail5a88fb.ts.net
+cd ~/echolet-deploy      # or deploy/relay/ in a checkout
+sudo install -m 0644 -o root -g root systemd/echolet-cert-renew.service /etc/systemd/system/
+sudo install -m 0644 -o root -g root systemd/echolet-cert-renew.timer   /etc/systemd/system/
+
+# the per-host value; `sudo systemctl edit echolet-cert-renew.service` writes the same file
+sudo mkdir -p /etc/systemd/system/echolet-cert-renew.service.d
+printf '[Service]\nEnvironment=ECHOLET_TLS_HOSTNAME=%s\n' "$(hostname).tail5a88fb.ts.net" \
+  | sudo tee /etc/systemd/system/echolet-cert-renew.service.d/10-hostname.conf
+
 sudo systemctl daemon-reload
 sudo systemctl enable --now echolet-cert-renew.timer
-sudo systemctl start echolet-cert-renew.service && systemctl status echolet-cert-renew.service --no-pager
+sudo systemctl start echolet-cert-renew.service   # prove it once, end to end
+systemctl status echolet-cert-renew.service --no-pager
 ```
 
-The unit deliberately contains no `restart`. A renewal that restarted the relay
-would turn a routine event into the outage the reloader exists to prevent.
+Why this is enough on `depr`, and why no volume-refresh step is needed: the
+container's TLS mount is a **directory bind mount of the same host directory**,
+so `/etc/echolet/tls/cert.pem` on the host and inside the container are the same
+inode (verified: `ino=2177654` on both sides). A write by the unit *is* a write
+to the path the relay reads. There is nothing in between that could fail.
+
+**On `geekom` — the committed units cannot be used, and were not.** Each of their
+assumptions fails there: no root to install into `/etc/systemd/system`, no root
+to `daemon-reload` or `enable`, no `/etc/echolet` at all, no root to `chown` to
+uid 10001, and — decisively — the relay reads its pair from the Docker volume
+`echolet-relay-tls`, so rewriting a host path would never reach the container.
+The equivalent there is a `systemctl --user` timer running a small script under
+`~/echolet-cert-renew/`, which re-runs `tailscale cert` into `~/echolet-tls`
+(mode `0700`) and then pushes the pair into the volume with a throwaway
+`--user 0` container — the Docker daemon is already root, so the host needs no
+privilege:
+
+```sh
+docker run --rm --user 0 --entrypoint /bin/sh \
+  -v ~/echolet-tls:/src:ro -v echolet-relay-tls:/dst "$IMG" -c '
+    cp /src/cert.pem /dst/cert.pem.new; cp /src/key.pem /dst/key.pem.new
+    chown 10001:10001 /dst/cert.pem.new /dst/key.pem.new
+    chmod 0644 /dst/cert.pem.new; chmod 0600 /dst/key.pem.new
+    mv /dst/cert.pem.new /dst/cert.pem; mv /dst/key.pem.new /dst/key.pem'
+```
+
+`$IMG` is read from the running container rather than pinned, so a relay upgrade
+cannot leave renewal pointing at a deleted tag. The full script and its install
+are in
+[`t11-geekom-tls-report.md`](../../../.metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t11-geekom-tls-report.md)
+§8.
+
+**Neither unit contains a `restart`, of the relay or of anything else.** A
+renewal that restarted the relay would turn a routine event into the outage the
+reloader exists to prevent.
+
+**A daily run costs nothing while the certificate is fresh.** `tailscale cert`
+answers `Public cert unchanged` / `Private key unchanged` and makes no Let's
+Encrypt request; the certificate serial is identical before and after. Proven on
+both hosts, so proving the timer works does not spend the duplicate budget.
+
+**What renewal does *not* yet prove, on either host:**
+
+- **The relay's in-process reloader has never picked up genuinely new certificate
+  content on a real host.** Forcing that means re-issuing into the duplicate rate
+  limit. Delivery to the container's path is proven on both hosts; *pickup* rests
+  on the automated test and on the code.
+- **Neither host has been rebooted since its timer was installed.** "The timer
+  comes back after a reboot" rests on the documented mechanism — the
+  `timers.target.wants` symlink on `depr`, that plus `Linger=yes` on `geekom` —
+  not on an observed boot.
+- The first *real* renewal on either host falls around early December 2026.
+  Every run before then is the no-op above.
+
+One wart worth knowing: the committed `.service` carries
+`[Install] WantedBy=multi-user.target`. Do not `systemctl enable` the *service*;
+enable only the **timer**. The service is `TriggeredBy=` the timer and should
+show `disabled` in `systemctl status`, which is correct, not a mistake.
 
 ## 5. Data directory (on the host, once per host)
 
@@ -835,10 +945,12 @@ within 168 h.
 | Log files on disk | `/var/lib/docker/containers/<id>/<id>-json.log` | needs sudo to read directly; `docker logs` does not. |
 | Relay data (TLS path, §5) | `/var/lib/echolet` on the host | Badger store, uid 10001, mode 0700. Envelope ciphertext, device records, ordering index, read marks. |
 | Relay data (loopback path, §6.5) | named volume `echolet-relay-data` | Same store. `docker volume inspect echolet-relay-data` for its path; reading it directly needs sudo, `docker run --rm --entrypoint /bin/sh -v echolet-relay-data:/data:ro <image>` does not. |
-| Certificate pair | `/etc/echolet/tls/{cert.pem,key.pem}` | written by `tailscale cert`, mounted **read-only** into the container. Absent on the §6.5 path — there is no certificate. |
+| Certificate pair (`depr`) | `/etc/echolet/tls/{cert.pem,key.pem}` | written by `tailscale cert`, mounted **read-only** into the container as a directory bind — host path and container path are the same inode. Absent on the §6.5 path. |
+| Certificate pair (`geekom`) | named volume `echolet-relay-tls` | Host copy in `~altsay/echolet-tls` (mode `0700`); the volume copy is what the relay reads, `cert 0644` / **`key 0600`**, both owned `10001:10001`. `/etc/echolet` does not exist on that host. |
 | Compose / run recipes | `deploy/relay/` in the repository | `docker-compose.yml`, `docker-compose.insecure-loopback.yml`, `run-relay.sh`, `env/*.env.example`, `systemd/`. |
 | Image definition | `apps/relay/Dockerfile` | build context is `apps/relay`, not the repository root. |
-| Renewal timer | `systemctl status echolet-cert-renew.timer` | `journalctl -u echolet-cert-renew` for its history. |
+| Renewal timer (`depr`) | `systemctl status echolet-cert-renew.timer` | Root scope, `/etc/systemd/system`. `journalctl -u echolet-cert-renew` for its history. |
+| Renewal timer (`geekom`) | `systemctl --user status echolet-cert-renew.timer` | **User scope** — the plain command above finds nothing there. `journalctl --user -u echolet-cert-renew`; script in `~/echolet-cert-renew/`. See §4.1. |
 
 The two data rows are the *templates*, not a description of `depr`. `depr` runs
 the **TLS** path against the **named volume** `echolet-relay-data`, because it
@@ -861,7 +973,19 @@ docker compose --env-file env/geekom.env -f docker-compose.yml down
 sudo rm -rf /var/lib/echolet /etc/echolet
 sudo systemctl disable --now echolet-cert-renew.timer
 sudo rm -f /etc/systemd/system/echolet-cert-renew.{service,timer}
+sudo rm -rf /etc/systemd/system/echolet-cert-renew.service.d
 sudo systemctl daemon-reload
+```
+
+On a **no-root host** such as `geekom` the renewal teardown is the user-scope
+equivalent, and needs no `sudo` at all:
+
+```sh
+systemctl --user disable --now echolet-cert-renew.timer
+rm -f ~/.config/systemd/user/echolet-cert-renew.{service,timer}
+systemctl --user daemon-reload
+rm -rf ~/echolet-cert-renew ~/echolet-tls
+docker volume rm echolet-relay-tls      # the certificate pair inside the volume
 ```
 
 `tailscale cert` leaves nothing else on the host to clean up.
@@ -923,17 +1047,31 @@ Everything in this section is true **after** a successful deployment.
   so. AC4 asks for the **relay itself** to terminate TLS on a **non-loopback**
   address. That was done on `depr` (§7.5), and it is `depr`'s TLS deployment —
   not this path — that establishes AC4.
-- **`geekom` is still on the loopback-only path.** One relay of two serves
-  HTTPS. `geekom` needs the one privileged step in §4 (`sudo tailscale cert`)
-  that only the user can run there; until it is run, `geekom` is reachable from
-  no other machine except through an SSH forward.
-- **The certificate-renewal timer is not installed on `depr`.** The certificate
-  it serves is valid until **6 December 2026 18:35:37 GMT** and nothing on that
-  host renews it. After that date the relay keeps serving an expired certificate
-  and every client that validates the chain — which the CLI does, always — stops
-  being able to talk to it. §4 has the five commands that fix this. Related:
-  hot reload on renewal has an automated test but has never been exercised on
-  `depr`, so on that host it is unproven rather than demonstrated.
+- **The two hosts' TLS deployments are not interchangeable.** Both serve HTTPS
+  and both renew, but `depr` keeps its pair in `/etc/echolet/tls` with a root
+  timer while `geekom` keeps it in a Docker volume with a `systemctl --user`
+  timer, because `geekom`'s operator has no usable root (§4.1). A command that
+  works on one host can silently find nothing on the other — most sharply,
+  `systemctl status echolet-cert-renew.timer` on `geekom`. This asymmetry is
+  documented rather than removed: unifying it would mean restructuring a running
+  TLS relay for symmetry alone.
+- **The committed `deploy/relay/systemd/` units are usable on `depr` and unusable
+  on `geekom`.** They are written for root and for a host-path certificate
+  directory. Nothing in the repository yet ships the user-scope, volume-aware
+  variant `geekom` runs; §4.1 describes it, and the `geekom` TLS report holds the
+  script. A reader who copies the committed units onto a `geekom`-shaped host
+  will get a unit that cannot be installed, and if it could, would renew a path
+  the relay does not read.
+- **Certificate hot reload has never been exercised on either host.** Both
+  certificates expire **6 December 2026** and both hosts now have a timer that
+  will rewrite them before then (§4.1) — but the relay's *pickup* of genuinely
+  new certificate content is still evidenced only by an automated test and by the
+  code, because forcing it on a real host means re-issuing into Let's Encrypt's
+  duplicate rate limit. Delivery is proven on both hosts; pickup is not.
+- **Neither host has been rebooted since its renewal timer was installed.** That
+  the timers come back on boot rests on the `timers.target.wants` symlink
+  (`depr`) and on that plus `Linger=yes` (`geekom`) — the documented mechanism,
+  not an observed boot.
 - **`docker-compose.yml` cannot start a TLS relay on an existing named volume.**
   It hard-requires `ECHOLET_HOST_DATA_DIR` and has no `ECHOLET_DATA_VOLUME`
   branch, so `docker compose config` fails outright for a host whose store lives

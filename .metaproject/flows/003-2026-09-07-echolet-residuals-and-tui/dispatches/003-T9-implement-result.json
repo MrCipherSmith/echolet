@@ -1,0 +1,244 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T9-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Five non-test Go files changed under apps/relay close RI-30, RI-23 and RI-19; RI-31's two green escalation pins are unbroken. All 8 of T8's in-scope RED assertions are now green (2 RI-30, 3 RI-23, 3 RI-19 subtests including the previously-incidental identity_id), the RI-19 control stays green, and TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes was not relaxed. RI-09's TestMaximumSizeEnvelopeIsDeliverableAtRaisedMaxMessageBytes is deliberately STILL RED and untouched, per the dispatch: it is a two-sided relay+CLI change split into its own task, and no relay-only workaround was attempted. CleanupService gained a joining Stop(); router.NewRouter now returns a *Router embedding *chi.Mux so the four existing single-assignment call sites in the router package's own tests still compile unchanged; cmd/relay stops it between the drain and the Badger close. The device-record backfill skips, counts, reports and retries. ValidatePreKeyBundle applies MaxIdentifierBytes to all three identifiers before signature verification. Go matrix identical under untagged, -race and -race -tags relayv2 with 0 data races; go vet exit 0 under both tag sets; gofmt adds nothing to the three pre-existing RI-35 files; pnpm typecheck exit 0. No test file was changed - all six new digests and process_shutdown_test.go's are unchanged.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "RI-30: the cleanup service can be stopped, stopping it ends the goroutine, and the relay stops it before storage closes",
+      "status": "met",
+      "evidence": "CleanupService gained stop/stopped channels under a sync.Mutex and a Stop() that closes the first and WAITS on the second, so 'stopped' means the goroutine is gone rather than merely asked to go - the property the caller actually buys, since it stops the service so nothing is writing when Badger closes. Start is now a no-op when already running and its goroutine defers both ticker.Stop() and close(stopped), so a panic in runCleanup releases the shutdown sequence instead of parking it. router.NewRouter returns *Router{*chi.Mux; cleanup} with Stop(); the mux is EMBEDDED so *Router is still an http.Handler for server.New and for the four existing NewRouter call sites in signal_prekey_bundle_v2_test.go and signal_prekey_bundle_v2_mailbox_test.go, none of which changed. cmd/relay routes all four post-router storage closes through stopBackgroundWorkAndCloseStorage(r, st, code), which calls r.Stop() then closeStorage. TestCleanupServiceStopEndsItsTickerGoroutine PASS (0.00s). TestRelayStopsTheCleanupServiceBeforeClosingStorage PASS (1.24s), on a real-binary stop log reading: Cleanup service started / Shutdown signal received / In-flight requests drained / Cleanup service stopped / Storage closed."
+    },
+    {
+      "criterion": "RI-23: a corrupt device record is skipped and counted, the healthy records around it are still bound, unrelated identities still authorise, and the count is reported",
+      "status": "met",
+      "evidence": "BackfillDeviceMailboxBindings now increments a skipped counter and returns nil on a json.Unmarshal failure instead of aborting the scan, keeping the bad-record / bad-store distinction: an error still returned from it.Item().Value came from Badger and is still returned. The per-record write moved into saveDeviceMailboxBindingWithRetry, which uses Save's bounded deviceRecordConflictRetries loop - the second, untested half of the RI-23 row. When skipped > 0 the repository logs slog.Warn('skipped undecodable device records during mailbox binding backfill', skipped, bound), counts only, no key, no identity, no stored value. TestBackfillSkipsUndecodableRecordAndBindsTheHealthyOnes PASS (0.05s, observed 'skipped=1 bound=2'), TestBackfillReportsTheNumberOfSkippedRecords PASS (0.04s), TestPreBindingIdentityStillAuthorizesWhenAnotherDeviceRecordIsUndecodable PASS (0.06s, observed 'skipped=1 bound=1' with the owner now answering 200)."
+    },
+    {
+      "criterion": "RI-19: an over-long identifier on the v1 prekey-bundle route is refused as client input with a bounded 4xx and a typed code, never a 500, and nothing is stored",
+      "status": "met",
+      "evidence": "ValidatePreKeyBundle gained the MaxIdentifierBytes loop ValidateDeviceRecord already has at validate.go:30-37, over identity_id, device_id AND bundle_id, returning 400 INVALID_SCHEMA with the field name and never the value. It runs before signature verification so an over-long value answers with the bound it violated. All three subtests of TestPublishPreKeyBundleRejectsOversizedIdentifiersWithClientError PASS at 65000 bytes: bundle_id was 500 INTERNAL_ERROR, device_id was 200-and-stored, identity_id was refused only incidentally as the verification key and is now refused by the bound. Each subtest also asserts 0 stored bundles under the claimed identity, which holds because validation runs before service.PublishPreKeyBundle. MaxIdentifierBytes' own doc comment now lists this validator among the sharers."
+    },
+    {
+      "criterion": "RI-19's control stays green: the bound is a bound, not a closed route",
+      "status": "met",
+      "evidence": "TestPublishPreKeyBundleStillAcceptsV2ShapedIdentifiers PASS (0.05s), publishing with the exact shapes the v2 path accepts (36-char UUID bundle_id and device_id, 43-char base64url identity_id) and finding 1 bundle stored. 256 bytes is far above every legitimate value, so no real publication is affected."
+    },
+    {
+      "criterion": "RI-31: the two escalation tests, green before, are not broken",
+      "status": "met",
+      "evidence": "TestRelayExitsZeroWhenTheDrainDeadlineIsExceeded PASS (7.05s) and TestRelayExitsZeroOnASecondSignalDuringShutdown PASS (1.82s), both with the new r.Stop() now sitting in the sequence they exercise. Both branches of main.go's shutdown select are byte-for-byte unchanged; only the shared tail after that select gained the cleanup stop. The four pre-existing process_shutdown_test.go tests also pass."
+    },
+    {
+      "criterion": "RI-09 is left red, untouched, with no relay-only workaround",
+      "status": "partial",
+      "evidence": "TestMaximumSizeEnvelopeIsDeliverableAtRaisedMaxMessageBytes is the ONLY failing Go test in all three configurations, failing on its own assertion in 0.09s / 0.65s / 0.68s. This is the instructed outcome, not an omission: T8-F-001 establishes that capping acceptance collides with TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes and that raising the poll budget cannot reach the fixed `size > 1024 * 1024` at apps/cli/src/transport/relayClient.ts:144, so the item was split into a two-sided task. mailbox_handler.go was not opened for edit and TestSendEnvelopeBodyLimitIsDerivedFromMaxMessageBytes was verified still PASS."
+    },
+    {
+      "criterion": "No test file changed, and nothing existing was weakened, skipped, narrowed or deleted",
+      "status": "met",
+      "evidence": "All six new test files' sha256 digests are identical to T8's result JSON: c2105ce4..., 02a6b385..., 3bd2c526..., d59fffc3..., d3ad8fa2..., a125d20b... process_shutdown_test.go is also unchanged at c38372f5ff4a983d6ad39799dfda28e36e5d9e8625131094222bc5eb08329155. git status --porcelain lists exactly five modified files, all non-test and all under apps/relay: cmd/relay/main.go, internal/api/router/router.go, internal/service/cleanup_service.go, internal/storage/repository/device_record_repo.go, internal/validation/validate.go. No validation was relaxed: every change adds a check or a lifecycle, and the only behaviour removed is 'abort the whole backfill on one bad record'. apps/cli/src/tui/history-pane.ts and pane-fit.ts also appear in git status and belong to the concurrent TUI task, not to this one."
+    },
+    {
+      "criterion": "The whole Go matrix is green apart from RI-09, with no data races and no new gofmt or vet debt",
+      "status": "met",
+      "evidence": "go test ./... , go test -race ./... and go test -race -tags relayv2 ./... all report exactly one failure - the RI-09 test - and every other package ok; 0 data races in both race configurations. go vet ./... and go vet -tags relayv2 ./... exit 0; go build ./... exits 0. gofmt -l apps/relay lists exactly the three pre-existing RI-35 files (mailbox_read_mark_test.go, api/handler/signal_prekey_bundle_v2.go, storage/repository/signal_prekey_bundle_v2.go), none of which was reformatted, and none of the five files changed here is on that list. pnpm typecheck exits 0."
+    },
+    {
+      "criterion": "Safety: nothing sensitive logged, and no remote host touched",
+      "status": "met",
+      "evidence": "Two log lines were added. slog.Info('Cleanup service stopped') carries no fields at all. slog.Warn('skipped undecodable device records during mailbox binding backfill') carries two integers; the device-record key is deliberately not carried out of the scan loop because it contains the identity it belongs to, and a startup line is not an audit record. No store key, private key, plaintext or HTTP request body is printed or recorded anywhere. Every command ran locally; geekom and depr were not contacted and no deployment was performed."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t9-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Each change with the alternative rejected and why, the exact position of the cleanup stop in the shutdown log, the full verification matrix, the seven unchanged test digests, and eight residuals.",
+      "hash": "sha256:5ac121b51f67a975cac3054127605d354eb69a7610bdb31f1429becfca561e1c"
+    },
+    {
+      "path": "apps/relay/internal/service/cleanup_service.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RI-30, service half. stop/stopped channels under a mutex; Start idempotent and selecting on both; Stop closes and JOINS, idempotent and safe when never started.",
+      "hash": "sha256:3b4f42ce763e2d96a49e5778c73ea833cecab0271723860c7cf6846fac9a1e39"
+    },
+    {
+      "path": "apps/relay/internal/api/router/router.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RI-30, lifecycle half. New Router type embedding *chi.Mux and holding the cleanup service, with Stop(); NewRouter returns it. Embedding keeps every existing caller compiling unchanged.",
+      "hash": "sha256:e8e29ddbe12f2f32c81b8fbfc72fabf9560e1afb0522b90066eb7d1331d90f30"
+    },
+    {
+      "path": "apps/relay/cmd/relay/main.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RI-30, shutdown half. stopBackgroundWorkAndCloseStorage stops the router's background work then closes Badger; all four post-router close paths go through it. Step 3's comment now names the ticker.",
+      "hash": "sha256:14baf9adf3197db1d8b30639b7e1347dcdd75099b2e543e14e5ec3615560b18b"
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/device_record_repo.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RI-23. Skip-and-count on an undecodable record, store errors still returned, per-record write moved to saveDeviceMailboxBindingWithRetry with Save's bounded conflict loop, one slog.Warn carrying counts only.",
+      "hash": "sha256:8d5f6fec6043d4e2afe3ead8581ead545792dd12456417c15969eb7f306d0498"
+    },
+    {
+      "path": "apps/relay/internal/validation/validate.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RI-19. MaxIdentifierBytes applied to identity_id, device_id and bundle_id in ValidatePreKeyBundle, before signature verification; the constant's doc comment updated.",
+      "hash": "sha256:b458b70baf4f9b7821ac096174efdc00229c7c830406766171f6087e9aed0c7e"
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/relay/internal/service/cleanup_service.go", "change": "modified" },
+    { "path": "apps/relay/internal/api/router/router.go", "change": "modified" },
+    { "path": "apps/relay/cmd/relay/main.go", "change": "modified" },
+    { "path": "apps/relay/internal/storage/repository/device_record_repo.go", "change": "modified" },
+    { "path": "apps/relay/internal/validation/validate.go", "change": "modified" },
+    { "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t9-implementation-report.md", "change": "added" },
+    { "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T9-implement-result.json", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "T9-F-001",
+      "severity": "info",
+      "confidence": "high",
+      "line": 19,
+      "evidence": "T8's out-of-tree achievability patch had NewRouter return (*chi.Mux, *service.CleanupService). That shape does not survive in the tree: signal_prekey_bundle_v2_test.go:17 and signal_prekey_bundle_v2_mailbox_test.go:29,41,58,73 all write `r := NewRouter(...)` and then use r as an http.Handler, so a second return value is a compile error in four places this task may not edit. Returning *Router with the mux EMBEDDED gives the same lifecycle handle while ServeHTTP is promoted, so all four sites and server.New(cfg, http.Handler) are untouched and the router package's tests pass unchanged.",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/api/router/router.go:19 (NewRouter's signature)",
+          "apps/relay/cmd/relay/main.go:67 (the only non-test caller)",
+          "apps/relay/internal/api/router/signal_prekey_bundle_v2_test.go:17",
+          "apps/relay/internal/api/router/signal_prekey_bundle_v2_mailbox_test.go:29,41,58,73"
+        ],
+        "enumeration_method": "keryx ctx rg for NewRouter across apps/relay; the result is every construction site in the module, five in total."
+      },
+      "reviewer": "task-implementer (003-T9)",
+      "problem": "The obvious RI-30 fix shape (a second return value) is unavailable in-tree; the embedded-mux handle is what the code actually wants",
+      "impact": "Anyone reading T8's achievability note and applying it literally would break four existing tests and then be tempted to edit them. Recorded so the next reader does not repeat the attempt.",
+      "suggested_fix": "Keep Router with the embedded *chi.Mux. If the router package ever needs more background work, add it to Router.Stop rather than growing NewRouter's return list.",
+      "file": "apps/relay/internal/api/router/router.go"
+    },
+    {
+      "id": "T9-F-002",
+      "severity": "minor",
+      "confidence": "high",
+      "line": 17,
+      "evidence": "The four NewRouter call sites in the router package's own tests never stop the service they start, so each leaks one goroutine parked on a 3600s ticker for the life of the test binary. This existed before RI-30 was fixed and is unchanged by it - but it is now fixable in one line per site, and it was not, because this task may not change a test file. Observable: cleanup_service_stop_test.go's own goroutine-dump matcher is the technique.",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/api/router/signal_prekey_bundle_v2_test.go:17",
+          "apps/relay/internal/api/router/signal_prekey_bundle_v2_mailbox_test.go:29,41,58,73"
+        ],
+        "enumeration_method": "Every NewRouter call site outside cmd/relay, from the same keryx ctx rg sweep."
+      },
+      "reviewer": "task-implementer (003-T9)",
+      "problem": "The router package's tests still leak the cleanup goroutine they now have a Stop for",
+      "impact": "Harmless today - the ticker never fires at 3600s and the goroutines die with the process - but it means the router package's tests do not exercise the lifecycle they now depend on, so a future regression in Router.Stop would only be caught by the two RI-30 tests.",
+      "suggested_fix": "Add `defer r.Stop()` at each of the five sites (four tests plus the restarted router) in a task permitted to edit tests.",
+      "file": "apps/relay/internal/api/router/signal_prekey_bundle_v2_mailbox_test.go"
+    },
+    {
+      "id": "T9-F-003",
+      "severity": "minor",
+      "confidence": "high",
+      "line": 63,
+      "evidence": "The RI-23 row names two defects: the abort on the first undecodable record, and the missing bounded conflict retry on the per-record write (unlike Save at device_record_repo.go:49). T8's tests pin only the first. saveDeviceMailboxBindingWithRetry closes the second, but nothing exercises it: provoking a Badger ErrConflict deterministically needs a concurrent writer against the same keys during the scan, which is a fixture this task may not add.",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/storage/repository/device_record_repo.go (saveDeviceMailboxBindingWithRetry, the new retry loop)",
+          "apps/relay/internal/storage/repository/device_record_repo.go:47-59 (Save's loop, the model it copies)"
+        ],
+        "enumeration_method": "The two device_mailbox writers in the repository; the RI-23 row names exactly these and there is no third."
+      },
+      "reviewer": "task-implementer (003-T9)",
+      "problem": "The retry half of RI-23 is fixed but untested",
+      "impact": "A regression that removed the retry would leave the backfill abandoning the rest of its records under startup contention, and nothing would go red - the same silent-coverage shape RI-31 was about.",
+      "suggested_fix": "A test that publishes a device record concurrently with the backfill scan over the same key space, asserting the backfill still returns nil and binds everything.",
+      "file": "apps/relay/internal/storage/repository/device_record_repo.go"
+    },
+    {
+      "id": "T9-F-004",
+      "severity": "info",
+      "confidence": "high",
+      "line": 74,
+      "evidence": "Before this change an over-long identity_id on /v1/prekeys/publish was refused with INVALID_SIGNATURE, because identity_id doubles as the ed25519 verification key and an over-long value fails verification before it can become a Badger key. The new length loop runs before that verification, so the same request now answers INVALID_SCHEMA. No test pinned the old code, and the T8 test requires only a typed non-INTERNAL_ERROR client code, so both are green - but it is a visible wire-level change on a case that was already refused.",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/validation/validate.go (ValidatePreKeyBundle, the new loop and the verification below it)",
+          "apps/relay/internal/api/handler/prekey_bundle_handler.go (the 400 mapping for ValidationError)"
+        ],
+        "enumeration_method": "The single route affected; identity_id is the only identifier whose refusal pre-existed the bound."
+      },
+      "reviewer": "task-implementer (003-T9)",
+      "problem": "An over-long identity_id's error code changed from INVALID_SIGNATURE to INVALID_SCHEMA",
+      "impact": "A client keying off the exact code for this case would see a different one. Intended - the answer now names the rule actually violated - but worth recording rather than discovering later.",
+      "suggested_fix": "Accept as intended. If any client is found matching on INVALID_SIGNATURE for over-long identifiers, that is itself a defect.",
+      "file": "apps/relay/internal/validation/validate.go"
+    },
+    {
+      "id": "T9-F-005",
+      "severity": "info",
+      "confidence": "high",
+      "line": 41,
+      "evidence": "RI-63 says CleanupService carries three unread fields and runCleanup() is two slog.Debug calls, and that RI-30 must be fixed first if runCleanup is ever given real work. RI-30 is now closed and Stop() joins, so a runCleanup with Badger transactions in it is bounded by the shutdown sequence. The unused fields and the empty body are untouched here.",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/service/cleanup_service.go (mailboxRepo, challengeRepo, mailboxTTL, runCleanup)"
+        ],
+        "enumeration_method": "The RI-63 row names exactly these four; read at source."
+      },
+      "reviewer": "task-implementer (003-T9)",
+      "problem": "RI-63's prerequisite is now met, so the item is unblocked",
+      "impact": "Whoever takes RI-63 no longer has to fix RI-30 first. Conversely, the value of RI-30's fix stays theoretical until runCleanup has work.",
+      "suggested_fix": "Take RI-63 next while the RI-30 reasoning is fresh: either delete the unused fields and mark the interval reserved, or give runCleanup its real work now that Stop bounds it.",
+      "file": "apps/relay/internal/service/cleanup_service.go"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "product_files_changed": 5,
+    "test_files_changed": 0,
+    "red_tests_turned_green": 8,
+    "red_tests_remaining": 1,
+    "green_tests_kept_green": 4,
+    "go_untagged": "1 failure (TestMaximumSizeEnvelopeIsDeliverableAtRaisedMaxMessageBytes, RI-09, out of scope); every other package ok",
+    "go_race": "identical single failure, 0 data races",
+    "go_race_relayv2": "identical single failure, 0 data races",
+    "go_vet": "exit 0 untagged and with -tags relayv2",
+    "go_build": "exit 0",
+    "gofmt": "the three pre-existing RI-35 files only; none of the five changed files is listed and none of the three was reformatted",
+    "js_typecheck": "exit 0",
+    "js_suite": "not re-run - Go-only change; the 15 TUI failures belong to the concurrent 003-T5/T6 dispatch",
+    "cleanup_stop_position": "between 'In-flight requests drained' and 'Storage closed', asserted on the real binary's stop log by TestRelayStopsTheCleanupServiceBeforeClosingStorage",
+    "test_file_digests_unchanged": [
+      "apps/relay/internal/service/cleanup_service_stop_test.go c2105ce47c51ec42cbd89659e4e004533bfd82f7c5996d9f20ae93391161f511",
+      "apps/relay/internal/server/process_shutdown_escalation_test.go 02a6b385d8b757f4eda3c58cfdae386e8b74f806b186928429142a0dfde7fdcf",
+      "apps/relay/internal/storage/repository/device_record_backfill_test.go 3bd2c52609c89b8b9b3524d3b4f6a050f4b40d38c660eb564117bf162db5f52f",
+      "apps/relay/internal/api/handler/mailbox_backfill_authorization_test.go d59fffc334b69249560b88a2608e8cc1bc372cae10c4c36494aa9965470e2f96",
+      "apps/relay/internal/api/handler/mailbox_poll_byte_budget_derivation_test.go d3ad8fa2e661ba4b360bcc58208327b444265f208931d2cd10c38b3d2f9f5819",
+      "apps/relay/internal/api/handler/prekey_bundle_identifier_bounds_test.go a125d20b1ce3158c7af6d003374ef8e44206f361aaca1fd4c153e8838e863a05",
+      "apps/relay/internal/server/process_shutdown_test.go c38372f5ff4a983d6ad39799dfda28e36e5d9e8625131094222bc5eb08329155"
+    ],
+    "routing_audit": {
+      "graph_used": "not-relevant - every source was named by file:line in T8's result JSON and the T1 inventory; the one navigation question (who calls NewRouter) was a single exact-symbol search",
+      "wiki_used": "not-relevant - the design reasoning for all three items lives in the T1 inventory rows, the T8 findings and the sources' own comments, all read directly",
+      "ctx_used": "yes - keryx ctx run for every build, vet, gofmt, test and git command; keryx ctx rg for every search; keryx ctx read for the large sources",
+      "raw_rg_used": "no"
+    }
+  },
+  "timestamp_utc": "2026-09-07T20:55:00Z"
+}
