@@ -1,0 +1,257 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T5-tests",
+  "status": "DONE",
+  "summary": "18 RED tests in 7 new colocated *.test.ts files under apps/cli/src/tui, pinning D-1 (single-flight commands and the exit-code contract, pure AND over real child processes), D-2 in both of AC7's halves - panes that drop rows in silence, and panes that keep the OLDEST rows rather than the ones an operator needs - D-3 (a legend wider than the viewport it is clamped to, and an unbound help key), D-4 (over-wide lines below the minimum viewport, which pushes the AC6 notice out of view), plus --help exiting 2 and the profiles-pane roster doc claim. No production file was changed. apps/cli measured at 18 failed | 228 passed (246) with exactly the 18 new tests failing, each on its own assertion; typecheck exits 0. The last 3 were added by a follow-up pass that closed AC7's ordering half; the first 6 files are byte-identical to their recorded hashes and nothing in them was weakened, skipped, narrowed or deleted.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "D-1 pinned: while a command is in flight, a key that would start another command starts none; the operator is told; the exit class reported is the one the CLI returned",
+      "status": "met",
+      "evidence": "7 RED tests across tui-shell.singleFlight.test.ts (4, pure/in-process) and main.processDriven.test.ts (2, process-level) plus the --help case. The process pair drives the real dist bundle with real child processes; the count assertion sits behind a causal barrier (a Node parent cannot exit while a child it spawned is alive), so the non-event 'no second child' is exact rather than timed."
+    },
+    {
+      "criterion": "D-2 pinned: a truncated pane says so, and says how many rows are not shown",
+      "status": "met",
+      "evidence": "shell-chrome.overflow.test.ts, 3 RED tests over history (10 of 30 rendered), the contact roster (2 of 30) and rejections (10 of 30). The hidden count is derived from the frame itself, not from layout arithmetic, so the assertion survives any later layout."
+    },
+    {
+      "criterion": "D-2 pinned, second half of AC7: a truncated pane keeps the rows an operator needs rather than the oldest",
+      "status": "met",
+      "evidence": "shell-chrome.recency.test.ts, 3 further RED tests added after the first six files. renderFrame slices paneLines with .slice(0, bodyRows) - a PREFIX - so 30 history entries render the first 10 and 30 rejections the first 10; the message that made the operator open the pane is the one discarded. Each test asserts, on ONE frame, that the surviving rows are the contiguous TAIL of the supplied list AND that the frame names the hidden count, so a fix cannot satisfy one half by breaking the other. Which rows survive is read off the frame (scan the supplied ids in their own order, ask the frame whether each is present), so no paint order is pinned: newest-first and chronological-within-the-window both pass, keeping-the-oldest does not. The third test repeats both panes at MIN_VIEWPORT.rows + 4 so the property is a rule about ordering rather than a coincidence of one row count. The contact roster is deliberately left unpinned for ordering, with the reasoning recorded in the file: ContactView carries no timestamp, the roster is a selection surface whose display order must be decided together with the `c` cycle in U6, and rosterDiscrepancy plus the D-2 marker already tell the operator the roster is short and by how much. What the roster needs is a paging key (reachability), which is not an ordering pin."
+    },
+    {
+      "criterion": "D-3 pinned: every advertised key is visible at the minimum viewport, and there is a discoverable way to see the key list",
+      "status": "met",
+      "evidence": "shell-chrome.legend.test.ts, 3 RED tests: '[q]' visible at MIN_VIEWPORT, mapKey binds '?', '[?]' advertised at MIN_VIEWPORT. MIN_VIEWPORT is not moved by any test."
+    },
+    {
+      "criterion": "D-4 pinned: at any viewport the shell emits, no line exceeds the viewport width and the notice remains visible",
+      "status": "met",
+      "evidence": "tui-shell.smallViewport.test.ts, 1 RED test driving the real runTuiShell with an injected 40x10 stdout (currently 16 lines of 72). The same test asserts a 96x28 terminal is still painted at 96x28, so 'always paint the minimum' cannot pass for a fix."
+    },
+    {
+      "criterion": "Smaller cases pinned: --help exits 0 with usage, and the profiles-pane header does not claim the roster holds exported cards",
+      "status": "met",
+      "evidence": "main.processDriven.test.ts '--help' (RED: exit 2, '--help needs a value') and profiles-pane.rosterClaim.test.ts (RED on the module doc comment's 'exported or imported' claim, alongside a green behavioural assertion that the roster is exactly what it is handed)."
+    },
+    {
+      "criterion": "The flow 002 properties that must not break are kept pinned and not relaxed",
+      "status": "met",
+      "evidence": "No existing test was weakened, skipped, narrowed or deleted; the 228 pre-existing apps/cli tests still pass, unchanged across both passes. Every new frame-level test additionally asserts exactly rows x cols, absence of ESC, and the presence of UNAUDITED_NOTICE on the very frames it adds requirements to - including the busy frame, the three truncated panes, the minimum-viewport legend frame, the 40x10 shell frames, and the five recency frames (history and rejections at MIN_VIEWPORT, and both again at MIN_VIEWPORT.rows + 4), so an ordering fix cannot buy its rows from the notice."
+    },
+    {
+      "criterion": "Every new test is RED on its own assertion, not on a compile error, missing fixture or timeout",
+      "status": "met",
+      "evidence": "pnpm typecheck exits 0 with all 7 new files in scope. All 18 new tests fail on an AssertionError, quoted in metrics.red_failures. The process-driven file was re-run 5 times consecutively with identical RED results in under 0.5s per test. The 3 recency tests fail on their ordering assertion (shell-chrome.recency.test.ts:114, `expect(visible).toEqual(newest)`) and not on the marker assertion that follows it, which is why the ordering assertion is placed first."
+    },
+    {
+      "criterion": "Tests are achievable: they go green under a fix rather than being structurally unsatisfiable",
+      "status": "met",
+      "evidence": "A throwaway 4-line patch (busy gate in mapKey/reduce, 'busy' in the activity line, viewport clamp removed, notice wrapped below its width) turned all 7 D-1 and D-4 tests green, including both process-level ones. The patch was reverted and apps/cli/src/tui/tui-shell.ts and shell-chrome.ts verified unchanged by SHA-256 (shasum -c OK)."
+    },
+    {
+      "criterion": "No production file changed; nothing outside apps/cli/src/tui/*.test.ts touched",
+      "status": "met",
+      "evidence": "Seven new *.test.ts files only. The follow-up pass re-verified by SHA-256 that all six earlier test files are byte-identical to the hashes recorded here and that no production file moved: shell-chrome.ts 2d74d8eb..., history-pane.ts 1afecc4108dcb4c6aedbad679f77e7fcf8731133a07390ae3b434232fdf30519, mailbox-pane.ts 656dc4f662b5f7ceb75cb33e5206d6751da7726ff5b68dd5b06e092aefcb912c, profiles-pane.ts 2bbca458..., state.ts d4fa788582ad288c5a7c40066e60d9d929715b9bab6d27c7774a08be51e73344, tui-shell.ts 1bfeccc0..., main.ts 0b87a0e5.... `git status --porcelain --untracked-files=no` shows no modified tracked file under apps/, packages/ or docs/. No relay was started by the follow-up pass; geekom and depr were not contacted. No store key, private key, plaintext or HTTP body was printed or recorded. First-pass evidence follows. tui-shell.ts 1bfeccc0ef8a85ed4fd31c16fbdaf30ce63e39ddeb0c7f8373a12594dfac6c68, shell-chrome.ts 2d74d8ebd2679b3cdc3ce4d71d001bb55b62c4f39af58a742077ce9e187b3306, main.ts 0b87a0e51a585183887dc01e0cf16af0a7ff9876604463e00969ec6e7a9f03be, profiles-pane.ts 2bbca458a70682eb7539450ea1ede1e0f42b5e5a298c0ff5a5d23f8f277e85a1 - all as found. apps/relay, packages/ and docs/ untouched. No relay was started; geekom and depr were not contacted. No store key, private key, plaintext or HTTP body was printed or recorded."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/src/tui/tui-shell.singleFlight.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "D-1 pure half: mapKey/reduce refuse a second command while busy, the busy frame tells the operator, and runTuiShell with a never-settling runCli calls it once for five keystrokes. 4 tests, all RED.",
+      "hash": "sha256:f0dfa6b6a232dcab2f9ae737f0b63bda42d35542987ff41ac547bd3d9d22875c"
+    },
+    {
+      "path": "apps/cli/src/tui/main.processDriven.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "D-1 process half plus --help. Drives the real console binary over a pipe with real children against a control-socket fake CLI. 3 tests, all RED.",
+      "hash": "sha256:f72a5fc61aa4ee3817f6d7fef0beecbce7bc8a7e71d589958f84a843bc0edcc7"
+    },
+    {
+      "path": "apps/cli/src/tui/shell-chrome.overflow.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "D-2: history, contact roster and rejections panes must name the number of rows they are not showing. 3 tests, all RED.",
+      "hash": "sha256:0b05771915dc9e11edab67d228813ad63fc664a4a2bfd938201e38f93e9de301"
+    },
+    {
+      "path": "apps/cli/src/tui/shell-chrome.recency.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "D-2 second half: the history and rejections panes must keep the most recent rows, not the first ones, and must say how many they hide on the same frame. Includes a written decision NOT to pin an ordering for the contact roster, with reasons. 3 tests, all RED on the ordering assertion.",
+      "hash": "sha256:aad0312c3f2d30a3ecbf44fce04f1c8358359e8083f85a215e30026a82d5bc73"
+    },
+    {
+      "path": "apps/cli/src/tui/shell-chrome.legend.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "D-3: the quit key and a help affordance must be visible at MIN_VIEWPORT, and '?' must be bound. 3 tests, all RED.",
+      "hash": "sha256:b0608084267caf10e7a2ff6284258c7cd955464a99dd15b1e71ad7c7b499a9e8"
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.smallViewport.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "D-4: the shell must paint a 40x10 terminal at 40x10 with the notice intact, and a 96x28 one at 96x28. 1 test, RED.",
+      "hash": "sha256:af49ba463b1457a35f1fb8dafcac54e8f01129878ddaa07c1c9f46b4e8e5e814"
+    },
+    {
+      "path": "apps/cli/src/tui/profiles-pane.rosterClaim.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The pane's documented roster contract must not name a category (exported cards) that no code path produces. 1 test, RED.",
+      "hash": "sha256:610cf9a3d8379ff04753184ceecc2c238b81f0dfa15f10a0da2485c75ae87607"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/tui/tui-shell.singleFlight.test.ts",
+      "change": "added"
+    },
+    {
+      "path": "apps/cli/src/tui/main.processDriven.test.ts",
+      "change": "added"
+    },
+    {
+      "path": "apps/cli/src/tui/shell-chrome.overflow.test.ts",
+      "change": "added"
+    },
+    {
+      "path": "apps/cli/src/tui/shell-chrome.recency.test.ts",
+      "change": "added"
+    },
+    {
+      "path": "apps/cli/src/tui/shell-chrome.legend.test.ts",
+      "change": "added"
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.smallViewport.test.ts",
+      "change": "added"
+    },
+    {
+      "path": "apps/cli/src/tui/profiles-pane.rosterClaim.test.ts",
+      "change": "added"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "new_test_files": 7,
+    "new_tests": 18,
+    "new_tests_red": 18,
+    "production_files_changed": 0,
+    "workspace_tests_total_after": 311,
+    "workspace_tests_passing_after": 293,
+    "workspace_tests_failing_after": 18,
+    "workspace_counts_note": "The 308/293/15 workspace figures were MEASURED by the first pass. The 311/293/18 figures above are DERIVED from it by adding the 3 tests of the follow-up pass, which measured apps/cli only (18 failed | 228 passed (246), 234.8s). The passing count is unchanged because all 3 additions are RED.",
+    "apps_cli_tests_after": "18 failed | 228 passed (246)",
+    "apps_cli_failures_by_file_after": "main.processDriven 3, profiles-pane.rosterClaim 1, shell-chrome.legend 3, shell-chrome.overflow 3, shell-chrome.recency 3, tui-shell.singleFlight 4, tui-shell.smallViewport 1 = 18",
+    "e2e_tests": "3 passed (3)",
+    "typecheck_exit_code": 0,
+    "process_driven_repeat_runs": 5,
+    "relays_started": 0,
+    "red_failures": [
+      {
+        "file": "apps/cli/src/tui/tui-shell.singleFlight.test.ts",
+        "test": "D-1 (pure): does not turn a command key into a run intent while busy, and keeps quit, panes and the modal live",
+        "failure": "AssertionError: expected 'run' not to be 'run' // Object.is equality"
+      },
+      {
+        "file": "apps/cli/src/tui/tui-shell.singleFlight.test.ts",
+        "test": "D-1 (pure): emits no run-cli effect for a run intent that arrives while busy",
+        "failure": "AssertionError: expected [ { kind: 'run-cli', ...(1) } ] to deeply equal []"
+      },
+      {
+        "file": "apps/cli/src/tui/tui-shell.singleFlight.test.ts",
+        "test": "D-1 (pure): tells the operator that the console is busy rather than dropping the keystroke in silence",
+        "failure": "AssertionError: expected 'UNAUDITED PROTOTYPE - not suitable fo...' to match /\\b(busy|refused|refuses|refusing|ignored|already running|in flight|one at a time|please wait)\\b/i"
+      },
+      {
+        "file": "apps/cli/src/tui/tui-shell.singleFlight.test.ts",
+        "test": "D-1 (shell, in-process): five command keystrokes in flight call runCli exactly once",
+        "failure": "AssertionError: expected 5 to be 1 // Object.is equality"
+      },
+      {
+        "file": "apps/cli/src/tui/main.processDriven.test.ts",
+        "test": "D-1 (process): spawns no second child while a command is in flight",
+        "failure": "AssertionError: expected [ 'doctor' ] to deeply equal []  (then: expected [ 'poll', 'doctor', 'doctor' ] to deeply equal [ 'poll', 'doctor' ])"
+      },
+      {
+        "file": "apps/cli/src/tui/main.processDriven.test.ts",
+        "test": "D-1 (process): reports the exit class the CLI returned, and does not manufacture a persistence failure",
+        "failure": "AssertionError: expected [ 'relay publish' ] to deeply equal []"
+      },
+      {
+        "file": "apps/cli/src/tui/main.processDriven.test.ts",
+        "test": "TUI entry point: prints usage and exits 0 for --help",
+        "failure": "AssertionError: expected 2 to be +0 // Object.is equality"
+      },
+      {
+        "file": "apps/cli/src/tui/shell-chrome.overflow.test.ts",
+        "test": "D-2: says how many history entries it is not showing",
+        "failure": "AssertionError: expected 0 to be greater than 0 (no truncation marker on the frame; 10 of 30 entries rendered)"
+      },
+      {
+        "file": "apps/cli/src/tui/shell-chrome.overflow.test.ts",
+        "test": "D-2: says how many contacts of the roster it is not showing",
+        "failure": "AssertionError: expected 0 to be greater than 0 (no truncation marker on the frame; 2 of 30 contacts rendered)"
+      },
+      {
+        "file": "apps/cli/src/tui/shell-chrome.overflow.test.ts",
+        "test": "D-2: says how many rejected envelopes it is not showing",
+        "failure": "AssertionError: expected 0 to be greater than 0 (no truncation marker on the frame; 10 of 30 rejections rendered)"
+      },
+      {
+        "file": "apps/cli/src/tui/shell-chrome.recency.test.ts",
+        "test": "D-2: keeps the most recent history entries, not the first ten of the conversation",
+        "failure": "AssertionError: expected [ +0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ] to deeply equal [ Array(10) ]  (expected 20..29, received 0..9)"
+      },
+      {
+        "file": "apps/cli/src/tui/shell-chrome.recency.test.ts",
+        "test": "D-2: keeps the most recent rejected envelopes, which are the ones not yet acted on",
+        "failure": "AssertionError: expected [ +0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ] to deeply equal [ Array(10) ]  (expected 20..29, received 0..9)"
+      },
+      {
+        "file": "apps/cli/src/tui/shell-chrome.recency.test.ts",
+        "test": "D-2: keeps the most recent entries at a taller viewport too, so this is a rule about order and not about one row count",
+        "failure": "AssertionError: expected [ +0, 1, 2, 3, 4, 5, 6, 7, 8, 9, …(4) ] to deeply equal [ Array(14) ]  (expected 16..29, received 0..13)"
+      },
+      {
+        "file": "apps/cli/src/tui/shell-chrome.legend.test.ts",
+        "test": "D-3: shows the operator how to quit at the minimum viewport",
+        "failure": "AssertionError: expected 'UNAUDITED PROTOTYPE - not suitable fo...' to contain '[q]'"
+      },
+      {
+        "file": "apps/cli/src/tui/shell-chrome.legend.test.ts",
+        "test": "D-3: binds a help key",
+        "failure": "AssertionError: expected undefined to be defined"
+      },
+      {
+        "file": "apps/cli/src/tui/shell-chrome.legend.test.ts",
+        "test": "D-3: advertises the route to the full key list at the minimum viewport",
+        "failure": "AssertionError: expected 'UNAUDITED PROTOTYPE - not suitable fo...' to contain '[?]'"
+      },
+      {
+        "file": "apps/cli/src/tui/tui-shell.smallViewport.test.ts",
+        "test": "D-4: writes no line wider than a 40x10 terminal, and keeps the unaudited notice on the frame",
+        "failure": "AssertionError: expected 72 to be less than or equal to 40"
+      },
+      {
+        "file": "apps/cli/src/tui/profiles-pane.rosterClaim.test.ts",
+        "test": "profiles-pane roster claim: does not describe the roster as holding exported cards as well as imported ones",
+        "failure": "AssertionError: expected '/**\\n * Profiles, their relay URL, th...' not to match /export\\w*\\s+(?:or|and)\\s+import/i"
+      }
+    ]
+  },
+  "timestamp_utc": "2026-09-08T20:45:00Z"
+}

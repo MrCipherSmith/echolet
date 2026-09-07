@@ -1,0 +1,131 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T20-implement",
+  "status": "DONE",
+  "summary": "Product code only. Two additions close the T19 specification and T13 residual R1: `Profile.hasPublication()` in apps/cli/src/runtime/profile.ts (presence of the durable `cli:publication` row, the conservative predicate - its absence is proof `relay publish` was never ATTEMPTED, and only then is the deposit certain to be refused), and one guard in `OutboundMessenger.sendOwned` placed AFTER the contact-trust check and BEFORE the durable claim-id transaction, throwing OutboundError(\"SENDER_NOT_PUBLISHED\") with an actionable message. `OutboundError` gained an optional message parameter defaulting to the code, so all four pre-existing throw sites are behaviourally byte-identical; the added sentence follows the ProfileError/ConfigurationError idiom of a fixed code beside operator-readable text and names the action: run `relay publish`, then send again. classify() needed no change and got none: an OutboundError that is not INVALID_MESSAGE already maps through trustFailure(error.code) to the code's own name on exit 3 - the operator-fixable-precondition class specification.md:76-82 pins for UNAUTHORIZED_MAILBOX_ACCESS, the relay's own late statement of this exact condition. All six failing tests are green and the whole apps/cli suite is green: 45 files, 253 tests, 253 passed / 0 failed. No test file was changed - all thirteen digests are identical to T19/T13. No Go file was touched, no CLI command added, nothing weakened or relaxed, no store key, private key, plaintext or request body printed or recorded, and no connection made to geekom or depr.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "The four new tests in outbound.publicationPrecondition.test.ts pass",
+      "status": "met",
+      "evidence": "All four GREEN in an isolated run (4 tests, 1038 ms) and again in the full suite: 'refuses locally, issuing no relay request at all, when the profile has never published'; 'leaves the recipient claimable by a different, properly published sender' (344 ms); 'leaves no durable trace of the refused send, so publishing and retrying starts clean'; 'keeps CONTACT_NOT_TRUSTED for an unpinned recipient, and still issues no request'."
+    },
+    {
+      "criterion": "The re-stated e2e case passes against the real relay binary",
+      "status": "met",
+      "evidence": "test/e2e/publication-claimability.test.ts > 'reports whether a republished bundle is still claimable, and names an exhausted prekey for a later sender' GREEN, 9640 ms file / 5360 ms test. The relay itself witnesses it: after carol's refused send, bob's `relay publish` still reports claimable === true with the identical bundleId, so no claim reached the relay."
+    },
+    {
+      "criterion": "outbound.claimResidual.test.ts test 1 - the T13 baseline failure - passes",
+      "status": "met",
+      "evidence": "'does not spend the recipient's one-time prekey on a send the relay is certain to refuse' GREEN, 465 ms. All 3 tests in that file pass. T13 residual #1 is closed."
+    },
+    {
+      "criterion": "CONTACT_NOT_TRUSTED keeps priority over the new guard",
+      "status": "met",
+      "evidence": "The guard is placed immediately after `if (!contact) throw new OutboundError(\"CONTACT_NOT_TRUSTED\")` and before the claim-id transaction. Test 4 pins both halves: an unpinned recipient reports CONTACT_NOT_TRUSTED with relay.paths() === [], and the SAME unpublished messenger sending to a PINNED recipient reports SENDER_NOT_PUBLISHED with claimsIssued() === 0. cli.processFailures.test.ts's CONTACT_NOT_TRUSTED case passes unchanged."
+    },
+    {
+      "criterion": "The error is typed, actionable, and lands in the right exit class",
+      "status": "met",
+      "evidence": "OutboundError, explicitly not RelayError (both instance checks asserted by test 1), code SENDER_NOT_PUBLISHED. classify() routes it through the existing default OutboundError branch, trustFailure(error.code), to exit 3 under its own name - never flattened to TRUST_REJECTED or PROTOCOL_REJECTED, never reachable as retryable RELAY_UNAVAILABLE on exit 4. Exit 2 was rejected: specification.md:74 defines it as input/configuration errors (malformed arguments or config), while here the command and config are valid and only a prior STEP is missing; exit 3 is where the relay's own UNAUTHORIZED_MAILBOX_ACCESS - the same condition detected late - is pinned by specification.md:76-82, and test/e2e/publication-claimability.test.ts:159 pins exit 3 against the real relay binary. Measured with the built CLI against a dead relay port: `{\"ok\":false,\"error\":{\"code\":\"SENDER_NOT_PUBLISHED\"}}`, exit 3. The message carries the action: 'This profile has never published its device record, so the relay cannot accept its messages; run `relay publish` for this profile, then send again.'"
+    },
+    {
+      "criterion": "No test file changed, at all",
+      "status": "met",
+      "evidence": "All thirteen digests identical to T19 (and T12/T13 for outbound.claimResidual.test.ts): 1b8e41b4…, 58d0dd98…, cec9cc7e…, c0fbb8d4…, 56285ada…, 15122e93…, e1d36ae6…, 088f53ae…, ef23b693…, e193d625…, d54c319f…, e89f96a6…, a8037c56…. No it.skip/it.todo/.only was added anywhere and no assertion was removed, narrowed or relaxed."
+    },
+    {
+      "criterion": "No Go file changed, no new CLI command, no schema relaxed, no secret printed",
+      "status": "met",
+      "evidence": "Only apps/cli/src/runtime/outbound.ts and apps/cli/src/runtime/profile.ts were edited; apps/relay was not entered and the Go suite was neither run nor touched. The frozen eight-command surface is unchanged. No Zod schema was modified. hasPublication() reads key PRESENCE and never decodes the stored bundle; the new error message is a static sentence with no key, plaintext or request body; no connection was made to geekom or depr."
+    },
+    {
+      "criterion": "No regression in the rest of the suite",
+      "status": "met",
+      "evidence": "One unfiltered run of apps/cli on Node v26.5.0: 45 files, 253 tests, 253 passed / 0 failed, 154.8 s. Baseline was 247 passed / 6 failed. The timing-sensitive process-spawning files passed in that same run (cli.test.ts 6/6 in 12.2 s, cli.relayErrorCodes.test.ts 2/2 in 6.1 s, cli.senderQuota.test.ts, cli.processFailures.test.ts), so no isolated re-run was required. `tsc -p apps/cli/tsconfig.json --noEmit` exits 0 and `pnpm typecheck` exits 0 across all seven workspace projects."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t20-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "The change, the exit class chosen and why, what an operator now sees, the six test results, and six residuals.",
+      "hash": "43cfb5544ad1b41be1b9ea0605bd2e21e16fed16a3d32a6e3bd0493c52519813"
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T20-implement-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This result document.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/runtime/profile.ts",
+      "change": "CHANGED. sha256 before: 29c654f22cea55d525e7b6caf544dd18b2efc52e794b571e0220cefec15a851e. after: 4a3d02b4e495c6af82e4c4bb94dc455a818991d6848ec56b0c5594a2f508da34. Added `hasPublication(): Promise<boolean>` returning `tx.get(publicationKey) !== undefined`, with the doc comment explaining why the predicate is presence-only and deliberately one-directional: absence is durable proof `relay publish` was never attempted (cli:publication is written by publicationBundle() alone, inside the transaction that precedes the relay call), while a rejected or lost-response publication answers true so the guard can never block a send that could have succeeded. Nothing else in the file changed."
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.ts",
+      "change": "CHANGED. sha256 before: 337031b1540c87b956f420cb42eead8cb123e7a7b7a33dfd9f81cfc3fab1fd5e. after: 42d2f3b6eb4d933502bb5dc13c376508e3d91e0bf9638a40382843b44bf2f324. Two edits. (1) OutboundError's constructor gained `message: string = code`, so `code` (what classify() and the CLI read) is unchanged and all four pre-existing throw sites keep the exact shape they had, while one site can carry an operator-readable sentence - the ProfileError/ConfigurationError idiom. (2) In sendOwned, one guard immediately after the CONTACT_NOT_TRUSTED check and before the durable claim-id transaction: `if (!(await this.profile.hasPublication())) throw new OutboundError(\"SENDER_NOT_PUBLISHED\", \"This profile has never published its device record, so the relay cannot accept its messages; run `relay publish` for this profile, then send again.\")`. Because it precedes the claim-id write, the Signal establish, the outbox commit and the history append, a refused send leaves no cli:claim:, cli:outbox: or session: key behind. No existing line was deleted or weakened."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "product_files_changed": 2,
+    "test_files_changed": 0,
+    "suite_before": "apps/cli 45 files / 253 tests: 247 passed / 6 failed",
+    "suite_after": "apps/cli 45 files / 253 tests: 253 passed / 0 failed (154.8 s, Node v26.5.0)",
+    "tests_red_to_green": [
+      "src/runtime/outbound.publicationPrecondition.test.ts > refuses locally, issuing no relay request at all, when the profile has never published",
+      "src/runtime/outbound.publicationPrecondition.test.ts > leaves the recipient claimable by a different, properly published sender",
+      "src/runtime/outbound.publicationPrecondition.test.ts > leaves no durable trace of the refused send, so publishing and retrying starts clean",
+      "src/runtime/outbound.publicationPrecondition.test.ts > keeps CONTACT_NOT_TRUSTED for an unpinned recipient, and still issues no request",
+      "test/e2e/publication-claimability.test.ts > reports whether a republished bundle is still claimable, and names an exhausted prekey for a later sender",
+      "src/runtime/outbound.claimResidual.test.ts > does not spend the recipient's one-time prekey on a send the relay is certain to refuse"
+    ],
+    "test_file_digests_unchanged": {
+      "apps/cli/src/runtime/outbound.publicationPrecondition.test.ts": "1b8e41b48adfbe47e99a78655b6e26b895c3dac29bc2670647b92307c48e4324",
+      "apps/cli/src/runtime/outbound.test.ts": "58d0dd98cdb94c8122eabdb7f204f3784bbf81be95d49d1fa6156d5c1f0c0921",
+      "apps/cli/src/runtime/outbound.senderAuthentication.test.ts": "cec9cc7e3f91fc49a82cb5b67066614bea8a5948e2c7794e806ae6665302dd88",
+      "apps/cli/src/runtime/outbound.concurrentSend.test.ts": "c0fbb8d4b3786ed9d17b8afad636b4f0e885020f15bed5f3a825b3dc3c436321",
+      "apps/cli/src/runtime/outbound.claimResidual.test.ts": "56285ada4a242f160b1c6ae04dfdf4e6baedcfe896b31b6cfde3393abf6d6714",
+      "apps/cli/src/runtime/inbound.test.ts": "15122e939361c5b3410d15fa2a75b579953092b226e09ac75dd3c95f2d9dc1ee",
+      "apps/cli/src/runtime/inbound.batchIsolation.test.ts": "e1d36ae61a854c8565fec463cd96c85973b9bd80ba1eda46b8485547c8a740ad",
+      "apps/cli/src/runtime/inbound.pollProgress.test.ts": "088f53ae4aff5c134379934264e32a4fba4e3d53237a0e07fff65e674b017875",
+      "apps/cli/src/runtime/inbound.readMark.test.ts": "ef23b69343818cacefaeba527adae40de0f06b26b692809d986856db80bf18f1",
+      "apps/cli/src/commands/cli.senderQuota.test.ts": "e193d625836cf6f5754e0d267fdb6a25a5e58ce80f6eb39a6b3622e71d303709",
+      "apps/cli/src/commands/cli.relayErrorCodes.test.ts": "d54c319f90a83ca357e0a96b689b5ade811a64ab099e29156d1867b805d41a4d",
+      "apps/cli/src/commands/cli.processFailures.test.ts": "e89f96a6d7be009a345ec94ba260fee47ba69eb941b8a163558f14be3c344ec6",
+      "apps/cli/test/e2e/publication-claimability.test.ts": "a8037c56cc054b26d006d8ec7a75a1de7af1a4f8747966b902f59c35352a2b24"
+    },
+    "typecheck": "tsc -p apps/cli/tsconfig.json --noEmit exits 0; pnpm typecheck exits 0 across all seven workspace projects",
+    "operator_output": "{\"ok\":false,\"error\":{\"code\":\"SENDER_NOT_PUBLISHED\"}} on exit 3",
+    "exit_class": "3 - the operator-fixable-precondition class, via classify()'s existing OutboundError default branch trustFailure(error.code); classify() was not modified",
+    "go_suite": "not run and not touched; no Go file was changed. The known RI-09 poll-byte-budget failure belongs to another task.",
+    "residuals": [
+      "The actionable sentence is not rendered by the CLI: main() writes {ok:false,error:{code}} only, a contract cli.test.ts pins, so the message reaches programmatic consumers but not the terminal operator.",
+      "SENDER_NOT_PUBLISHED is undocumented. It belongs in specification.md:76-82's exit-3 code table, but test-file comments cite specification.md:92 and :130 by LINE NUMBER, so inserting a row at line 82 would silently invalidate citations living in files this task must not edit. Filed as a documentation task.",
+      "hasPublication() is presence-only and scoped to the profile directory; a cli:publication row removed out of band is indistinguishable from a fresh profile.",
+      "A profile whose publication the relay REJECTED is still allowed to send, by design, and still spends the recipient's one-time prekey before failing late under UNAUTHORIZED_MAILBOX_ACCESS. Recording the publication OUTCOME rather than the attempt is a strictly larger change that would risk refusing sends that could have succeeded.",
+      "T13 residuals #2-#6 remain open: PREKEY_BUNDLE_EXPIRED has no test of its own; claimReplaced is undocumented in runbook.md:106; claim replacement is bounded per send rather than per recipient; replacement still consumes a second one-time prekey; cli:claim:<identity> can still hold an id that was never issued.",
+      "There is still no CLI command to replenish a consumed bundle (T12 §7's open questions). Bundle rotation is a separate task and was not touched."
+    ],
+    "routing_audit": {
+      "graph_used": "no (not-relevant - every file under change was named in the dispatch and confirmed through the T13 and T19 reports)",
+      "wiki_used": "no (not-relevant - T12's analysis, T13's report and docs/requirements/echolet-cli-prototype/specification.md are the cited authority for this behaviour)",
+      "ctx_used": "yes (keryx ctx rg for every search, keryx ctx read for large file reads)",
+      "raw_rg_used": "no"
+    }
+  },
+  "timestamp_utc": "2026-09-08T23:05:00Z"
+}

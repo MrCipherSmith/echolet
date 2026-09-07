@@ -17,3 +17,32 @@
 - 2026-09-07T19:54:57.057Z - task-attempt: T7: started (attempt 1) — 003-T7-docs-reconcile
 - 2026-09-07T19:54:57.150Z - task-attempt: T8: started (attempt 1) — 003-T8-relay-tests
 - 2026-09-07T20:18:09.226Z - task-done: T7: Reconcile every document with the tree: stale deletions, the shutdown fix, AC4, and the e2e labelling
+- 2026-09-07T20:42:05.078Z - task-done: T8: RED tests for the relay FIX NOW items: cleanup timer, backfill skip-and-count, poll byte budget, v1 identifier bounds, shutdown escalation
+- 2026-09-07T20:42:05.389Z - task-attempt: T9: started (attempt 1) — 003-T9-relay-implement (four items; RI-09 split out)
+- 2026-09-07T20:42:05.547Z - task-added: T10: RED tests for the two-sided max-message-size derivation (RI-09)
+- 2026-09-07T20:42:05.677Z - task-added: T11: Implement the two-sided max-message-size derivation (RI-09)
+- 2026-09-07T20:42:50.629Z - task-done: T5: RED tests for the TUI concurrency defect, silent row dropping, and viewport/legend correctness
+- 2026-09-07T20:42:50.742Z - task-attempt: T6: started (attempt 1) — 003-T6-tui-implement
+- 2026-09-07T20:50:36.795Z - task-added: T12: RED test: a failed mailbox deposit must not permanently consume the recipient's one-time prekey bundle
+- 2026-09-07T20:50:36.915Z - task-added: T13: Fix the unrolled-back prekey claim, or bound it explicitly
+- 2026-09-07T20:50:37.109Z - task-added: T14: Install certificate renewal on depr, matching geekom
+- 2026-09-07T20:50:43.711Z - task-depends-set: T13: dependsOn T12 (was empty) — Implementation follows the RED test
+- 2026-09-07T20:50:43.810Z - task-attempt: T14: started (attempt 1) — 003-T14-depr-renewal
+- 2026-09-07T20:57:04.441Z - task-done: T9: Implement the relay FIX NOW items
+- 2026-09-07T20:57:04.608Z - task-attempt: T10: started (attempt 1) — 003-T10-ri09-tests
+- 2026-09-07T20:57:04.720Z - task-attempt: T12: started (attempt 1) — 003-T12-prekey-rollback-test
+- 2026-09-07T21:05:52.300Z - task-done: T14: Install certificate renewal on depr, matching geekom
+- 2026-09-07T21:05:52.392Z - task-added: T15: Correct deploy/relay/README.md: the committed systemd units are root-and-host-path only
+- 2026-09-07T21:14:29.529Z - task-done: T6: Fix the TUI concurrency defect, row dropping, and viewport/legend correctness
+- 2026-09-07T21:14:29.611Z - task-added: T16: Record that the process-spawning CLI tests fail under CPU contention and decide whether to harden or serialise them
+- 2026-09-07T21:25:05.974Z - task-done: T12: RED test: a failed mailbox deposit must not permanently consume the recipient's one-time prekey bundle
+- 2026-09-07T21:25:06.060Z - task-added: T17: Add a CLI entry point for bundle rotation so a consumed bundle is recoverable
+- 2026-09-07T21:25:06.153Z - task-added: T18: Design: authenticate /v2/prekeys/claim to close the denial-of-first-contact primitive
+- 2026-09-07T21:25:06.249Z - task-attempt: T13: started (attempt 1) — 003-T13-claim-bounds-implement
+- 2026-09-07T21:48:22.792Z - task-done: T13: Fix the unrolled-back prekey claim, or bound it explicitly
+- 2026-09-07T21:48:22.889Z - task-added: T19: RED tests: send must refuse before claiming when the sender has not published
+- 2026-09-07T21:48:23.001Z - task-added: T20: Implement: send presupposes relay publish
+- 2026-09-07T21:48:30.673Z - task-depends-set: T20: dependsOn T19 (was empty) — Implementation follows the RED tests
+- 2026-09-07T21:48:31.670Z - task-attempt: T19: started (attempt 1) — 003-T19-publish-before-send-tests
+- 2026-09-07T22:15:24.580Z - task-done: T19: RED tests: send must refuse before claiming when the sender has not published
+- 2026-09-07T22:15:24.679Z - task-attempt: T20: started (attempt 1) — 003-T20-publish-before-send-implement

@@ -1,0 +1,202 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T12-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "3 new RED tests in one new file, apps/cli/src/runtime/outbound.claimResidual.test.ts. No Go test was added and no production file was changed. Established first, by reading and by measurement: the claim and the deposit are two separate client-issued requests; the failure T11 hit is a server-side rejection of the SECOND (403 UNAUTHORIZED_MAILBOX_ACCESS, because that sender had never run relay publish) after the first had already committed; the claim route carries no authentication at all, so a sender that cannot deposit can still consume. The consumption is permanent BY DESIGN and must stay so - the fix is NOT a rollback. Measured on the real relay: replenishment already works (a newly signed publication with a fresh one-time prekey restores claimability while the old claim id keeps replaying its own bundle), so nothing relay-side is red. Measured on the CLI: the same sender's own retry already recovers and does not re-claim, so that requested pin is already GREEN and is recorded in the analysis rather than written as a green test. What is left are two missing bounds on the client: (R1) the irreversible claim is issued before the reversible precondition of the sender's own deposit is checked, and (R2) a stored claim is never released even once its bundle has expired, wedging the sender permanently against a recipient who has replenished, and reporting the expiry to the operator as CONTACT_PIN_MISMATCH. Achievability verified tests-only with a throwaway probe. The design question - a ninth CLI command for rotation, and whether the claim route should authenticate - is handed back, not answered.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Establish and state how the claim and the deposit actually relate before asserting anything",
+      "status": "met",
+      "evidence": "Two separate client-issued requests: outbound.ts sendOwned issues POST /v2/prekeys/claim at line 62, commits the envelope locally, then issues POST /v1/messages/send from deliver() at line 117; router.go registers the two routes independently at :91 and :98 with no shared transaction. The T11 failure is SERVER-side on the SECOND request: 403 UNAUTHORIZED_MAILBOX_ACCESS, because since T50 the relay authenticates a send against an already-published root-signed device record and that profile had run only init + contact import (cli.ts:40-46 documents the precondition). Nothing on the claim route depends on the claimant having published: /v2/prekeys/claim is registered with no authentication. Reproduced locally: recorded relay path sequence ['/v2/prekeys/claim', '/v1/messages/send'] ending in RELAY_HTTP_ERROR httpStatus 403 remoteCode UNAUTHORIZED_MAILBOX_ACCESS."
+    },
+    {
+      "criterion": "A first-contact send whose deposit fails must not leave the recipient unable to receive first contact from a different sender afterwards",
+      "status": "met",
+      "evidence": "Test 1, 'does not spend the recipient's one-time prekey on a send the relay is certain to refuse'. An unpublished sender's doomed attempt is followed by a different, properly published sender first-contacting the same recipient. RED on its own assertion: 'promise rejected \"RelayError: RELAY_HTTP_ERROR { …(4) }\" instead of resolving', Serialized Error: { code: 'RELAY_HTTP_ERROR', retryable: false, httpStatus: 404, remoteCode: 'PREKEY_BUNDLE_UNAVAILABLE' }. Stated as an outcome, not a mechanism; the assertion on the doomed attempt itself was deliberately relaxed to 'it failed' so a fix may refuse it earlier under its own code."
+    },
+    {
+      "criterion": "A retry of the same failed send by the same sender must be able to succeed rather than answering that the bundle is gone",
+      "status": "met",
+      "evidence": "Already GREEN, measured, so no test is added (a green test would violate the RED-only constraint). Deposit rejected 403 then same-profile retry: recorded paths across both attempts ['/v2/prekeys/claim', '/v1/messages/send', '/v1/messages/send'] - one claim id in total, the retry runs off the durable outbox record and never re-claims. Claim response lost then same-profile retry: the two claim requests carry the IDENTICAL claim_id, because sendOwned writes cli:claim:<identity> durably before issuing the claim and deletes it only in the transaction that commits the envelope; the retry delivered. outbound.test.ts 'keeps an ambiguous send pending and reuses byte-identical IDs, ciphertext, and envelope after restart' already covers the analogous path. The T11 retry failed only because it was made from a different profile - T11 §9 records that each demo store key lived only in the environment of its own process - so it was a genuinely different first-contact sender."
+    },
+    {
+      "criterion": "Pin whatever guarantee the code is supposed to offer, so a future change cannot quietly regress it",
+      "status": "partial",
+      "evidence": "The guarantee is that a consumed one-time prekey is NEVER released to a second claimant and that a committed claim replays byte-exactly - and it is already pinned, in the tree, by prekey_bundle_v2_test.go TestSignalPreKeyBundleV2OneTimePreKeyReservationsArePermanent, TestSignalPreKeyBundleV2ConcurrentClaimsAllocateExactlyOnce and TestSignalPreKeyBundleV2ClaimReplayIsExactAndSelectorBound (sha256 44e4c27da8a274d29496c3ab07a97fcb2b0e1685d7057c280829fdcda580a91d, untouched). Those three are exactly the guard against a rollback-shaped 'fix', so adding another would duplicate them, and the RED-only constraint forbids adding a green one. Partial rather than met because the pin is inherited rather than written by this task."
+    },
+    {
+      "criterion": "Say plainly if the correct fix is not a rollback",
+      "status": "met",
+      "evidence": "It is not a rollback. SaveSignalV2 writes two permanent one-time-prekey tombstones and specification.md states that expiry, a previous claim and a relay restart never release them; ClaimSignalV2 binds the exact bytes to the claim_id and marks-claimed plus deletes-availability in one transaction so two claim ids can never reach the same prekey. A rollback would hand one Signal one-time prekey to two senders, and the relay cannot know the deposit failed - the sender may still deliver from its durable outbox using the very bundle a rollback would have re-offered. Measured that replenishment, the correct remedy, already works relay-side: publish primary claimable=true; claim A ok; claim B PREKEY_BUNDLE_UNAVAILABLE; republish identical claimable=false; publish independent_bundle claimable=true; claim B after replenish returns the rotated bundle; claim A replay still returns the primary."
+    },
+    {
+      "criterion": "Every new test is RED for the right reason, on its assertion, not on a compile error, a missing fixture or a timeout",
+      "status": "met",
+      "evidence": "3 failed / 3, each on its own expect: test 1 'promise rejected \"RelayError: RELAY_HTTP_ERROR { …(4) }\" instead of resolving' (remoteCode PREKEY_BUNDLE_UNAVAILABLE), test 2 'promise rejected \"OutboundError: CONTACT_PIN_MISMATCH { code: '…' }\" instead of resolving', test 3 'an expired prekey bundle is an exhausted recipient, not a contact whose pin no longer matches: expected 'CONTACT_PIN_MISMATCH' not to be 'CONTACT_PIN_MISMATCH''. Durations 477ms, 328ms and 221ms against 60000ms budgets, so none is a timeout. tsc -p apps/cli/tsconfig.json --noEmit exits 0, so none is a compile error. No new fixture is required: the only fixture touched is the already-present relay-v2.json independent_bundle variant, and only in a throwaway measurement, not in a delivered test."
+    },
+    {
+      "criterion": "The tests are achievable - they go green under a fix rather than being structurally unsatisfiable",
+      "status": "met",
+      "evidence": "Verified tests-only, with no production change. A throwaway probe (apps/cli/src/runtime/probe.achievability.test.ts, since deleted) reproduced test 2's scenario and, in place of any production edit, deleted the dead cli:claim:<identity> key from the profile store through EncryptedSqliteStore before the retry. The existing client then claimed the replenished bundle and delivered: '✓ probe > releasing the dead stored claim lets the existing client deliver 478ms'. Test 3 is satisfied by the same release (the re-claim then answers 404 PREKEY_BUNDLE_UNAVAILABLE, which is not CONTACT_PIN_MISMATCH) or by classifying the expiry separately. Test 1 is satisfied by checking cli:publication - written only by Profile.publicationBundle(), which only publish() calls - before issuing the claim; nothing in the client blocks that ordering."
+    },
+    {
+      "criterion": "Nothing existing is weakened, skipped, narrowed or deleted; nothing outside apps/cli/*.test.ts and apps/relay/*_test.go is touched",
+      "status": "met",
+      "evidence": "One new file only: apps/cli/src/runtime/outbound.claimResidual.test.ts (sha256 56285ada4a242f160b1c6ae04dfdf4e6baedcfe896b31b6cfde3393abf6d6714). git status over apps/cli/src/runtime and apps/relay shows it as the only entry belonging to this task. outbound.ts sha256 07c3960bec152ba640e1f5077710a5273e8112978434e5098e48bdaeafcd8454 and profile.ts sha256 29c654f22cea55d525e7b6caf544dd18b2efc52e794b571e0220cefec15a851e are unchanged, confirmed after the achievability work. Nothing in packages/ or docs/ was modified. Both throwaway measurement files (one Go, one TS) were deleted. Suite: src/runtime + src/transport + src/commands = 112 tests, 109 passed, and the only 3 failures are the new ones."
+    },
+    {
+      "criterion": "Deterministic synchronisation only; no sleep standing in for an event",
+      "status": "met",
+      "evidence": "No test sleeps. The relay fake is an in-process vi.fn over fetch, so every request/response ordering is a direct await. Time is injected, never waited for: the openOutboundMessenger 'now' option supplies t0 = bundle.created_at_ms and afterExpiry = bundle.expires_at_ms + 60000, and the replenished bundle is created with an explicit createdAtMs, so the expiry boundary is crossed by construction rather than by elapsed wall-clock. The lost claim response is a synchronous DOMException AbortError raised after the fake has already committed the claim, which is exactly the ordering being modelled."
+    },
+    {
+      "criterion": "No store key, private key, plaintext or HTTP request body is printed or recorded",
+      "status": "met",
+      "evidence": "The three tests assert on request PATHS, error CODES and a claim COUNT only. There is no bodyText assertion, no disk-content assertion and no console output. Store keys are generated with randomBytes(32) into a per-test environment object and never read back or compared. The analysis document quotes only measurement log lines carrying booleans, error codes and path names."
+    },
+    {
+      "criterion": "Do not touch the relays running on geekom and depr, and do not connect to either host",
+      "status": "met",
+      "evidence": "No network call left this machine. Every measurement ran against an in-process fetch fake or, on the Go side, against a local Badger store under t.TempDir(). No ssh, curl or host reference of any kind was issued."
+    },
+    {
+      "criterion": "Baseline failures belonging to other tasks are not reported as this task's",
+      "status": "met",
+      "evidence": "Go baseline captured before any change: go -C apps/relay test -count=1 -tags=relayv2 ./... fails only TestMaximumSizeEnvelopeIsDeliverableAtRaisedMaxMessageBytes (the RI-09 poll-byte-budget test), with all other packages ok. That is unchanged by this task, which adds no Go file. The TUI baseline failures were avoided by scoping the JS run to src/runtime, src/transport and src/commands; apps/cli/src/tui and the modified apps/relay production files belong to concurrent tasks and were not read as results here."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t12-prekey-claim-analysis.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "What was established about how the claim and the deposit relate, the measurements behind it, why a rollback is wrong, the two client-side bounds that are missing, and the design question handed back.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.claimResidual.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "3 RED tests pinning R1 (the irreversible claim precedes the reversible precondition) and R2 (a dead stored claim is never released, and its expiry is misreported as a pin mismatch).",
+      "hash": "56285ada4a242f160b1c6ae04dfdf4e6baedcfe896b31b6cfde3393abf6d6714"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/runtime/outbound.claimResidual.test.ts",
+      "change": "added - 3 RED tests, sha256 56285ada4a242f160b1c6ae04dfdf4e6baedcfe896b31b6cfde3393abf6d6714"
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t12-prekey-claim-analysis.md",
+      "change": "added - analysis and design question"
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T12-tests-result.json",
+      "change": "added - this result"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T12-F-001",
+      "reviewer": "003-T12-tests",
+      "severity": "major",
+      "confidence": "high",
+      "problem": "apps/cli/src/runtime/outbound.ts sendOwned allocates the claim id (lines 52-59) and issues POST /v2/prekeys/claim (line 62) before anything establishes that this profile's own deposit can be accepted. Since T50 the relay refuses a deposit from a device it holds no published record for, and the profile already knows locally: cli:publication is written by Profile.publicationBundle() (profile.ts:291-299), which only publish() calls.",
+      "impact": "A send that could never have been accepted permanently consumes the recipient's only one-time prekey, and the recipient has no CLI command to replenish it. This is the T11 §10.1 accident, generalised: an operator-fixable precondition on the SENDER produces a permanent denial of first contact for the RECIPIENT, from every later sender.",
+      "suggested_fix": "Establish the reversible preconditions of the send before taking the irreversible step that spends a third party's non-renewable resource. Refusing a send from a profile with no cli:publication covers the measured case; the new test pins the outcome, not the mechanism.",
+      "evidence": "Measured locally with a throwaway probe: an init + contact import profile sends and the recorded relay path sequence is ['/v2/prekeys/claim', '/v1/messages/send'], ending in RELAY_HTTP_ERROR httpStatus 403 remoteCode UNAUTHORIZED_MAILBOX_ACCESS. RED test: apps/cli/src/runtime/outbound.claimResidual.test.ts 'does not spend the recipient's one-time prekey on a send the relay is certain to refuse' - 'promise rejected \"RelayError: RELAY_HTTP_ERROR { …(4) }\" instead of resolving', Serialized Error: { code: 'RELAY_HTTP_ERROR', retryable: false, httpStatus: 404, remoteCode: 'PREKEY_BUNDLE_UNAVAILABLE' }.",
+      "class_scope": {
+        "sites": ["apps/cli/src/runtime/outbound.ts:62 (the only production caller of RelayClient.claimBundle)"],
+        "enumeration_method": "keryx ctx rg -n 'claimBundle|claimKey' apps/cli/src: outside test files the only hits are relayClient.ts:97 (the method definition) and outbound.ts:62 (its single production call site), so the class has exactly one member."
+      }
+    },
+    {
+      "id": "T12-F-002",
+      "reviewer": "003-T12-tests",
+      "severity": "major",
+      "confidence": "high",
+      "problem": "The durable claim key cli:claim:<identity> is written before the claim (outbound.ts:51-59) - correct, it is what makes a lost claim response recoverable - but it is deleted only in the transaction that commits a successful envelope (outbound.ts:99). Nothing releases it when what it resolves to has become unusable.",
+      "impact": "If the sender returns after the claimed bundle's validity window has closed, the relay replays that bundle exactly (correct: replay must be byte-exact for idempotency), importVerifiedSignalBundleV2 refuses it as 'Bundle is not currently valid', and every later first-contact attempt to that recipient replays the same dead bundle instead of claiming the fresh publication sitting on the relay. A transient lost response becomes a permanent, silent denial of first contact.",
+      "suggested_fix": "Bound the stored claim by the usability of what it resolves to: a replayed bundle outside its validity window is dead for everyone and the claim must not be held. Releasing it is sufficient.",
+      "evidence": "Measured: the second attempt issues a claim with the IDENTICAL claim_id and ends in OutboundError CONTACT_PIN_MISMATCH while the replenished bundle is claimable on the relay. RED test: 'does not stay wedged on a stored claim whose bundle has expired, once the recipient replenishes' - 'promise rejected \"OutboundError: CONTACT_PIN_MISMATCH { code: '…' }\" instead of resolving'. Achievability verified tests-only: a probe deleted the dead cli:claim: key from the profile store before the retry and the existing client then claimed the replenished bundle and delivered.",
+      "class_scope": {
+        "sites": ["apps/cli/src/runtime/outbound.ts:51 (key), :54 (read), :57 (write), :99 (delete)"],
+        "enumeration_method": "keryx ctx rg -n 'claimBundle|claimKey' apps/cli/src: claimKey appears only in outbound.ts, at those four lines, and nowhere else in production code, so the whole lifecycle of the stored claim is that one file."
+      }
+    },
+    {
+      "id": "T12-F-003",
+      "reviewer": "003-T12-tests",
+      "severity": "minor",
+      "confidence": "high",
+      "problem": "apps/cli/src/runtime/outbound.ts:63-67 funnels every failure of the claimed-bundle verification block into OutboundError CONTACT_PIN_MISMATCH, including a bundle that fails only on its validity window.",
+      "impact": "When only the window has closed, the pinned identity_id, device_id, device_pubkey and signal_identity_key all still match, yet the operator is told their peer may be an impostor and the CLI exits 3 as a trust failure. cli.ts:26-29 states the project's own rule that the failure vocabulary should grow where flattening actively misleads, and cli.ts:31-38 already carries PREKEY_BUNDLE_UNAVAILABLE inland precisely because an exhausted or out-of-window recipient is not a trust violation.",
+      "suggested_fix": "Do not classify a window failure as a trust failure. The new test asserts only that the code is not CONTACT_PIN_MISMATCH and prescribes no replacement, so an existing code or a new one is equally acceptable.",
+      "evidence": "RED test: 'does not report an expired stored claim as a contact pin mismatch' - 'an expired prekey bundle is an exhausted recipient, not a contact whose pin no longer matches: expected 'CONTACT_PIN_MISMATCH' not to be 'CONTACT_PIN_MISMATCH''."
+    },
+    {
+      "id": "T12-F-004",
+      "reviewer": "003-T12-tests",
+      "severity": "major",
+      "confidence": "high",
+      "problem": "apps/relay/internal/api/router/router.go:91 registers POST /v2/prekeys/claim with no authentication and no relation to whether the caller has published anything, while /v1/messages/send has authenticated the sender since T50.",
+      "impact": "A claim permanently consumes the recipient's one-time prekey (permanent tombstones in SaveSignalV2) and the CLI has no command to allocate a fresh one, so knowing an identity id is enough to deny that identity first contact from everyone - cheaply, silently, and without being able to send anything. This is the deliberate version of the T11 accident.",
+      "suggested_fix": "Decide deliberately whether the claim route should authenticate its caller or whether consumption should be bounded some other way. No test is written for it here: closing it is a protocol change and belongs in a design decision, recorded as question T12-Q-002.",
+      "evidence": "Read at router.go:85-101: the v2 publish and claim routes are registered directly on the mux alongside the v1 routes, with no auth middleware; handler.ClaimSignalPreKeyBundleV2 (signal_prekey_bundle_v2.go:101-122) accepts only claim_id, identity_id and device_id and performs no caller verification. Confirmed from the other side by measurement: a profile with no published device record successfully claimed and was then refused at the deposit under 403 UNAUTHORIZED_MAILBOX_ACCESS.",
+      "class_scope": {
+        "sites": ["apps/relay/internal/api/router/router.go:91 (POST /v2/prekeys/claim)"],
+        "enumeration_method": "keryx ctx rg -n 'prekeys/claim|prekeys/publish|v2/prekeys' apps/relay returns one production registration for the claim route (router.go:91); the remaining hits are tests. Every other route that consumes or exposes recipient state on the mailbox path resolves a device binding in its handler, which is what makes this one the single member of the class."
+      }
+    }
+  ],
+  "questions": [
+    {
+      "id": "T12-Q-001",
+      "question": "Does the frozen eight-command CLI surface get a ninth entry point for bundle rotation, so a recipient whose bundle has been consumed can restore first contact?",
+      "why": "The claim is legitimately permanent, so the only remedy is replenishment - and replenishment already works end to end on the relay (measured) and already exists in the runtime as OutboundMessenger.rotateBundle(), pinned by outbound.publish.test.ts. Only the command is missing, deliberately: specification.md says a ninth command would change the frozen surface this prototype validates. The two bounds these tests pin shrink the window in which a bundle is wasted but cannot remove it. Without the command, any consumed bundle is terminal for that recipient.",
+      "options": [
+        { "id": "add-command", "label": "Add the rotation command and unfreeze the surface to nine", "recommended": true },
+        { "id": "keep-frozen", "label": "Keep the surface at eight and document the terminal condition more loudly" },
+        { "id": "implicit-rotation", "label": "Rotate implicitly on a publish that reports claimable:false" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T12-Q-002",
+      "question": "Should POST /v2/prekeys/claim authenticate its caller?",
+      "why": "Finding T12-F-004. Today a claim permanently consumes a recipient's first-contact bundle and requires nothing of the claimant, while the deposit that would follow it has been authenticated since T50. Knowing an identity id is enough to deny that identity first contact from everyone. Answering this is a protocol change with a spec impact, so it is handed back rather than asserted in a test.",
+      "options": [
+        { "id": "authenticate", "label": "Require the claimant to present a published, root-signed device record" },
+        { "id": "rate-limit", "label": "Leave it open but bound consumption per claimant or per recipient" },
+        { "id": "accept", "label": "Accept it for the prototype and record it as a known limitation" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T12-Q-003",
+      "question": "When a stored claim resolves to a bundle that is no longer usable, should the CLI silently claim again or surface the dead claim to the operator?",
+      "why": "Test 2 pins the outcome 'the sender can still reach a recipient who replenished', which the obvious fix - release the dead claim and claim once more - satisfies. Re-claiming does consume a second one-time prekey, though the first was already unusable by anyone, so nothing is double-spent. If the decision is that a dead claim must be reported rather than silently replaced, test 2 is the one to revisit. Test 3 holds either way, since it only forbids calling an expired bundle a trust violation.",
+      "options": [
+        { "id": "reclaim", "label": "Release the dead claim and claim once more", "recommended": true },
+        { "id": "surface", "label": "Refuse under a distinct code and let the operator decide" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_added": 3,
+    "tests_red": 3,
+    "tests_green": 0,
+    "test_files_added": 1,
+    "production_files_changed": 0,
+    "go_tests_added": 0
+  },
+  "timestamp_utc": "2026-09-08T00:20:00Z"
+}

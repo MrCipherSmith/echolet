@@ -1,0 +1,184 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T13-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "One product file changed, apps/cli/src/runtime/outbound.ts. The claim block became claimFirstContact: the pinned identity/device/device-key/Signal-identity-key check is now separate from the bundle's validity window, a stored claim whose bundle has expired is released exactly once and replaced by a fresh claim id written durably BEFORE the second claim is issued, and an expired bundle is no longer reported as CONTACT_PIN_MISMATCH. The recovery is visible: the send receipt carries claimReplaced: true on the send that replaced a dead claim, and only then. Two of T12's three RED tests are now GREEN ('does not stay wedged on a stored claim whose bundle has expired, once the recipient replenishes' and 'does not report an expired stored claim as a contact pin mismatch'). The third, 'does not spend the recipient's one-time prekey on a send the relay is certain to refuse', is STILL RED and is not implementable: it demands the opposite of outbound.test.ts 'claims the pinned contact...' for byte-identical local state, which is a contradiction, not a choice of predicate. The R1 guard was implemented, measured at 36 failing tests including a real-relay e2e, and fully reverted; profile.ts is byte-identical to baseline. apps/cli is 248 passed / 1 failed of 249 (baseline 246 passed with 3 red), pnpm typecheck exit 0. No test file was changed - the T12 test file's digest is unchanged at 56285ada... - and no Go file was opened. The relay's claim semantics, the three Go guards against a rollback, the same-sender retry and relay-side replenishment were not touched.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Test 2 GREEN: a sender holding a dead stored claim can reach a recipient who has replenished",
+      "status": "met",
+      "evidence": "'does not stay wedged on a stored claim whose bundle has expired, once the recipient replenishes' passes in 345 ms against its 60 s budget (isolated run, Node v26.5.0). claimFirstContact detects `at < bundle.created_at_ms || at >= bundle.expires_at_ms` after the pin has matched, generates one fresh claim id, writes it to cli:claim:<identity> inside a store transaction BEFORE issuing the second claim - the same durable-before-issue ordering that made the first claim recoverable - and claims once more. The replacement is attempted at most once per send, so a recipient whose replacement publication is also outside its window cannot turn one send into a claim loop."
+    },
+    {
+      "criterion": "Test 3 GREEN: a dead claim is not reported as a trust failure",
+      "status": "met",
+      "evidence": "'does not report an expired stored claim as a contact pin mismatch' passes. The pin comparison (identity_id, device_id, device_pubkey, signal_identity_key, one_time_prekey present) now throws CONTACT_PIN_MISMATCH on its own, before any validity reasoning; a closed window never reaches it. With nothing left to replenish, the replacement claim answers the relay's own 404 PREKEY_BUNDLE_UNAVAILABLE, which is exactly the exhausted-recipient condition cli.ts already carries inland on exit 3. The new OutboundError code PREKEY_BUNDLE_EXPIRED covers the case where even the replacement bundle is outside its window; classify() maps it to trustFailure, exit 3, unchanged."
+    },
+    {
+      "criterion": "The recovery is automatic AND visible in the command's result",
+      "status": "met",
+      "evidence": "A send that replaced a dead claim resolves to {messageId, envelopeId, status: 'delivered', claimReplaced: true}; through the CLI that prints as {\"ok\":true,\"data\":{...,\"claimReplaced\":true}}. Measured with a throwaway probe over test 2's scenario, which printed RECEIPT_KEYS [\"claimReplaced\",\"envelopeId\",\"messageId\",\"status\"] claimReplaced= true status= delivered; the probe was deleted. The key is camelCase, matching messageId/envelopeId/status, and is ABSENT on every ordinary send - outbound.test.ts asserts the receipt with toEqual({messageId, envelopeId, status}) in two places, so an always-present key would have rewritten a contract this task has no business rewriting."
+    },
+    {
+      "criterion": "Test 1 (R1): the recipient's one-time prekey is not spent on a send the relay is certain to refuse",
+      "status": "not_met",
+      "evidence": "STILL RED, unchanged, failing at line 213 with RELAY_HTTP_ERROR httpStatus 404 remoteCode PREKEY_BUNDLE_UNAVAILABLE. Not implementable, and the reason is a contradiction rather than a judgement call. Let S be the durable state after init + contact import with no relay publish. outbound.test.ts 'claims the pinned contact, establishes Signal, and durably sends a valid mailbox envelope' runs send from S and asserts the request sequence is EXACTLY ['/v2/prekeys/claim', '/v1/messages/send'] - so from S the client must claim, and must issue nothing before it. claimResidual test 1 runs send from the same S and requires a different sender to still be able to claim afterwards, with exactly one successful claim in total - so from S the client must NOT claim. The decision at the claim is a function of durable state and requests already issued; both agree on the state and the first forbids any prior request; the only discriminator (whether the relay accepts this sender's deposit) is knowable only from the deposit, which happens after the claim. I implemented the analysis's own R1 predicate (Profile.hasPublication(), guarding the claim path) and measured 36 failing tests: outbound.test.ts (4), outbound.senderAuthentication.test.ts (3), outbound.concurrentSend.test.ts (1), inbound*.test.ts (24), cli.senderQuota / cli.relayErrorCodes / cli.processFailures, and test/e2e/publication-claimability.test.ts, whose step 5 pins against the REAL relay binary that an unpublished carol's send must be reported under a code matching /PREKEY/ (it reported SENDER_NOT_PUBLISHED). The guard was fully reverted. Closing R1 needs a decision above this task - that send presupposes relay publish - plus a correction of those fixtures to publish before sending; I did not edit them."
+    },
+    {
+      "criterion": "No test file changed, no Go file changed, nothing weakened, narrowed, skipped or deleted",
+      "status": "met",
+      "evidence": "apps/cli/src/runtime/outbound.claimResidual.test.ts is unchanged at sha256 56285ada4a242f160b1c6ae04dfdf4e6baedcfe896b31b6cfde3393abf6d6714, identical to T12's recorded digest. outbound.test.ts unchanged at de0b4877..., profile.ts byte-identical to baseline at 29c654f2... after the reverted probe, and apps/relay/internal/storage/repository/prekey_bundle_v2_test.go unchanged at 44e4c27d... - the Go guards against a claim rollback are exactly as T12 left them. No rollback was added, no relay claim semantics were touched, apps/relay was not entered, and no Zod schema was relaxed: the change adds checks and one narrow recovery. The only behaviour removed is 'keep replaying a bundle that can never be used'."
+    },
+    {
+      "criterion": "No regression in apps/cli, and typecheck clean",
+      "status": "met",
+      "evidence": "Whole apps/cli suite, 44 files including the real-relay e2e suites (publication-claimability, two-process, rewalk-crash-safety, flood-closure): 248 passed / 1 failed of 249, the single failure being test 1. Baseline was 246 passed with the three new tests red, so exactly two tests moved red to green and nothing regressed. pnpm typecheck exits 0 across all seven workspace projects. The process-spawning tests in src/commands all passed in that full run, so no isolation re-run was needed."
+    },
+    {
+      "criterion": "Safety: no secret material handled, no remote host touched, no new CLI command",
+      "status": "met",
+      "evidence": "No store key, private key, plaintext or HTTP request body is printed, logged or recorded by the change or by the throwaway probe, which emitted only the receipt's key names and two booleans/strings. No CLI command was added - bundle rotation stays unreachable and out of scope. Every command ran locally; geekom and depr were not contacted."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t13-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "The change and the alternative rejected, what a caller sees when a dead claim is replaced, the proof that test 1 contradicts outbound.test.ts with the measured 36-failure evidence, the unchanged digests, and six residuals.",
+      "hash": "sha256:084c68cde51c1b203dc2e9086f144945f0844c04f331b7ee00b39f31f0771c46"
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "claimFirstContact: pin checked before window, one release-and-reclaim of a dead stored claim with the replacement id written durably before it is issued, PREKEY_BUNDLE_EXPIRED instead of CONTACT_PIN_MISMATCH for a closed window, and claimReplaced: true on the receipt of a send that replaced a claim.",
+      "hash": "sha256:337031b1540c87b956f420cb42eead8cb123e7a7b7a33dfd9f81cfc3fab1fd5e"
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/runtime/outbound.ts", "change": "modified" },
+    { "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t13-implementation-report.md", "change": "added" },
+    { "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T13-implement-result.json", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "T13-F-001",
+      "severity": "major",
+      "confidence": "high",
+      "line": 182,
+      "evidence": "outbound.claimResidual.test.ts:182 and outbound.test.ts:122 both run send from the same durable state S (init + contact import, no relay publish, no session) against a relay holding one claimable bundle. outbound.test.ts:133 asserts the request sequence is exactly ['/v2/prekeys/claim','/v1/messages/send']; claimResidual:210-217 requires that a different sender can still claim afterwards and that exactly one claim succeeds. No deterministic client satisfies both: the discriminator (will the relay accept this sender's deposit?) is only knowable from the deposit, which is issued after the claim, and outbound.test.ts's exact path list forbids any earlier request. Measured: the analysis's own predicate (cli:publication absent) as a guard produces 36 failures.",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/outbound.claimResidual.test.ts:182 (test 1)",
+          "apps/cli/src/runtime/outbound.test.ts:122,133 (exact path assertion)",
+          "apps/cli/src/runtime/outbound.senderAuthentication.test.ts:85-99 (relay fake answers only claim and send, so no pre-flight probe is possible either)",
+          "apps/cli/test/e2e/publication-claimability.test.ts:157-159 (real relay: an unpublished sender's send must report a /PREKEY/ code)"
+        ],
+        "enumeration_method": "Every apps/cli test that drives a first-contact send from a profile that has not published, found by reading each outbound/inbound/e2e fixture and confirmed by the 36-failure measurement with the guard in place."
+      },
+      "reviewer": "task-implementer (003-T13)",
+      "problem": "Test 1's R1 bound is unsatisfiable while the existing fixtures send without publishing",
+      "impact": "R1 stays open: the recipient's one-time prekey is still spent by a send the relay is certain to refuse. It cannot be closed by a better implementation, only by deciding that send presupposes relay publish and correcting the fixtures.",
+      "suggested_fix": "Decide the product rule explicitly. If send presupposes relay publish, add publish() to the affected fixtures (outbound.test.ts's trustedPair-based sends, senderAuthentication.test.ts's three, concurrentSend, the inbound history setups) and to publication-claimability's carol, then reinstate the guard - Profile.hasPublication() plus one line in sendOwned - as one task permitted to edit tests. If the rule is not adopted, retire test 1 rather than leaving it permanently red.",
+      "file": "apps/cli/src/runtime/outbound.claimResidual.test.ts"
+    },
+    {
+      "id": "T13-F-002",
+      "severity": "minor",
+      "confidence": "high",
+      "line": 141,
+      "evidence": "claimFirstContact throws OutboundError('PREKEY_BUNDLE_EXPIRED') when the replacement claim also returns a bundle outside its validity window. No test constructs that state - test 3 exercises the neighbouring case where the replacement finds nothing to claim and gets the relay's 404 PREKEY_BUNDLE_UNAVAILABLE. The code is reachable in the field (a recipient who publishes a bundle whose window has already closed) and is deliberately distinct: the relay's code means 'nothing to claim', this one means 'what I was given cannot be used'.",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/outbound.ts (claimFirstContact, the second-expiry branch)",
+          "apps/cli/src/commands/cli.ts:385 (classify maps every OutboundError to trustFailure, exit 3)"
+        ],
+        "enumeration_method": "The single new error code introduced by this change; every OutboundError construction site was read."
+      },
+      "reviewer": "task-implementer (003-T13)",
+      "problem": "A new CLI failure code with no test and no documentation",
+      "impact": "A regression that collapsed it back into CONTACT_PIN_MISMATCH would go unnoticed, reinstating the security-alarm mislabelling test 3 exists to forbid.",
+      "suggested_fix": "A test that replenishes with an already-expired bundle and asserts the code is neither CONTACT_PIN_MISMATCH nor a relay code, in a task permitted to add tests; and a line in specification.md if a CLI failure-code table is ever added.",
+      "file": "apps/cli/src/runtime/outbound.ts"
+    },
+    {
+      "id": "T13-F-003",
+      "severity": "info",
+      "confidence": "high",
+      "line": 106,
+      "evidence": "docs/requirements/echolet-cli-prototype/runbook.md:106 shows a send result as {\"messageId\":\"...\",\"envelopeId\":\"...\",\"status\":\"delivered\"} and does not mention claimReplaced, which a send that replaced a dead claim now also carries. The runbook does not claim the shape is exhaustive, and nothing parses it strictly - the TUI reads the send result by name and only increments outboxPending - so no consumer breaks.",
+      "class_scope": {
+        "sites": [
+          "docs/requirements/echolet-cli-prototype/runbook.md:106",
+          "apps/cli/src/tui/tui-shell.ts:298 (the only in-tree consumer of the send result)"
+        ],
+        "enumeration_method": "Every markdown occurrence of envelopeId plus every in-tree reader of the send result."
+      },
+      "reviewer": "task-implementer (003-T13)",
+      "problem": "The operator-facing documentation does not mention the new receipt field",
+      "impact": "An operator who sees claimReplaced: true has nowhere to read what it means, which is half the point of surfacing it.",
+      "suggested_fix": "One sentence in the runbook's send section: the field appears only when a stored claim had expired and was replaced, and it means one of the recipient's one-time prekeys was consumed by the abandoned claim.",
+      "file": "docs/requirements/echolet-cli-prototype/runbook.md"
+    },
+    {
+      "id": "T13-F-004",
+      "severity": "info",
+      "confidence": "high",
+      "line": 130,
+      "evidence": "The replacement is bounded at one per send, not per recipient. A recipient who keeps publishing bundles outside their validity window costs one extra claim request per send attempt, each consuming another of their own one-time prekeys. Recovery also still depends on the recipient having replenished, and there is still no CLI command that lets them: specification.md keeps OutboundMessenger.rotateBundle() deliberately unreachable behind the frozen eight-command surface.",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/outbound.ts (claimFirstContact, the single-replacement bound)",
+          "apps/cli/src/runtime/outbound.ts:36 (rotateBundle, reachable in code and not from the CLI)"
+        ],
+        "enumeration_method": "The two places the client can allocate or re-allocate first-contact key material."
+      },
+      "reviewer": "task-implementer (003-T13)",
+      "problem": "The wedge is removed but the underlying scarcity is not",
+      "impact": "Where the recipient has not replenished, the sender now gets an honest PREKEY_BUNDLE_UNAVAILABLE instead of a false trust alarm, but still cannot make first contact. T12 section 7's first two open questions (a ninth command for rotation; an authenticated claim route) are untouched.",
+      "suggested_fix": "Take T12 section 7 question 1 as its own decision. Nothing in this change forecloses it.",
+      "file": "apps/cli/src/runtime/outbound.ts"
+    }
+  ],
+  "questions": [
+    {
+      "id": "T13-Q-001",
+      "question": "Does send presuppose relay publish, and may the existing fixtures be corrected to publish before sending? That is the only way R1 / test 1 can be closed - see finding T13-F-001. Without that decision test 1 stays permanently red.",
+      "why": "The R1 bound is unsatisfiable while outbound.test.ts, outbound.senderAuthentication.test.ts, the inbound history setups and publication-claimability's carol all send from a profile that never published; the analysis's own predicate produced 36 failures. The answer decides whether the guard is reinstated together with a fixture correction, or test 1 is retired. It is not blocking: the other two bounds are delivered and nothing regressed."
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "product_files_changed": 1,
+    "test_files_changed": 0,
+    "red_tests_turned_green": 2,
+    "red_tests_remaining": 1,
+    "js_suite": "apps/cli 248 passed / 1 failed of 249 across 44 files (baseline 246 passed with 3 red); the single failure is claimResidual test 1",
+    "js_typecheck": "exit 0 across all seven workspace projects",
+    "go_suite": "not run - no Go file was opened; apps/relay was out of scope and the RI-09 poll-byte-budget failure belongs to another task",
+    "reverted_experiment": "the R1 guard (Profile.hasPublication() + one line in sendOwned) produced 36 failing tests and was fully reverted; profile.ts is byte-identical to baseline",
+    "caller_visible_change": "a send that replaced a dead claim resolves to {messageId, envelopeId, status: 'delivered', claimReplaced: true}; the key is absent on every other send",
+    "test_file_digests_unchanged": [
+      "apps/cli/src/runtime/outbound.claimResidual.test.ts 56285ada4a242f160b1c6ae04dfdf4e6baedcfe896b31b6cfde3393abf6d6714",
+      "apps/cli/src/runtime/outbound.test.ts de0b4877d5af612bae352eba217250e1a646aa497933d2e11d5036d0218c7d98",
+      "apps/relay/internal/storage/repository/prekey_bundle_v2_test.go 44e4c27da8a274d29496c3ab07a97fcb2b0e1685d7057c280829fdcda580a91d"
+    ],
+    "unchanged_product_files": [
+      "apps/cli/src/runtime/profile.ts 29c654f22cea55d525e7b6caf544dd18b2efc52e794b571e0220cefec15a851e"
+    ],
+    "routing_audit": {
+      "graph_used": "not-relevant - the three files under change were named in the dispatch and in T12's analysis by path; the one navigation question (who writes cli:publication) was a single exact-symbol search",
+      "wiki_used": "not-relevant - T12's analysis is the authority for this behaviour and cites specification.md and the Go sources directly, all read at source",
+      "ctx_used": "yes - keryx ctx run for every vitest, typecheck and listing command; keryx ctx rg for every search",
+      "raw_rg_used": "no"
+    }
+  },
+  "timestamp_utc": "2026-09-07T21:50:00Z"
+}

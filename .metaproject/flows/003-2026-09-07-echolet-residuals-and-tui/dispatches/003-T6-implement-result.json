@@ -1,0 +1,164 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T6-implement",
+  "status": "DONE",
+  "summary": "All 18 RED tests from T5 are green with PRODUCT-CODE-ONLY changes under apps/cli/src/tui. D-1: mapKey gates on the INTENT (a `run` while state.busy returns undefined) and reduce refuses a `run` while busy, so a key-mash spawns no second child against the encrypted SQLite store and no PERSISTENCE_FAILURE is manufactured out of a RELAY_UNAVAILABLE; the busy frame's activity line tells the operator; quit, Ctrl-C, pane keys, ?, c, t and the modal keys stay live. D-2: a new pure leaf module pane-fit.ts replaces the frame's silent prefix slice with per-pane head/rows/tail regions plus a `keep` end, spending one row on `… N more not shown` where N counts LIST rows; history and rejections keep their tail (newest), and the contact roster deliberately keeps its head because `c` cycles from the head and ContactView carries no time. D-3: the footer is a ranked label list fitted to the viewport, so [q] quit and [?] help survive at 72 columns; ? is bound to a new toggle-help intent and paints every binding in place of the pane body. D-4: runTuiShell no longer clamps the viewport up to MIN_VIEWPORT, and renderFrame paints a degraded frame below it with UNAUDITED_NOTICE wrapped rather than pushed off-screen; paint() records modal.renderedAt only when the painted viewport was not below the minimum, so a trust confirmation cannot become answerable on a frame that never showed the identifiers. Plus --help now prints usage and exits 0, and the profiles-pane doc comment no longer claims the roster holds exported cards. apps/cli: 246 passed (246), 0 failed, 43 files. pnpm typecheck exit 0 over 7 workspace projects. No test file changed — all seven T5 digests reproduce unchanged. Nothing in apps/relay, packages/ or docs/ touched; no relay started; geekom and depr not contacted; no store key, private key, plaintext or HTTP body printed or recorded.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC6 / D-1: while a command is in flight a key that would start another starts none, the operator is told, and the exit class reported is the class the CLI returned — demonstrated against a real driven process",
+      "status": "met",
+      "evidence": "All 7 D-1 tests green. Pure half (tui-shell.singleFlight, 4): mapKey returns no `run` for p/d/r/h/i on a busy state while still returning quit for q and ctrl-c, select-pane for every ordinal and trust-confirm/trust-cancel with a modal open, and still returning `run` for all five when idle; reduce emits no run-cli effect while busy and still emits exactly one when idle; the busy frame matches the refusal alternation; runTuiShell with a never-settling runCli calls it once for five keystrokes. Process half (main.processDriven, 2): driving the real bundle with real children over a pipe, the announcement list behind the causal barrier is exactly ['poll','doctor'] and ['relay publish','poll','relay publish'], no child was refused by the store, PERSISTENCE_FAILURE never appears in the paint, and the only relay-publish class reported is RELAY_UNAVAILABLE exit 4. The gate is written over the intent rather than a key list, so a binding added later cannot slip past it; reduce holds the deep half for the same reason the trust gate does."
+    },
+    {
+      "criterion": "AC7 / D-2, first half: a truncated pane states that it is truncated and how many rows are not shown",
+      "status": "met",
+      "evidence": "shell-chrome.overflow (3) green over history (9 of 30 shown), the contact roster (1 of 30) and rejections (9 of 30). pane-fit.ts spends one body row on `… N more not shown`, where N counts LIST rows rather than dropped output lines — which is the number the tests derive from the frame (supplied minus visible) and the number an operator can act on. The rejections pane in shell-chrome and the mailbox pane's rejection list were routed through the same helper for consistency, though only the former is pinned."
+    },
+    {
+      "criterion": "AC7 / D-2, second half: a truncated pane keeps the rows an operator needs rather than the oldest",
+      "status": "met",
+      "evidence": "shell-chrome.recency (3) green. history and rejections declare keep:\"tail\", so at MIN_VIEWPORT the surviving rows are entries 22-30 of 30 (indices 21..29) and at MIN_VIEWPORT.rows+4 they are 17..29 — the contiguous tail in both cases, with the marker naming 21 and 17 on the same frame. The contact roster keeps its head, deliberately and as the dispatch requires: no ordering was invented for it. keep:\"head\" is the order it already had, and it has to stay — `c` cycles state.contacts from the head, so a pane showing the tail would cycle the operator through contacts it is not showing."
+    },
+    {
+      "criterion": "AC8 / D-3: every advertised key is visible at the minimum viewport and there is a discoverable key list",
+      "status": "met",
+      "evidence": "shell-chrome.legend (3) green. footerLine now fits a ranked label list to the viewport: [q] quit is rank 1 and [?] help rank 2, so at 72 columns the footer is '[1-5] pane  [p] poll  [d] doctor  [r] publish  [?] help  [q] quit' (65 columns) and both are present. ? is bound to a new toggle-help intent; the key list replaces the pane body, so it inherits the frame's shape, the notice and the escape-free guarantee with no second layout. MIN_VIEWPORT was not moved and UNAUDITED_NOTICE was not shortened."
+    },
+    {
+      "criterion": "AC8 / D-4: at any viewport no emitted line exceeds the viewport width, so the unaudited notice cannot be pushed out of view",
+      "status": "met",
+      "evidence": "tui-shell.smallViewport (1) green. runTuiShell.viewport() reports the terminal's own size (a pipe, reporting nothing, still defaults to MIN_VIEWPORT); renderFrame paints a degraded frame below the minimum, with the notice hard-wrapped across as many rows as it takes and every other line of that frame wrapped too, so the frame that explains a too-small terminal is not itself cut off. At 40x10 the shell writes 10 lines of 40 with the notice intact; at 96x28 it writes 28 lines of 96, so 'always paint the minimum' was not the fix. shell-chrome.ts:30's long-documented behaviour is now implemented and the comment corrected."
+    },
+    {
+      "criterion": "The smaller cases: --help exits 0 with usage, and the profiles-pane header does not name a roster category no code path produces",
+      "status": "met",
+      "evidence": "main.processDriven '--help' green: exit 0, output contains --profile, no alternate-screen sequence. main.ts recognises the zero-argument flag before reading its successor as a value — which is what produced '--help needs a value' — and scans argv positionally so `--label -h` stays a label. profiles-pane.rosterClaim green: the module doc comment now says 'imported' and explains why an export is not a pinned contact; the same false claim on ContactView in state.ts was fixed with it."
+    },
+    {
+      "criterion": "The flow 002 properties are preserved: renderFrame pure, total, deterministic, escape-free, exactly rows x cols; no key material in any frame or child argv; the notice on every frame including modal frames; the trust modal cannot confirm what was never painted",
+      "status": "met",
+      "evidence": "shell-chrome.test.ts (12), tui.keyMaterial.test.ts (9), modal-host.test.ts (14) and tui-shell.test.ts (14) are green untouched, and every new frame-level test re-asserts rows x cols, absence of ESC and UNAUDITED_NOTICE on the frames it adds requirements to. renderFrame stayed total because the defect was the shell's clamp, not the renderer: both branches leave through the same slice-pad-fitLine exit, tooSmallFrame reads only state.modal, cols and rows, and fitPane clamps a non-integer, negative or infinite limit rather than trusting it. The trust gate was STRENGTHENED, not merely preserved: paint() now records modal.renderedAt only when the painted viewport was not below the minimum, so a modal whose identifiers the degraded frame cannot show can no longer become confirmable. cli-bridge.ts and modal-host.ts are byte-identical, so CLI_COMMANDS, buildArgv and the four-identifier completeness check are untouched."
+    },
+    {
+      "criterion": "No test weakened, skipped, narrowed or deleted; no test file changed; nothing outside apps/cli/src touched",
+      "status": "met",
+      "evidence": "All seven T5 test files reproduce their recorded SHA-256 exactly (listed in metrics.test_file_digests). No .skip, .only or removed assertion anywhere; the 228 pre-existing apps/cli tests all still pass. Nine files under apps/cli/src/tui changed, one of them added. apps/relay, packages/ and docs/ untouched, and the concurrent apps/relay work was ignored entirely. No ninth CLI command, no mouse support, no colour theme, no persisted preference file — the console still writes no file. No relay was started; geekom and depr were not contacted. No store key, private key, plaintext or HTTP request body was printed or recorded."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t6-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Each change with the alternative that was rejected and why; how renderFrame stayed pure and total while the shell learned to paint arbitrary viewports; the 18 tests by name; seven residuals; digests; routing audit.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/pane-fit.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New pure leaf module. Head/rows/tail pane regions with a `keep` end; one row spent on a marker naming the number of LIST rows not shown; the list never gives up its last row; fixed regions get what is left, head before tail.",
+      "hash": "sha256:0c5866f08a563c786b9ce74c2262a48ba882a60bc12c8896f4b72d73631b030b"
+    },
+    {
+      "path": "apps/cli/src/tui/shell-chrome.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Ranked, viewport-fitted footer; the busy line; the key list; isBelowMinViewport and the wrapped too-small frame; paneLines takes and passes down the row budget.",
+      "hash": "sha256:814f3253a67099ecf98f8fef9bca5b52e9817c35a5639f7e3c49ef83f851988f"
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The D-1 gate in mapKey (over the intent) and in reduce; the `?` binding and toggle-help; viewport() reports the terminal's own size; paint() records renderedAt only above the minimum viewport.",
+      "hash": "sha256:185e8a9fc40c8ff9383c0f0c28f045c9bc4271ac1965564383bde65fb4333fda"
+    },
+    {
+      "path": "apps/cli/src/tui/main.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "USAGE plus a positional wantsHelp; --help/-h prints usage on stdout and returns 0 before parseOptions and before the alternate screen; parseOptions recognises the zero-argument flag before reading its successor as a value.",
+      "hash": "sha256:cdf4f14a59d973af72f6298a9d43f55fa84dc6055a47f14a602a5af9b831a8e5"
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/tui/pane-fit.ts", "change": "added" },
+    { "path": "apps/cli/src/tui/shell-chrome.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/tui-shell.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/main.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/state.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/intents.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/history-pane.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/mailbox-pane.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/profiles-pane.ts", "change": "modified" },
+    { "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t6-implementation-report.md", "change": "added" },
+    { "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T6-implement-result.json", "change": "added" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_made_green": 18,
+    "test_files_changed": 0,
+    "production_files_changed": 9,
+    "production_files_added": 1,
+    "apps_cli_tests_after": "246 passed (246), 43 files, 0 failed",
+    "apps_cli_tests_before": "18 failed | 228 passed (246)",
+    "tui_subset_after": "15 files, 108 passed (108)",
+    "typecheck_exit_code": 0,
+    "typecheck_projects": 7,
+    "relays_started": 0,
+    "green_tests": [
+      { "file": "apps/cli/src/tui/tui-shell.singleFlight.test.ts", "test": "D-1 (pure): does not turn a command key into a run intent while busy, and keeps quit, panes and the modal live", "result": "PASS" },
+      { "file": "apps/cli/src/tui/tui-shell.singleFlight.test.ts", "test": "D-1 (pure): emits no run-cli effect for a run intent that arrives while busy", "result": "PASS" },
+      { "file": "apps/cli/src/tui/tui-shell.singleFlight.test.ts", "test": "D-1 (pure): tells the operator that the console is busy rather than dropping the keystroke in silence", "result": "PASS" },
+      { "file": "apps/cli/src/tui/tui-shell.singleFlight.test.ts", "test": "D-1 (shell, in-process): five command keystrokes in flight call runCli exactly once", "result": "PASS" },
+      { "file": "apps/cli/src/tui/main.processDriven.test.ts", "test": "D-1 (process): spawns no second child while a command is in flight", "result": "PASS" },
+      { "file": "apps/cli/src/tui/main.processDriven.test.ts", "test": "D-1 (process): reports the exit class the CLI returned, and does not manufacture a persistence failure", "result": "PASS" },
+      { "file": "apps/cli/src/tui/main.processDriven.test.ts", "test": "TUI entry point: prints usage and exits 0 for --help", "result": "PASS" },
+      { "file": "apps/cli/src/tui/shell-chrome.overflow.test.ts", "test": "D-2: says how many history entries it is not showing", "result": "PASS" },
+      { "file": "apps/cli/src/tui/shell-chrome.overflow.test.ts", "test": "D-2: says how many contacts of the roster it is not showing", "result": "PASS" },
+      { "file": "apps/cli/src/tui/shell-chrome.overflow.test.ts", "test": "D-2: says how many rejected envelopes it is not showing", "result": "PASS" },
+      { "file": "apps/cli/src/tui/shell-chrome.recency.test.ts", "test": "D-2: keeps the most recent history entries, not the first ten of the conversation", "result": "PASS" },
+      { "file": "apps/cli/src/tui/shell-chrome.recency.test.ts", "test": "D-2: keeps the most recent rejected envelopes, which are the ones not yet acted on", "result": "PASS" },
+      { "file": "apps/cli/src/tui/shell-chrome.recency.test.ts", "test": "D-2: keeps the most recent entries at a taller viewport too, so this is a rule about order and not about one row count", "result": "PASS" },
+      { "file": "apps/cli/src/tui/shell-chrome.legend.test.ts", "test": "D-3: shows the operator how to quit at the minimum viewport", "result": "PASS" },
+      { "file": "apps/cli/src/tui/shell-chrome.legend.test.ts", "test": "D-3: binds a help key", "result": "PASS" },
+      { "file": "apps/cli/src/tui/shell-chrome.legend.test.ts", "test": "D-3: advertises the route to the full key list at the minimum viewport", "result": "PASS" },
+      { "file": "apps/cli/src/tui/tui-shell.smallViewport.test.ts", "test": "D-4: writes no line wider than a 40x10 terminal, and keeps the unaudited notice on the frame", "result": "PASS" },
+      { "file": "apps/cli/src/tui/profiles-pane.rosterClaim.test.ts", "test": "profiles-pane roster claim: does not describe the roster as holding exported cards as well as imported ones", "result": "PASS" }
+    ],
+    "test_file_digests": [
+      { "path": "apps/cli/src/tui/tui-shell.singleFlight.test.ts", "sha256": "f0dfa6b6a232dcab2f9ae737f0b63bda42d35542987ff41ac547bd3d9d22875c", "matches_t5": true },
+      { "path": "apps/cli/src/tui/main.processDriven.test.ts", "sha256": "f72a5fc61aa4ee3817f6d7fef0beecbce7bc8a7e71d589958f84a843bc0edcc7", "matches_t5": true },
+      { "path": "apps/cli/src/tui/shell-chrome.overflow.test.ts", "sha256": "0b05771915dc9e11edab67d228813ad63fc664a4a2bfd938201e38f93e9de301", "matches_t5": true },
+      { "path": "apps/cli/src/tui/shell-chrome.recency.test.ts", "sha256": "aad0312c3f2d30a3ecbf44fce04f1c8358359e8083f85a215e30026a82d5bc73", "matches_t5": true },
+      { "path": "apps/cli/src/tui/shell-chrome.legend.test.ts", "sha256": "b0608084267caf10e7a2ff6284258c7cd955464a99dd15b1e71ad7c7b499a9e8", "matches_t5": true },
+      { "path": "apps/cli/src/tui/tui-shell.smallViewport.test.ts", "sha256": "af49ba463b1457a35f1fb8dafcac54e8f01129878ddaa07c1c9f46b4e8e5e814", "matches_t5": true },
+      { "path": "apps/cli/src/tui/profiles-pane.rosterClaim.test.ts", "sha256": "610cf9a3d8379ff04753184ceecc2c238b81f0dfa15f10a0da2485c75ae87607", "matches_t5": true }
+    ],
+    "residuals": [
+      "A pane whose FIXED lines alone overflow still drops some of them without a count; the marker counts list rows. Measured case: the profiles pane at 72x16 with no observed contacts loses its relay-health line — which is what it did before this task too, so it is carried forward rather than introduced, and the health line has its own pane.",
+      "The roster is counted but still not reachable: no paging key reaches contact 30. That is U5's other half and it has to be decided with U6's rework of the `c` cycle, which is why no ordering was invented for the roster.",
+      "Long fixed lines are still clipped rather than wrapped inside the defined frame (the rosterDiscrepancy line loses its last word at 72 columns). Pre-existing; wrapToWidth is used only on the degraded frame.",
+      "state.activity still surfaces only its last entry; a result that completes while the operator reads another pane is kept in state but not painted. That is U2, untouched.",
+      "The refusal is stated by the busy frame rather than acknowledged per keystroke. It is true and visible before the key is pressed; a per-keystroke acknowledgement needs a clock the reducer does not have.",
+      "-h is accepted as an alias for --help. Positional scanning keeps it from swallowing an option value, but a future zero-argument option must be added to the same handling in parseOptions or it will consume its successor the way --help did.",
+      "HELP_LINES and FOOTER_KEYS are maintained by hand against what mapKey binds; nothing machine-checks the relation in both directions. The design note's U4 asks for exactly that relation test, and this task may not write tests."
+    ],
+    "routing_audit": {
+      "graph_used": "no — not-relevant: the dispatch named the seven test files and their subjects exhaustively, and every product file involved is a direct import of one of them, read in full",
+      "wiki_used": "no — not-relevant: the architecture, domain rules and decisions in play were supplied in-band by t2-tui-usability-design.md, acceptance-criteria.md and the T5 result JSON, which are more specific than the wiki for this surface",
+      "ctx_used": "yes — keryx ctx rg for the T2 heading sweep; all commands routed through the gdctx hook",
+      "raw_rg_used": "yes, once — grep -n '^#' over t2-tui-usability-design.md with the # keryx:raw marker and an inline reason: the compacted ctx rg summary elided most of the heading list and exact line numbers were needed to read section 7 without loading a 623-line file"
+    }
+  },
+  "timestamp_utc": "2026-09-08T22:20:00Z"
+}
