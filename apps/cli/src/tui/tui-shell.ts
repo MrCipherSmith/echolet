@@ -1,7 +1,7 @@
 import type { CliOutcome, CliRequest } from "./cli-bridge";
 import type { Effect, Intent, Step } from "./intents";
 import { modalIntent, trustModalIsComplete } from "./modal-host";
-import { MIN_VIEWPORT, renderFrame, styleFrame } from "./shell-chrome";
+import { MIN_VIEWPORT, isBelowMinViewport, renderFrame, styleFrame } from "./shell-chrome";
 import {
   PANE_IDS,
   type ContactView,
@@ -77,11 +77,37 @@ export function mapKey(key: KeyEvent, state: OperatorState): Intent | undefined 
 
   if (key.ctrl) return key.name.toLowerCase() === "c" ? { kind: "quit" } : undefined;
   if (key.name === "q") return { kind: "quit" };
+  if (key.name === "?") return { kind: "toggle-help" };
 
   const ordinal = /^[1-9]$/.test(key.name) ? Number(key.name) : 0;
   const pane = PANE_IDS[ordinal - 1];
   if (pane !== undefined) return { kind: "select-pane", pane };
 
+  const intent = paneKeyIntent(key, state);
+
+  /*
+   * D-1, the gate the console was measured to be missing (flow 003 T2 §3.1).
+   *
+   * Every `run` spawns a child against one encrypted SQLite store. With one already in flight the
+   * second met the store as a concurrent writer, so `p p p d` at 5 ms produced two
+   * `PERSISTENCE_FAILURE (exit 5)` results and one success — the console manufactured its most
+   * alarming exit class out of key-mashing — and a `relay publish` pressed during a poll reported
+   * `PERSISTENCE_FAILURE (exit 5)` where the CLI on its own returns `RELAY_UNAVAILABLE (exit 4)`.
+   * A console whose whole purpose is to surface the typed exit-code contract must not invent its
+   * most alarming class out of its most benign one.
+   *
+   * The gate is written over the INTENT rather than over a list of key names, so a binding added
+   * later cannot slip past it. Quit, Ctrl-C, pane selection, the modal, `?`, `c` and `t` are all
+   * decided above this line and stay live: a console that goes deaf while a child runs is
+   * indistinguishable from a hung one. The operator is told rather than ignored — while `busy` is
+   * set, `activityLine` says so on every frame.
+   */
+  if (state.busy && intent?.kind === "run") return undefined;
+  return intent;
+}
+
+/** The bindings that depend on the active profile. Split out so the D-1 gate can read the intent. */
+function paneKeyIntent(key: KeyEvent, state: OperatorState): Intent | undefined {
   // The command keys. Each is a precondition away from being unbound: a key that would build an
   // incomplete request returns `undefined` rather than an argv with a missing operand.
   const profile = state.profiles[state.activeProfile];
@@ -123,7 +149,14 @@ export function reduce(state: OperatorState, intent: Intent): Step {
     }
     case "select-contact":
       return { state: { ...state, selectedContactId: intent.identityId }, effects: [] };
+    case "toggle-help":
+      return { state: { ...state, help: state.help !== true }, effects: [] };
     case "run":
+      // The deep half of the D-1 gate, held here for the same reason the trust gate is: a `run`
+      // arriving from anywhere — a stray keystroke, a resize race, a future scripted mode, a
+      // startup effect — meets the same precondition. `mapKey` refusing the keystroke keeps the
+      // console honest; this keeps it correct.
+      if (state.busy) return { state, effects: [] };
       return { state: { ...state, busy: true }, effects: [{ kind: "run-cli", request: intent.request }] };
     case "trust-confirm": {
       const modal = state.modal;
@@ -283,17 +316,31 @@ export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
   let current = state;
   let running = true;
 
+  /**
+   * The terminal's OWN size, never clamped up to `MIN_VIEWPORT`.
+   *
+   * MEASURED (flow 003 T2 §4, D-4): clamping up wrote sixteen 72-column lines into a 40×10 window,
+   * the terminal wrapped every one of them, and `UNAUDITED_NOTICE` — flow 002's AC6 — scrolled off
+   * the top. `renderFrame` is total at any viewport and paints a degraded frame below the minimum,
+   * so the honest thing is to hand it the size that was reported. A terminal that reports nothing
+   * at all (a pipe) still falls back to `MIN_VIEWPORT`, which is a default rather than a clamp.
+   */
   const viewport = (): Viewport => ({
-    cols: Math.max(MIN_VIEWPORT.cols, io.stdout.columns ?? MIN_VIEWPORT.cols),
-    rows: Math.max(MIN_VIEWPORT.rows, io.stdout.rows ?? MIN_VIEWPORT.rows),
+    cols: Math.max(1, Math.floor(io.stdout.columns ?? MIN_VIEWPORT.cols)),
+    rows: Math.max(1, Math.floor(io.stdout.rows ?? MIN_VIEWPORT.rows)),
   });
 
   const paint = (): void => {
-    io.stdout.write(`${HOME}${styleFrame(renderFrame(current, viewport())).join("\r\n")}`);
+    const painted = viewport();
+    io.stdout.write(`${HOME}${styleFrame(renderFrame(current, painted)).join("\r\n")}`);
     // Set only AFTER the frame carrying the modal has been written. This is the whole content of
     // the `renderedAt` gate in `reduce`.
+    //
+    // The degraded frame below `MIN_VIEWPORT` carries no modal, so writing it is not the operator
+    // seeing the four identifiers. Recording `renderedAt` there would let a confirmation through
+    // for a modal that was never painted, which is exactly what the gate exists to refuse.
     const modal = current.modal;
-    if (modal !== undefined && modal.renderedAt === null) {
+    if (modal !== undefined && modal.renderedAt === null && !isBelowMinViewport(painted)) {
       current = { ...current, modal: { ...modal, renderedAt: io.now() } };
     }
   };

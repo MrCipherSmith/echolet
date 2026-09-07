@@ -1,6 +1,7 @@
 import { buildHistorySnapshot, formatHistoryLines } from "./history-pane";
 import { buildMailboxSnapshot, formatMailboxLines } from "./mailbox-pane";
 import { renderModal, resolveModalPanelSize } from "./modal-host";
+import { fitPane } from "./pane-fit";
 import { buildProfilesSnapshot, formatProfilesLines } from "./profiles-pane";
 import { PANE_IDS, type Frame, type OperatorState, type PaneId, type Viewport } from "./state";
 import { clipLine, codePoints, padOrClip } from "./text";
@@ -27,11 +28,26 @@ import { clipLine, codePoints, padOrClip } from "./text";
 export const UNAUDITED_NOTICE = "UNAUDITED PROTOTYPE — not suitable for sensitive communication";
 
 /**
- * Below this the frame is not defined; the shell shows the notice and a resize hint instead.
+ * Below this the frame is not defined; the frame shows the notice and a resize hint instead.
  * 72 columns is chosen so `UNAUDITED_NOTICE` fits on one line without truncation at the narrowest
  * supported terminal: a warning that has to be truncated to fit is not a warning.
+ *
+ * It is NOT a floor the shell clamps up to. Painting 72-column lines into a 40-column terminal makes
+ * the terminal wrap every one of them, which pushes the notice — an acceptance criterion — off the
+ * screen entirely (flow 003 T2 §4, D-4). See `isBelowMinViewport` and `tooSmallFrame`.
  */
 export const MIN_VIEWPORT: Viewport = { cols: 72, rows: 16 };
+
+/**
+ * True when the defined frame does not fit and `renderFrame` paints the degraded one instead.
+ *
+ * Exported because the shell has to know: the degraded frame carries no modal, so the shell must
+ * not record that a modal was painted after writing one. "The operator saw the four identifiers"
+ * has to stay a claim about what was on the screen.
+ */
+export function isBelowMinViewport(viewport: Viewport): boolean {
+  return Math.floor(viewport.cols) < MIN_VIEWPORT.cols || Math.floor(viewport.rows) < MIN_VIEWPORT.rows;
+}
 
 /** Pads or truncates to exactly `cols` printable columns, counted in code points. */
 export function fitLine(text: string, cols: number): string {
@@ -51,42 +67,133 @@ function headerLine(state: OperatorState): string {
   return `echolet operator · ${profile?.label ?? "no profile"} ·${tabs}`;
 }
 
-/** Names exactly what `mapKey` binds. A footer that advertised an unbound key would be a lie. */
-function footerLine(state: OperatorState): string {
-  if (state.modal !== undefined) return "[y] trust  [n] reject  [esc] cancel";
-  return "[1-5] pane  [p] poll  [d] doctor  [r] publish  [h] history  [i] import  [c] contact  [t] profile  [q] quit";
+/**
+ * One advertised key, and how badly the footer needs it.
+ *
+ * `rank` orders removal, not display: the labels are painted in the order they appear here, and the
+ * ones with the highest rank are dropped first when they do not fit. MEASURED (flow 003 T2 §4): the
+ * old footer was one 106-column string and `MIN_VIEWPORT.cols` is 72, so at exactly the width the
+ * shell falls back to, the frame ended at "[i] import" and the key that leaves the program was
+ * invisible. Quitting and finding the key list are the two things an operator cannot do without, so
+ * they hold ranks 1 and 2 and are the last to go.
+ */
+interface FooterKey {
+  readonly label: string;
+  readonly rank: number;
 }
 
-function activityLine(state: OperatorState): string {
-  const latest = state.activity.at(-1);
-  const busy = state.busy ? "running… " : "";
-  return `${busy}${latest?.text ?? "no activity yet"}`;
+const FOOTER_KEYS: readonly FooterKey[] = [
+  { label: "[1-5] pane", rank: 3 },
+  { label: "[p] poll", rank: 4 },
+  { label: "[d] doctor", rank: 5 },
+  { label: "[r] publish", rank: 6 },
+  { label: "[h] history", rank: 7 },
+  { label: "[i] import", rank: 8 },
+  { label: "[c] contact", rank: 9 },
+  { label: "[t] profile", rank: 10 },
+  { label: "[?] help", rank: 2 },
+  { label: "[q] quit", rank: 1 },
+];
+
+const FOOTER_KEYS_HELP_OPEN: readonly FooterKey[] = FOOTER_KEYS.map((entry) =>
+  entry.label === "[?] help" ? { label: "[?] close", rank: entry.rank } : entry);
+
+const FOOTER_SEPARATOR = "  ";
+
+/**
+ * The widest prefix of `entries`, by rank, that fits `cols`.
+ *
+ * Whatever the footer drops, it never drops the way to find what it dropped: `[?] help` opens the
+ * list that names every binding, so a footer of two labels is short rather than dishonest.
+ */
+function fitFooter(entries: readonly FooterKey[], cols: number): string {
+  const byRank = entries.map((_, index) => index)
+    .sort((left, right) => (entries[left]?.rank ?? 0) - (entries[right]?.rank ?? 0));
+
+  const paint = (chosen: readonly number[]): string =>
+    [...chosen].sort((left, right) => left - right).map((index) => entries[index]?.label ?? "").join(FOOTER_SEPARATOR);
+
+  const chosen: number[] = [];
+  for (const index of byRank) {
+    const candidate = paint([...chosen, index]);
+    if (codePoints(candidate).length > Math.max(0, Math.floor(cols))) break;
+    chosen.push(index);
+  }
+  return paint(chosen);
+}
+
+/** Names exactly what `mapKey` binds. A footer that advertised an unbound key would be a lie. */
+function footerLine(state: OperatorState, cols: number): string {
+  if (state.modal !== undefined) return "[y] trust  [n] reject  [esc] cancel";
+  return fitFooter(state.help === true ? FOOTER_KEYS_HELP_OPEN : FOOTER_KEYS, cols);
 }
 
 /**
- * The lines of the pane the operator has selected.
+ * What the console is doing, and — while it is doing it — that a second command would not start.
+ *
+ * MEASURED (flow 003 T2 §3.1 and §4): a keystroke that starts nothing paints nothing, which is
+ * indistinguishable from a hung console. The busy state is the one moment where that matters, so
+ * the state itself says it rather than each refused keystroke having to.
+ */
+function activityLine(state: OperatorState): string {
+  const latest = state.activity.at(-1);
+  const text = latest?.text ?? "no activity yet";
+  return state.busy ? `running… (busy — a command key starts nothing) ${text}` : text;
+}
+
+/**
+ * Every binding on this surface, in one place, reachable with `?`.
+ *
+ * MEASURED (flow 003 T2 §4): `?` was unbound and painted nothing, and the footer could not carry
+ * ten labelled keys in 72 columns. A footer that has to drop labels needs somewhere to send the
+ * operator, and this is it. It replaces the pane body rather than floating over it, so it inherits
+ * the frame's shape, the notice and the escape-free guarantee without a second layout to audit.
+ */
+const HELP_LINES: readonly string[] = [
+  "key bindings",
+  "  1-5        select pane",
+  "  p          poll",
+  "  d          doctor",
+  "  r          relay publish",
+  "  h          history for the selected contact",
+  "  i          import the contact card named at startup",
+  "  c          next contact",
+  "  t          next profile",
+  "  ?          close this list",
+  "  q          quit (ctrl-c also quits)",
+];
+
+/**
+ * The lines of the pane the operator has selected, laid out into the `bodyRows` the frame has.
  *
  * Every pane is a `build…Snapshot` + `format…Lines` pair living in its own module, so each is
- * independently testable as a value comparison and this function is only layout.
+ * independently testable as a value comparison and this function is only layout. The row budget is
+ * passed DOWN into each pane rather than applied here as a slice, because which rows a pane may
+ * drop, and from which end, is a fact about that pane — see `pane-fit.ts`.
  */
-function paneLines(state: OperatorState, pane: PaneId, width: number): string[] {
+function paneLines(state: OperatorState, pane: PaneId, width: number, bodyRows: number): string[] {
+  if (state.help === true) return fitPane({ head: [HELP_LINES[0] ?? ""], rows: HELP_LINES.slice(1), keep: "head" }, bodyRows, width);
+
   const profile = state.profiles[state.activeProfile];
   switch (pane) {
     case "profiles": {
       if (profile === undefined) return [clipLine("no profile configured — run init first", width)];
-      return formatProfilesLines(buildProfilesSnapshot({ profile, contacts: state.contacts, health: state.health }), width);
+      return formatProfilesLines(buildProfilesSnapshot({ profile, contacts: state.contacts, health: state.health }), width, bodyRows);
     }
     case "mailbox":
-      return formatMailboxLines(buildMailboxSnapshot({ mailbox: state.mailbox, rejections: state.rejections }), width);
+      return formatMailboxLines(buildMailboxSnapshot({ mailbox: state.mailbox, rejections: state.rejections }), width, bodyRows);
     case "history":
-      return formatHistoryLines(buildHistorySnapshot({ entries: state.history, selectedContactId: state.selectedContactId }), width);
+      return formatHistoryLines(buildHistorySnapshot({ entries: state.history, selectedContactId: state.selectedContactId }), width, bodyRows);
     case "rejections": {
       const snapshot = buildMailboxSnapshot({ mailbox: state.mailbox, rejections: state.rejections });
       if (snapshot.rejectionCount === 0) return [clipLine("no permanently rejected envelopes in the last poll", width)];
-      return [
-        clipLine(`${snapshot.rejectionCount} rejected by the last poll`, width),
-        ...snapshot.rejectionLines.map((line) => clipLine(`  ${line}`, width)),
-      ];
+      return fitPane({
+        head: [`${snapshot.rejectionCount} rejected by the last poll`],
+        rows: snapshot.rejectionLines.map((line) => `  ${line}`),
+        // The untriaged rejections are the ones that arrived last; `poll` reports them in arrival
+        // order, so the tail is what the operator has not yet decided about.
+        keep: "tail",
+      }, bodyRows, width);
     }
     case "health": {
       const snapshot = buildProfilesSnapshot({
@@ -102,6 +209,47 @@ function paneLines(state: OperatorState, pane: PaneId, width: number): string[] 
 }
 
 /**
+ * The frame for a terminal smaller than `MIN_VIEWPORT`, painted at the terminal's OWN size.
+ *
+ * MEASURED (flow 003 T2 §4, D-4): the shell used to clamp UP to 72×16 and write sixteen 72-column
+ * lines into a 40×10 window. The terminal wraps every one of them into two rows — roughly 32 visual
+ * rows in a 10-row window — and `UNAUDITED_NOTICE`, which sits on row 0, scrolls out of view. That
+ * notice is flow 002's AC6, and a small terminal must not defeat an acceptance criterion.
+ *
+ * So the notice is WRAPPED rather than truncated or clamped: at any width it is present in full,
+ * across as many rows as it takes, which is what `shell-chrome.ts` has documented since flow 002
+ * and never did. Everything else on this frame is what the operator needs in order to leave it.
+ */
+function tooSmallFrame(state: OperatorState, cols: number, rows: number): string[] {
+  const lines = [
+    ...wrapToWidth(UNAUDITED_NOTICE, cols),
+    "",
+    ...wrapToWidth(`${String(cols)}x${String(rows)} — this console needs ${String(MIN_VIEWPORT.cols)}x${String(MIN_VIEWPORT.rows)}`, cols),
+    ...wrapToWidth("resize, or press q to quit", cols),
+  ];
+  // A trust decision cannot be answered here, because the identifiers cannot be shown here, and the
+  // reducer will refuse a confirmation for a modal that was never painted. Saying so is the
+  // difference between a refusal and a console that appears to have stopped responding.
+  if (state.modal !== undefined) lines.push("", ...wrapToWidth("a trust decision is waiting — resize to answer it", cols));
+  return lines;
+}
+
+/**
+ * Hard-wraps to `cols` code points per line.
+ *
+ * Every line of the degraded frame goes through this, so nothing on the one frame whose job is to
+ * explain a too-small terminal is itself cut off by that terminal. `cols` is at least 1 where this
+ * is called, so it always terminates.
+ */
+function wrapToWidth(text: string, cols: number): string[] {
+  const points = codePoints(text);
+  if (points.length === 0) return [""];
+  const lines: string[] = [];
+  for (let at = 0; at < points.length; at += cols) lines.push(points.slice(at, at + cols).join(""));
+  return lines;
+}
+
+/**
  * Exactly `viewport.rows` lines, each exactly `viewport.cols` columns, containing no ESC byte and
  * depending on nothing but its two arguments.
  *
@@ -113,11 +261,17 @@ export function renderFrame(state: OperatorState, viewport: Viewport): Frame {
   const cols = Math.max(1, Math.floor(viewport.cols));
   const rows = Math.max(1, Math.floor(viewport.rows));
 
+  if (isBelowMinViewport({ cols, rows })) {
+    const degraded = tooSmallFrame(state, cols, rows).slice(0, rows).map((line) => fitLine(line, cols));
+    while (degraded.length < rows) degraded.push(fitLine("", cols));
+    return degraded;
+  }
+
   const head = [UNAUDITED_NOTICE, headerLine(state), "─".repeat(cols)].slice(0, Math.min(HEAD_ROWS, rows));
-  const tail = [activityLine(state), footerLine(state)].slice(0, Math.max(0, Math.min(TAIL_ROWS, rows - head.length)));
+  const tail = [activityLine(state), footerLine(state, cols)].slice(0, Math.max(0, Math.min(TAIL_ROWS, rows - head.length)));
 
   const bodyRows = Math.max(0, rows - head.length - tail.length);
-  const body = paneLines(state, state.pane, cols).slice(0, bodyRows);
+  const body = paneLines(state, state.pane, cols, bodyRows).slice(0, bodyRows);
   while (body.length < bodyRows) body.push("");
 
   const frame = [...head, ...body, ...tail].map((line) => fitLine(line, cols));

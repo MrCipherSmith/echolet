@@ -15,6 +15,8 @@ export type Intent =
   | { readonly kind: "select-profile"; readonly index: number }
   | { readonly kind: "select-contact"; readonly identityId: string }
   | { readonly kind: "run"; readonly request: CliRequest }
+  /** Opens or closes the key list. Bound to `?`, the one key an operator will try. */
+  | { readonly kind: "toggle-help" }
   | { readonly kind: "trust-confirm" }
   | { readonly kind: "trust-cancel" }
   | { readonly kind: "quit" };

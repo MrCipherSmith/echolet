@@ -1,5 +1,6 @@
+import { fitPane } from "./pane-fit";
 import type { MailboxView, RejectionView } from "./state";
-import { clipLine, formatInstant, labelled } from "./text";
+import { formatInstant, labelled } from "./text";
 
 /**
  * Outbox and inbox state, and the rejected envelopes from the last `poll`.
@@ -42,14 +43,22 @@ export function buildMailboxSnapshot(source: {
   return { rows, rejectionLines: rejections.map(formatRejectionLine), rejectionCount: rejections.length };
 }
 
-export function formatMailboxLines(snapshot: MailboxSnapshot, width: number): string[] {
-  const lines: string[] = snapshot.rows.map((row) => clipLine(labelled(row.label, row.value), width));
+/**
+ * `limit` is the number of body rows the frame has for this pane; `Infinity` (the default) means
+ * "no limit", which is what every value-comparison test of this module wants.
+ *
+ * The rejection list is the only region truncation may take rows from, and it is kept from the END:
+ * a rejection the operator has already seen is one they have already decided about, and `poll`
+ * reports rejections in arrival order, so the untriaged ones are at the tail.
+ */
+export function formatMailboxLines(snapshot: MailboxSnapshot, width: number, limit = Number.POSITIVE_INFINITY): string[] {
+  const head: string[] = snapshot.rows.map((row) => labelled(row.label, row.value));
   if (snapshot.rejectionCount > 0) {
-    lines.push("");
-    lines.push(clipLine(labelled("rejected", `${snapshot.rejectionCount} permanently unacceptable`), width));
-    for (const rejection of snapshot.rejectionLines) lines.push(clipLine(`  ${rejection}`, width));
+    head.push("");
+    head.push(labelled("rejected", `${snapshot.rejectionCount} permanently unacceptable`));
   }
-  return lines;
+  const rows = snapshot.rejectionLines.map((rejection) => `  ${rejection}`);
+  return fitPane({ head, rows, keep: "tail" }, limit, width);
 }
 
 /**

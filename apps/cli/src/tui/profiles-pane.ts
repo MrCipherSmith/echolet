@@ -1,5 +1,6 @@
+import { fitPane } from "./pane-fit";
 import type { ContactView, ProfileView, RelayHealthView } from "./state";
-import { clipLine, formatInstant, labelled } from "./text";
+import { formatInstant, labelled } from "./text";
 
 /**
  * Profiles, their relay URL, the pinned contacts this session observed, and relay health.
@@ -13,9 +14,14 @@ import { clipLine, formatInstant, labelled } from "./text";
  * `Profile.listContacts()` has no entry point. The two alternatives were rejected — adding a ninth
  * command reopens a frozen decision, and reading the encrypted store directly would require the
  * TUI to hold the 32-byte store key, which is precisely what AC5 forbids. So the pane lists the
- * contacts it observed being exported or imported through the trust modal, cross-checks the count
- * against `doctor`, and states the discrepancy rather than showing a plausible list that is
- * silently short. See the design note §6.
+ * contacts it observed being imported through the trust modal, cross-checks the count against
+ * `doctor`, and states the discrepancy rather than showing a plausible list that is silently short.
+ * See the design note §6.
+ *
+ * An import is the only thing that can put a contact on this list. `contact export` creates no
+ * trust — a card this session handed out is not a pinned contact — and it has no key binding on
+ * this surface either, so the roster names exactly one category and this comment says so. (Flow 003
+ * T2 §1.2: the earlier wording here claimed both categories and no code path produced the other.)
  */
 
 export interface ProfilesRow {
@@ -87,13 +93,25 @@ export function buildProfilesSnapshot(source: {
   return { rows, contactLines, rosterDiscrepancy, healthLine: formatHealthLine(health) };
 }
 
-export function formatProfilesLines(snapshot: ProfilesSnapshot, width: number): string[] {
-  const lines: string[] = snapshot.rows.map((row) => clipLine(labelled(row.label, row.value), width));
-  lines.push("");
-  lines.push(clipLine(labelled("contacts", `${snapshot.contactLines.length} observed this session`), width));
-  for (const contact of snapshot.contactLines) lines.push(clipLine(`  ${contact}`, width));
-  if (snapshot.rosterDiscrepancy !== null) lines.push(clipLine(snapshot.rosterDiscrepancy, width));
-  lines.push("");
-  lines.push(clipLine(snapshot.healthLine, width));
-  return lines;
+/**
+ * `limit` is the number of body rows the frame has for this pane; `Infinity` (the default) means
+ * "no limit", which is what every value-comparison test of this module wants.
+ *
+ * The roster is the list region, and it keeps its HEAD rather than its tail — deliberately, and
+ * unlike history and rejections. `ContactView` carries no time, so "most recent" is not a question
+ * the value can answer; and the roster is a selection surface whose display order has to be decided
+ * together with the `c` cycle, which walks `state.contacts` from the head. A pane that showed the
+ * tail while `c` walked from the head would cycle the operator through contacts it is not showing.
+ *
+ * `rosterDiscrepancy` is moved above the list so that the pane's own account of what it cannot name
+ * is a fixed line: it is the last thing that should disappear when the pane runs out of rows.
+ */
+export function formatProfilesLines(snapshot: ProfilesSnapshot, width: number, limit = Number.POSITIVE_INFINITY): string[] {
+  const head: string[] = snapshot.rows.map((row) => labelled(row.label, row.value));
+  head.push("");
+  head.push(labelled("contacts", `${snapshot.contactLines.length} observed this session`));
+  if (snapshot.rosterDiscrepancy !== null) head.push(snapshot.rosterDiscrepancy);
+
+  const rows = snapshot.contactLines.map((contact) => `  ${contact}`);
+  return fitPane({ head, rows, tail: ["", snapshot.healthLine], keep: "head" }, limit, width);
 }

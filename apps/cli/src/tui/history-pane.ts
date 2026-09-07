@@ -1,5 +1,5 @@
+import { fitPane } from "./pane-fit";
 import type { HistoryEntryView } from "./state";
-import { clipLine } from "./text";
 
 /**
  * Decrypted history for ONE explicitly selected contact.
@@ -42,19 +42,30 @@ export function buildHistorySnapshot(source: {
   return { contactIdentityId: selectedContactId, lines, withheldCount: entries.length - selected.length };
 }
 
-export function formatHistoryLines(snapshot: HistorySnapshot, width: number): string[] {
-  const lines: string[] = [];
+/**
+ * `limit` is the number of body rows the frame has for this pane; `Infinity` (the default) means
+ * "no limit", which is what every value-comparison test of this module wants.
+ *
+ * The entries are the list region and they are kept from the END: an operator opens history to see
+ * what just arrived, and a pane that kept the first ten messages a conversation ever contained
+ * would discard the message that made them look. The two disclosures — which contact this is, and
+ * how many entries belong to other contacts — are fixed regions and survive the truncation that
+ * takes rows from the conversation.
+ */
+export function formatHistoryLines(snapshot: HistorySnapshot, width: number, limit = Number.POSITIVE_INFINITY): string[] {
+  const head: string[] = [];
+  const rows: string[] = [];
   if (snapshot.contactIdentityId === null) {
-    lines.push(clipLine("no contact selected — history is shown only on an explicit request", width));
+    head.push("no contact selected — history is shown only on an explicit request");
   } else {
-    lines.push(clipLine(`history with ${snapshot.contactIdentityId}`, width));
-    if (snapshot.lines.length === 0) lines.push(clipLine("  no entries for this contact", width));
-    else for (const entry of snapshot.lines) lines.push(clipLine(`  ${entry}`, width));
+    head.push(`history with ${snapshot.contactIdentityId}`);
+    if (snapshot.lines.length === 0) head.push("  no entries for this contact");
+    else for (const entry of snapshot.lines) rows.push(`  ${entry}`);
   }
-  if (snapshot.withheldCount > 0) {
-    // Silently showing two of four conversations looks identical to having only two.
-    lines.push("");
-    lines.push(clipLine(`${snapshot.withheldCount} entries withheld (other contacts)`, width));
-  }
-  return lines;
+  // Silently showing two of four conversations looks identical to having only two.
+  const tail = snapshot.withheldCount > 0
+    ? ["", `${snapshot.withheldCount} entries withheld (other contacts)`]
+    : [];
+
+  return fitPane({ head, rows, tail, keep: "tail" }, limit, width);
 }
