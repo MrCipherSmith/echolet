@@ -9,13 +9,42 @@
   "title": "Echolet: close the flood class, operator console, and two-relay deployment",
   "status": "in-progress",
   "createdAt": "2026-09-07T06:55:37.619Z",
-  "updatedAt": "2026-09-07T16:20:33.700Z",
+  "updatedAt": "2026-09-07T18:27:39.009Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:736524228b28b2c1a7b32bb2f60fc57784727eb5963477107d8ae0499208254b",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-07T17:09:30.743Z",
+      "note": "T5 sections 3, 4 and 6 name what the closure closes, the residuals R-1..R-8 written before implementation, and why candidates 1-3 were rejected. Confirmed by independent verification T10 r3."
+    },
+    "AC2": {
+      "at": "2026-09-07T17:09:30.820Z",
+      "note": "Measured by the independent verifier on the real relay: 4 identities, 49 maximum-size envelopes, 12.23 MB, 53 requests -> delivered in 2 polls / 17 pages. Reported as a bound, not a fix: the attacker still enqueues and the recipient still pays a one-time walk; what is closed is the amplification across polls."
+    },
+    "AC3": {
+      "at": "2026-09-07T17:09:30.902Z",
+      "note": "pnpm test 293/293, test:e2e 3/3, Go untagged/-race/-race -tags relayv2 all exit 0 with 0 data races, re-run by the verifier and independently by the orchestrator. No pre-existing test weakened, skipped or deleted; the one changed assertion was re-stated under a recorded ruling into a strictly stronger form."
+    },
+    "AC5": {
+      "at": "2026-09-07T17:09:30.983Z",
+      "note": "Demonstrated, not asserted: live run of the real TUI against a real relay with a real 32-byte store key in the environment; the key appears in no frame, no child argv and no command line, while every child inherits it."
+    },
+    "AC6": {
+      "at": "2026-09-07T17:09:31.063Z",
+      "note": "The UNAUDITED PROTOTYPE notice was found on every probe frame wide enough to hold it, including every modal frame, and in every live frame."
+    },
+    "AC7": {
+      "at": "2026-09-07T18:13:34.339Z",
+      "note": "Two relay instances run on geekom and depr, verified by the orchestrator directly: both Up (healthy) on 127.0.0.1:8443 with health answering, both refusing their tailnet address (curl exit 7). The reproducibility clause is closed by deploy/relay/run-relay.sh's insecure-loopback mode, docker-compose.insecure-loopback.yml and env/insecure-loopback.env.example, with runbook sections 6.5 and 7.5; proved by starting and completely tearing down two throwaway instances from those artifacts on a real host, and by the refusal of a non-loopback bind address. The plain-HTTP mode is an explicit exact-string opt-in confined to loopback by an allowlist, never a fallback: TLS mode still hard-fails on a missing certificate."
+    },
+    "AC8": {
+      "at": "2026-09-07T18:13:34.419Z",
+      "note": "STATUS_CURRENT.md, the requirements README and both runbooks were updated against HEAD c302485 and now state what remains untrue: no independent cryptographic audit, no mobile client, no user-demand evidence, no production deployment or readiness claim, no safety for sensitive communication, and the libsignal pin is not permanent. Five contradictions with the tree were corrected, including the stale claim that main is unborn with no commit and no remote, and the superseded flooding measurement. The flooding closure is stated as a bound, not as elimination. AC4 and the T16/T10r3 residuals are carried forward explicitly."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -206,7 +235,7 @@
       "id": "T10",
       "title": "Verify the closure and the console on a real relay",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7",
         "T8",
@@ -246,24 +275,34 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Fourth attempt, on HEAD c302485. Crash sweep: 32 completed configurations across four interruption points (page request at pages 1/3/5/16, inside accept(), between the last commit and finishMailboxRewalk(), inside ackPending() with the ack both dropped and applied) x SIGINT/SIGKILL x two ciphertext regimes — ZERO losses, no first losing configuration. The max regime at 3 envelopes/page makes the re-walk need 18 pages and so crosses the 16-page valve, which the existing suite never did. Genuine RED->GREEN established by replay: reverting only the four fixed source files to 624ea47 while keeping every test at c302485 turns 3 of 4 crash tests, 4 of 10 loopback tests and the ack-oracle test red. T6-F-004 holds by measurement: 0 of ~100 post-re-walk pages restart at index 0. Ack oracle: 1 distinct answer over read_through 0..1e15, with a pre-T16 control that recovers the exact count, so the negative result is real. AC1, AC2 (as a bound), AC3, AC5, AC6 met; AC4 partial — the remote half is T11's to close. Matrix green, 0 data races, tracked-tree digest identical before and after."
     },
     {
       "id": "T11",
       "title": "Deploy two relay instances and write the deployment runbook",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T10",
         "T12"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T17:09:43.015Z",
+            "outcome": "started",
+            "detail": "002-T11-docs: the documentation half of T11 (runbook prerequisite, AC8 honesty pass). The deployment half waits on the tailnet HTTPS Certificates toggle, which is the user's to flip."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Two relays run on geekom and depr, verified by the orchestrator's own commands: both Up (healthy) on 127.0.0.1:8443, health answering, and both refusing connections on their tailnet address (curl exit 7), so loopback confinement is a measured fact. Two-machine exchange through the remote relay proved via SSH local forward: offline delivery, reply, byte-identical retry returning the same envelopeId twice, dedup to 0, mirrored histories, and 0 plaintext hits in relay data and logs. Restart survival proved by data, not health. AC7's reproducibility clause closed afterwards by adding an explicit insecure-loopback mode to the committed artifacts, structurally confined to loopback by an allowlist and verified by starting and tearing down two throwaway instances from those artifacts on a real host. AC4 remains NOT met and is not claimed: the relay serves plain HTTP and the wire confidentiality is SSH's, blocked on the tailnet HTTPS Certificates toggle which the corporate proxy also blocks from this network."
     },
     {
       "id": "T12",
@@ -375,6 +414,52 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "All eight handover REDs green; re-verified by the orchestrator's own runs on this tree: pnpm test exit 0 (36 files / 228 tests in apps/cli, every package green, 293 total), test:e2e 3/3 exit 0, typecheck exit 0, go test -race -count=1 -tags relayv2 ./... exit 0 with 8 packages ok and 0 data races. All five test-file SHA-256 digests match T15's recorded values exactly, so the specification was not edited to fit the fix. The T6-F-004 trap was not taken: the position is still cleared, on the same condition, and both guards hold."
+    },
+    {
+      "id": "T17",
+      "title": "Relay exits cleanly on SIGTERM so a normal operator stop is not a crash",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T18"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T18:13:20.844Z",
+            "outcome": "started",
+            "detail": "002-T17-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "All four SIGTERM/SIGINT tests pass; re-verified by the orchestrator: go test -race -count=1 -tags relayv2 ./... exit 0, 8 packages ok, 0 data races, and process_shutdown_test.go still hashes c38372f5..., byte-identical to T18's recorded value. Only apps/relay/cmd/relay/main.go changed. The signal handler is installed before badger.Open, because between Open and the first health check the directory is already locked and already carries a memtable; main() became os.Exit(run()) so no exit path depends on a defer, which was the shape of the defect. Server.Shutdown already existed and was already correct - nothing called it, which is why a process-level test was the right specification."
+    },
+    {
+      "id": "T18",
+      "title": "RED tests for clean SIGTERM shutdown",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T17:58:19.486Z",
+            "outcome": "started",
+            "detail": "002-T18-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Four RED tests driving the real cmd/relay binary as a child process (main.go installs no signal handler at all, so an in-process test would pass while the shipped binary still dies badly). Re-run by the orchestrator: all four fail on their own assertions in 1.2-2.1 s against a 10 s budget, so none is a timeout. Synchronisation is on observable events throughout: /health answering for readiness, and an Expect: 100-continue interim response — emitted only when the handler first reads the body — to prove a request is genuinely in flight before the signal is sent."
     }
   ],
   "history": [
@@ -645,6 +730,91 @@
       "at": "2026-09-07T16:20:33.700Z",
       "event": "task-attempt",
       "detail": "T10: started (attempt 5) — 002-T10-verify-r3 re-run after T16"
+    },
+    {
+      "at": "2026-09-07T17:09:18.550Z",
+      "event": "task-done",
+      "detail": "T10: Verify the closure and the console on a real relay"
+    },
+    {
+      "at": "2026-09-07T17:09:30.743Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: T5 sections 3, 4 and 6 name what the closure closes, the residuals R-1..R-8 written before implementation, and why candidates 1-3 were rejected. Confirmed by independent verification T10 r3."
+    },
+    {
+      "at": "2026-09-07T17:09:30.821Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Measured by the independent verifier on the real relay: 4 identities, 49 maximum-size envelopes, 12.23 MB, 53 requests -> delivered in 2 polls / 17 pages. Reported as a bound, not a fix: the attacker still enqueues and the recipient still pays a one-time walk; what is closed is the amplification across polls."
+    },
+    {
+      "at": "2026-09-07T17:09:30.903Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: pnpm test 293/293, test:e2e 3/3, Go untagged/-race/-race -tags relayv2 all exit 0 with 0 data races, re-run by the verifier and independently by the orchestrator. No pre-existing test weakened, skipped or deleted; the one changed assertion was re-stated under a recorded ruling into a strictly stronger form."
+    },
+    {
+      "at": "2026-09-07T17:09:30.983Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Demonstrated, not asserted: live run of the real TUI against a real relay with a real 32-byte store key in the environment; the key appears in no frame, no child argv and no command line, while every child inherits it."
+    },
+    {
+      "at": "2026-09-07T17:09:31.063Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: The UNAUDITED PROTOTYPE notice was found on every probe frame wide enough to hold it, including every modal frame, and in every live frame."
+    },
+    {
+      "at": "2026-09-07T17:09:43.015Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 002-T11-docs: the documentation half of T11 (runbook prerequisite, AC8 honesty pass). The deployment half waits on the tailnet HTTPS Certificates toggle, which is the user's to flip."
+    },
+    {
+      "at": "2026-09-07T17:58:13.148Z",
+      "event": "task-added",
+      "detail": "T17: Relay exits cleanly on SIGTERM so a normal operator stop is not a crash"
+    },
+    {
+      "at": "2026-09-07T17:58:13.231Z",
+      "event": "task-added",
+      "detail": "T18: RED tests for clean SIGTERM shutdown"
+    },
+    {
+      "at": "2026-09-07T17:58:19.407Z",
+      "event": "task-depends-set",
+      "detail": "T17: dependsOn T18 (was empty) — Implementation follows the RED tests"
+    },
+    {
+      "at": "2026-09-07T17:58:19.486Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 002-T18-tests"
+    },
+    {
+      "at": "2026-09-07T18:13:20.678Z",
+      "event": "task-done",
+      "detail": "T18: RED tests for clean SIGTERM shutdown"
+    },
+    {
+      "at": "2026-09-07T18:13:20.764Z",
+      "event": "task-done",
+      "detail": "T11: Deploy two relay instances and write the deployment runbook"
+    },
+    {
+      "at": "2026-09-07T18:13:20.844Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 002-T17-implement"
+    },
+    {
+      "at": "2026-09-07T18:13:34.339Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Two relay instances run on geekom and depr, verified by the orchestrator directly: both Up (healthy) on 127.0.0.1:8443 with health answering, both refusing their tailnet address (curl exit 7). The reproducibility clause is closed by deploy/relay/run-relay.sh's insecure-loopback mode, docker-compose.insecure-loopback.yml and env/insecure-loopback.env.example, with runbook sections 6.5 and 7.5; proved by starting and completely tearing down two throwaway instances from those artifacts on a real host, and by the refusal of a non-loopback bind address. The plain-HTTP mode is an explicit exact-string opt-in confined to loopback by an allowlist, never a fallback: TLS mode still hard-fails on a missing certificate."
+    },
+    {
+      "at": "2026-09-07T18:13:34.419Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: STATUS_CURRENT.md, the requirements README and both runbooks were updated against HEAD c302485 and now state what remains untrue: no independent cryptographic audit, no mobile client, no user-demand evidence, no production deployment or readiness claim, no safety for sensitive communication, and the libsignal pin is not permanent. Five contradictions with the tree were corrected, including the stale claim that main is unborn with no commit and no remote, and the superseded flooding measurement. The flooding closure is stated as a bound, not as elimination. AC4 and the T16/T10r3 residuals are carried forward explicitly."
+    },
+    {
+      "at": "2026-09-07T18:27:39.009Z",
+      "event": "task-done",
+      "detail": "T17: Relay exits cleanly on SIGTERM so a normal operator stop is not a crash"
     }
   ]
 }

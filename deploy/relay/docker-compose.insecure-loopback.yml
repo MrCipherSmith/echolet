@@ -1,0 +1,128 @@
+# Echolet relay — INSECURE LOOPBACK-ONLY variant. PLAIN HTTP, NO TLS.
+#
+#   docker compose --env-file env/insecure-loopback.env \
+#     -f docker-compose.insecure-loopback.yml up -d
+#
+# ---------------------------------------------------------------------------
+# READ THIS BEFORE USING IT
+# ---------------------------------------------------------------------------
+#
+# This file starts a relay that serves the API in the clear. It exists for one
+# reason: the tailnet's HTTPS Certificates toggle is off (see §3.1 of the
+# deployment runbook), `tailscale cert` therefore issues nothing, and the relay
+# correctly refuses to start rather than serving envelopes over a half-configured
+# listener. Until that toggle is on, this is the only shape that runs — and it
+# runs only where nothing off the host can reach it.
+#
+# It is NOT a fallback. `docker-compose.yml` is the production file and it stays
+# that way; nothing in it degrades to this one, and a missing certificate there
+# is still a hard startup failure. Reaching this file takes deliberately
+# choosing it by name AND setting ECHOLET_INSECURE_LOOPBACK_ONLY.
+#
+# The confinement is structural, not a check you can misconfigure: the publish
+# address below is the LITERAL 127.0.0.1. There is no variable to get wrong.
+# Docker's published-port DNAT is evaluated before ufw's INPUT chain, so on this
+# deployment the publish address is the access control — which is exactly why it
+# is not parameterised here.
+#
+# A client on another machine reaches this relay through an SSH local forward
+# (`ssh -N -L 18443:127.0.0.1:8443 <host>`). The confidentiality on that wire is
+# SSH's, not the relay's. See §6.5 of the deployment runbook, and note that this
+# arrangement is explicitly NOT evidence for AC4.
+
+name: ${ECHOLET_STACK_NAME:-echolet-relay}
+
+services:
+  relay:
+    # No `build:` stanza on purpose — same reason as docker-compose.yml: the
+    # hosts have no Go toolchain and no checkout. Pin the exact tag.
+    image: ${ECHOLET_IMAGE:?set ECHOLET_IMAGE, e.g. echolet-relay:2026-09-07-<short-sha>}
+    container_name: ${ECHOLET_CONTAINER_NAME:-echolet-relay}
+    restart: unless-stopped
+
+    user: "${ECHOLET_UID:-10001}:${ECHOLET_GID:-10001}"
+
+    labels:
+      # So that `docker ps --filter label=echolet.tls=disabled-insecure-loopback-only`
+      # and `docker inspect` say it too, not only this file and the relay's log.
+      echolet.tls: "disabled-insecure-loopback-only"
+      # The acknowledgement is required so this file cannot be started by someone
+      # who reached for it without reading it. Compose can only assert that it is
+      # set; run-relay.sh checks the exact value. The loopback confinement below
+      # does not depend on either check. It is recorded as a label rather than an
+      # environment variable so nothing about it reaches the relay process.
+      echolet.insecure_ack: "${ECHOLET_INSECURE_LOOPBACK_ONLY:?set ECHOLET_INSECURE_LOOPBACK_ONLY=yes-plain-http-on-loopback-only to acknowledge that this relay serves the API in the clear}"
+
+    # LITERAL 127.0.0.1. Not a variable, and it must not become one: a plain-HTTP
+    # relay may never be published anywhere a second machine can dial. Only the
+    # port is configurable, so a second instance on the same host is possible
+    # without ever widening the address.
+    ports:
+      - "127.0.0.1:${ECHOLET_PORT:-8443}:8443"
+
+    environment:
+      ECHOLET_HTTP_ADDR: "0.0.0.0:8443"
+
+      # NEITHER TLS variable appears here, and neither may be added. The relay's
+      # contract is both-or-neither: both set => HTTPS; neither set => plain
+      # HTTP; exactly one set => refuse to start. Omitting both is the documented
+      # way to ask for plain HTTP, and the relay announces the result in its own
+      # startup line: `scheme=http tls_cert_file="" tls_key_file=""`.
+
+      ECHOLET_DATA_DIR: /var/lib/echolet
+      ECHOLET_LOG_LEVEL: "${ECHOLET_LOG_LEVEL:-info}"
+      ECHOLET_NODE_CALLSIGN: "${ECHOLET_NODE_CALLSIGN:?set ECHOLET_NODE_CALLSIGN, e.g. RPT-GEEKOM-01}"
+
+      # Bounds. Identical to docker-compose.yml — ECHOLET_MAX_UNACKED_ENVELOPES_PER_SENDER
+      # and ECHOLET_MAX_MAILBOX_BATCH were sized against each other by the flood
+      # closure; change one and you must re-reason about the other.
+      ECHOLET_MAILBOX_TTL_HOURS: "${ECHOLET_MAILBOX_TTL_HOURS:-168}"
+      ECHOLET_MAX_MESSAGE_BYTES: "${ECHOLET_MAX_MESSAGE_BYTES:-262144}"
+      ECHOLET_MAX_MAILBOX_BATCH: "${ECHOLET_MAX_MAILBOX_BATCH:-100}"
+      ECHOLET_MAX_UNACKED_ENVELOPES_PER_SENDER: "${ECHOLET_MAX_UNACKED_ENVELOPES_PER_SENDER:-16}"
+      ECHOLET_RATE_LIMIT_PER_MINUTE: "${ECHOLET_RATE_LIMIT_PER_MINUTE:-120}"
+      ECHOLET_CHALLENGE_TTL_SECONDS: "${ECHOLET_CHALLENGE_TTL_SECONDS:-60}"
+      ECHOLET_CLEANUP_INTERVAL_SECONDS: "${ECHOLET_CLEANUP_INTERVAL_SECONDS:-60}"
+      # Declared by the relay and enforced nowhere (T7 §6 R-3). Recorded, not relied on.
+      ECHOLET_MAX_STORAGE_BYTES: "${ECHOLET_MAX_STORAGE_BYTES:-2147483648}"
+
+    volumes:
+      # A NAMED VOLUME, not a host bind mount, and that is the second reason this
+      # shape exists: Docker seeds a fresh named volume from the image's
+      # /var/lib/echolet, which the Dockerfile already chowns to 10001:10001. So
+      # a `user: 10001:10001` container owns its data directory with no host-side
+      # mkdir and no host-side chown — the whole deployment stays inside the
+      # `docker` group and needs no sudo. On geekom, whose `altsay` has
+      # password-gated sudo, that is the difference between scriptable and not.
+      #
+      # No TLS mount. There is no certificate pair to mount.
+      #
+      # `data` is the compose-local alias; the real Docker volume name is set by
+      # ECHOLET_DATA_VOLUME in the `volumes:` block at the bottom. The alias is
+      # fixed on purpose: compose resolves a service's mount source against the
+      # top-level KEY, and top-level keys are not interpolated, so a variable
+      # here would break every value except the default.
+      - "data:/var/lib/echolet"
+
+    # Every hardening docker-compose.yml applies, unchanged. Turning TLS off is
+    # not a licence to turn anything else off.
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "${ECHOLET_LOG_MAX_SIZE:-20m}"
+        max-file: "${ECHOLET_LOG_MAX_FILE:-5}"
+
+volumes:
+  data:
+    # The Docker volume this actually creates. Overriding ECHOLET_DATA_VOLUME is
+    # how a second, throwaway instance gets its own state without going near the
+    # production one.
+    name: "${ECHOLET_DATA_VOLUME:-echolet-relay-data}"
