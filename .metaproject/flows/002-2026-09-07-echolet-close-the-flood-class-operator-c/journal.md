@@ -43,3 +43,6 @@
 - 2026-09-07T11:13:02.060Z - task-depends-set: T10: dependsOn T7, T8, T9, T14 (was T7, T8, T9) — Verification is re-run after the regression it found is fixed
 - 2026-09-07T11:13:02.151Z - task-attempt: T13: started (attempt 1) — 002-T13-tests
 - 2026-09-07T11:32:56.020Z - task-done: T12: Prepare deployment artifacts: relay container image, unit files, runbook draft
+- 2026-09-07T11:34:31.770Z - task-done: T13: RED tests for the truncated contact-import re-walk and the unauthenticated count oracle
+- 2026-09-07T11:34:31.853Z - task-attempt: T14: started (attempt 1) — 002-T14-implement
+- 2026-09-07T12:05:13.794Z - task-done: T14: Fix T10-F-001 message loss, T10-F-002 count oracle, T10-F-003 relay URL path

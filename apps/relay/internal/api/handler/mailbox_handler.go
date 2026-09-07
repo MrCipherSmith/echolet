@@ -407,20 +407,19 @@ type PollRequest struct {
 	ReadThrough *string `json:"read_through"`
 }
 
-// resolveReadThrough applies the shape rule every opaque position this relay
-// issues shares (repository.DecodeMailboxCursor) and then the bound that makes it
-// meaningful: a position above the highest this mailbox ever allocated is not a
-// position this relay could have issued.
+// decodeReadThroughShape applies the shape rule every opaque position this relay
+// issues shares (repository.DecodeMailboxCursor), and NOTHING that depends on the
+// mailbox.
 //
-// Both refusals are 400 INVALID_SCHEMA and both are applied BEFORE
-// authorizeMailboxDevice, like the envelope_ids bounds above: malformed client
+// Its refusals are 400 INVALID_SCHEMA and stay BEFORE the challenge, the device
+// binding and the signature, like the envelope_ids bounds above: malformed client
 // input must never answer 500 and must never depend on who is asking. Silently
 // coercing an uninterpretable token is not an option - decodeMailboxCursor's own
 // comment says why, and with a durable mark a discarded token is an invisible
 // SKIP rather than merely an invisible replay.
 //
 // It writes its own error response and reports whether the request may proceed.
-func (h *MailboxHandler) resolveReadThrough(w http.ResponseWriter, mailboxID string, readThrough *string) (uint64, bool) {
+func (h *MailboxHandler) decodeReadThroughShape(w http.ResponseWriter, readThrough *string) (uint64, bool) {
 	if readThrough == nil {
 		return 0, true
 	}
@@ -435,17 +434,46 @@ func (h *MailboxHandler) resolveReadThrough(w http.ResponseWriter, mailboxID str
 		return 0, false
 	}
 
+	return position, true
+}
+
+// readThroughWithinIssued applies the bound that makes a well-formed position
+// meaningful: a position above the highest this mailbox ever allocated is not a
+// position this relay could have issued, and accepting it would advance the
+// recipient's mark past envelopes it was never offered (design §4, R-4).
+//
+// Unlike the shape rule it CONSULTS THE MAILBOX, so it must never be answered to
+// a caller who has not proved they may ask about that mailbox. Finding T10-F-002:
+// while this ran before authentication, the pair of refusals it produces - 400
+// INVALID_SCHEMA above the bound against whatever the request's own defects
+// deserve below it - was a comparator on the number of envelopes the mailbox had
+// ever been issued, and about twenty requests carrying a fabricated challenge_id,
+// a fabricated device_id and a signature that was not one recovered that number
+// exactly. mailbox_id is sha256(identity_id + ":mailbox:v1") and identity_id is
+// printed on every contact card, so anyone who had ever seen the victim's card
+// could compute the target. That is the victim's lifetime received-envelope
+// count, not traffic the asking party observed, and SEC-01 §6.2 confines what the
+// relay exposes to third parties.
+//
+// Callers therefore apply it only after the caller is established: on the poll
+// route after the device signature verifies, on the ack route after the device
+// binding resolves.
+func (h *MailboxHandler) readThroughWithinIssued(w http.ResponseWriter, mailboxID string, readThrough *string, position uint64) bool {
+	if readThrough == nil {
+		return true
+	}
+
 	highest, err := h.mailboxService.HighestIssuedPosition(mailboxID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to evaluate the read position")
-		return 0, false
+		return false
 	}
 	if position > highest {
 		writeJSONError(w, http.StatusBadRequest, "INVALID_SCHEMA", "read_through is above every position issued for this mailbox")
-		return 0, false
+		return false
 	}
 
-	return position, true
+	return true
 }
 
 func (h *MailboxHandler) PollMailbox(w http.ResponseWriter, r *http.Request) {
@@ -463,7 +491,9 @@ func (h *MailboxHandler) PollMailbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	readThrough, ok := h.resolveReadThrough(w, req.RecipientMailboxID, req.ReadThrough)
+	// Shape only. The bound that consults the mailbox is applied further down,
+	// after the device signature verifies (finding T10-F-002).
+	readThrough, ok := h.decodeReadThroughShape(w, req.ReadThrough)
 	if !ok {
 		return
 	}
@@ -510,6 +540,13 @@ func (h *MailboxHandler) PollMailbox(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil || !signatureValid {
 		writeJSONError(w, http.StatusForbidden, "INVALID_SIGNATURE", "signature verification failed")
+		return
+	}
+
+	// Now, and not before: the caller has proved they hold the device key this
+	// mailbox is bound to, so an answer that depends on the mailbox's contents is
+	// an answer to its owner (finding T10-F-002).
+	if !h.readThroughWithinIssued(w, req.RecipientMailboxID, req.ReadThrough, readThrough) {
 		return
 	}
 
@@ -641,7 +678,7 @@ func (h *MailboxHandler) AckMailbox(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	readThrough, ok := h.resolveReadThrough(w, req.RecipientMailboxID, req.ReadThrough)
+	readThrough, ok := h.decodeReadThroughShape(w, req.ReadThrough)
 	if !ok {
 		return
 	}
@@ -649,6 +686,17 @@ func (h *MailboxHandler) AckMailbox(w http.ResponseWriter, r *http.Request) {
 	deviceRecord, err := h.authorizeMailboxDevice(req.RecipientMailboxID, req.DeviceID)
 	if err != nil {
 		writeMailboxAuthorizationError(w, err)
+		return
+	}
+
+	// The mailbox-dependent bound, applied after the device binding resolves so it
+	// is not answered to a caller who names no device this mailbox knows (finding
+	// T10-F-002). It cannot move later than this on THIS route: an ack that
+	// carries an out-of-range position must answer 400 INVALID_SCHEMA rather than
+	// 403, including when the position is not the one the presented signature
+	// covers, and that ordering is pinned by
+	// TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued.
+	if !h.readThroughWithinIssued(w, req.RecipientMailboxID, req.ReadThrough, readThrough) {
 		return
 	}
 

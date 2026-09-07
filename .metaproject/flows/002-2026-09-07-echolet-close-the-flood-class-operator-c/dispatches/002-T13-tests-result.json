@@ -1,0 +1,126 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T13-tests",
+  "status": "DONE",
+  "summary": "RED tests pinning the three T10 findings, all against the real relay binary and the real dist/cli.js. T10-F-001 (permanent message loss): RED-6 is no longer a one-page flood - it is now parameterised on flood DEPTH, with a 30-envelope/10-page control that passes and a 49-envelope/17-page attack that fails, and the load-bearing assertion is DELIVERY (history length), not the poll exit code, because once the mark reaches the end of the mailbox a poll that delivers nothing exits 0. The attack row reproduced T10's numbers independently: 5 self-published identities, 55 poison envelopes, 14 457 630 B, 60 requests, paid once; 8 polls after `contact import` (exit codes [3,3,3,3,3,3,3,3], 23 pages served) left the message undelivered. T10-F-002 (count oracle): a new RED-7 probes /v1/mailbox/poll with a fabricated challenge_id, a fabricated device_id and the literal signature \"AAAA\", binary-searches the answer boundary and recovered exactly 66 against a mailbox with exactly 66 allocated positions - the same number T10 recovered - and asserts that the answer must not vary with the mailbox's contents, with a live control that a legitimate signed poll still delivers. T10-F-003 (misleading failure): a new real-binary suite requires `init` to refuse a relay URL carrying a path or a query with exit 2 INVALID_CONFIGURATION, with guards that the URLs both layers accept still work and that an unreachable relay is never reported as PERSISTENCE_FAILURE. No implementation code was written. Every RED was proved satisfiable with a throwaway probe that was then reverted and re-verified by SHA-256. Workspace tests went 267 -> 278 with exactly 7 failures, all of them the new RED assertions; all 267 pre-existing tests still pass, Go untagged / -race / -race -tags=relayv2 and `pnpm -r typecheck` are green.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "T10-F-001 - the message must survive: the verifier's exact attack shape is pinned and delivery is required",
+      "status": "met",
+      "evidence": "apps/cli/test/e2e/flood-closure.test.ts, `RED-6 ... attack - 49 maximum-size poison ahead (17 pages), past the 16-page valve (T10-F-001)`. 49 maximum-size poison ahead (4 identities), a real third CLI profile (Carol) whose envelope is queued behind them, 6 maximum-size poison behind it from a disjoint envelope_id range so the target is not in the never-marked final page, Bob's pre-import drive walked to the END of the mailbox (asserted, not assumed: the drive continues until a poll walks fewer pages than the valve allows), then `contact import` and 8 polls. The assertion is `historyLength(bob, carol) === 1`. Measured RED: expected 1, received 0, after [3,3,3,3,3,3,3,3] and 23 pages served. The failure message states the outcome and both suggested fix directions without pinning either mechanism."
+    },
+    {
+      "criterion": "RED-6 is strengthened so it cannot miss this again - it must fail if the re-walk truncates",
+      "status": "met",
+      "evidence": "The old RED-6 flooded 40 envelopes at ciphertext 4 - about ONE page - and passed while a 55-envelope flood destroyed a message permanently. It is replaced by a describe.each over two depths sharing one body: control 30 maximum-size poison (10 pages, inside the valve) and attack 49 maximum-size poison (17 pages, past it), each with 6 poison behind. The control is strictly deeper than the flood it replaces, so nothing is weakened; the attack is the case the valve truncates. Both were run: control green in 6.7-8.8 s, attack RED. Under the throwaway probe both went green, so the pair genuinely isolates the page bound rather than late import in general."
+    },
+    {
+      "criterion": "T10-F-002 - the count oracle must not be answerable before authentication",
+      "status": "met",
+      "evidence": "apps/cli/test/e2e/flood-closure.test.ts, `RED-7: an unauthenticated caller cannot recover how many envelopes a mailbox has ever been issued`. A mailbox with exactly 66 allocated positions; probes carry a random challenge_id the relay never issued, a random device_id with no binding, and the literal signature \"AAAA\"; only the status and the typed error code are retained, never a body. Measured RED: [\"400 CHALLENGE_EXPIRED\",\"400 INVALID_SCHEMA\"] across read_through 0,1,33,65,66,67,99,1000,4096, and the binary search recovered 66 - T10's number, reproduced. The assertion is that the number of distinct answers is 1, which pins the outcome and not the mechanism. A control at the end (a real signed poll that carries a real read position must still deliver, history 1) prevents the assertion being satisfied by deleting the check."
+    },
+    {
+      "criterion": "T10-F-003 - a relay URL with a path must be refused at `init` with the configuration code",
+      "status": "met",
+      "evidence": "apps/cli/test/e2e/init-relay-url.test.ts (new). Five RED rows - `https://relay.example.com/path` verbatim from T10, a trailing-slash path, a nested path, a query string, and a path on a loopback relay - each requiring exit 2 and error code INVALID_CONFIGURATION, plus `config.json` absent after a refusal. Measured RED: `init exited 0 (none)` on all five. Three guards pin the URLs both layers accept (bare HTTPS origin, HTTPS origin with root path, loopback HTTP origin) and one guard pins the complement that makes the exit code mean something: an unreachable relay must NOT be reported as PERSISTENCE_FAILURE. All four guards pass today. The suite is fully offline - no relay is started and no name is resolved."
+    },
+    {
+      "criterion": "The real-binary harness is used; no mocked RelayClient may carry any of these assertions",
+      "status": "met",
+      "evidence": "Every new assertion runs against `apps/relay/cmd/relay` built from this tree and `apps/cli/dist/cli.js` built once by test/globalSetup.ts. flood-closure.test.ts reuses the existing world() harness (real relay, counting loopback proxy, three real CLI profiles as real processes). init-relay-url.test.ts spawns the real dist/cli.js and reads its real exit code and --json envelope; it imports no module from the source tree. No vi.fn(), no fake fetch, no mocked RelayClient anywhere in either file."
+    },
+    {
+      "criterion": "Each RED test proved satisfiable with a throwaway probe, then reverted and verified by SHA-256",
+      "status": "met",
+      "evidence": "T10-F-003: added `url.search || url.pathname !== \"/\"` to config.ts:25 -> init-relay-url.test.ts 9/9 green; reverted, sha256 e1aa85c305fa9fd7337c5a76de70a9a7d22d6bd14881636ad2a1ef0de5630dbc restored. T10-F-002: split the HighestIssuedPosition bound out of resolveReadThrough and applied it after VerifyMessageSignature in mailbox_handler.go -> RED-7 green including its live control; reverted, sha256 c64952698d4cee56d2e8b99bd75d5ecf759c6d5f60d5c248474452ddf136e31d restored. T10-F-001: let the `contact import` re-walk run past maxPollPagesPerPoll in inbound.ts -> both RED-6 depths green; reverted, sha256 b93ec6733234214581ed2e047fb7dd3440eb31dbb32cd5d0cf446cd27cb242a0 restored. Integrity was established by digest, never by mtime."
+    },
+    {
+      "criterion": "No pre-existing test weakened, skipped or deleted; the closure, TLS, TUI and flow-001 suites stay green",
+      "status": "met",
+      "evidence": "`pnpm -r test`: 278 tests, 7 failed / 271 passed. The 7 failures are exactly the 7 new RED assertions (5 init rows, RED-6 attack, RED-7). apps/cli went 202 -> 213 (+9 init file, +1 RED-6 second depth, +1 RED-7) and 206 pass = 202 baseline + 4 new guards. Every other package is unchanged: protocol 12, client-db 1, crypto-core 20, client-core 2, session-node 24, mobile 6. test/e2e went 13 -> 24 with the original 13 all green, including relay-tls (3), two-process (3 iterations) and the three closure volumes. `go -C apps/relay vet ./...`, `test -count=1 ./...`, `test -race -count=1 ./...` and `test -race -count=1 -tags=relayv2 ./...` all exit 0. `pnpm -r typecheck` exits 0 across 7 projects. No it.skip / test.skip / .todo / t.Skip / .only was introduced."
+    },
+    {
+      "criterion": "Prohibited edits avoided: no implementation code, no vitest.config.ts / globalSetup.ts / flow.json / acceptance-criteria.md, no T12 files, no git commit",
+      "status": "met",
+      "evidence": "A SHA-256 manifest of 238 source and documentation files under apps/, packages/ and docs/ was taken before any work (digest ae784c9485db7456bcde0e8aee7bd32115974e9fdc73bb45505be1d88167fd7b) and re-verified afterwards: the only entry that differs by my hand is apps/cli/test/e2e/flood-closure.test.ts. docs/requirements/echolet-cli-prototype/README.md also differs and is NOT mine - it is the parallel 002-T12 deployment worker writing at 15:27 alongside runbook.md and the new deployment-runbook.md, which I did not touch. apps/relay has no Dockerfile or compose file in the tree. No `git commit`, no `git push`. Node v26.5.0 (/opt/homebrew/bin/node) throughout."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/test/e2e/flood-closure.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Modified. RED-6 replaced by a describe.each over two flood DEPTHS (control 30 max-size / 10 pages, attack 49 max-size / 17 pages, each with 6 poison behind) asserting DELIVERY rather than the poll exit code; new RED-7 unauthenticated count-oracle probe with a live legitimate-poll control; flood() gained an indexOffset so two floods into one mailbox cannot reuse an envelope_id; a shared introduceCarol() helper factored out of the old RED-6 body; suite header RED map updated. RED-1, RED-2/3/5 and RED-4 are untouched.",
+      "hash": "cf5b6ef6d716f9c51b0a66859ed5fe6f9b57a25ae97b8ed17e136cc51be38ee9"
+    },
+    {
+      "path": "apps/cli/test/e2e/init-relay-url.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New. Real-binary suite for T10-F-003: five RED rows requiring exit 2 INVALID_CONFIGURATION for a relay URL carrying a path or a query, three guards for the URLs both layers accept, and one guard that an unreachable relay is never reported as PERSISTENCE_FAILURE. Fully offline: no relay is started and no name is resolved.",
+      "hash": "f1d6cf708739becc30f1807bf81b75bead0b6d4449c46c6c9e76f4ab19b95599"
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t10-verification-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "The specification for this dispatch. Sections 2.2, 2.3 and 3 (T10-F-003) supplied the attack shapes, the volumes and the numbers reproduced above.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/test/e2e/flood-closure.test.ts",
+      "change": "modified - RED-6 strengthened from a one-page flood to two parameterised depths asserting delivery; RED-7 count-oracle test added; flood() gained indexOffset; introduceCarol() factored out; header RED map updated. No existing assertion was removed or relaxed."
+    },
+    {
+      "path": "apps/cli/test/e2e/init-relay-url.test.ts",
+      "change": "added - real-binary RED suite for T10-F-003 plus four guards."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T13-tests-result.json",
+      "change": "added - this dispatch result."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "new_test_files": 1,
+    "modified_test_files": 1,
+    "tests_added": 11,
+    "red_tests": 7,
+    "green_guard_tests": 4,
+    "workspace_tests_before": 267,
+    "workspace_tests_after": 278,
+    "workspace_tests_failing": 7,
+    "workspace_tests_passing": 271,
+    "cli_tests_before": 202,
+    "cli_tests_after": 213,
+    "e2e_tests_before": 13,
+    "e2e_tests_after": 24,
+    "e2e_duration_seconds": 121.5,
+    "satisfiability_probes_run": 3,
+    "satisfiability_probes_reverted_and_verified_by_sha256": 3,
+    "baseline_manifest_files": 238,
+    "baseline_manifest_sha256": "ae784c9485db7456bcde0e8aee7bd32115974e9fdc73bb45505be1d88167fd7b",
+    "attack_identities": 5,
+    "attack_envelopes": 55,
+    "attack_uploaded_bytes": 14457630,
+    "attack_requests": 60,
+    "oracle_positions_allocated": 66,
+    "oracle_positions_recovered_unauthenticated": 66,
+    "node_version": "v26.5.0",
+    "graph_used": "not-relevant",
+    "wiki_used": "partial",
+    "ctx_used": "yes",
+    "raw_rg_used": "no"
+  },
+  "timestamp_utc": "2026-09-07T11:35:00Z"
+}

@@ -17,6 +17,20 @@ const configSchema = z.object({
 export type ClientConfig = z.infer<typeof configSchema>;
 export type Environment = Readonly<Record<string, string | undefined>>;
 
+/**
+ * A relay URL is an ORIGIN, and this function and `RelayClient` must agree on that.
+ *
+ * `RelayClient` refuses a base URL carrying a path or a query at construction
+ * (`transport/relayClient.ts`) and then serves every request from `url.origin`, so a profile whose
+ * `relay_url` carries either is a profile no relay command can ever open. Until finding T10-F-003
+ * this rule lived only in the transport: `init --relay-url https://relay.example.com/path` exited 0,
+ * wrote the profile, and every later relay command exited 5 PERSISTENCE_FAILURE - a local-storage
+ * code for a mistake on the command line, pointing the operator at a disk that is perfectly healthy.
+ * The refusal belongs here, where it is a configuration error, is reported as one, and happens
+ * before anything is written.
+ */
+const isRelayOrigin = (url: URL): boolean => !url.search && url.pathname === "/";
+
 export function parseClientConfig(input: unknown): ClientConfig {
   const parsed = configSchema.safeParse(input);
   if (!parsed.success) throw new ConfigurationError("Invalid client configuration");
@@ -24,6 +38,9 @@ export function parseClientConfig(input: unknown): ClientConfig {
   const loopback = url.hostname === "localhost" || url.hostname === "[::1]" || /^127\.(?:\d{1,3}\.){2}\d{1,3}$/.test(url.hostname);
   if (url.username || url.password || url.hash || (url.protocol !== "https:" && !(url.protocol === "http:" && loopback))) {
     throw new ConfigurationError("Relay URL requires HTTPS or loopback HTTP without credentials");
+  }
+  if (!isRelayOrigin(url)) {
+    throw new ConfigurationError("Relay URL must be an origin, without a path or a query");
   }
   return parsed.data;
 }

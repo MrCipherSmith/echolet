@@ -25,10 +25,24 @@ export class PersistenceError extends Error {
 const metadataKey = "cli:profile";
 const publicationKey = "cli:publication";
 /**
- * A pending request that the next mailbox walk start at the head of the mailbox.
- * Written by `contact import`, consumed exactly once by the next `poll`.
+ * An UNFINISHED re-walk of the mailbox, held as the position it has reached.
+ *
+ * Written by `contact import` as `"0"` (the head), carried forward by each `poll` that could not
+ * finish the walk, and deleted the moment a walk reaches the end of the mailbox. See
+ * `requestMailboxRewalk` / `takeMailboxRewalk` / `keepMailboxRewalk` for why it is a position and no
+ * longer a flag (finding T10-F-001).
  */
 const mailboxRewalkKey = "cli:mailbox-rewalk";
+/**
+ * The opaque, relay-issued decimal token a re-walk resumes strictly after; `"0"` is the head.
+ *
+ * It is the same token shape `cursor` and `read_through` already use on the wire
+ * (`repository.DecodeMailboxCursor`, at most 15 digits), so a stored value that is not one cannot be
+ * presented to the relay. Anything else - including the single `0x01` byte the flag this key used to
+ * hold was written as - is read as `"0"`: an unreadable re-walk position must degrade to "walk the
+ * whole mailbox again", never to "the re-walk never happened".
+ */
+const mailboxRewalkPosition = /^\d{1,15}$/;
 const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
 const decode = (value: Uint8Array): unknown => JSON.parse(new TextDecoder().decode(value));
 const metadataSchema = z.object({
@@ -139,27 +153,54 @@ export class Profile {
    * `CONTACT_NOT_TRUSTED` envelope the walk has already passed.
    */
   requestMailboxRewalk(): Promise<void> {
-    return this.transact((tx) => { tx.set(mailboxRewalkKey, Uint8Array.of(1)); });
+    return this.transact((tx) => { tx.set(mailboxRewalkKey, new TextEncoder().encode("0")); });
   }
 
   /**
-   * Consume a pending re-walk request, EXACTLY ONCE.
+   * Consume a pending re-walk, EXACTLY ONCE, and report the position it resumes strictly after.
    *
    * The "exactly once" is load-bearing and is the most dangerous path in this
-   * change (finding T6-F-004): a flag that survives the walk it started would
-   * make every subsequent poll restart at the head of the mailbox, which
-   * reinstates the whole flooding class while every unit test still passes. It is
-   * therefore deleted here, before the walk begins, and not on the walk's success.
+   * change (finding T6-F-004): a value that survives the walk it started would
+   * make every subsequent poll restart at the same place, which reinstates the
+   * whole flooding class while every unit test still passes. It is therefore
+   * deleted here, before the walk begins, and not on the walk's success; a walk
+   * that could not finish puts back the position it REACHED, never the one it
+   * started from, so every poll moves the re-walk strictly forward
+   * (`keepMailboxRewalk`).
    *
-   * When no request is pending this writes nothing at all, so an ordinary poll
+   * When no re-walk is pending this writes nothing at all, so an ordinary poll
    * leaves the encrypted store byte-identical.
    */
-  takeMailboxRewalk(): Promise<boolean> {
+  takeMailboxRewalk(): Promise<string | undefined> {
     return this.transact((tx) => {
-      if (!tx.get(mailboxRewalkKey)) return false;
+      const stored = tx.get(mailboxRewalkKey);
+      if (!stored) return undefined;
       tx.delete(mailboxRewalkKey);
-      return true;
+      const position = new TextDecoder().decode(stored);
+      return mailboxRewalkPosition.test(position) ? position : "0";
     });
+  }
+
+  /**
+   * Carry an UNFINISHED re-walk forward to the next poll, at the position it reached.
+   *
+   * This is the durable re-walk floor finding T10-F-001 is about. The re-walk is the design's own
+   * recovery path for R-5 - the one thing that makes a durable read mark safe for an envelope
+   * refused as CONTACT_NOT_TRUSTED before its sender's card was imported - and it is bounded by the
+   * same `maxPollPagesPerPoll` liveness valve as any other walk. Before this, the request was
+   * consumed whether or not the walk had reached the end of the mailbox: past 16 pages of poison the
+   * truncated re-walk never reached the envelope, the mark was already past it, every later poll
+   * resumed after it, and the message was lost permanently. Re-requesting a walk from the head
+   * instead would loop forever without progressing, which is why what is kept is a POSITION.
+   *
+   * It is written only while a re-walk is in flight, so the F-012 store-identity guarantee for an
+   * ordinary poll is untouched, and it is only ever a token the relay itself issued for a page this
+   * walk actually received and fully judged - the same rule that bounds `read_through` (design §4,
+   * R-4).
+   */
+  keepMailboxRewalk(position: string): Promise<void> {
+    const kept = mailboxRewalkPosition.test(position) ? position : "0";
+    return this.transact((tx) => { tx.set(mailboxRewalkKey, new TextEncoder().encode(kept)); });
   }
 
   /**

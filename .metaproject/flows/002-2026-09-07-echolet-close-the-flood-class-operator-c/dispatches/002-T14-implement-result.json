@@ -1,0 +1,189 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T14-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "All seven T13 RED assertions pass unmodified and the four guards stay green, with both T13 test files byte-identical to the digests T13 recorded. T10-F-001 (permanent message loss) is closed by making the `contact import` re-walk a DURABLE POSITION instead of a flag: cli:mailbox-rewalk now holds the position the re-walk has reached, poll() consumes it exactly once before the walk (T6-F-004 discipline unchanged), advances it only for pages it fully judged, ends it when the relay reports no further pages, and carries it forward - before any verdict is re-raised and from the catch on a relay/storage failure - when the walk could not finish. Re-requesting cursor \"0\" was rejected as the T13 author warned: it restarts at the head and never progresses; a position only moves forward, so recovery costs ceil(N / 16 pages) extra poll invocations and always terminates. Measured on the exact T10 shape with an out-of-repo probe against the real relay binary and the real dist/cli.js: 5 self-published identities, 55 maximum-size envelopes, 14 457 630 B, 60 requests, paid once - unchanged, and now buying nothing. The message that was permanently lost is DELIVERED on the second post-import poll (exit codes [3,0], 17 pages, 35 requests, 13 413 271 B); history goes 0 -> 1. Reported as a bound: an import against a flooded mailbox costs one extra walk of it, measured at 1.98:1 recipient bytes over attacker bytes, paid once per import, operator-triggered only, O(N) not O(N x K). T10-F-002 (count oracle) is closed on /v1/mailbox/poll by splitting resolveReadThrough into a pure shape check (unchanged position, before the challenge, the binding and the signature) and a mailbox-dependent bound applied after VerifyMessageSignature succeeds; an unauthenticated caller now gets one answer for every read_through value. T10-F-003 is closed by making parseClientConfig apply the transport's own origin rule, so `init` refuses a relay URL carrying a path or a query with exit 2 INVALID_CONFIGURATION and writes nothing. pnpm -r test 278/278, pnpm -r typecheck 7 projects, go vet, go test, -race and -race -tags=relayv2 all exit 0; keryx health PASS score 98, 0 findings.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "All T13 RED tests pass unmodified - both RED-6 depths, RED-7, and the five init-relay-url rows - and the four guards stay green",
+      "status": "met",
+      "evidence": "`vitest run test/e2e/init-relay-url.test.ts` 9/9 (baseline 5 failed / 4 passed). `vitest run test/e2e/flood-closure.test.ts -t \"RED-6\"` 2/2: control (30 max-size ahead, 10 pages) 7.7 s and attack (49 max-size ahead, 17 pages, past the 16-page valve) 10.5 s. `-t \"RED-7\"` 1/1 including its live control that a legitimate signed poll carrying a real read position still delivers. Inside `pnpm -r test`, flood-closure.test.ts is 8/8 in 130.0 s. Both test files are byte-identical to T13's recorded digests: flood-closure.test.ts cf5b6ef6d716f9c51b0a66859ed5fe6f9b57a25ae97b8ed17e136cc51be38ee9, init-relay-url.test.ts f1d6cf708739becc30f1807bf81b75bead0b6d4449c46c6c9e76f4ab19b95599. Verified by SHA-256, never by mtime."
+    },
+    {
+      "criterion": "T10-F-001 is fixed by a durable re-walk position, not by re-requesting a walk that cannot progress",
+      "status": "met",
+      "evidence": "profile.ts: cli:mailbox-rewalk holds a relay-issued decimal position ( \"0\" = head; the legacy 0x01 flag byte reads as \"0\"); takeMailboxRewalk() consumes it exactly once before the walk begins (T6-F-004 unchanged); new keepMailboxRewalk() writes back only the position the walk REACHED. inbound.ts: poll() starts at that position, advances it per fully judged page, sets it to finished the moment next_cursor is null, and persists it before `throw firstRejection` and from the catch around the page loop, so a poll that judged 16 pages of poison, an unreachable relay, a rate limit and a timeout all keep the recovery instead of spending it. The value only moves forward, so no poll repeats work and the re-walk terminates."
+    },
+    {
+      "criterion": "The measured attacker cost after the fix is stated for the same 5-identity / 55-envelope shape",
+      "status": "met",
+      "evidence": "Out-of-repo probe (session scratchpad, independent node:crypto ed25519, counting loopback proxy, real relay binary built from this tree, real dist/cli.js, real CLI profiles as real processes, ECHOLET_RATE_LIMIT_PER_MINUTE=1000000 declared): attacker 5 identities, 55 envelopes (49 ahead + 6 behind), 14 457 630 B, 60 requests, paid once - identical to T10 and T13. Pre-import drive [3,3], 20 pages, 15 253 860 B, history 0. After `contact import`: poll exit codes [3,0], 2 polls, 17 pages, 35 requests, 13 413 271 B, history 1 - DELIVERED where T10 and T13 measured permanent loss after 8 polls. Total recipient download 28 667 131 B against 14 457 630 B uploaded = 1.98:1, the cost of one extra mailbox walk per import, reported as a bound. The probe printed labels, counters, byte totals, exit codes and booleans only."
+    },
+    {
+      "criterion": "T10-F-002: the count oracle is not answerable before the caller is authenticated on the poll route",
+      "status": "met",
+      "evidence": "mailbox_handler.go: resolveReadThrough split into decodeReadThroughShape (DecodeMailboxCursor only, still before the challenge, the device binding and the signature, so malformed input never answers 500 and never depends on who is asking) and readThroughWithinIssued (HighestIssuedPosition). PollMailbox applies the bound after VerifyMessageSignature succeeds. RED-7 measures one distinct answer across read_through 0,1,33,65,66,67,99,1000,4096 with a fabricated challenge_id, a fabricated device_id and the literal signature \"AAAA\", and its live control still delivers."
+    },
+    {
+      "criterion": "T10-F-003: `init` refuses a relay URL carrying a path or a query as a configuration error and writes nothing",
+      "status": "met",
+      "evidence": "config.ts parseClientConfig now applies RelayClient's own rule (no url.search, url.pathname === \"/\") and raises ConfigurationError, which cli.ts classify() maps to exit 2 INVALID_CONFIGURATION; it runs before openProfile in the init case, so config.json is absent after a refusal. All five RED rows pass, all three accepted-URL guards still exit 0, and the guard that an unreachable relay is never reported as PERSISTENCE_FAILURE still passes. docs/requirements/echolet-cli-prototype/deployment-runbook.md section 9 records the origin rule for operators."
+    },
+    {
+      "criterion": "The whole suite is green and nothing from the closure or from flow 001 was undone",
+      "status": "met",
+      "evidence": "`pnpm -r test` exit 0: 278 tests, 0 failed (protocol 12, client-db 1, crypto-core 20, client-core 2, session-node 24, mobile 6, apps/cli 34 files / 213). test/e2e 24/24 across 5 files including the three closure volumes (49 max-size, 800, 8000), relay-tls 3/3 and three two-process iterations. `pnpm -r typecheck` exit 0 across 7 projects. `go -C apps/relay vet ./...`, `test -count=1 ./...`, `test -race -count=1 ./...` and `test -race -count=1 -tags=relayv2 ./...` all exit 0 across 16 packages with no data race. `keryx health run --changed --source eslint,typescript` PASS, score 98, 0 findings. A repository-wide scan for it.skip / test.skip / describe.skip / .todo( / t.Skip( / .only across apps/ and packages/ returns zero matches."
+    },
+    {
+      "criterion": "Prohibited edits avoided",
+      "status": "met",
+      "evidence": "No test file was edited, skipped, deleted or relaxed - both T13 files verify byte-identical by SHA-256. apps/cli/vitest.config.ts (da0c9db0...) and apps/cli/test/globalSetup.ts (a27ae897...) are untouched, as are apps/cli/src/tui/, flow.json, acceptance-criteria.md, deploy/ and apps/relay/Dockerfile. No `git commit`, no `git push`. Node v26.5.0 (/opt/homebrew/bin/node) throughout. No plaintext body, ciphertext, store key, private key material, signing seed or HTTP request body was printed or logged by any probe or command."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t14-implementation-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "The re-walk floor, the count-oracle split, the origin rule, the measured before/after cost table, the verification matrix, and six open items including the ack-route residual.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/runtime/inbound.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "poll() resumes an unfinished re-walk at its durable position, advances it per fully judged page, ends it at the end of the mailbox, and carries it forward before any verdict is re-raised or any failure propagates.",
+      "hash": "a30e270382bb8289dd9efd17ee50d00a6ef3c247c0c6596f6c201ea74bd0c3c5"
+    },
+    {
+      "path": "apps/cli/src/runtime/profile.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "cli:mailbox-rewalk holds a re-walk POSITION; takeMailboxRewalk() returns it and still consumes it exactly once; new keepMailboxRewalk() carries an unfinished re-walk forward. An ordinary poll still writes nothing.",
+      "hash": "b52a1fdfe32709687292c6fb7237113f03a8ffca92ba8555ac8915d021853973"
+    },
+    {
+      "path": "apps/cli/src/runtime/config.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "A relay URL must be an origin - no path, no query - refused as INVALID_CONFIGURATION before anything is written.",
+      "hash": "4bfb5e6f601fc99464fa8babbf0e0375845cd5249bf3249ad03030a0c1be1bdf"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "resolveReadThrough split into decodeReadThroughShape (before authentication) and readThroughWithinIssued (poll: after the signature verifies; ack: after the device binding resolves).",
+      "hash": "61b6ce1aabc5615d6e777f5633a0e95056e1b394f601d9ab14973d788ed7b587"
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/deployment-runbook.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Section 9 states the origin-only relay URL rule beside the HTTPS rule, and what the old behaviour cost the operator.",
+      "hash": "9fd67a13ce77f0eb923d32c74da0fe914f87a4699803860b33119e30586587e1"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/runtime/profile.ts",
+      "change": "modified - re-walk state is a durable position; keepMailboxRewalk() added; requestMailboxRewalk() writes \"0\"."
+    },
+    {
+      "path": "apps/cli/src/runtime/inbound.ts",
+      "change": "modified - poll() resumes, advances, ends and carries forward the re-walk position (T10-F-001)."
+    },
+    {
+      "path": "apps/cli/src/runtime/config.ts",
+      "change": "modified - relay URL must be an origin (T10-F-003)."
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "change": "modified - read_through shape check and mailbox-dependent bound separated; the bound moved after authentication (T10-F-002)."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/deployment-runbook.md",
+      "change": "modified - section 9 documents the origin-only relay URL rule."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t14-implementation-report.md",
+      "change": "added - implementation report."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T14-implement-result.json",
+      "change": "added - this dispatch result."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T14-F-001",
+      "reviewer": "002-T14-implement",
+      "severity": "minor",
+      "file": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "problem": "The lifetime-envelope-count bound (HighestIssuedPosition) is still answerable on /v1/mailbox/ack to a caller who names any device_id bound to the mailbox, without holding that device's key. On the poll route the bound now runs after VerifyMessageSignature, which closes T10-F-002 there; on the ack route it runs after authorizeMailboxDevice and before the signature check.",
+      "impact": "A caller holding the victim's contact card - which prints identity_id and device_id, and from which mailbox_id = sha256(identity_id + ':mailbox:v1') is computable - can still binary-search the victim's lifetime received-envelope count through /v1/mailbox/ack, the same metadata T10-F-002 named and the same SEC-01 section 6.2 concern. It no longer works with a fabricated device_id.",
+      "suggested_fix": "Re-state TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued so an ack whose signature does not verify is refused 403 INVALID_SIGNATURE before any mailbox-dependent bound is consulted, then move readThroughWithinIssued on the ack route to after VerifyMessageSignature, exactly as PollMailbox now does. That is a test-authoring decision and was out of this dispatch's authority.",
+      "evidence": "apps/relay/internal/api/handler/mailbox_read_mark_test.go:175-192 signs the V1 ack transcript (CreateMailboxAckMessage, no read_through) and then requires read_through '999999999999999' to answer 400 INVALID_SCHEMA. With the bound after the signature check that request answers 403 INVALID_SIGNATURE and the test fails, so the bound cannot move further on that route without changing the test. Placing it after authorizeMailboxDevice keeps the test green: go test ./internal/api/handler/ and the untagged, -race and -race -tags=relayv2 suites all exit 0.",
+      "confidence": "high"
+    },
+    {
+      "id": "T14-F-002",
+      "reviewer": "002-T14-implement",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "problem": "A pending re-walk is dropped if the poll carrying it is SIGKILLed: the position is written at the end of the walk, not per page.",
+      "impact": "A recovery interrupted by a kill loses the re-walk, and the operator must re-import the card to request another one. Ordinary walk progress stays crash-safe because it lives on the relay; recovery progress does not.",
+      "suggested_fix": "Leave it as it is unless flood-closure RED-4 is re-stated. Persisting the position per page would make the re-walk survive into the next process, and RED-4 requires the process following a SIGKILL to poll CURSORLESS and resume at the relay-held mark - a resumed re-walk sends a cursor. The alternative is a relay-held re-walk floor, which is a protocol change rather than a fix.",
+      "evidence": "apps/cli/test/e2e/flood-closure.test.ts:568-572 asserts counters.cursored[secondProcessStart] === false after killPollAfterPages, in a world() where `contact import` has already requested a re-walk. Measured: with end-of-walk persistence RED-4 passes and both RED-6 depths pass; the loss it replaces (T10-F-001) was permanent and needed no kill at all.",
+      "confidence": "high"
+    },
+    {
+      "id": "T14-F-003",
+      "reviewer": "002-T14-implement",
+      "severity": "info",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "problem": "A `contact import` against a flooded mailbox now costs one extra walk of that mailbox, and while the re-walk is in flight polls resume it instead of resuming at the relay-held mark.",
+      "impact": "Recipient amplification for the import case is about 2:1 rather than the 1.06:1 ordinary delivery pays, and a message arriving at the tail waits for the re-walk to catch up. Both are bounded by the mailbox and by ceil(N / 16 pages) poll invocations, are paid once per import, and are triggered only by a local operator action - an attacker cannot request a re-walk.",
+      "suggested_fix": "Record it in AC8's residual list as a stated bound. If it ever needs reducing, the re-walk could stop at the position the mark held when the import happened, which requires the client to learn the mark - a protocol addition, not a local change.",
+      "evidence": "Out-of-repo probe on the T10 attack shape: attacker 14 457 630 B uploaded once; recipient downloaded 15 253 860 B in the pre-import drive plus 13 413 271 B in the recovery = 28 667 131 B, ratio 1.9828; delivery on the second post-import poll, exit codes [3,0], 17 pages, 35 requests, history 0 -> 1.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "workspace_tests": 278,
+    "workspace_tests_failing": 0,
+    "cli_tests": 213,
+    "e2e_tests": 24,
+    "red_tests_now_passing": 7,
+    "green_guard_tests": 4,
+    "test_files_modified": 0,
+    "implementation_files_modified": 4,
+    "docs_files_modified": 1,
+    "attack_identities": 5,
+    "attack_envelopes": 55,
+    "attack_uploaded_bytes": 14457630,
+    "attack_requests": 60,
+    "post_import_polls_to_delivery": 2,
+    "post_import_pages": 17,
+    "post_import_requests": 35,
+    "post_import_down_bytes": 13413271,
+    "delivered_after_fix": 1,
+    "recovery_amplification_ratio": 1.98,
+    "health_score": 98,
+    "health_findings": 0,
+    "node_version": "v26.5.0",
+    "graph_used": "not-relevant",
+    "wiki_used": "partial",
+    "ctx_used": "yes",
+    "raw_rg_used": "no"
+  },
+  "timestamp_utc": "2026-09-07T12:00:00Z"
+}

@@ -127,16 +127,31 @@ class InboundMessenger {
       let more = false;
       // A poll with no cursor resumes at the read position the RELAY holds for this device, so a
       // walk continues where the last one stopped even across a process that never returned. The
-      // one exception is a pending `contact import` re-walk: an explicit cursor of "0" asks for the
-      // head of the mailbox, which is how an envelope refused as CONTACT_NOT_TRUSTED before the
-      // card existed is offered again (T5 design §4, R-5). The request is consumed exactly once,
-      // here, before the walk begins - a flag that outlived its walk would restart every subsequent
-      // poll at the head and silently reinstate the whole flooding class (finding T6-F-004).
-      let cursor: string | undefined = (await this.profile.takeMailboxRewalk()) ? "0" : undefined;
+      // one exception is a pending `contact import` re-walk: an explicit cursor - "0" for the head
+      // of the mailbox - asks for ground the mark is already past, which is how an envelope refused
+      // as CONTACT_NOT_TRUSTED before the card existed is offered again (T5 design §4, R-5). It is
+      // consumed exactly once, here, before the walk begins: a re-walk that outlived its own walk
+      // would restart every subsequent poll at the same place and silently reinstate the whole
+      // flooding class (finding T6-F-004).
+      //
+      // What is consumed is a POSITION, not a flag, and an unfinished re-walk is carried forward at
+      // the position it reached (finding T10-F-001). The re-walk is bounded by the same
+      // `maxPollPagesPerPoll` valve as any other walk, so past 16 pages of poison a flag-shaped
+      // re-walk stopped short of the envelope it was performed for and every later poll resumed
+      // after it from the mark: the recovery path the durable mark depends on was itself wedged by
+      // a flood of the same order, and a lost message does not come back. Re-requesting the walk
+      // from the head would loop forever without progressing; resuming it moves it strictly
+      // forward, so it costs one more `poll` per valve's worth of pages and always terminates.
+      const rewalkFrom = await this.profile.takeMailboxRewalk();
+      // The position an unfinished re-walk must resume strictly after, or `undefined` once the walk
+      // has reached the end of the mailbox and there is nothing left to re-walk.
+      let rewalk = rewalkFrom;
+      let cursor: string | undefined = rewalkFrom;
       // The highest position this walk has fully judged. Held in memory for the duration of the
       // walk and put on the wire; never persisted locally, because a poll that writes to the store
       // breaks F-012's store-identity guarantee and because the relay is the durable holder
-      // (finding T6-F-005).
+      // (finding T6-F-005). The re-walk position above is not this: it is written only while a
+      // re-walk is in flight, so an ordinary poll still leaves the store byte-identical.
       let readThrough: string | undefined;
       // Walk the relay's pages while every page so far has yielded nothing and the relay says more
       // remain. A permanently rejected envelope is deliberately never acknowledged (F-012), so it
@@ -144,21 +159,39 @@ class InboundMessenger {
       // an unauthenticated sender who fills one selection window makes every batch entirely poison
       // and the legitimate envelopes behind it are never delivered (round-2 finding R2-001 path B).
       // The walk stops as soon as anything is accepted, because the accepted envelopes must be
-      // acknowledged promptly and the next `poll()` resumes the remainder from the durable mark.
-      for (let page = 0; page < maxPollPagesPerPoll; page += 1) {
-        const batch = await this.page(cursor, readThrough);
-        const accepted = await this.accept(batch.envelopes);
-        received += accepted.received;
-        rejected.push(...accepted.rejected);
-        firstRejection ??= accepted.firstRejection;
-        more = batch.next_cursor !== null;
-        cursor = batch.next_cursor ?? undefined;
-        // The page just judged becomes the position the NEXT page's request reports. It is only
-        // ever a token the relay itself issued for a page this walk actually received, which is
-        // what keeps the mark from advancing past an envelope the recipient never read (R-4).
-        readThrough = batch.next_cursor ?? undefined;
-        if (accepted.received > 0 || !more) break;
+      // acknowledged promptly and the next `poll()` resumes the remainder - from the durable mark,
+      // or from the re-walk position when a re-walk is still in flight.
+      try {
+        for (let page = 0; page < maxPollPagesPerPoll; page += 1) {
+          const batch = await this.page(cursor, readThrough);
+          const accepted = await this.accept(batch.envelopes);
+          received += accepted.received;
+          rejected.push(...accepted.rejected);
+          firstRejection ??= accepted.firstRejection;
+          more = batch.next_cursor !== null;
+          cursor = batch.next_cursor ?? undefined;
+          // The page just judged becomes the position the NEXT page's request reports. It is only
+          // ever a token the relay itself issued for a page this walk actually received, which is
+          // what keeps the mark from advancing past an envelope the recipient never read (R-4).
+          readThrough = batch.next_cursor ?? undefined;
+          // A re-walk in flight advances with the walk, and ENDS - `undefined`, nothing to carry
+          // forward - the moment the relay reports no more pages. Only a page that was fully judged
+          // moves it, so an interrupted judgement re-offers that page rather than skipping it.
+          if (rewalk !== undefined) rewalk = batch.next_cursor ?? undefined;
+          if (accepted.received > 0 || !more) break;
+        }
+      } catch (error) {
+        // A relay outage, a rate limit or a local storage failure must not silently spend the
+        // re-walk: without this an unreachable relay would consume the `contact import` recovery
+        // and the envelope it was performed for would never be offered again.
+        if (rewalk !== undefined) {
+          try { await this.profile.keepMailboxRewalk(rewalk); } catch { /* the failure being unwound is the one the operator must see */ }
+        }
+        throw error;
       }
+      // An unfinished re-walk is carried forward BEFORE any verdict is re-raised: the walk that
+      // most needs to be resumed is exactly the one that judged nothing but poison and threw.
+      if (rewalk !== undefined) await this.profile.keepMailboxRewalk(rewalk);
       // Nothing survived any page the walk reached: keep the historical whole-batch contract, which
       // is also the F-012 guarantee - re-raise the first rejection, acknowledge nothing, mutate
       // nothing. Walking further pages changes only how much of the mailbox is consulted before

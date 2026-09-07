@@ -304,6 +304,14 @@ The relay URL is fixed at `init` time and must name the host the certificate was
 issued for. **An IP address will not match a MagicDNS certificate**, and the CLI
 refuses a non-loopback URL that is not HTTPS (exit 2, `INVALID_CONFIGURATION`).
 
+**It must be an ORIGIN — scheme, host and port only.** A relay URL carrying a
+path or a query (`https://host:8443/echolet`, `https://host:8443/?token=…`) is
+refused by `init` with the same exit 2 `INVALID_CONFIGURATION`, and nothing is
+written. A bare origin and a root path (`https://host:8443`,
+`https://host:8443/`) are both accepted. Until finding T10-F-003 `init` accepted
+a path, wrote the profile, and every later relay command on it exited 5
+`PERSISTENCE_FAILURE` — a local-storage code for a mistake on the command line.
+
 ```sh
 D=$(mktemp -d /tmp/echolet-remote-XXXXXX)
 CLI="<repo>/apps/cli/dist/cli.js"
