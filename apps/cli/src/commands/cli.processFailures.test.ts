@@ -156,6 +156,9 @@ function lockProfileDatabase(owner: Fixture) {
 const acceptedSend = (body: Record<string, unknown>) => ({
   accepted: true, envelope_id: (body.envelope as { envelope_id: string }).envelope_id, status: "relayed",
 });
+const acceptedPublish = (body: Record<string, unknown>) => ({
+  stored: true, bundle_id: (body.bundle as { bundle_id: string }).bundle_id, claimable: true,
+});
 
 // Populated inside the typed-failure test before its poll route is exercised.
 const undecryptable: Record<string, unknown> = {};
@@ -210,10 +213,15 @@ describe("runtime persistence failure classification (F-003)", () => {
     let lock: { release(): void } | undefined;
     const relayUrl = await startRelay({
       "/v2/prekeys/claim": () => ({ bundle: peer.card.signal_bundle }),
+      // Alice's own publication. `send` presupposes `relay publish` (T19), and the failure this test
+      // is about is the commit that follows an ACCEPTED deposit - so the send has to reach
+      // /v1/messages/send. The lock is still armed only by that route, never by the publish.
+      "/v2/prekeys/publish": acceptedPublish,
       "/v1/messages/send": acceptedSend,
     }, (path) => { if (path === "/v1/messages/send") lock = lockProfileDatabase(alice); });
     await init(alice, relayUrl);
     expect(outcome(await run(alice, ["contact", "import", "--from", peer.path, "--yes"]))).toMatchObject({ code: 0 });
+    expect(outcome(await run(alice, ["relay", "publish"]))).toMatchObject({ code: 0, errorCode: "ok" });
 
     try {
       const result = await run(alice, ["send", "--to", peer.record.identity_id, "--text", "SYNTHETIC_RED_BODY", "--message-id", randomUUID()]);

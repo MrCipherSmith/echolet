@@ -144,17 +144,25 @@ describe("relay failure reporting distinguishes an exhausted prekey from a proto
     const alice = fixture(), bob = fixture();
     await init(bob);
     const peer = await exportCard(bob);
+    // Alice's own publication succeeds first and is only then made to fail. `send` presupposes
+    // `relay publish` (T19), so alice has to have published for her send to reach the claim at all -
+    // and the genuine protocol violation this test contrasts against is still raised on exactly the
+    // same non-retryable 4xx path, from the same profile, a moment later.
+    let publishReply: (body: Record<string, unknown>) => Reply = (body) =>
+      accepted({ stored: true, bundle_id: (body.bundle as { bundle_id: string }).bundle_id, claimable: true });
     const relayUrl = await startRelay({
       // Exactly what the relay returns once the recipient's single published bundle is consumed
       // (specification.md:92, confirmed at the wire by the T44 probe).
       "/v2/prekeys/claim": () => rejected(404, "PREKEY_BUNDLE_UNAVAILABLE"),
-      // A genuine protocol violation on the same non-retryable 4xx path.
-      "/v2/prekeys/publish": () => rejected(400, "INVALID_SIGNATURE"),
+      "/v2/prekeys/publish": (body) => publishReply(body),
     });
     await init(alice, relayUrl);
     expect(outcome(await run(alice, ["contact", "import", "--from", peer.path, "--yes"]))).toMatchObject({ code: 0 });
+    expect(outcome(await run(alice, ["relay", "publish"]))).toMatchObject({ code: 0, errorCode: "ok" });
 
     const exhaustedRun = await run(alice, ["send", "--to", peer.record.identity_id, "--text", marker]);
+    // A genuine protocol violation on the same non-retryable 4xx path.
+    publishReply = () => rejected(400, "INVALID_SIGNATURE");
     const violationRun = await run(alice, ["relay", "publish"]);
     const exhausted = outcome(exhaustedRun), violation = outcome(violationRun);
 
