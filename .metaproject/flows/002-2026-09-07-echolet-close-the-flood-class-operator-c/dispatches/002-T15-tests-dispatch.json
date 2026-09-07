@@ -1,0 +1,82 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T15-tests",
+  "parent_dispatch_id": "002-T10-verify-r2",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {
+    "title": "RED tests for re-walk crash safety, the ack-route count oracle and the loopback hostname rule",
+    "description": "Independent verification of T10 (attempt 3, report t10-verification-report-r2.md) returned DONE_WITH_CONCERNS with one major finding and two minor ones. Write failing tests that pin all of them, plus one test-quality repair. You write ONLY tests; you do not fix the product code, and a separate implementer will make your tests pass.\n\nT10R3-F-001 (major, the reason this task exists). The contact-import re-walk is not crash-safe. `Profile.takeMailboxRewalk()` (apps/cli/src/runtime/profile.ts) DELETES the durable position `cli:mailbox-rewalk` before the walk begins, and `keepMailboxRewalk()` writes it back only from the catch around the page loop or after the loop returns. The entire walk is therefore a window in which the position exists in no durable place: interrupt the process inside it and the recovery the operator asked for is silently and permanently gone, taking the message with it. The verifier reproduced this with SIGINT — Ctrl-C, a normal way to stop a poll, which inbound.ts itself names as a normal interruption — as well as SIGKILL. Note carefully WHY the delete-first shape was chosen, because your tests must not push the implementer back into the older defect: the comment on `takeMailboxRewalk` cites finding T6-F-004, that a re-walk position surviving its own SUCCESSFUL walk would make every later poll restart at the same place and reinstate the whole flooding class. Both properties must hold at once, so pin both.\n\nT10R3-F-002 (minor). The ack route still answers a mailbox's lifetime envelope count to a caller who cannot produce a verifying signature. POST /v1/mailbox/ack with a real `device_id` taken from a contact card and a junk signature distinguishes an in-range `read_through` from an out-of-range one, and a binary search recovers the exact count. T14 applied the fix — bound the value only AFTER signature verification — to the poll route and not to this one. The qualification T14's report omits is that `identity_id` and `device_id` travel on the same contact card, so calling this 'a bound requiring a device_id' does not shrink the adversary population.\n\nT10R3-F-003 (minor). `parseClientConfig` and `RelayClient` disagree about what counts as loopback. `RelayClient` uses /^127\\./ at apps/cli/src/transport/relayClient.ts:75, which accepts the hostname `127.evil.example` as loopback and therefore admits plain HTTP to a remote host. It is unreachable through the CLI today only because config validation runs first at apps/cli/src/commands/cli.ts:210 — a defence in depth that currently is not one.\n\nT10R3-F-004 (info, test quality). In apps/cli/test/e2e/flood-closure.test.ts the RED-6 case uses `behind: 6`, which only clears the never-marked final page in the maximum-size-ciphertext regime. Re-parameterise it so the case cannot pass for the wrong reason if the ciphertext size regime changes; the verifier hit this and had to re-run with 60.",
+    "intent": "test",
+    "scope": "apps/cli/test/**, apps/relay/internal/api/handler/*_test.go. Tests only."
+  },
+  "acceptance_criteria": [
+    "Every new test FAILS on the current tree (HEAD 624ea47) and fails for the stated reason, not by erroring on a missing import, a typo or a timeout. Quote the actual failure output for each.",
+    "A test proves the re-walk survives interruption: with a recovery poll killed by SIGINT partway through, and separately by SIGKILL, the message the re-walk was requested for is still delivered by a later poll without a second `contact import`. Use two independent OS processes and a real relay, as the existing e2e tests do.",
+    "A test proves the opposite property still holds, so the fix cannot regress T6-F-004: a re-walk that COMPLETES to the end of the mailbox is not repeated — the poll after it starts from the durable mark and does not restart at the re-walk's origin. Without this the implementer can pass the crash-safety test by never clearing the position.",
+    "A test proves the position only ever moves strictly forward across an interrupted-then-resumed sequence, so a fix cannot pass by rewinding to the head each time.",
+    "A Go test proves the ack route does not distinguish an in-range `read_through` from an out-of-range one for a caller whose signature does not verify, including when the caller supplies a genuine `device_id`. Assert on the response the caller can observe (status and error code), not on internal state.",
+    "A test proves `RelayClient` refuses plain HTTP to `127.evil.example` and to at least one further hostname that a `/^127\\./` prefix rule wrongly admits, and that it still accepts genuine loopback (`127.0.0.1`, `localhost`, `[::1]`). Exercise `RelayClient` directly so the test does not pass merely because config validation runs first.",
+    "flood-closure.test.ts RED-6 is re-parameterised so it cannot pass for the wrong reason under a different ciphertext size regime, with the reasoning stated in a comment.",
+    "No existing test is weakened, skipped, deleted or narrowed. Report the SHA-256 of every test file you touched, before and after.",
+    "The full suite is run once so the pre-existing green count is on record: report the exact pass/fail counts for `pnpm test`, `pnpm --filter @echolet/cli test:e2e` and the Go suites, and state which of the failures are yours."
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t10-verification-report-r2.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "The verification report these findings come from, with the verifier's own reproductions and measurements."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t5-flood-closure-design.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "The closure design; §4 states the R-4 rule that bounds read_through and the R-5 recovery path the re-walk implements."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t14-implementation-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "How the durable re-walk position was introduced, and the residual T14 itself recorded about an interrupted walk."
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/index.md",
+    "apps/cli/src/runtime/inbound.ts",
+    "apps/cli/src/runtime/profile.ts",
+    "apps/cli/src/transport/relayClient.ts",
+    "apps/cli/src/commands/cli.ts",
+    "apps/cli/test/e2e/flood-closure.test.ts",
+    "apps/cli/test/e2e/two-process.test.ts",
+    "apps/relay/internal/api/handler/mailbox_handler.go"
+  ],
+  "constraints": [
+    "Write TESTS ONLY. Do not change any file under apps/cli/src, apps/relay/internal (except *_test.go), packages/, or docs/. If a test cannot be written without a production change, say so and stop rather than making the change.",
+    "The tests must be RED for the right reason. A test that fails because of a compile error, a missing fixture or a timeout is not RED — fix it until it fails on the assertion it is about.",
+    "Do not weaken, skip, delete or narrow any existing test, and do not relax any strict Zod schema or Go validation to make a test pass.",
+    "Do not print plaintext, ciphertext, store keys, private key material or HTTP request bodies into test output or logs.",
+    "Every text or symbol search goes through `keryx ctx rg`, never a bare rg or grep; route commands and large logs through `keryx ctx run` / `keryx ctx read`.",
+    "Signal-based tests must be deterministic: synchronise on an observable event (a page request the relay has served, a line the process has written), never on a sleep long enough to 'probably' work.",
+    "Requires Node 22.13+ for node:sqlite; report the Node version you ran on.",
+    "Report file identity by SHA-256, never by mtime — files in this tree have been touched with byte-identical content."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T15-tests-result.json",
+    "summary_max_tokens": 1000
+  },
+  "budget": {
+    "max_prompt_tokens": null,
+    "max_output_tokens": null,
+    "max_runtime_ms": null,
+    "max_findings": 10
+  },
+  "provenance": {
+    "created_at": "2026-09-07T14:55:00.000Z",
+    "created_by": "orchestrator",
+    "source_request": "T10 attempt 3 returned DONE_WITH_CONCERNS; the orchestrator declined to accept T10R3-F-001 as a residual because Ctrl-C is a normal interruption and the loss is silent and permanent."
+  }
+}

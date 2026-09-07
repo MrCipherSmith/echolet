@@ -9,7 +9,7 @@
   "title": "Echolet: close the flood class, operator console, and two-relay deployment",
   "status": "in-progress",
   "createdAt": "2026-09-07T06:55:37.619Z",
-  "updatedAt": "2026-09-07T12:05:13.794Z",
+  "updatedAt": "2026-09-07T16:20:33.700Z",
   "source": {
     "type": "description",
     "ref": null
@@ -211,10 +211,11 @@
         "T7",
         "T8",
         "T9",
-        "T14"
+        "T14",
+        "T16"
       ],
       "attempts": {
-        "count": 2,
+        "count": 5,
         "log": [
           {
             "at": "2026-09-07T09:43:36.999Z",
@@ -225,6 +226,21 @@
             "at": "2026-09-07T11:12:53.270Z",
             "outcome": "failed",
             "detail": "T10-F-001: the contact-import re-walk is itself bounded at 16 pages and its flag is consumed regardless, so a message behind >16 pages of poison is permanently lost"
+          },
+          {
+            "at": "2026-09-07T12:05:22.969Z",
+            "outcome": "started",
+            "detail": "002-T10-verify re-run after T14"
+          },
+          {
+            "at": "2026-09-07T14:51:33.706Z",
+            "outcome": "failed",
+            "detail": "Verifier returned DONE_WITH_CONCERNS, but the orchestrator declines to accept: T10R3-F-001 (major) is silent permanent message loss when a recovery poll is interrupted with Ctrl-C, which is a normal way to stop a poll and is not an acceptable residual before deployment. Confirmed by reading the source, not only from the report: takeMailboxRewalk() deletes the position before the walk and it is written back only on return, so the whole walk is a crash window. Also carrying T10R3-F-002 (ack-route count oracle) and T10R3-F-003 (RelayClient loopback hostname rule) into the fix."
+          },
+          {
+            "at": "2026-09-07T16:20:33.700Z",
+            "outcome": "started",
+            "detail": "002-T10-verify-r3 re-run after T16"
           }
         ]
       },
@@ -313,6 +329,52 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "RED tests for re-walk crash safety, the ack-route count oracle and the loopback hostname rule",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T14:51:40.718Z",
+            "outcome": "started",
+            "detail": "002-T15-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "17 tests: 8 RED (4 loopback, 3 re-walk crash safety, 1 ack-oracle) and 9 green guards including the T6-F-004 guard RED-4b. Re-verified by the orchestrator's own runs: pnpm test 293 tests / 7 failed, all in the two new vitest files; go test ./... exactly one failure, the ack oracle, every other package ok. RED-4's cursorless line re-stated under ruling; the ack range test given a V2-signing legitimate-client helper with every assertion byte-identical."
+    },
+    {
+      "id": "T16",
+      "title": "Fix T10R3-F-001 re-walk crash safety, T10R3-F-002 ack oracle, T10R3-F-003 loopback rule",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T15"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T15:54:46.810Z",
+            "outcome": "started",
+            "detail": "002-T16-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "All eight handover REDs green; re-verified by the orchestrator's own runs on this tree: pnpm test exit 0 (36 files / 228 tests in apps/cli, every package green, 293 total), test:e2e 3/3 exit 0, typecheck exit 0, go test -race -count=1 -tags relayv2 ./... exit 0 with 8 packages ok and 0 data races. All five test-file SHA-256 digests match T15's recorded values exactly, so the specification was not edited to fit the fix. The T6-F-004 trap was not taken: the position is still cleared, on the same condition, and both guards hold."
     }
   ],
   "history": [
@@ -528,6 +590,61 @@
       "at": "2026-09-07T12:05:13.794Z",
       "event": "task-done",
       "detail": "T14: Fix T10-F-001 message loss, T10-F-002 count oracle, T10-F-003 relay URL path"
+    },
+    {
+      "at": "2026-09-07T12:05:22.969Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 3) — 002-T10-verify re-run after T14"
+    },
+    {
+      "at": "2026-09-07T14:51:33.706Z",
+      "event": "task-attempt",
+      "detail": "T10: failed (attempt 4) — Verifier returned DONE_WITH_CONCERNS, but the orchestrator declines to accept: T10R3-F-001 (major) is silent permanent message loss when a recovery poll is interrupted with Ctrl-C, which is a normal way to stop a poll and is not an acceptable residual before deployment. Confirmed by reading the source, not only from the report: takeMailboxRewalk() deletes the position before the walk and it is written back only on return, so the whole walk is a crash window. Also carrying T10R3-F-002 (ack-route count oracle) and T10R3-F-003 (RelayClient loopback hostname rule) into the fix."
+    },
+    {
+      "at": "2026-09-07T14:51:33.790Z",
+      "event": "task-added",
+      "detail": "T15: RED tests for re-walk crash safety, the ack-route count oracle and the loopback hostname rule"
+    },
+    {
+      "at": "2026-09-07T14:51:33.940Z",
+      "event": "task-added",
+      "detail": "T16: Fix T10R3-F-001 re-walk crash safety, T10R3-F-002 ack oracle, T10R3-F-003 loopback rule"
+    },
+    {
+      "at": "2026-09-07T14:51:40.548Z",
+      "event": "task-depends-set",
+      "detail": "T16: dependsOn T15 (was empty) — Implementation follows the RED tests"
+    },
+    {
+      "at": "2026-09-07T14:51:40.634Z",
+      "event": "task-depends-set",
+      "detail": "T10: dependsOn T7, T8, T9, T14, T16 (was T7, T8, T9, T14) — Verification is re-run after the crash-safety defect it found is fixed; attempt 3 is not credited retroactively"
+    },
+    {
+      "at": "2026-09-07T14:51:40.718Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 002-T15-tests"
+    },
+    {
+      "at": "2026-09-07T15:54:46.726Z",
+      "event": "task-done",
+      "detail": "T15: RED tests for re-walk crash safety, the ack-route count oracle and the loopback hostname rule"
+    },
+    {
+      "at": "2026-09-07T15:54:46.811Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 002-T16-implement"
+    },
+    {
+      "at": "2026-09-07T16:20:33.618Z",
+      "event": "task-done",
+      "detail": "T16: Fix T10R3-F-001 re-walk crash safety, T10R3-F-002 ack oracle, T10R3-F-003 loopback rule"
+    },
+    {
+      "at": "2026-09-07T16:20:33.700Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 5) — 002-T10-verify-r3 re-run after T16"
     }
   ]
 }

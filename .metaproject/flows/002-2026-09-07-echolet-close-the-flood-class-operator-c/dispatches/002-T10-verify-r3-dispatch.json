@@ -1,0 +1,98 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T10-verify-r3",
+  "parent_dispatch_id": "002-T16-implement",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "independent-verifier",
+  "task": {
+    "title": "T10 re-run: verify the closure, TLS and the operator console on a real relay after T16",
+    "description": "Independently verify flow 002 on the post-T16 tree. This is the fourth attempt at T10 and the earlier verdicts are NOT credited retroactively — judge AC1..AC6 yourself on this tree.\n\nHistory you need, stated so you know where the bodies are buried. Attempt 2 found T10-F-001, a truncated contact-import re-walk that permanently lost a message; T14 fixed it by introducing a durable re-walk position `cli:mailbox-rewalk`. Attempt 3 confirmed that fix by measurement but found T10R3-F-001: the re-walk was not crash-safe, because `takeMailboxRewalk()` deleted the position before the walk and it was written back only on return, so an interruption anywhere inside the walk — Ctrl-C was enough — silently and permanently lost the message. The orchestrator declined to accept that as a residual. T15 wrote the RED tests and T16 has now implemented the fix.\n\nT16's claim, which you must check rather than believe: the shape is now peek-and-advance. `requestMailboxRewalk()` writes the head position at `contact import`; the page loop calls `keepMailboxRewalk(next_cursor)` once per page the walk received and FULLY judged, in the same place `read_through` is computed; and the new `finishMailboxRewalk()` clears it in exactly one place, only when `next_cursor === null`. T16 argues there is no window at all, because each page is a single store transaction replacing P(k-1) with P(k), so the store holds P(k-1) before the commit and P(k) after and never holds nothing.\n\nThe trap, which you must confirm was not taken: delete-before-the-walk was deliberate, per finding T6-F-004 — a position surviving its own SUCCESSFUL walk restarts every later poll at the same place and reinstates the entire flooding class this flow exists to close. Two guards pin it (`rewalk-crash-safety` case 4, and `flood-closure` RED-4b). Verify by measurement that a completed re-walk is genuinely not repeated, rather than reading the guards' names.\n\nT16 also applied the shape/range split to the ack route (shape before authorisation, range only after `VerifyMessageSignature`) and converged `RelayClient` and `parseClientConfig` on one loopback predicate in the new `apps/cli/src/transport/loopback.ts`.\n\nSweep the coverage bound T15 and T16 both recorded as a residual (T15-F-003): the crash-safety suite exercises ONE interruption point — a held page 3 — and ONE ciphertext regime, 4 bytes. Interruptions inside `accept()`, between the last page's commits and the clear, inside `ackPending()`, and the maximum-size-ciphertext regime are argued correct but were never measured. Measure them.",
+    "intent": "verify",
+    "scope": "apps/cli, apps/relay, the flow 002 artifacts, and docs/requirements/echolet-cli-prototype; loopback only"
+  },
+  "acceptance_criteria": [
+    "AC1: The flooding closure is chosen by a written design task that names what it closes, what it does not close, and why the alternatives were rejected.",
+    "AC2: Against the real relay binary, the probe that previously wedged a mailbox with 4 self-published identities and 49 maximum-size envelopes no longer prevents delivery of a legitimate message, and the new attacker cost is measured and stated. If the result is a bound rather than a closure, it is reported as a bound and not as a fix.",
+    "AC3: A legitimate two-party exchange, offline delivery, byte-identical exact retry and deduplication all still pass on the real relay after the change, with no pre-existing test weakened, skipped or deleted.",
+    "AC4: A relay reachable on a non-loopback address serves HTTPS, and the CLI completes the full acceptance scenario against it from a different machine. The 'different machine' half cannot be established from loopback and you are forbidden to touch the remote hosts — report it as partial with that reason rather than as met or failed.",
+    "AC5: The operator console drives a local CLI, shows profiles, queues, history, rejections and relay health, and never receives, stores or transmits a store key or private key material. This is demonstrated by evidence, not asserted.",
+    "AC6: The console displays, on its own surface, that this is an unaudited prototype not suitable for sensitive communication.",
+    "T10R3-F-001 is closed: interrupt a recovery poll with SIGINT and with SIGKILL, at SEVERAL different points — inside the page request, inside acceptance, between the last page's commit and the clear, and inside the acknowledgement — and show the message is still delivered by a later poll without a second `contact import`. State the first configuration, if any, at which a message is still lost.",
+    "The T6-F-004 property still holds by your own measurement: a re-walk that completed is not repeated, later ordinary polls do not restart at the head, and the cost of three ordinary polls after a completed re-walk stays bounded.",
+    "T10R3-F-002 is closed: the lifetime envelope count is not answerable on the ack route to a caller whose signature does not verify, including one holding a genuine contact-card `device_id`; re-run the binary search yourself and report how many distinct answers it can distinguish.",
+    "T10R3-F-003 is closed: `RelayClient` and `parseClientConfig` agree on every URL you can construct, including hostnames a `/^127\\./` prefix rule wrongly admits, and genuine loopback still works.",
+    "The full matrix is re-run on this tree by you: `pnpm typecheck`, `pnpm test`, `pnpm --filter @echolet/cli test:e2e`, and `go -C apps/relay test ./...` untagged, with `-race` and with `-race -tags relayv2`. Report exact counts, exit codes and data-race counts.",
+    "Repository integrity is verified by SHA-256 over tracked files, and every test file T15 wrote or touched is shown unchanged by T16."
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t10-verification-report-r2.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Attempt 3's report: the measurements that confirmed T14, and the three findings T16 has now fixed."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t16-implementation-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "T16's own account of the peek-and-advance shape, the ack split, the loopback predicate and six residuals. A claim to check, not evidence."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t5-flood-closure-design.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "The closure design and the residuals R-1..R-8 written before implementation."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/journal.md",
+      "kind": "context",
+      "exists": true,
+      "summary": "The orchestrator's rulings, including why the re-walk floor stays local and why RED-4's cursorless line was re-stated."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/runbook.md",
+      "kind": "context",
+      "exists": true,
+      "summary": "The reproduction runbook whose commands were executed against the real relay and the real dist/cli.js."
+    }
+  ],
+  "files_to_read": [
+    ".metaproject/index.md",
+    "apps/cli/src/runtime/inbound.ts",
+    "apps/cli/src/runtime/profile.ts",
+    "apps/cli/src/runtime/config.ts",
+    "apps/cli/src/transport/loopback.ts",
+    "apps/cli/src/transport/relayClient.ts",
+    "apps/cli/src/tui/tui-shell.ts",
+    "apps/relay/internal/api/handler/mailbox_handler.go",
+    "apps/relay/internal/storage/repository/mailbox_repo.go"
+  ],
+  "constraints": [
+    "Do not modify any source, test, documentation or flow file. This is a read-and-measure task; your only writes are your two deliverables and scratch files under /tmp.",
+    "Do not touch the remote hosts geekom or depr, and do not open any non-loopback listener.",
+    "Do not weaken, skip, delete or filter any test to obtain a green result. Report a failure as a failure.",
+    "Do not print plaintext, ciphertext, store keys, profile keys, private key material or HTTP request bodies into any log, report or terminal output.",
+    "Every text or symbol search goes through `keryx ctx rg`, never a bare rg or grep; route commands and large logs through `keryx ctx run` / `keryx ctx read`.",
+    "Verify integrity by SHA-256, never mtime — files in this tree have been touched with byte-identical content.",
+    "`bash -lc` on this machine starts Node v22.12.0, which lacks `node:sqlite` and makes packages/session-node fail to collect in a way indistinguishable from broken code. Use the default non-login interpreter, v26.5.0, and report the version you measured on.",
+    "Finding a real defect is a successful outcome for this task. Do not soften a verdict to let the flow proceed."
+  ],
+  "allowed_actions": ["read", "write", "run-command"],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T10-verify-r3-result.json",
+    "summary_max_tokens": 1200
+  },
+  "budget": {
+    "max_prompt_tokens": null,
+    "max_output_tokens": null,
+    "max_runtime_ms": null,
+    "max_findings": 20
+  },
+  "provenance": {
+    "created_at": "2026-09-07T16:20:00.000Z",
+    "created_by": "orchestrator",
+    "source_request": "T16 reports all eight handover REDs green and the full matrix clean; T10 must be re-run rather than credited, and must sweep the coverage bound T15-F-003 that both T15 and T16 recorded."
+  }
+}

@@ -455,9 +455,13 @@ func (h *MailboxHandler) decodeReadThroughShape(w http.ResponseWriter, readThrou
 // count, not traffic the asking party observed, and SEC-01 §6.2 confines what the
 // relay exposes to third parties.
 //
-// Callers therefore apply it only after the caller is established: on the poll
-// route after the device signature verifies, on the ack route after the device
-// binding resolves.
+// Callers therefore apply it only after the caller is ESTABLISHED, which on both
+// routes means after VerifyMessageSignature. The ack route used to apply it one
+// step earlier, after the device binding resolved but before the signature was
+// checked, and that step was enough to keep the oracle open for anyone holding
+// the victim's contact card: the card carries the identity_id the mailbox id is
+// derived from AND the device_id, so "name a device this mailbox knows" excludes
+// nobody (finding T10R3-F-002).
 func (h *MailboxHandler) readThroughWithinIssued(w http.ResponseWriter, mailboxID string, readThrough *string, position uint64) bool {
 	if readThrough == nil {
 		return true
@@ -678,6 +682,12 @@ func (h *MailboxHandler) AckMailbox(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Shape only, and deliberately still ahead of authorisation: like the
+	// envelope_ids bounds above, a token this relay could not have issued is
+	// malformed client input, so it must answer the same bounded 400 INVALID_SCHEMA
+	// whoever is asking and must never reach a code path that could answer 500. The
+	// bound that CONSULTS THE MAILBOX is a different rule and is applied further
+	// down, after the device signature verifies (finding T10R3-F-002).
 	readThrough, ok := h.decodeReadThroughShape(w, req.ReadThrough)
 	if !ok {
 		return
@@ -686,17 +696,6 @@ func (h *MailboxHandler) AckMailbox(w http.ResponseWriter, r *http.Request) {
 	deviceRecord, err := h.authorizeMailboxDevice(req.RecipientMailboxID, req.DeviceID)
 	if err != nil {
 		writeMailboxAuthorizationError(w, err)
-		return
-	}
-
-	// The mailbox-dependent bound, applied after the device binding resolves so it
-	// is not answered to a caller who names no device this mailbox knows (finding
-	// T10-F-002). It cannot move later than this on THIS route: an ack that
-	// carries an out-of-range position must answer 400 INVALID_SCHEMA rather than
-	// 403, including when the position is not the one the presented signature
-	// covers, and that ordering is pinned by
-	// TestAckRefusesAReadThroughAboveAnyPositionTheRelayIssued.
-	if !h.readThroughWithinIssued(w, req.RecipientMailboxID, req.ReadThrough, readThrough) {
 		return
 	}
 
@@ -715,6 +714,26 @@ func (h *MailboxHandler) AckMailbox(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil || !signatureValid {
 		writeJSONError(w, http.StatusForbidden, "INVALID_SIGNATURE", "signature verification failed")
+		return
+	}
+
+	// Now, and not before - the same split the poll route already makes (finding
+	// T10-F-002), completed here for the ack route (finding T10R3-F-002). While
+	// this ran ahead of the signature check, the relay answered two DIFFERENT
+	// things to a caller who could not produce a verifying signature: 400
+	// INVALID_SCHEMA for a position above the highest this mailbox was ever issued
+	// and 403 INVALID_SIGNATURE for one at or below it. That pair is a comparator
+	// on the victim's lifetime received-envelope count, and a binary search over it
+	// recovers the number in about thirteen requests. Naming a real device is no
+	// barrier: mailbox_id is sha256(identity_id + ":mailbox:v1") and identity_id and
+	// device_id are printed on the same contact card, so the caller who can compute
+	// the mailbox id can read the device id off the card. Behind the signature the
+	// caller is established, so an answer that depends on the mailbox's contents is
+	// an answer to its owner. The R-4 bound itself is unchanged and still refuses an
+	// out-of-range position with 400 INVALID_SCHEMA - to the legitimate recipient,
+	// which is who it was always for (TestAckRefusesAReadThroughAboveAnyPositionThe
+	// RelayIssued, which signs the V2 transcript the handler builds above).
+	if !h.readThroughWithinIssued(w, req.RecipientMailboxID, req.ReadThrough, readThrough) {
 		return
 	}
 

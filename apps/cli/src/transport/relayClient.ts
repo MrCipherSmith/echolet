@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MailboxEnvelopeSchema, SignalPreKeyBundleV2Schema, type MailboxEnvelope, type SignalPreKeyBundleV2 } from "@echolet/protocol";
+import { isLoopbackHostname } from "./loopback";
 
 export class RelayError extends Error {
   constructor(readonly code: string, readonly retryable: boolean, readonly httpStatus?: number, readonly remoteCode?: string) {
@@ -72,7 +73,11 @@ export class RelayClient {
   constructor(options: { baseUrl: string; timeoutMs: number; fetch?: typeof fetch }) {
     let url: URL;
     try { url = new URL(options.baseUrl); } catch { throw new RelayError("INVALID_RELAY_CONFIGURATION", false); }
-    const loopback = url.hostname === "localhost" || url.hostname === "[::1]" || /^127\./.test(url.hostname);
+    // The one loopback rule (`transport/loopback.ts`), shared with `parseClientConfig` so the two
+    // cannot answer "may this base URL be used?" differently. Finding T10R3-F-003: the prefix rule
+    // that used to live here admitted `127.evil.example` as loopback and would have carried every
+    // relay request to it in plaintext.
+    const loopback = isLoopbackHostname(url.hostname);
     if (url.username || url.password || url.hash || url.search || url.pathname !== "/" ||
         !(url.protocol === "https:" || url.protocol === "http:" && loopback) ||
         !Number.isInteger(options.timeoutMs) || options.timeoutMs < 1 || options.timeoutMs > 60000) {

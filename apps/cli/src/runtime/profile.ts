@@ -27,10 +27,11 @@ const publicationKey = "cli:publication";
 /**
  * An UNFINISHED re-walk of the mailbox, held as the position it has reached.
  *
- * Written by `contact import` as `"0"` (the head), carried forward by each `poll` that could not
- * finish the walk, and deleted the moment a walk reaches the end of the mailbox. See
- * `requestMailboxRewalk` / `takeMailboxRewalk` / `keepMailboxRewalk` for why it is a position and no
- * longer a flag (finding T10-F-001).
+ * Written by `contact import` as `"0"` (the head), ADVANCED by each page a walk fully judges, and
+ * deleted the moment a walk reaches the end of the mailbox. See `requestMailboxRewalk` /
+ * `pendingMailboxRewalk` / `keepMailboxRewalk` / `finishMailboxRewalk` for why it is a position and
+ * no longer a flag (finding T10-F-001), and why the walk never removes it up front (finding
+ * T10R3-F-001).
  */
 const mailboxRewalkKey = "cli:mailbox-rewalk";
 /**
@@ -157,32 +158,35 @@ export class Profile {
   }
 
   /**
-   * Consume a pending re-walk, EXACTLY ONCE, and report the position it resumes strictly after.
+   * Report a pending re-walk as the position it resumes strictly after, WITHOUT consuming it.
    *
-   * The "exactly once" is load-bearing and is the most dangerous path in this
-   * change (finding T6-F-004): a value that survives the walk it started would
-   * make every subsequent poll restart at the same place, which reinstates the
-   * whole flooding class while every unit test still passes. It is therefore
-   * deleted here, before the walk begins, and not on the walk's success; a walk
-   * that could not finish puts back the position it REACHED, never the one it
-   * started from, so every poll moves the re-walk strictly forward
-   * (`keepMailboxRewalk`).
+   * Peek, not take (finding T10R3-F-001). This used to delete the position before handing it to the
+   * walk, and `keepMailboxRewalk` wrote it back only once the page loop returned - so the whole
+   * walk was a window in which the position existed in no durable place, and a process that ended
+   * inside it (`inbound.ts` names an operator's Ctrl-C as a NORMAL interruption) silently dropped
+   * the recovery the operator had asked for. The relay-held mark is already past the envelope the
+   * import was performed for, every later poll is cursorless and resumes after it, and nothing
+   * tells the operator anything happened.
    *
-   * When no re-walk is pending this writes nothing at all, so an ordinary poll
-   * leaves the encrypted store byte-identical.
+   * Nothing is removed here, so the position is never absent while a walk that owns it is in
+   * flight. It is advanced per fully judged page by `keepMailboxRewalk` and removed only by
+   * `finishMailboxRewalk`, at the end of the mailbox - which is what keeps finding T6-F-004 closed:
+   * the position still does not survive its own SUCCESSFUL walk.
+   *
+   * This reads and writes nothing at all, so an ordinary poll still leaves the encrypted store
+   * byte-identical (F-012).
    */
-  takeMailboxRewalk(): Promise<string | undefined> {
+  pendingMailboxRewalk(): Promise<string | undefined> {
     return this.transact((tx) => {
       const stored = tx.get(mailboxRewalkKey);
       if (!stored) return undefined;
-      tx.delete(mailboxRewalkKey);
       const position = new TextDecoder().decode(stored);
       return mailboxRewalkPosition.test(position) ? position : "0";
     });
   }
 
   /**
-   * Carry an UNFINISHED re-walk forward to the next poll, at the position it reached.
+   * Advance an UNFINISHED re-walk to the position the walk has now reached.
    *
    * This is the durable re-walk floor finding T10-F-001 is about. The re-walk is the design's own
    * recovery path for R-5 - the one thing that makes a durable read mark safe for an envelope
@@ -193,6 +197,11 @@ export class Profile {
    * resumed after it, and the message was lost permanently. Re-requesting a walk from the head
    * instead would loop forever without progressing, which is why what is kept is a POSITION.
    *
+   * Since finding T10R3-F-001 it is called per fully judged PAGE rather than once at the end of the
+   * walk, which is what makes the re-walk crash-safe: the store transaction replaces one position
+   * with a later one, so at every instant durable storage holds a position at or BEHIND where the
+   * walk truly got to. An interruption therefore costs repeated work, never a lost message.
+   *
    * It is written only while a re-walk is in flight, so the F-012 store-identity guarantee for an
    * ordinary poll is untouched, and it is only ever a token the relay itself issued for a page this
    * walk actually received and fully judged - the same rule that bounds `read_through` (design §4,
@@ -201,6 +210,20 @@ export class Profile {
   keepMailboxRewalk(position: string): Promise<void> {
     const kept = mailboxRewalkPosition.test(position) ? position : "0";
     return this.transact((tx) => { tx.set(mailboxRewalkKey, new TextEncoder().encode(kept)); });
+  }
+
+  /**
+   * End a re-walk that has reached the END of the mailbox, and nothing else.
+   *
+   * This is the sole place the position is removed, and the condition is the sole condition under
+   * which there is nothing left to re-walk: the relay reported no continuation, so this walk was
+   * offered and judged every envelope the mailbox holds. It is the whole of finding T6-F-004 - a
+   * re-walk position that outlived its own successful walk would restart every later poll at the
+   * same place and reinstate the entire flooding class while every unit test still passed - and it
+   * is why making the re-walk crash-safe could not be done by simply never clearing it.
+   */
+  finishMailboxRewalk(): Promise<void> {
+    return this.transact((tx) => { tx.delete(mailboxRewalkKey); });
   }
 
   /**
