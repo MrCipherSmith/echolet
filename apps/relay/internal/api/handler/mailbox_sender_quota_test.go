@@ -44,9 +44,13 @@ import (
 //     (TestIdempotentReplayDoesNotConsumeSenderQuota)
 //   - the measurable improvement: one identity alone can no longer wedge the client's bounded drain
 //     walk (TestASingleIdentityCannotWedgeTheBoundedDrainWalk)
-//   - and the honest residue, recorded rather than hidden: N distinct identities still occupy
-//     N x quota slots and still wedge the walk
-//     (TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk)
+//   - and the residue, recorded rather than hidden: N distinct identities still occupy N x quota
+//     slots, because the quota bounds one sender and nothing bounds the mailbox
+//     (TestDistinctIdentitiesNoLongerWedgeTheDrainWalk, which is
+//     TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk re-measured and inverted for flow
+//     002 / T5: the occupancy half of the residue still holds and is still asserted, while the
+//     WEDGE it used to produce is now required not to happen. See that test's own comment for what
+//     moved and what was deliberately left to the real-binary suite)
 //
 // Only labels, counts, status codes, error codes and identifiers are ever printed. Ciphertext is
 // inert padding; no request or response body is echoed.
@@ -649,63 +653,153 @@ func TestASingleIdentityCannotWedgeTheBoundedDrainWalk(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Property 5 - the honest residue, recorded rather than hidden
+// Property 5 - the residue, RE-MEASURED and INVERTED for flow 002 / T5
 // ---------------------------------------------------------------------------
 
 // quotaIdentitiesToWedge is how many distinct identities it takes to refill the simulated walk once
 // each is bounded by senderUnackedQuota: ceil((walk capacity + 1) / quota). In the byte-bounded
-// regime T52 measured the same arithmetic gives ceil(49/16) = 4 identities for a 48-envelope walk.
+// regime T52 measured the same arithmetic gives ceil(49/16) = 4 identities for a 48-envelope walk,
+// which T55 confirmed by execution against the real binary ("boundary_49poison { identities: 4,
+// wedged: true }").
 const quotaIdentitiesToWedge = (clientDrainWalkPages*quotaWalkPageSize)/senderUnackedQuota + 1
 
-// TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk records what the per-sender quota does
-// NOT close, so that nobody has to rediscover it and the next verification has a threshold to
-// measure from.
+// drainWalkReachesWithin is drainWalkReaches with the page bound as a parameter.
 //
-// A per-sender quota bounds one SENDER; it does not bound total mailbox occupancy. Identity
-// creation is free - POST /v1/device-records/publish accepts a fresh self-signed record with no
-// credential (T52-F-001) - so an attacker simply mints more identities. The quota raises the price
-// from one identity to about (walk capacity / quota) identities. That is a linear improvement, not
-// a structural fix.
-//
-// This test is GREEN both before and after T54: it asserts current behaviour on purpose. If a later
-// change genuinely closes the class - binding occupancy to something an attacker cannot self-mint,
-// or letting a recipient drain permanently-unacceptable envelopes without the 16-page cap - this
-// test SHOULD start failing. Update it then; do not delete it, and do not weaken it to hide the
-// residue in the meantime.
-func TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk(t *testing.T) {
-	handler, recipient, recipientDeviceKey, mailboxID := quotaHarness(t)
-	legitimate := publishQuotaSender(t, handler, "residue-legitimate-contact")
-	nowMS := time.Now().UnixMilli()
+// The 16-page constant is what T54 had to treat as the whole of the recipient's patience, because
+// nothing carried progress from one poll to the next. Flow 002 / T5 C4-3 demotes it to a LIVENESS
+// VALVE: one `poll` still returns in bounded time, and hitting the valve costs one more `poll`
+// invocation instead of a lost message. This helper is what lets a test say "reached in N pages"
+// and record N, rather than only "reached / not reached inside 16".
+func drainWalkReachesWithin(
+	t *testing.T,
+	handler *MailboxHandler,
+	recipient *model.DeviceRecord,
+	recipientDeviceKey ed25519.PrivateKey,
+	mailboxID string,
+	pageSize int,
+	maxPages int,
+	wantedEnvelopeID string,
+) (bool, int) {
+	t.Helper()
 
-	// Each identity fills its own allowance. Nothing here is unauthenticated: every envelope carries
-	// a signature that verifies against a device record the relay itself accepted for free.
-	accepted := 0
-	for identity := 0; identity < quotaIdentitiesToWedge; identity++ {
-		attacker := publishQuotaSender(t, handler, fmt.Sprintf("residue-identity-%d", identity))
-		for index := 0; index < senderUnackedQuota; index++ {
-			envelopeID := quotaEnvelopeID(identity*senderUnackedQuota + index)
-			if sendFromQuotaSender(t, handler, attacker, quotaEnvelope(mailboxID, recipient, envelopeID, nowMS)).Code == http.StatusOK {
-				accepted++
+	cursor := ""
+	for page := 1; page <= maxPages; page++ {
+		response := pollMailboxPage(t, handler, mailboxID, recipient.DeviceID, recipientDeviceKey, pageSize, cursor)
+		if response.Code != http.StatusOK {
+			t.Fatalf("drain walk page %d: poll status = %d (code %q)", page, response.Code, mailboxErrorCode(t, response))
+		}
+		batch := decodePollResponse(t, response)
+		for _, envelope := range batch.Data.Envelopes {
+			if envelope.EnvelopeID == wantedEnvelopeID {
+				return true, page
 			}
 		}
+		if batch.Data.NextCursor == nil {
+			return false, page
+		}
+		cursor = *batch.Data.NextCursor
 	}
+	return false, maxPages
+}
 
-	// The residue in one number: the quota bounds each sender, and nothing bounds the mailbox.
-	if accepted != quotaIdentitiesToWedge*senderUnackedQuota {
-		t.Fatalf("%d of %d envelopes from %d distinct published identities were accepted, want all %d. "+
-			"This test records the KNOWN RESIDUE of the per-sender quota: it bounds one sender, not total mailbox occupancy. If a change made this fewer, the class may now be closed further than the quota alone closes it - re-measure and update this test rather than deleting it",
-			accepted, quotaIdentitiesToWedge*senderUnackedQuota, quotaIdentitiesToWedge, quotaIdentitiesToWedge*senderUnackedQuota)
-	}
+// TestDistinctIdentitiesNoLongerWedgeTheDrainWalk is the RE-MEASURED and INVERTED successor of
+// TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk (T54).
+//
+// What the original recorded, and why it is not deleted
+// -----------------------------------------------------
+// The original asserted the honest residue of the per-sender quota: it bounds one SENDER and not
+// total mailbox occupancy, `POST /v1/device-records/publish` is unauthenticated (T52-F-001), so an
+// attacker mints ceil(walk capacity / quota) identities and the wedge stands. Its own closing
+// instruction was: "If a change genuinely closes the class this test SHOULD start failing. Update it
+// then; do not delete it, and do not weaken it to hide the residue in the meantime." T55 then
+// re-measured the residue on the real binary and corrected it to 4 identities + 49 maximum-size
+// envelopes (the T54 report said 3 + 48). This is that update.
+//
+// What it now asserts, and what it deliberately leaves to the real-binary suite
+// -----------------------------------------------------------------------------
+// Flow 002 / T5 closes the class with three coupled parts, and only ONE of them is decidable at this
+// level:
+//
+//   - C4-1, relay-assigned selection order, is decidable here. Arm "ahead of stored mail" pins
+//     finding T5-F-001 directly: the attacker must not be able to place N x quota envelopes in FRONT
+//     of a message the mailbox already held. This arm is RED today, because selection is a byte-order
+//     scan over the sender-supplied envelope_id (mailbox_repo.go:429-431).
+//   - C4-2/C4-3, the durable read position, are NOT decidable here: the mark is advanced by a
+//     `read_through` on a signed ack whose transcript this test would have to forge. That half is
+//     pinned end to end, against the real relay binary and the real dist/cli.js, in
+//     apps/cli/test/e2e/flood-closure.test.ts (RED-2/3/4) - which is where the T5 design requires
+//     the closure claim to rest, because finding T47-TP-001 caught a fixture-only proof.
+//
+// Arm "behind the flood" records the second number: how many pages of the relay's OWN cursor it
+// takes to reach a message queued behind the whole flood. It passes today, and that is the point -
+// the relay can always serve the message; what was missing is that the recipient's progress through
+// those pages was discarded on every poll. Both page counts are logged so a future regression
+// surfaces as a number rather than as a boolean.
+func TestDistinctIdentitiesNoLongerWedgeTheDrainWalk(t *testing.T) {
+	for _, identities := range []int{1, quotaIdentitiesToWedge, 2 * quotaIdentitiesToWedge} {
+		t.Run(fmt.Sprintf("%d-identities", identities), func(t *testing.T) {
+			handler, recipient, recipientDeviceKey, mailboxID := quotaHarness(t)
+			legitimate := publishQuotaSender(t, handler, "closure-legitimate-contact")
+			nowMS := time.Now().UnixMilli()
 
-	sent := sendFromQuotaSender(t, handler, legitimate, quotaEnvelope(mailboxID, recipient, legitimateEnvelopeID, nowMS))
-	if sent.Code != http.StatusOK {
-		t.Fatalf("SendEnvelope(legitimate contact) status = %d (code %q), want %d", sent.Code, mailboxErrorCode(t, sent), http.StatusOK)
-	}
+			// The message that was already in the mailbox when the flood started. Its envelope_id
+			// sorts AFTER every attacker id, which is what lets the attacker jump the queue today.
+			alreadyStored := sendFromQuotaSender(t, handler, legitimate, quotaEnvelope(mailboxID, recipient, legitimateEnvelopeID, nowMS))
+			if alreadyStored.Code != http.StatusOK {
+				t.Fatalf("SendEnvelope(legitimate contact, stored before the flood) status = %d (code %q), want %d",
+					alreadyStored.Code, mailboxErrorCode(t, alreadyStored), http.StatusOK)
+			}
 
-	reached, pages := drainWalkReaches(t, handler, recipient, recipientDeviceKey, mailboxID, quotaWalkPageSize, legitimateEnvelopeID)
-	if reached {
-		t.Fatalf("the legitimate message WAS reached at page %d despite %d identities x %d envelopes filling the %d-page walk. "+
-			"That is better than the per-sender quota alone promises. Re-measure the new wedge threshold and update this residue test to the behaviour that now holds",
-			pages, quotaIdentitiesToWedge, senderUnackedQuota, clientDrainWalkPages)
+			// Each identity fills its own allowance. Nothing here is unauthenticated: every envelope
+			// carries a signature that verifies against a device record the relay accepted for free.
+			accepted := 0
+			for identity := 0; identity < identities; identity++ {
+				attacker := publishQuotaSender(t, handler, fmt.Sprintf("closure-identity-%d", identity))
+				for index := 0; index < senderUnackedQuota; index++ {
+					envelopeID := quotaEnvelopeID(identity*senderUnackedQuota + index)
+					if sendFromQuotaSender(t, handler, attacker, quotaEnvelope(mailboxID, recipient, envelopeID, nowMS)).Code == http.StatusOK {
+						accepted++
+					}
+				}
+			}
+
+			// The quota still bounds one sender and still does not bound the mailbox: the flood lands
+			// in full. That half of the residue is unchanged and is recorded, not hidden.
+			if accepted != identities*senderUnackedQuota {
+				t.Fatalf("%d of %d envelopes from %d distinct published identities were accepted, want all %d: the per-sender quota bounds one sender, not total mailbox occupancy, and identity creation is still free (T52-F-001)",
+					accepted, identities*senderUnackedQuota, identities, identities*senderUnackedQuota)
+			}
+
+			// Arm 1 - the inversion. C4-1: order is the relay's.
+			reached, pages := drainWalkReachesWithin(t, handler, recipient, recipientDeviceKey, mailboxID, quotaWalkPageSize, clientDrainWalkPages, legitimateEnvelopeID)
+			if !reached {
+				t.Fatalf("a message that was ALREADY IN THE MAILBOX was not reached within the recipient's %d-page walk after %d self-published identities placed %d envelopes behind it (walk stopped at page %d). "+
+					"Selection order is keyed on the sender-supplied envelope_id (mailbox_repo.go:429-431) and validation/validate.go:134 admits ~10^28 ids that sort below every random v4 UUID, so the attacker chose a position in front of mail the relay had already accepted. "+
+					"This is finding T5-F-001 and it is the half of the flooding class that a relay-assigned selection order closes on its own. "+
+					"The other half - durable recipient progress across polls - is pinned against the real binary in apps/cli/test/e2e/flood-closure.test.ts, not here",
+					clientDrainWalkPages, identities, accepted, pages)
+			}
+			if pages != 1 {
+				t.Fatalf("the already-stored message was reached at page %d, want page 1: with relay-assigned order it is the OLDEST envelope in the mailbox and must be served first", pages)
+			}
+
+			// Arm 2 - the recorded number. A message queued BEHIND the whole flood is reachable in a
+			// number of pages proportional to the flood, using the relay's own continuation cursor.
+			behindID := "ffffffff-ffff-4fff-8fff-fffffffffffe"
+			behind := sendFromQuotaSender(t, handler, legitimate, quotaEnvelope(mailboxID, recipient, behindID, nowMS))
+			if behind.Code != http.StatusOK {
+				t.Fatalf("SendEnvelope(legitimate contact, behind the flood) status = %d (code %q), want %d",
+					behind.Code, mailboxErrorCode(t, behind), http.StatusOK)
+			}
+			linearPages := (accepted+2)/quotaWalkPageSize + 2
+			reachedBehind, pagesBehind := drainWalkReachesWithin(t, handler, recipient, recipientDeviceKey, mailboxID, quotaWalkPageSize, linearPages, behindID)
+			if !reachedBehind {
+				t.Fatalf("a message queued behind %d poison envelopes was not reached within %d pages of the relay's own continuation cursor: the walk must be linear in the size of the mailbox, not bounded by a constant",
+					accepted, linearPages)
+			}
+			// The measured cost, recorded so a regression surfaces as a number rather than a boolean.
+			t.Logf("identities=%d poison=%d pages_to_already_stored=%d pages_to_behind_flood=%d page_size=%d",
+				identities, accepted, pages, pagesBehind, quotaWalkPageSize)
+		})
 	}
 }

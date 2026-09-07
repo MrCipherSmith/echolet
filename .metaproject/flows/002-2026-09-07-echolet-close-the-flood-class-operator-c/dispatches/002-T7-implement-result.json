@@ -1,0 +1,170 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T7-implement",
+  "status": "DONE",
+  "summary": "GREEN phase for the flood-closure wave. Implemented T5 candidate C4 with all five T6 corrections binding: (C4-1) a per-mailbox ordering side index mailboxseq:<mailbox>:<20-digit position> -> envelope_id, written inside SaveEnvelope's existing transaction under a striped per-mailbox lock, with a chunked, idempotent, counter-marked backfill that runs on the read path and before every store so records that predate the index are ordered rather than invisible (T6-F-002); the primary key layout, replay semantics, ENVELOPE_ID_CONFLICT, SenderOccupancy, DeleteEnvelope, retention and GetEnvelopes are untouched, and nothing was added to model.MailboxEnvelope. (C4-2) next_cursor keeps its exact wire shape and changes meaning to 'resume strictly after this relay-assigned position', closing the skip/repeat window; the read position is durable per (mailbox, device), moves forward only, and is bound by the recipient's signature through new v2 transcripts minted together in packages/crypto-core/src/mailbox/auth.ts and apps/relay/internal/cryptoutil/signatures.go, signed if and only if the request carries read_through. It rides on the already-signed POLL request rather than on the ack (T6-F-001), and is presented PER PAGE rather than at end of walk (T6-F-003), so progress survives a SIGKILL at a cost of one repeated page. Nothing is persisted client-side (T6-F-005). (C4-3) maxPollPagesPerPoll = 16 is demoted to a liveness valve. `contact import` records a re-walk request locally with no relay call and the next walk consumes it exactly once, before its first page, as an explicit cursor '0' that never rewinds the relay's mark (T6-F-004). Measured on the real relay binary and the real dist/cli.js at T55's exact wedge (4 self-published identities + 49 maximum-size poison, 12880434 B, 53 attacker requests): poll exit codes went from [3,3,3,3] with nothing delivered for up to 168 h, to [3,0] delivering on the second poll invocation in 18 poll pages / 37 HTTP requests / 13676370 B downloaded once (amplification 1.06:1); the SECOND delivered message into the same still-poisoned mailbox cost 1 poll, 1 page, 3 requests and 267181 B (0.021:1). No test file was written, edited, skipped or deleted: 60 tracked test files, exactly one differing from HEAD, which is mailbox_sender_quota_test.go left byte for byte as T6 left it. apps/cli/src/tui/ was not touched. No git commit was made.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC1 - the flooding closure is chosen by a written design task naming what it closes, what it does not, and why alternatives were rejected",
+      "status": "not_applicable",
+      "evidence": "Satisfied by dispatch 002-T5-design. This dispatch implements that design as corrected by 002-T6-tests and does not revisit the choice."
+    },
+    {
+      "criterion": "AC2 - against the real relay binary the 4-identity / 49-envelope probe no longer prevents delivery, and the new attacker cost is measured and stated; a bound is reported as a bound",
+      "status": "met",
+      "evidence": "apps/cli/test/e2e/flood-closure.test.ts passes 6/6 against apps/relay/cmd/relay built from this tree and the real apps/cli/dist/cli.js, including the three volume cases at 4 identities x 49 maximum-size poison, 50 x 800 and 500 x 8000. An independent probe outside the repository re-measured the 4/49 case end to end: attacker pays 4 identities, 49 envelopes, 53 requests and 12880434 B once; the recipient delivers on the 2nd poll invocation (exit codes [3,0]) after 18 poll pages, 37 HTTP requests and 13676370 B downloaded ONCE - amplification 1.06:1 against unbounded before. The second delivered message costs 1 poll, 1 page, 3 requests, 267181 B (0.021:1). The residual is reported as a bound, not as a closure: R-2, the first-walk latency, is still capped by the victim's own 120/min rate limit (about 19 s for the 4/49 flood, on the order of an hour for the design's 2.8 GB case), and R-3, unbounded relay storage, is untouched. Both are in section 6 of t7-implementation-report.md."
+    },
+    {
+      "criterion": "AC3 - legitimate exchange, offline delivery, byte-identical exact retry and deduplication still pass, with no pre-existing test weakened, skipped or deleted",
+      "status": "met",
+      "evidence": "apps/cli/test/e2e/two-process.test.ts passes 3/3 unchanged (offline delivery, restart, byte-identical exact retry, ack recovery), publication-claimability passes, the whole Go suite passes untagged, -race -count=1 and -race -count=1 -tags=relayv2, go vet is clean, pnpm typecheck is green on 7 projects, @echolet/crypto-core is 20/20 and @echolet/cli non-TUI is 99/99. `git diff --name-only` over every test/config file reports exactly one path, apps/relay/internal/api/handler/mailbox_sender_quota_test.go, which is T6's authorised residue inversion left untouched (sha256 0fd4e86ba00e725e331f74e42b94f948ee56baf63d280462e7538c7d27782762). All five T6 corrections were taken, so the four named pre-existing tests the design as written would have turned red - inbound.pollProgress.test.ts:248 and :251, mailbox_repo_test.go:165, cli.test.ts:148 - are green."
+    },
+    {
+      "criterion": "All 17 T6 RED assertions pass unmodified, including the real-binary flood-closure suite at 4/49, 50/800 and 500/8000, monotone progress across a SIGKILL, and the byte/request counters",
+      "status": "met",
+      "evidence": "vitest test/e2e: 10 passed / 0 failed (3 files) - RED-1 relay-chosen order, RED-2/3/5 the three volume cases with their byte and request counters and the O(1) second delivery, RED-4 across a SIGKILLed poll, RED-6 the late contact import guard, plus the untouched two-process 3/3 and publication-claimability. Go: mailbox_ordering_test.go (6), mailbox_read_mark_test.go (4) and the inverted TestDistinctIdentitiesNoLongerWedgeTheDrainWalk (3 subtests) all pass, under -race and under -race -tags=relayv2. crypto-core auth.readThrough.test.ts 4/4 and inbound.readMark.test.ts 2/2 pass."
+    },
+    {
+      "criterion": "A migration/backfill note, since existing relay data has no ordering index",
+      "status": "met",
+      "evidence": "Section 5 of t7-implementation-report.md. The backfill is in the code rather than in a runbook step an operator can forget: ensureMailboxOrderingLocked assigns positions in current key order, is triggered by the absence of mailboxseqnext:<mailbox_id>, runs on the read path and before every store, is chunked at 512 entries per transaction because a Badger transaction is bounded and a mailbox is not, is idempotent, and writes its counter last so an interrupted run is retried rather than half-applied. Two operator-facing items are recorded for the wave-3 runbook: the ack/poll transcript change is BREAKING and must land before any relay is serving, and wiping the relay data directory remains an acceptable alternative on a prototype deployment."
+    },
+    {
+      "criterion": "The ack/poll transcript change is agreed exactly between packages/crypto-core/src/mailbox/auth.ts and its Go twin, pinned literally on both sides",
+      "status": "met",
+      "evidence": "echolet-mailbox-challenge:v2:{challenge_id}:{recipient_mailbox_id}:{device_id}:{nonce}:{read_through} and echolet-mailbox-ack:v2:{recipient_mailbox_id}:{device_id}:{sorted_ids}:{read_through} are written as literal format strings in both languages and documented in docs/API-11_JSON_SCHEMAS.md and docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md. v2 is signed if and only if read_through is present, so every pre-existing v1 signer and verifier is unchanged (T6-Q-002, option v2-alongside). A divergence cannot drift silently: every poll page after the first in flood-closure.test.ts carries read_through, so a mismatched transcript answers 403 INVALID_SIGNATURE and the real-binary suite fails."
+    },
+    {
+      "criterion": "Nothing landed in flow 001 was undone, and the constrained surfaces were not changed",
+      "status": "met",
+      "evidence": "F-004 replay/409, F-005 expiry ordering, F-006 bounds, `claimable` required, sender authentication, the per-sender quota, T48 shape parity and the 0/2/3/4/5 exit-code contract are all still pinned by their own tests, which pass. The primary mailbox key layout at mailbox_repo.go is unchanged (the ordering index is a side index). Nothing was added to model.MailboxEnvelope. Every .strict() schema stayed strict and closed: the only schema change is an optional read_through in relayClient's pollRequestSchema, whose Go counterpart is a *string so absent and present stay distinguishable."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t7-implementation-report.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "The ordering index, the read position and its authentication, the per-page presentation, the reset semantics, the migration/backfill note, the measured attacker cost, and what this does not close (R-1..R-8 plus two new items).",
+      "hash": null
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "C4-1 ordering side index with striped allocation locking and a chunked idempotent backfill; C4-2 cursor as resume-after-position; HighestIssuedPosition / ReadMark / AdvanceReadMark.",
+      "hash": null
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "read_through on poll and ack, bounded before authorisation with 400 INVALID_SCHEMA, v2 transcripts when present, mark recorded before selection, cursorless poll resumes at the stored mark.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/runtime/inbound.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Per-page read position on the signed poll request, re-walk request consumed exactly once at the start of the walk, the 16-page bound re-documented as a liveness valve.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T7-implement-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/relay/internal/storage/repository/mailbox_repo.go", "change": "modified - ordering side index (mailboxseq:/mailboxseqnext:), striped per-mailbox allocation lock, chunked idempotent backfill on read and store paths, index-driven selection, cursor as resume-strictly-after-position, DecodeMailboxCursor exported, HighestIssuedPosition / ReadMark / AdvanceReadMark (forward-only, 30-day TTL)" },
+    { "path": "apps/relay/internal/service/mailbox_service.go", "change": "modified - pass-throughs for HighestIssuedPosition, ReadMark and AdvanceReadMark" },
+    { "path": "apps/relay/internal/api/handler/mailbox_handler.go", "change": "modified - read_through on PollRequest and AckRequest as *string, shared resolveReadThrough applying the cursor shape rule and the highest-issued bound before authorizeMailboxDevice, v2 transcript selection on both routes, mark advanced before selection, cursorless poll resolved against the stored mark" },
+    { "path": "apps/relay/internal/cryptoutil/signatures.go", "change": "modified - added CreateMailboxAckMessageV2 and CreateMailboxChallengeMessageV2; extracted normalizedMailboxEnvelopeIDs. v1 functions unchanged, so no existing call site was edited" },
+    { "path": "packages/crypto-core/src/mailbox/auth.ts", "change": "modified - createMailboxChallengeMessage and createMailboxAckMessage take an optional readThrough and emit a distinct :v2: transcript when it is present; the v1 strings are byte-identical to before" },
+    { "path": "apps/cli/src/transport/relayClient.ts", "change": "modified - optional bounded read_through in the strict poll request schema and in pollMailbox's input type" },
+    { "path": "apps/cli/src/runtime/profile.ts", "change": "modified - mailboxAuthorization signs the poll read position; added requestMailboxRewalk and takeMailboxRewalk (consume-once, writes nothing when no request is pending)" },
+    { "path": "apps/cli/src/runtime/inbound.ts", "change": "modified - page() carries read_through, poll() presents page k's position on page k+1's request including on the accept-nothing path, consumes a pending re-walk exactly once as cursor '0', maxPollPagesPerPoll re-documented as a liveness valve" },
+    { "path": "apps/cli/src/commands/cli.ts", "change": "modified - `contact import` records a local re-walk request after a confirmed import, with no relay call" },
+    { "path": "docs/API-11_JSON_SCHEMAS.md", "change": "modified - v2 poll and ack transcripts, read_through on both routes, the new cursor meaning, relay-assigned selection order" },
+    { "path": "docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md", "change": "modified - the same, in sections 9.7 and 9.8" },
+    { "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t7-implementation-report.md", "change": "added - the T7 implementation report" }
+  ],
+  "findings": [
+    {
+      "id": "T7-F-001",
+      "global_id": "002-T7-implement#T7-F-001",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 429,
+      "problem": "An acknowledged envelope's ordering-index entry is not deleted with its primary record; it is skipped lazily at selection and disappears with its own TTL, which is the envelope's retention deadline. In a long-running two-party conversation the recipient's mark does not advance on the page that delivers (the relay issues next_cursor only when more envelopes remain, so a final page has no token to report), so each poll iterates past the tail of dangling entries accumulated since the mark.",
+      "impact": "One iterator step plus one failing primary-key lookup per dangling entry, bounded by the number of envelopes acknowledged since the mark last moved and by the 24 h declared expiry. Negligible for a normal mailbox and measured as negligible at 8000 envelopes (the second delivered message cost 1 page and 267181 B). Recorded because it is a real cost that a future high-volume mailbox would surface, and because the fix - a reverse (envelope_id -> position) mapping so DeleteEnvelope can remove the index entry - is a new key space this change deliberately did not add.",
+      "suggested_fix": "If it ever matters: store the position alongside the primary record, or add mailboxpos:<mailbox>:<envelope_id> -> <position>, and delete both keys in DeleteEnvelope's existing transaction. Not done here because it doubles the per-envelope key count for a cost that is currently below measurement.",
+      "evidence": "Measured. The three volume cases and the independent 4/49 probe all deliver the SECOND message in 1 poll page and 267181 B against a mailbox still holding the whole flood, so the dangling tail did not register.",
+      "confidence": "high"
+    },
+    {
+      "id": "T7-F-002",
+      "global_id": "002-T7-implement#T7-F-002",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "line": 113,
+      "problem": "A walk always leaves its LAST page unreported. The relay issues next_cursor only when more envelopes remain, so the final page of a walk carries no token the client could echo back as read_through, and the client mints no positions of its own by design (it only ever presents a value the relay issued, which is what keeps the mark from advancing past an envelope the recipient never read).",
+      "impact": "The final page of every walk is re-downloaded and re-judged by the next poll. Bounded at exactly one page, and the T6 tests explicitly admit this one page of lag. It is the reason the volume cases need one extra poll invocation rather than exactly ceil(pages/16).",
+      "suggested_fix": "None proposed. Closing it would require either the relay issuing a position on the final page (a wire change for one page of work) or the client deriving positions itself (which is precisely the R-4 hazard the design forbids).",
+      "evidence": "Measured: at 4 identities x 49 maximum-size poison the mark reaches position 45 after a 16-page first walk rather than 48, so the second poll re-reads envelopes 46-48 before delivering. Total first-delivery cost 18 pages against 17 pages of real work.",
+      "confidence": "high"
+    },
+    {
+      "id": "T7-F-003",
+      "global_id": "002-T7-implement#T7-F-003",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "line": 105,
+      "problem": "The `contact import` re-walk request is consumed at the START of the next walk and is not restored if that walk hits the 16-page liveness valve before reaching the newly-trusted envelope. On a mailbox large enough that a full re-walk exceeds 16 pages, the second and later polls resume at the stored mark instead of continuing the re-walk, so a late-imported card can still fail to recover a message that sits beyond the valve.",
+      "impact": "Narrow, and the alternative is worse: a flag that survives its walk restarts every subsequent poll at the head of the mailbox and silently reinstates the entire flooding class (finding T6-F-004, measured). Consume-once is the safe half of that trade. The residual is a late import into a mailbox holding more than ~800 envelopes at the default batch size of 50.",
+      "suggested_fix": "If it matters later: persist the re-walk as a bounded LOCAL cursor that the walk advances and clears only when the re-walk completes, so it can never re-present position 0 twice. That is more client-side state than R-4 and F-012 currently permit, so it was deliberately not added.",
+      "evidence": "Reasoned from the code path plus the measured page arithmetic; RED-6 exercises the recovering case (40 poison plus one envelope, one page) and passes.",
+      "confidence": "medium"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "go_suites_green": "untagged, -race -count=1, -race -count=1 -tags=relayv2, go vet clean",
+    "typecheck": "green on 7 projects",
+    "crypto_core_tests": "20/20",
+    "cli_unit_tests_non_tui": "99/99",
+    "e2e_tests": "10/10 (flood-closure 6, two-process 3, publication-claimability 1)",
+    "tracked_test_files_checked": 60,
+    "tracked_test_files_differing_from_head": 1,
+    "attacker_identities_before": 4,
+    "attacker_envelopes_before": 49,
+    "attacker_uploaded_bytes": 12880434,
+    "attacker_requests": 53,
+    "poll_exit_codes_before": "[3,3,3,3] (T55, nothing delivered, wedged to the 168 h retention cap)",
+    "poll_exit_codes_after": "[3,0]",
+    "first_delivery_poll_invocations": 2,
+    "first_delivery_poll_pages": 18,
+    "first_delivery_http_requests": 37,
+    "first_delivery_downloaded_bytes": 13676370,
+    "first_delivery_amplification": 1.062,
+    "second_delivery_poll_invocations": 1,
+    "second_delivery_poll_pages": 1,
+    "second_delivery_http_requests": 3,
+    "second_delivery_downloaded_bytes": 267181,
+    "second_delivery_amplification": 0.02074,
+    "note_other_worker": "apps/cli/src/tui/, apps/cli/build.mjs and apps/cli/package.json in this tree belong to the concurrent 002-T9 operator-TUI dispatch and were not touched by this one. Its tests are outside this task's verification and may be red."
+  },
+  "timestamp_utc": "2026-09-07T09:00:00Z"
+}

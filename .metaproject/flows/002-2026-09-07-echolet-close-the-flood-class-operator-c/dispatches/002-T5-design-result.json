@@ -1,0 +1,183 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T5-design",
+  "status": "DONE",
+  "summary": "Chose the flood-class closure. Recommendation is candidate 4: a server-assigned mailbox ordering index, a durable recipient-signed read position persisted at the relay, and a walk bound that is a function of the mailbox rather than the constant 16 pages. The orchestrator's prior (candidate 1, an unbounded walk) is refuted as a standalone closure by measured walk-cost arithmetic: it buys roughly 113 identities and 1801 max-size envelopes for a ten-minute wedge, leaves the amplification unbounded because recipient progress is discarded every poll, and degrades the operator-visible failure from exit 3 to exit 4 RELAY_UNAVAILABLE through the victim's own 120/min rate limit. Candidate 2 (PoW) cannot close a class needing only 10^2-10^3 identities without 30+ seconds of onboarding per legitimate user. Candidate 3 (recipient allow-list) closes it but violates SEC-01 section 2 (no central registry) and section 6.2 (relay would hold contacts who never send). Design only; no source, test or configuration file was modified.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC1 - the flooding closure is chosen by a written design task that names what it closes, what it does not close, and why the alternatives were rejected",
+      "status": "met",
+      "evidence": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t5-flood-closure-design.md sections 3 (mechanism at file:line), 4 (residuals R-1..R-8 with measurement recipes) and 6 (rejections with SEC-01 citations)."
+    },
+    {
+      "criterion": "AC2 - against the real relay binary the 4-identity / 49-envelope probe no longer prevents delivery, and the new attacker cost is measured and stated; a bound is reported as a bound",
+      "status": "partial",
+      "evidence": "Cannot be met by a design task; it is the RED/GREEN phase that follows. The design specifies exactly what must be measured instead of a new wedge threshold: first-poll bytes and requests per delivered message, steady-state second-poll cost O(1), and monotone progress across interrupted polls (design section 8, RED-2/RED-3/RED-4/RED-5). Residual R-2 (an hour-long first walk at 2.8 GB) is stated upfront so the result cannot be reported as a closure with no residual."
+    },
+    {
+      "criterion": "AC3 - legitimate exchange, offline delivery, byte-identical exact retry and deduplication still pass with no pre-existing test weakened",
+      "status": "partial",
+      "evidence": "Design section 7 names the two hazards the implementer must respect: the ack transcript change touches ack signing and the E2E ack-recovery case, and TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk will fail after the change and must be re-measured and inverted rather than deleted, per its own T54 instruction. The side-index design in C4-1 was chosen specifically so that mailbox_repo_test.go:294-296 and mailbox_repo_test.go:115-129 stay untouched."
+    },
+    {
+      "criterion": "AC4 - a non-loopback relay serves HTTPS and the CLI completes the full scenario from another machine",
+      "status": "not_applicable",
+      "evidence": "Wave 2 of the plan. Noted only that apps/cli/src/transport/relayClient.ts:66-71 already refuses non-loopback plain HTTP, so this is a precondition rather than a nicety."
+    },
+    {
+      "criterion": "AC5/AC6 - operator console drives a local CLI, holds no key material, and states it is an unaudited prototype",
+      "status": "not_applicable",
+      "evidence": "Wave 2 of the plan; outside this dispatch."
+    },
+    {
+      "criterion": "AC7 - two relay instances run on the user's servers with a reproducing runbook",
+      "status": "not_applicable",
+      "evidence": "Wave 3 of the plan. The design records one item the runbook must carry: a one-time relay data-dir wipe or ordering-index backfill (design section 5)."
+    },
+    {
+      "criterion": "AC8 - documentation states what remains untrue after this flow",
+      "status": "partial",
+      "evidence": "Residuals R-1..R-8 in design section 4 are the content AC8 must record. R-3 is a new item for it: ECHOLET_MAX_STORAGE_BYTES is declared and never enforced, and no per-mailbox occupancy cap exists."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t5-flood-closure-design.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Flood-closure design: recommendation, mechanism at file:line, predicted residuals with measurement recipes, cost to legitimate users, acceptance-criteria mapping, RED-phase test strategy against the real relay binary.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T5-design-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This subagent-result.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t5-flood-closure-design.md",
+      "change": "added - design report for the flooding closure"
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T5-design-result.json",
+      "change": "added - subagent-result for dispatch 002-T5-design"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T5-F-001",
+      "global_id": "002-T5-design#T5-F-001",
+      "reviewer": "flood-closure-design",
+      "severity": "major",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 429,
+      "symbol": "mailboxEnvelopeKey",
+      "problem": "The mailbox selection order is a Badger prefix scan over the key mailbox:<mailbox_id>:<envelope_id>, whose second component is supplied by the sender and constrained only by the UUID shape rule at apps/relay/internal/validation/validate.go:134. That rule accepts the nil UUID and roughly 9.9e27 further identifiers whose first eight hex characters are zeros, all of which sort strictly ahead of every legitimate randomUUID() the CLI mints.",
+      "impact": "The attacker, not the relay, chooses where its envelopes sit in the victim's drain walk, including ahead of envelopes that are already stored. This is the ordering half of the flooding class: any bounded walk from the head of the mailbox is defeated by placing enough poison at the head, and a legitimate message queued behind it is never reached before its 24 h lifetime expires.",
+      "suggested_fix": "Add a per-mailbox ordering index mailboxseq:<mailbox_id>:<zero-padded server-assigned sequence> -> <envelope_id>, written inside SaveEnvelope's existing transaction, and have GetEnvelopeBatchFrom iterate that prefix instead of the primary one. Keep the primary key layout unchanged so mailbox_repo_test.go:294-296 and the idempotent-replay/conflict/occupancy/delete paths are untouched, and add nothing to model.MailboxEnvelope because the client parses poll responses under MailboxEnvelopeSchema.strict() (apps/cli/src/transport/relayClient.ts:100).",
+      "evidence": "Read-only probe outside the repository on Node v26.5.0 against the exact regexp at validate.go:134: nil_uuid, 00000000-0000-1000-8000-000000000000, 00000000-0000-1000-8000-000000000001 and 00000000-0000-4000-8000-000000000000 are all accepted; 0 of 200000 generated v4 UUIDs sorted below the 00000000- prefix; 9.90e+27 head identifiers are choosable. Corroborated on the real relay binary by t48-implementation-report.md section 4, which used envelope_ids sorting ahead of every random UUID to place poison at the head of the victim's mailbox.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/storage/repository/mailbox_repo.go:429 (mailboxEnvelopeKey - the key layout)",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:63 (SaveEnvelope builds the key)",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:104 (GetEnvelopes prefix scan inherits the order)",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:183 (SenderOccupancy prefix scan inherits the order)",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:319 (GetEnvelopeBatchFrom prefix scan - the poll route's order)",
+          "apps/relay/internal/validation/validate.go:134 (clientMailboxUUID - the rule that admits head-sorting identifiers)",
+          "apps/relay/internal/storage/repository/mailbox_repo_test.go:294 (mailboxEnvelopeKeyForTest - test-side duplicate of the layout, may not be edited)"
+        ],
+        "enumeration_method": "keryx ctx rg over apps/relay/internal for 'mailboxEnvelopeKey|fmt.Sprintf(\"mailbox:' returned 12 matches in 2 files; every prefix scan and every key construction in the repository is listed, plus the validation rule that decides which identifiers are admissible."
+      }
+    },
+    {
+      "id": "T5-F-002",
+      "global_id": "002-T5-design#T5-F-002",
+      "reviewer": "flood-closure-design",
+      "severity": "major",
+      "file": "apps/relay/internal/config/config.go",
+      "line": 12,
+      "symbol": "Config.MaxStorageBytes",
+      "problem": "ECHOLET_MAX_STORAGE_BYTES is declared with a 2 GiB default and is referenced nowhere else in apps/relay. There is also no per-mailbox occupancy cap, although docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md:473 names one as a send-route precondition. The only bounds on a mailbox are the per-sender quota of 16, the per-IP rate limit of 120/min, and the host's disk.",
+      "impact": "Total mailbox and total relay occupancy are unbounded. This is the storage half of the flooding class and it is untouched by the recommended delivery closure: an attacker can still fill the relay's disk, and a recipient that has read past its poison has no reason to delete it, so it lingers to the 168 h retention cap. It becomes live in wave 3 when two relays become internet-reachable. A configuration name that promises a limit and enforces nothing is also actively misleading to an operator writing the deployment runbook.",
+      "suggested_fix": "Decide deliberately in wave 3: either enforce MaxStorageBytes and add a fair-shared per-mailbox occupancy cap (a flat cap alone converts a delivery-delay attack into an outright send-refusal attack against legitimate senders, which is worse), or delete the unused field and record the absence of any storage bound in the deployment runbook and in AC8's list of what remains untrue.",
+      "evidence": "keryx ctx rg for 'MaxStorageBytes' over apps/relay returned exactly one match, the declaration at config.go:12. keryx ctx rg for 'MaxMailboxEnvelopes|mailbox quota|MAILBOX_FULL|MailboxFull|total occupancy' over the repository returned three matches, none of them a relay-side enforcement site.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/config/config.go:12 (MaxStorageBytes declared, never read)",
+          "apps/relay/internal/api/handler/mailbox_handler.go:90 (SendEnvelope - the only write path, enforces only the per-sender quota at :133)",
+          "apps/relay/internal/storage/repository/mailbox_repo.go:57 (SaveEnvelope - no occupancy check)",
+          "docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md:473 (documents a mailbox quota that does not exist in code)"
+        ],
+        "enumeration_method": "keryx ctx rg for 'MaxStorageBytes' over apps/relay (1 match, the declaration) plus keryx ctx rg for 'MaxMailboxEnvelopes|mailbox quota|MAILBOX_FULL|MailboxFull|total occupancy' over the repository (3 matches, none an enforcement site); the send path was then read end to end at mailbox_handler.go:90-161 to confirm the only occupancy control is enforceSenderQuota."
+      }
+    },
+    {
+      "id": "T5-F-003",
+      "global_id": "002-T5-design#T5-F-003",
+      "reviewer": "flood-closure-design",
+      "severity": "info",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "line": 71,
+      "symbol": "maxPollPagesPerPoll",
+      "problem": "Removing or enlarging the 16-page walk bound without also making recipient progress durable is a linear price increase, not a closure, and it degrades the operator's diagnosis. Each page costs two HTTP requests (challenge at inbound.ts:87 and poll at inbound.ts:94) against a default 120/min per-IP limit, so a victim can traverse at most 60 pages, 180 max-size envelopes and 47.3 MB per minute; and because every walk restarts at the head of the mailbox (mailbox_repo.go:325-326, inbound.ts:105) an interrupted walk makes zero net progress.",
+      "impact": "An attacker buys a one-minute wedge with 181 poison envelopes and 12 identities (193 requests, 47.6 MB), a ten-minute wedge with 1801 envelopes and 113 identities (1914 requests, 473 MB), and an hour with 10801 envelopes and 676 identities (2.8 GB). Once the walk exceeds 60 pages/min the victim's own 429 RATE_LIMITED is classified retryable at relayClient.ts:140 and mapped to RELAY_UNAVAILABLE exit 4 at cli.ts:372, so the operator loses today's typed exit-3 rejection and sees a generic relay outage instead. The amplification also stays unbounded: the attacker uploads once, the victim re-downloads on every poll for up to 168 h.",
+      "suggested_fix": "Pair the mailbox-proportional walk with a durable recipient-signed read position stored at the relay (design section 3, C4-2 and C4-3), so the page bound stops being load-bearing for correctness and becomes a liveness valve only.",
+      "evidence": "Read-only probe outside the repository computing the walk arithmetic from mailbox_handler.go:65-69 (poll byte budget (1<<20)-4096), the 262853-byte encoded max-size envelope measured in t55-final-verification.md, inbound.ts:87/:94 (two requests per page) and config.go:25 (120/min). Non-durable progress was measured on the real binary by t48-implementation-report.md section 4, poll #2: a cursorless poll re-selects the identical head page.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Confirm that the breaking ack-transcript change (adding read_through to createMailboxAckMessage and its Go twin) lands before wave 3 deployment rather than after.",
+      "why": "A client built before the change cannot ack against a relay built after it. The compatibility cost is exactly zero if it ships before two relays are serving, and breaks every deployed client if it ships after. The flow already fixes this order, so this is a confirmation rather than a new decision.",
+      "options": [
+        { "id": "before", "label": "Land the transcript change in wave 1, before any relay becomes reachable", "recommended": true },
+        { "id": "after", "label": "Defer it and accept a client/relay compatibility break during wave 3", "recommended": false }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q2",
+      "question": "Is a full mailbox re-walk on the next poll after `contact import` acceptable, as the mitigation for losing the late-import recovery path (residual R-5)?",
+      "why": "With a durable read position, an envelope refused as CONTACT_NOT_TRUSTED is passed once rather than re-offered on every poll, so a card imported later would no longer recover it. Resetting the mark on `contact import` restores that path at the cost of one extra walk. specification.md:98 says both parties exchange cards before messaging, so the affected case is at the margin of the supported path - but it is a real behaviour change and the user should choose it knowingly.",
+      "options": [
+        { "id": "reset", "label": "Reset the read position on contact import; accept one extra walk", "recommended": true },
+        { "id": "no-reset", "label": "Do not reset; accept that a message refused before import is never re-offered", "recommended": false }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q3",
+      "question": "Should the unenforced ECHOLET_MAX_STORAGE_BYTES and the missing per-mailbox occupancy cap (T5-F-002) be scheduled into wave 3, or recorded in AC8 as a known open class?",
+      "why": "It is a relay-availability class rather than a delivery class, so the recommended closure does not touch it, but it becomes live the moment two relays are internet-reachable. A flat per-mailbox cap is not a safe default: it converts a delivery-delay attack into an outright send-refusal attack against legitimate senders.",
+      "options": [
+        { "id": "wave3-fix", "label": "Schedule a fair-shared occupancy bound in wave 3", "recommended": false },
+        { "id": "ac8-record", "label": "Record it in AC8 as a known open class and delete the misleading unused config field", "recommended": true }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "candidates_evaluated": 4,
+    "probes_run": 1,
+    "source_files_read": 14,
+    "repo_files_modified": 0
+  },
+  "timestamp_utc": "2026-09-07T07:12:00Z"
+}

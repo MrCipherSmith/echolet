@@ -26,6 +26,27 @@ func CreateMailboxChallengeMessage(challengeID, recipientMailboxID, deviceID, no
 	)
 }
 
+// CreateMailboxChallengeMessageV2 is the poll transcript that BINDS the read
+// position a poll carries (flow 002 / T5 design C4-2, as corrected by finding
+// T6-F-001: the position rides on the already-signed POLL request rather than on
+// the ack, because an ack sent purely to report a position is an ack request the
+// F-012 accept-nothing path must not make).
+//
+// Same rule as the ack: a poll that carries no read_through signs the v1 string
+// unchanged, so every client and every test that predates the read position keeps
+// verifying. The string is pinned literally here and in
+// createMailboxChallengeMessage in packages/crypto-core/src/mailbox/auth.ts.
+func CreateMailboxChallengeMessageV2(challengeID, recipientMailboxID, deviceID, nonce, readThrough string) string {
+	return fmt.Sprintf(
+		"echolet-mailbox-challenge:v2:%s:%s:%s:%s:%s",
+		challengeID,
+		recipientMailboxID,
+		deviceID,
+		nonce,
+		readThrough,
+	)
+}
+
 func CreateMailboxCreateChallengeMessage(recipientMailboxID, deviceID string) string {
 	return fmt.Sprintf(
 		"echolet-mailbox-create-challenge:v1:%s:%s",
@@ -35,14 +56,51 @@ func CreateMailboxCreateChallengeMessage(recipientMailboxID, deviceID string) st
 }
 
 func CreateMailboxAckMessage(recipientMailboxID, deviceID string, envelopeIDs []string) string {
-	normalizedEnvelopeIDs := append([]string(nil), envelopeIDs...)
-	sort.Strings(normalizedEnvelopeIDs)
 	return fmt.Sprintf(
 		"echolet-mailbox-ack:v1:%s:%s:%s",
 		recipientMailboxID,
 		deviceID,
-		strings.Join(normalizedEnvelopeIDs, ","),
+		normalizedMailboxEnvelopeIDs(envelopeIDs),
 	)
+}
+
+// CreateMailboxAckMessageV2 is the ack transcript that BINDS the recipient's
+// durable read position (flow 002 / T5 design C4-2).
+//
+// It is a separate version rather than a widened v1 because the read position is
+// optional on the wire: an ack that carries no read_through signs, and must keep
+// signing, exactly the string it always did. Two transcripts, one per shape, is
+// what makes "the field was absent" and "the field was empty" different signed
+// statements instead of the same one.
+//
+// Why the read position has to be inside the signature at all: it decides what
+// the recipient is offered NEXT, and once a cursorless poll resumes at the stored
+// mark, a value that advances the mark past an envelope makes that envelope
+// unreachable for the rest of its lifetime (design section 4, R-4). A field with
+// that power is exactly as security-relevant as envelope_ids.
+//
+// The string is a wire contract shared with the TypeScript recipients
+// (createMailboxAckMessage in packages/crypto-core/src/mailbox/auth.ts, called
+// with its optional fourth argument) and is pinned literally on both sides. The
+// two halves are exercised against each other by the real-binary suite, so a
+// divergence fails loudly rather than drifting. Change it only by minting a new
+// version prefix in both languages together.
+func CreateMailboxAckMessageV2(recipientMailboxID, deviceID string, envelopeIDs []string, readThrough string) string {
+	return fmt.Sprintf(
+		"echolet-mailbox-ack:v2:%s:%s:%s:%s",
+		recipientMailboxID,
+		deviceID,
+		normalizedMailboxEnvelopeIDs(envelopeIDs),
+		readThrough,
+	)
+}
+
+// normalizedMailboxEnvelopeIDs sorts and joins the acknowledged ids, so a
+// recipient and a relay that received them in different orders still agree.
+func normalizedMailboxEnvelopeIDs(envelopeIDs []string) string {
+	normalized := append([]string(nil), envelopeIDs...)
+	sort.Strings(normalized)
+	return strings.Join(normalized, ",")
 }
 
 // HashMailboxEnvelopeCiphertext binds an envelope's payload into the sender

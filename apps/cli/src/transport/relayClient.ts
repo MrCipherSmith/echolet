@@ -43,10 +43,19 @@ const nextCursorSchema = z.union([z.string().min(1).max(256), z.null()]);
 // this client never constructs, parses or reasons about its content, and it is
 // bounded by the same closed schema the response is, so a token the relay could
 // not have issued never reaches the wire. Omitted on the first page of a walk.
+//
+// `read_through` is the recipient's durable read position: the highest
+// server-issued position this walk has JUDGED — committed or permanently refused
+// — reported on the request for the page after it. It is the same kind of opaque,
+// server-issued token `cursor` is (this client only ever echoes back a value the
+// relay produced as `next_cursor`), it is covered by the signature this request
+// already carries, and it costs no extra request. Omitted on the first page of a
+// walk, where nothing has been judged yet.
 const pollRequestSchema = authorizationSchema.extend({
   challenge_id: z.string().uuid(),
   batch_size: z.number().int().min(1).max(100),
   cursor: z.string().min(1).max(256).optional(),
+  read_through: z.string().min(1).max(256).optional(),
 });
 // `claimable` is the relay's answer to "is the bundle I just published available for a first
 // contact to claim?" - a question the client cannot answer, because a successful publish response
@@ -95,7 +104,7 @@ export class RelayClient {
       challenge_id: z.string().uuid(), nonce: z.string().min(1).max(256), expires_at_ms: z.number().int().nonnegative(),
     }).strict());
   }
-  pollMailbox(input: Authorization & { challenge_id: string; batch_size: number; cursor?: string }) {
+  pollMailbox(input: Authorization & { challenge_id: string; batch_size: number; cursor?: string; read_through?: string }) {
     return this.request("/v1/mailbox/poll", this.validate(pollRequestSchema, input), z.object({
       envelopes: z.array(MailboxEnvelopeSchema.strict()).max(100), next_cursor: nextCursorSchema,
     }).strict());

@@ -2,13 +2,42 @@ import { createHash } from "crypto";
 import { encodeBase64Url } from "../encoding/base64url";
 import { signUtf8Message, verifyUtf8Message } from "../signatures/sign";
 
+/**
+ * The transcript `/v1/mailbox/poll` authenticates a recipient with.
+ *
+ * `readThrough` is the recipient's durable read position — the highest
+ * relay-assigned position it has JUDGED, committed or permanently refused — and it
+ * is optional because it is absent on the first page of every walk. When it is
+ * present the transcript is a DIFFERENT string (`:v2:`, with the position
+ * appended), so a poll that reports a position cannot be reshaped into one that
+ * reports a different position, or none, under the same signature.
+ *
+ * Why it is bound at all: once a cursorless poll resumes at the stored mark
+ * instead of at the head of the mailbox, a value that advances the mark past an
+ * envelope makes that envelope unreachable for the rest of its lifetime (T5
+ * design §4, R-4). A field with that power belongs inside the signature.
+ *
+ * Why v1 must keep existing rather than simply growing a field: an absent read
+ * position and an empty one have to be different signed statements, and every
+ * pre-existing signer and verifier of the four-argument form stays correct.
+ *
+ * The Go twin is `cryptoutil.CreateMailboxChallengeMessage` /
+ * `CreateMailboxChallengeMessageV2` (apps/relay/internal/cryptoutil/signatures.go).
+ * Both strings are pinned literally in both languages and the relay rebuilds them
+ * byte for byte, so the two halves are a wire contract: change one only by minting
+ * a new version prefix in both languages together.
+ */
 export function createMailboxChallengeMessage(
   challengeId: string,
   recipientMailboxId: string,
   deviceId: string,
   nonce: string,
+  readThrough?: string,
 ): string {
-  return `echolet-mailbox-challenge:v1:${challengeId}:${recipientMailboxId}:${deviceId}:${nonce}`;
+  if (readThrough === undefined) {
+    return `echolet-mailbox-challenge:v1:${challengeId}:${recipientMailboxId}:${deviceId}:${nonce}`;
+  }
+  return `echolet-mailbox-challenge:v2:${challengeId}:${recipientMailboxId}:${deviceId}:${nonce}:${readThrough}`;
 }
 
 export function createMailboxCreateChallengeMessage(
@@ -18,13 +47,30 @@ export function createMailboxCreateChallengeMessage(
   return `echolet-mailbox-create-challenge:v1:${recipientMailboxId}:${deviceId}`;
 }
 
+/**
+ * The transcript `/v1/mailbox/ack` authenticates a recipient with.
+ *
+ * The ids are sorted before signing, so a recipient and a relay that received
+ * them in different orders still agree — unchanged, and unaffected by the
+ * optional fourth argument.
+ *
+ * `readThrough` binds the recipient's durable read position for the case where an
+ * acknowledgement and a read position are one signed statement. It follows the
+ * same rule as the poll transcript above: absent means the v1 string exactly as
+ * it always was, present means a distinct `:v2:` string. The Go twin is
+ * `cryptoutil.CreateMailboxAckMessage` / `CreateMailboxAckMessageV2`.
+ */
 export function createMailboxAckMessage(
   recipientMailboxId: string,
   deviceId: string,
   envelopeIds: string[],
+  readThrough?: string,
 ): string {
   const normalizedEnvelopeIds = [...envelopeIds].sort().join(",");
-  return `echolet-mailbox-ack:v1:${recipientMailboxId}:${deviceId}:${normalizedEnvelopeIds}`;
+  if (readThrough === undefined) {
+    return `echolet-mailbox-ack:v1:${recipientMailboxId}:${deviceId}:${normalizedEnvelopeIds}`;
+  }
+  return `echolet-mailbox-ack:v2:${recipientMailboxId}:${deviceId}:${normalizedEnvelopeIds}:${readThrough}`;
 }
 
 export function signMailboxChallengeMessage(

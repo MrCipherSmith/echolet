@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"echolet/apps/relay/internal/cryptoutil"
 	"echolet/apps/relay/internal/model"
 	"echolet/apps/relay/internal/service"
+	"echolet/apps/relay/internal/storage/repository"
 	"echolet/apps/relay/internal/validation"
 
 	"github.com/dgraph-io/badger/v4"
@@ -392,9 +394,58 @@ type PollRequest struct {
 	// means "use the server default".
 	BatchSize int `json:"batch_size"`
 	// Cursor is the continuation token a previous poll returned as next_cursor,
-	// echoed back verbatim. Omitted or empty means "start at the head of the
-	// mailbox". A token this relay could not have issued is a client error.
+	// echoed back verbatim. A token this relay could not have issued is a client
+	// error. Omitted or empty means "resume at this device's stored read
+	// position" - which is the head of the mailbox until the device has judged
+	// anything, and which is what makes recipient progress durable across polls,
+	// rate limits, timeouts and process exit (design C4-2).
 	Cursor string `json:"cursor"`
+	// ReadThrough is the highest position this device has JUDGED - committed or
+	// permanently refused - reported on the next page's request. A pointer so
+	// "absent" and "present" are distinguishable: the two cases sign different
+	// transcripts, and only the present case may move the stored mark.
+	ReadThrough *string `json:"read_through"`
+}
+
+// resolveReadThrough applies the shape rule every opaque position this relay
+// issues shares (repository.DecodeMailboxCursor) and then the bound that makes it
+// meaningful: a position above the highest this mailbox ever allocated is not a
+// position this relay could have issued.
+//
+// Both refusals are 400 INVALID_SCHEMA and both are applied BEFORE
+// authorizeMailboxDevice, like the envelope_ids bounds above: malformed client
+// input must never answer 500 and must never depend on who is asking. Silently
+// coercing an uninterpretable token is not an option - decodeMailboxCursor's own
+// comment says why, and with a durable mark a discarded token is an invisible
+// SKIP rather than merely an invisible replay.
+//
+// It writes its own error response and reports whether the request may proceed.
+func (h *MailboxHandler) resolveReadThrough(w http.ResponseWriter, mailboxID string, readThrough *string) (uint64, bool) {
+	if readThrough == nil {
+		return 0, true
+	}
+	if *readThrough == "" {
+		writeJSONError(w, http.StatusBadRequest, "INVALID_SCHEMA", "read_through is present but empty")
+		return 0, false
+	}
+
+	position, err := repository.DecodeMailboxCursor(*readThrough)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "INVALID_SCHEMA", "read_through is not a position issued by this relay")
+		return 0, false
+	}
+
+	highest, err := h.mailboxService.HighestIssuedPosition(mailboxID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to evaluate the read position")
+		return 0, false
+	}
+	if position > highest {
+		writeJSONError(w, http.StatusBadRequest, "INVALID_SCHEMA", "read_through is above every position issued for this mailbox")
+		return 0, false
+	}
+
+	return position, true
 }
 
 func (h *MailboxHandler) PollMailbox(w http.ResponseWriter, r *http.Request) {
@@ -409,6 +460,11 @@ func (h *MailboxHandler) PollMailbox(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.BatchSize < 0 {
 		writeJSONError(w, http.StatusBadRequest, "INVALID_SCHEMA", "batch_size must be a positive integer")
+		return
+	}
+
+	readThrough, ok := h.resolveReadThrough(w, req.RecipientMailboxID, req.ReadThrough)
+	if !ok {
 		return
 	}
 
@@ -428,13 +484,27 @@ func (h *MailboxHandler) PollMailbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signatureValid, err := cryptoutil.VerifyMessageSignature(
-		cryptoutil.CreateMailboxChallengeMessage(
+	// The transcript depends on whether a read position is carried, so a poll
+	// that reports one cannot be reshaped into a poll that reports a different
+	// one, or none, under the same signature.
+	pollTranscript := cryptoutil.CreateMailboxChallengeMessage(
+		req.ChallengeID,
+		req.RecipientMailboxID,
+		req.DeviceID,
+		challenge.Nonce,
+	)
+	if req.ReadThrough != nil {
+		pollTranscript = cryptoutil.CreateMailboxChallengeMessageV2(
 			req.ChallengeID,
 			req.RecipientMailboxID,
 			req.DeviceID,
 			challenge.Nonce,
-		),
+			*req.ReadThrough,
+		)
+	}
+
+	signatureValid, err := cryptoutil.VerifyMessageSignature(
+		pollTranscript,
 		req.Signature,
 		deviceRecord.DevicePubKey,
 	)
@@ -452,11 +522,39 @@ func (h *MailboxHandler) PollMailbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The read position is recorded before selection, under the signature that
+	// just verified, so a walk that is killed, rate-limited or timed out after
+	// this point has still made durable progress. This is the whole of C4-2: the
+	// judgement a page produced survives the process that produced it.
+	if req.ReadThrough != nil {
+		if err := h.mailboxService.AdvanceReadMark(req.RecipientMailboxID, req.DeviceID, readThrough); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to record the read position")
+			return
+		}
+	}
+
+	// A poll WITHOUT a cursor resumes at this device's stored read position
+	// rather than at the head of the mailbox. A poll WITH one resumes strictly
+	// after that token, so a full re-walk (cursor "0") is always available - which
+	// is how `contact import` recovers an envelope the walk already passed,
+	// without the relay ever rewinding a mark.
+	cursor := req.Cursor
+	if cursor == "" {
+		mark, err := h.mailboxService.ReadMark(req.RecipientMailboxID, req.DeviceID)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to read the stored read position")
+			return
+		}
+		if mark > 0 {
+			cursor = strconv.FormatUint(mark, 10)
+		}
+	}
+
 	batch, err := h.mailboxService.GetEnvelopeBatchFrom(
 		challenge.RecipientMailboxID,
 		h.pollBatchSize(req.BatchSize),
 		pollEnvelopeByteBudget,
-		req.Cursor,
+		cursor,
 	)
 	if err != nil {
 		if errors.Is(err, model.ErrInvalidMailboxCursor) {
@@ -506,6 +604,12 @@ type AckRequest struct {
 	DeviceID           string   `json:"device_id"`
 	EnvelopeIDs        []string `json:"envelope_ids"`
 	Signature          string   `json:"signature"`
+	// ReadThrough is the recipient's durable read position, optionally carried
+	// here as well as on the poll. The CLI reports it on the poll instead (finding
+	// T6-F-001: an ack sent only to report a position is an ack REQUEST, and the
+	// F-012 accept-nothing path makes none), but the route accepts it so an
+	// acknowledgement and a read position can be one signed statement.
+	ReadThrough *string `json:"read_through"`
 }
 
 func (h *MailboxHandler) AckMailbox(w http.ResponseWriter, r *http.Request) {
@@ -537,14 +641,27 @@ func (h *MailboxHandler) AckMailbox(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	readThrough, ok := h.resolveReadThrough(w, req.RecipientMailboxID, req.ReadThrough)
+	if !ok {
+		return
+	}
+
 	deviceRecord, err := h.authorizeMailboxDevice(req.RecipientMailboxID, req.DeviceID)
 	if err != nil {
 		writeMailboxAuthorizationError(w, err)
 		return
 	}
 
+	// As on the poll route: an ack that reports a read position signs a different
+	// transcript from one that does not, so the position cannot be added to,
+	// removed from or altered in a request the recipient signed.
+	ackTranscript := cryptoutil.CreateMailboxAckMessage(req.RecipientMailboxID, req.DeviceID, req.EnvelopeIDs)
+	if req.ReadThrough != nil {
+		ackTranscript = cryptoutil.CreateMailboxAckMessageV2(req.RecipientMailboxID, req.DeviceID, req.EnvelopeIDs, *req.ReadThrough)
+	}
+
 	signatureValid, err := cryptoutil.VerifyMessageSignature(
-		cryptoutil.CreateMailboxAckMessage(req.RecipientMailboxID, req.DeviceID, req.EnvelopeIDs),
+		ackTranscript,
 		req.Signature,
 		deviceRecord.DevicePubKey,
 	)
@@ -556,6 +673,13 @@ func (h *MailboxHandler) AckMailbox(w http.ResponseWriter, r *http.Request) {
 	if err := h.mailboxService.AckEnvelopes(req.RecipientMailboxID, req.EnvelopeIDs); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to ack envelopes")
 		return
+	}
+
+	if req.ReadThrough != nil {
+		if err := h.mailboxService.AdvanceReadMark(req.RecipientMailboxID, req.DeviceID, readThrough); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to record the read position")
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

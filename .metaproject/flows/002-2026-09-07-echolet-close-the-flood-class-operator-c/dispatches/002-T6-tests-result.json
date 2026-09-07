@@ -1,0 +1,280 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "002",
+  "dispatch_id": "002-T6-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "RED phase for the flood-closure wave. 17 new failing assertions across 5 new test files plus the re-measured and inverted residue test, all written against the T5 design (C4-1 relay-assigned order, C4-2 durable read position, C4-3 the page bound as a liveness valve). No closure assertion uses a mocked RelayClient: the closure claim rests on apps/cli/test/e2e/flood-closure.test.ts, which builds apps/relay/cmd/relay from this tree and drives the real dist/cli.js behind a byte-and-request counting proxy. It reproduces the T55 measurement exactly (4 self-published identities + 49 max-size poison -> poll exit codes [3,3,3,3], nothing delivered), and also fails at 50/800 and 500/8000. Every RED assertion was proven satisfiable by a throwaway implementation spike: under the spike all 10 E2E tests pass (including the untouched 3-iteration two-process suite and publication-claimability), the whole Go suite passes untagged, -race and -race -tags=relayv2, and the non-TUI apps/cli and crypto-core suites pass. The spike was then reverted and integrity verified by SHA-256: 60 of 61 tracked test/config files are byte-identical, the one difference being the intended residue inversion, and all 9 production files the spike touched are back at HEAD. The spike surfaced five defects in the design as written; they are recorded as findings T6-F-001..T6-F-005 with the exact pre-existing test each one turns red and the verified alternative. No implementation code was written or left behind. No git commit was made.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC1 - the flooding closure is chosen by a written design task naming what it closes, what it does not, and why alternatives were rejected",
+      "status": "not_applicable",
+      "evidence": "Satisfied by dispatch 002-T5-design (t5-flood-closure-design.md). This dispatch consumes that design as its specification and does not revisit it."
+    },
+    {
+      "criterion": "AC2 - against the real relay binary the 4-identity / 49-envelope probe no longer prevents delivery, and the new attacker cost is measured and stated; a bound is reported as a bound",
+      "status": "partial",
+      "evidence": "The measuring instrument now exists and currently reports the wedge. apps/cli/test/e2e/flood-closure.test.ts reproduces T55's boundary_49poison on the real binary: poll exit codes [3,3,3,3], history length 0, at 4 self-published identities and 49 maximum-size poison envelopes. It also measures the cost per delivered message in BYTES and REQUESTS on the first and the second poll, at 49 / 800 / 8000 poison, so an implementation that restores delivery by re-downloading the mailbox on every poll fails on the counters rather than passing on the exit code. AC2 can only be marked met by the GREEN phase; this dispatch supplies the assertions it will be judged by."
+    },
+    {
+      "criterion": "AC3 - legitimate exchange, offline delivery, byte-identical exact retry and deduplication still pass, with no pre-existing test weakened, skipped or deleted",
+      "status": "partial",
+      "evidence": "Nothing was weakened, skipped or deleted: SHA-256 shows 60 of 61 tracked test/config files byte-identical, the single difference being the required re-measurement and inversion of TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk into TestDistinctIdentitiesNoLongerWedgeTheDrainWalk (its occupancy assertion is preserved and still asserted). apps/relay/internal/storage/repository/mailbox_repo_test.go and apps/cli/test/globalSetup.ts, apps/cli/vitest.config.ts, flow.json and acceptance-criteria.md were not touched. Under the satisfiability spike the untouched two-process E2E passed 3/3 including ack recovery, publication-claimability passed, and the whole Go suite passed under -race and -race -tags=relayv2. Marked partial because five ways the design as written turns a pre-existing test red were found and are recorded as T6-F-001..T6-F-005; the implementer must take the verified alternatives or AC3 fails."
+    },
+    {
+      "criterion": "Every RED test is proven satisfiable by a throwaway probe, which is then reverted and integrity verified by SHA-256",
+      "status": "met",
+      "evidence": "A throwaway spike implemented C4-1 (a mailboxseq: side index written in SaveEnvelope's transaction with a read-time backfill), C4-2 (the cursor as a resume-after-sequence, read_through carried on the signed poll request, a mailboxmark: per (mailbox, device) position) and C4-3 (the mark presented per page, contact import requesting a re-walk locally). Under it: E2E 10/10 including the 3 untouched two-process iterations; Go all packages ok untagged, -race -count=1 and -race -count=1 -tags=relayv2; apps/cli non-TUI 99/99; crypto-core 20/20. Reverted with git checkout; verification: 60/61 tracked test files OK by SHA-256 (the one difference intended), git diff shows exactly one changed file, and the 9 spike-touched production files hash back to their HEAD content."
+    },
+    {
+      "criterion": "No closure assertion uses a mocked RelayClient (finding T47-TP-001)",
+      "status": "met",
+      "evidence": "Every closure assertion lives in apps/cli/test/e2e/flood-closure.test.ts against the real relay binary and the real dist/cli.js. The one mocked-RelayClient file added, apps/cli/src/runtime/inbound.readMark.test.ts, states in its header that it claims no closure and pins only client walk logic; its two assertions are about which request poll() decides to make, which no real-binary test can localise."
+    },
+    {
+      "criterion": "The residue test is re-measured and inverted, never deleted",
+      "status": "met",
+      "evidence": "TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk is now TestDistinctIdentitiesNoLongerWedgeTheDrainWalk, parameterised on 1 / 3 / 6 identities. The occupancy half of the residue - the quota bounds one sender and nothing bounds the mailbox - is still asserted and still passes; the WEDGE it used to produce is now required not to happen, and the measured page cost is recorded with t.Logf so a regression surfaces as a number. Its comment records what the original asserted, why it changed, and which half was deliberately left to the real-binary suite."
+    },
+    {
+      "criterion": "No implementation code written; tests only",
+      "status": "met",
+      "evidence": "git diff --stat reports exactly one changed tracked file, apps/relay/internal/api/handler/mailbox_sender_quota_test.go, and it is a test file. The five other deliverables are new test files. All 9 production files the throwaway spike touched are byte-identical to HEAD by SHA-256."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/test/e2e/flood-closure.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Real-binary RED suite: RED-1 relay-chosen order, RED-2/3 closure at 4/49, 50/800 and 500/8000 with byte and request counters and an O(1) second delivery, RED-4 monotone progress across a SIGKILLed poll, RED-6 late contact import guard.",
+      "hash": null
+    },
+    {
+      "path": "apps/relay/internal/storage/repository/mailbox_ordering_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Six repository tests: relay-assigned order, distinct positions under 20 concurrent stores, replay allocates no position, SenderOccupancy and DeleteEnvelope still address by (mailbox, envelope_id), the cursor resumes strictly after what was delivered, expired records do not consume the resume position.",
+      "hash": null
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_read_mark_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RED-7: the ack signature must bind read_through, a token this relay could not have issued is refused 400 INVALID_SCHEMA before authorisation, a position above every issued one is refused, and an ack carrying envelope ids still deletes them.",
+      "hash": null
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_sender_quota_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The T54 residue test re-measured and inverted, parameterised on identity count, with the measured page cost logged.",
+      "hash": null
+    },
+    {
+      "path": "packages/crypto-core/src/mailbox/auth.readThrough.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The ack transcript must depend on read_through, and a signature made for one read position must not authorise another. Written through a widened local alias so pnpm typecheck stays green while the production signature is still three-parameter.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/runtime/inbound.readMark.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Client walk logic only, explicitly claiming no closure: a page walk that judged nothing still raises the typed InboundError, acknowledges no envelope and leaves the store byte-identical, yet reports the position it judged; and the next poll resumes rather than re-walking.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/dispatches/002-T6-tests-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/test/e2e/flood-closure.test.ts", "change": "added - real-binary flood-closure RED suite, 6 tests" },
+    { "path": "apps/relay/internal/storage/repository/mailbox_ordering_test.go", "change": "added - 6 repository ordering and cursor tests" },
+    { "path": "apps/relay/internal/api/handler/mailbox_read_mark_test.go", "change": "added - 4 read-position authorisation tests" },
+    { "path": "packages/crypto-core/src/mailbox/auth.readThrough.test.ts", "change": "added - 4 ack transcript tests" },
+    { "path": "apps/cli/src/runtime/inbound.readMark.test.ts", "change": "added - 2 client walk-logic tests" },
+    { "path": "apps/relay/internal/api/handler/mailbox_sender_quota_test.go", "change": "modified - TestKnownResidueDistinctIdentitiesStillWedgeTheDrainWalk re-measured and inverted into TestDistinctIdentitiesNoLongerWedgeTheDrainWalk; drainWalkReachesWithin helper added; file header updated. No other test in the file was touched." }
+  ],
+  "findings": [
+    {
+      "id": "T6-F-001",
+      "global_id": "002-T6-tests#T6-F-001",
+      "reviewer": "tests-creator",
+      "severity": "major",
+      "file": "apps/cli/src/runtime/inbound.pollProgress.test.ts",
+      "line": 248,
+      "problem": "Design C4-2 puts read_through on /v1/mailbox/ack, and C4-3 requires the mark to advance on the accept-nothing path. A poison-only walk makes NO ack request today, and inbound.pollProgress.test.ts:248 asserts exactly that with expect(fake.acks()).toEqual([]) - the REQUEST list, not the acknowledged ids. Sending a mark-only ack on that path turns a pre-existing test red.",
+      "impact": "AC3 forbids weakening any pre-existing test. Taken literally, C4-2 makes AC3 unsatisfiable without editing an F-012 regression test, which is the guarantee this whole wave is built on top of.",
+      "suggested_fix": "Carry read_through on the POLL request instead of, or as well as, the ack. The poll is already signed and challenge-bound, so the value is authenticated by the same key with no extra request, and the ack goes back to being purely about acknowledgement. Verified: with the mark carried on the poll, inbound.pollProgress.test.ts, inbound.test.ts, inbound.batchIsolation.test.ts and cli.test.ts all stay green and every new RED test passes.",
+      "evidence": "Measured. Spike v1 (mark on the ack) -> `pnpm --filter @echolet/cli exec vitest run src/runtime` failed at inbound.pollProgress.test.ts:248 with one /v1/mailbox/ack carrying envelope_ids: []. Spike v2 (mark on the poll) -> the same 31 tests pass, and the full E2E directory passes 10/10.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/inbound.pollProgress.test.ts:248",
+          "apps/cli/src/runtime/inbound.test.ts:169",
+          "apps/cli/src/runtime/inbound.test.ts:181",
+          "apps/cli/src/runtime/inbound.test.ts:198",
+          "apps/cli/src/runtime/inbound.batchIsolation.test.ts:272",
+          "apps/cli/src/runtime/inbound.batchIsolation.test.ts:295"
+        ],
+        "enumeration_method": "keryx ctx rg \"\\.acks\\(\\)\" apps/cli/src apps/cli/test - every assertion that reads the ack REQUEST list rather than the acknowledged envelope ids. All six were then executed under the spike."
+      }
+    },
+    {
+      "id": "T6-F-002",
+      "global_id": "002-T6-tests#T6-F-002",
+      "reviewer": "tests-creator",
+      "severity": "major",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo_test.go",
+      "line": 165,
+      "problem": "Design C4-1 says GetEnvelopeBatchFrom iterates the mailboxseq: prefix, and argues the side index is safe because only TestGetEnvelopesFiltersExpiredBeforeApplyingBatchLimit seeds raw primary keys. It is not the only one: TestGetEnvelopeBatchFiltersExpiredBeforeApplyingBatchLimit (mailbox_repo_test.go:165, the T38-TP-002 regression on the PRODUCTION poll path) also seeds with seedStoredEnvelope and then drives GetEnvelopeBatch. Records that exist only under the primary key are invisible to an index-only iteration.",
+      "impact": "The test file may not be edited, so an index-only GetEnvelopeBatchFrom fails AC3 outright. The same gap is the deployment migration the design's section 5 already anticipates: every envelope stored before the change has no ordering entry, so on a relay that is not wiped the entire existing mailbox becomes undeliverable rather than merely unordered.",
+      "suggested_fix": "Backfill an ordering entry for any primary record that has none, in current key order, and do it on read as well as at startup so a record written by any other path is still selectable. Verified: a one-shot backfill triggered when a mailbox has primary records but has never allocated a position makes the whole repository package green, including the two raw-seeded tests.",
+      "evidence": "Measured. Spike without backfill -> mailbox_repo_test.go:188 'GetEnvelopeBatch(limit=1) returned 0 envelopes, want 1'. Spike with backfill -> `go -C apps/relay test ./internal/storage/repository/` ok.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/storage/repository/mailbox_repo_test.go:128",
+          "apps/relay/internal/storage/repository/mailbox_repo_test.go:129",
+          "apps/relay/internal/storage/repository/mailbox_repo_test.go:178",
+          "apps/relay/internal/storage/repository/mailbox_repo_test.go:179"
+        ],
+        "enumeration_method": "keryx ctx rg \"seedStoredEnvelope\\(\" apps/relay - every call site that writes a primary mailbox: record without going through SaveEnvelope. Two belong to the GetEnvelopes test (unaffected) and two to the GetEnvelopeBatch test (affected); both tests were then executed under the spike."
+      }
+    },
+    {
+      "id": "T6-F-003",
+      "global_id": "002-T6-tests#T6-F-003",
+      "reviewer": "tests-creator",
+      "severity": "major",
+      "file": "apps/cli/src/runtime/inbound.ts",
+      "line": 113,
+      "problem": "The design states that recipient progress 'survives rate-limiting, timeouts and process exit', but the obvious implementation of C4-3 - advance the mark once, when the walk finishes - does not survive process exit. A poll SIGKILLed mid-walk has judged pages and reported none of them, so the next process starts where the last one started.",
+      "impact": "The residual the design names as R-2 (an hour-long first walk at extreme volume) becomes unbounded again the moment anything interrupts the walk: a rate-limit 429, a request timeout, an operator's Ctrl-C, or a supervisor restart. Under the default 120/min limit the victim's own rate limiter interrupts the walk routinely, so this is the normal case, not the exotic one.",
+      "suggested_fix": "Present the position for page k on the request for page k+1. It costs no extra request, it is authenticated by the signature that request already carries, and it means at most one page of work is repeated after any interruption. Verified.",
+      "evidence": "Measured on the real binary. Spike with an end-of-walk mark -> flood-closure.test.ts RED-4 failed: 'after an interrupted poll judged poison up to index 100, the next process's first cursorless page starts at envelope 000000000000'. Spike with the mark presented per page -> RED-4 passes, and total poll pages across both processes stayed within the O(N) bound.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/inbound.ts:99-131",
+          "apps/cli/src/runtime/inbound.ts:86-98",
+          "apps/cli/src/runtime/inbound.ts:187-196"
+        ],
+        "enumeration_method": "The walk is a single loop with a single page-fetch helper and a single ack helper; all three were read in full and all three were modified in the spike. There is no other code path that issues a mailbox poll."
+      }
+    },
+    {
+      "id": "T6-F-004",
+      "global_id": "002-T6-tests#T6-F-004",
+      "reviewer": "tests-creator",
+      "severity": "major",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 306,
+      "problem": "C4-3 says `contact import` resets the mark. Two ways of doing that are wrong and both were measured. (a) Resetting by calling the relay makes an offline trust operation a networked one: cli.test.ts:148 pins the exact ordered request path list and turns red, and importing a card starts failing when the relay is unreachable. (b) Recording the reset locally but not consuming it on the first walk that presents it makes every subsequent poll re-present position 0, so the relay mark is rewound on every poll and no walk ever finishes.",
+      "impact": "(a) fails AC3 and regresses a command that is deliberately offline. (b) silently reinstates the entire flooding class while every unit test passes - the mark exists, is signed, is stored, and is reset to zero by the victim on every single poll.",
+      "suggested_fix": "Record the request for a re-walk locally at import time, and consume it exactly once, at the start of the next walk that presents it. Verified: with (a) fixed, cli.test.ts passes; with (b) fixed, the three volume tests and RED-4 pass.",
+      "evidence": "Measured. (a) Spike v1 -> cli.test.ts:148 failed with an extra leading '/v1/mailbox/ack'. (b) Spike v3 -> all three volume tests failed with poll exit codes [3,3,3,3] and RED-4 restarted at index 0, on the real binary; consuming the flag once made all four pass.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/commands/cli.ts:306-324",
+          "apps/cli/src/commands/cli.test.ts:148",
+          "apps/cli/src/runtime/inbound.ts:99-131"
+        ],
+        "enumeration_method": "`contact import` is one switch case with one call site; cli.test.ts:148 is the only assertion in the repository that pins the ordered list of request paths a CLI run makes (keryx ctx rg \"requests.map\\(\\(\\{ path \\}\\)\" apps/cli). The reset is consumed in the single poll loop."
+      }
+    },
+    {
+      "id": "T6-F-005",
+      "global_id": "002-T6-tests#T6-F-005",
+      "reviewer": "tests-creator",
+      "severity": "major",
+      "file": "apps/cli/src/runtime/inbound.pollProgress.test.ts",
+      "line": 251,
+      "problem": "Persisting the read position in the client store breaks F-012's store-identity guarantee. inbound.pollProgress.test.ts:251 snapshots the encrypted client store before a poison-only poll and requires it byte-identical afterwards; a poll that writes cli:read-mark fails that comparison.",
+      "impact": "AC3 again, and it is the guarantee with the most weight behind it: 'nothing is deleted, no history is written, no session advances' is the whole of F-012, and the store snapshot is how it is checked.",
+      "suggested_fix": "Keep the position in memory for the duration of the walk and put it on the wire; store nothing client-side. The relay is the durable holder of the mark, which is what makes it survive a SIGKILL in the first place. The one thing that may be persisted is the `contact import` re-walk request, because it is written by a command that is not a poll.",
+      "evidence": "Measured. Spike with client-side persistence -> inbound.pollProgress.test.ts:251 failed with a 9-key store against an 8-key snapshot. Spike with the position in memory only -> the same test passes, and so does the new inbound.readMark.test.ts store-identity assertion.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/inbound.pollProgress.test.ts:251",
+          "apps/cli/src/runtime/inbound.test.ts:171",
+          "apps/cli/src/runtime/inbound.test.ts:182",
+          "apps/cli/src/runtime/inbound.test.ts:199",
+          "apps/cli/src/runtime/inbound.readMark.test.ts"
+        ],
+        "enumeration_method": "keryx ctx rg \"snapshot\\(\" apps/cli/src/runtime - every assertion that compares the encrypted client store before and after a poll. All were executed under the spike."
+      }
+    },
+    {
+      "id": "T6-F-006",
+      "global_id": "002-T6-tests#T6-F-006",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/relay/internal/storage/repository/mailbox_repo.go",
+      "line": 183,
+      "problem": "SenderOccupancy scans the whole mailbox prefix on every send and only stops early once it has counted countLimit envelopes FROM THAT SENDER. A fresh identity never reaches the limit, so it walks every record in the mailbox. Filling a mailbox of N therefore costs O(N^2) JSON decodes.",
+      "impact": "Not a delivery defect, but it is a measured relay cost under exactly the conditions this wave is about, and it belongs with residual R-3 (relay availability). It is also the single largest cost in the new test suite: the 8000-envelope volume case spends about 77 s filling the mailbox at concurrency 8 (272 s sequential) before any assertion runs.",
+      "suggested_fix": "None proposed here - this dispatch writes tests, not implementation. Recorded so the number is known before someone rediscovers it as a slow test, and so AC8's documentation of what remains untrue can carry it.",
+      "evidence": "Measured: apps/cli/test/e2e/flood-closure.test.ts '500 identities x 8000 minimum-size poison' took 272454 ms with sequential sends and 77 s at concurrency 8, dominated by the send loop rather than by the drain walk.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [
+    {
+      "id": "T6-Q-001",
+      "question": "Should read_through ride on the signed poll request rather than on /v1/mailbox/ack, as findings T6-F-001 and T6-F-003 both point to?",
+      "why": "The design names the ack route. Measurement says the ack route costs one pre-existing F-012 test (T6-F-001) and cannot make progress survive an interrupted walk without an extra request per page (T6-F-003), while the poll route costs neither. The new tests deliberately accept either shape, so this is a decision the implementer can still make - but making it the ack route means also deciding what to do about inbound.pollProgress.test.ts:248.",
+      "options": [
+        { "id": "poll", "label": "Carry read_through on the poll request (verified green end to end)", "recommended": true },
+        { "id": "ack", "label": "Keep it on the ack and additionally send a mark-only ack per page", "recommended": false }
+      ],
+      "can_be_resolved_by_agent": true
+    },
+    {
+      "id": "T6-Q-002",
+      "question": "The ack (or poll) transcript change forces a mechanical signature update at four Go test call sites. Is that acceptable under AC3?",
+      "why": "cryptoutil.CreateMailboxAckMessage is called from mailbox_handler_test.go, identifier_bounds_test.go, mailbox_device_authorization_test.go and mailbox_sender_quota_test.go. Adding a parameter to it edits those files. The satisfiability spike avoided the question by adding a V2 function alongside the V1 one, which left every existing call site untouched and every existing test green; that is the lower-risk shape but it leaves two transcripts in the tree.",
+      "options": [
+        { "id": "v2-alongside", "label": "Add a V2 transcript function alongside V1 (no existing call site edited)", "recommended": true },
+        { "id": "widen", "label": "Widen the existing function and update the four call sites", "recommended": false }
+      ],
+      "can_be_resolved_by_agent": true
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "new_test_files": 5,
+    "modified_test_files": 1,
+    "red_tests": 17,
+    "green_guard_tests": 6,
+    "vitest_tests_added": 12,
+    "vitest_red": 10,
+    "e2e_tests_added": 6,
+    "e2e_red": 5,
+    "go_test_functions_added": 10,
+    "go_test_functions_rewritten": 1,
+    "go_red": 7,
+    "baseline_test_files_verified_sha256": 61,
+    "baseline_test_files_byte_identical": 60,
+    "post_revert_e2e": "5 failed (all new) | 5 passed (two-process 3/3, publication-claimability, RED-6 guard)",
+    "post_revert_cli_units_non_tui": "2 failed (both new) | 97 passed",
+    "post_revert_crypto_core": "3 failed (all new) | 17 passed",
+    "spike_e2e_pass": "10/10",
+    "spike_go_pass": "all packages ok, untagged + -race + -race -tags=relayv2",
+    "post_revert_typecheck": "green on 7 projects",
+    "note_other_worker": "apps/cli/src/tui/ is an untracked tree from the concurrent 002-T9 operator-TUI dispatch, not from this one. It adds about 98 apps/cli tests, most of them red, so a full `pnpm test` no longer reports the 162 baseline. All counts above exclude it."
+  },
+  "timestamp_utc": "2026-09-07T08:30:00Z"
+}
