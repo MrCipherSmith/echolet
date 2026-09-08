@@ -1,0 +1,301 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T26-design",
+  "status": "DONE",
+  "summary": "Design for replenishable one-time bundles: a recipient publishes a pool of N = LIMITS.PREKEY_MIN_COUNT = 20 independently signed bundles through the UNCHANGED /v2/prekeys/publish route, one bundle per call; a claim consumes one of twenty rather than the only one; and `relay publish` changes meaning from 'submit my publication' to 'bring my published pool back up to N', which is the recovery a drained victim has never had. Measured against the real relay binary (sha256 f60b1570..., byte-identical to the binary T18 measured): a pool of four published and stayed simultaneously claimable, served four distinct first-contact senders who all delivered, was decrypted in full by the recipient, answered the fifth sender with today's exact 404 PREKEY_BUNDLE_UNAVAILABLE, and was restored by one further publish after which that refused sender's own retry delivered. No relay change, no wire change, no schema change, no shared fixture, no two-language transcript, no rollout flag - `geekom` and `depr` accept it exactly as they run today and their observable behaviour does not change. The attacker's price is 120*S/N victims per minute: 6/min at N=20 against 120 today, a 20x increase and nothing more. Stated against it: the victim pays a measured 61.6 ms to mint and publish each bundle the attacker destroys for 2.0 ms, a 30.6x per-unit disadvantage, and holding one source below one victim per minute would need N >= 120, which costs 7.4 s and the operator's entire per-minute request budget. Signal's last-resort key is NOT adopted: measured, both its shapes (one_time_prekey:null and an additive last_resort marker) are refused 400 INVALID_SCHEMA by the deployed protocol, so it would cost a relay change plus its own two-deployment flag, and it contradicts the standing one-time-prekey reservation guards. The permanent-reservation property survives untouched and prekey_bundle_v2_test.go is not edited. Recommendation: land this BEFORE the T18 claim-authentication work, because it is client-only and needs one deployment where T18 needs two in a strict order, and because it is the only one of the two that helps a victim who has already been drained.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Design a pool of N one-time bundles where a claim consumes one and the recipient can replenish",
+      "status": "met",
+      "evidence": "t26-replenishment-design.md sections 2.1-2.4. The relay's availability index is the prefix v2:available:<identity>:<createdAtMS>:<bundleID> and ClaimSignalV2 scans it, so N published bundles are N claims with no relay change. Measured P1: a pool of 4 published, all four claimable=true, four distinct bundle_ids and four distinct one-time prekey key ids (1,2,3,4). Measured P3/P4: four distinct first-contact senders all delivered and the recipient decrypted all four in one poll."
+    },
+    {
+      "criterion": "State how many, who decides, and what it costs when the pool is exhausted anyway",
+      "status": "met",
+      "evidence": "Section 2.2. N is fixed by the protocol at LIMITS.PREKEY_MIN_COUNT = 20 - a constant that already exists in packages/protocol/src/constants/limits.ts:5 beside PREKEY_REFILL_THRESHOLD: 10 and is referenced by no source file (measured), i.e. the pool was specified and never built. Publisher-chosen is rejected because ClientConfig is a strict schema at profile_version literal 1; relay-bounded is rejected for this task because it is the one option that changes what geekom and depr accept. Failure mode of the chosen option, stated: the relay enforces no per-identity availability cap, so N is advisory - already true today and named as a follow-on. Cost when exhausted anyway: the operator sees today's PREKEY_BUNDLE_UNAVAILABLE and clears it with one `relay publish` (1.23 s worst case, 78 ms steady state, both measured)."
+    },
+    {
+      "criterion": "Say plainly whether Signal's last-resort key is adopted, and what a sender sees at exhaustion",
+      "status": "met",
+      "evidence": "Section 4. NOT adopted, on three grounds, the first measured: L2 (one_time_prekey:null) -> 400 INVALID_SCHEMA and L3 (additive last_resort:true) -> 400 INVALID_SCHEMA against the real binary, so it costs a relay change, a signed-tuple change and its own rollout flag; it contradicts TestSignalPreKeyBundleV2OneTimePreKeyReservationsArePermanent, which L4 measured bites even earlier (400 INVALID_SIGNATURE, because bundle_id is inside the signed tuple); and the X3DH weakening is not worth buying when recovery costs one command. At exhaustion the sender sees exactly today's 404 PREKEY_BUNDLE_UNAVAILABLE at exit 3 (measured P5), which is strictly better than today because it takes 20 claims instead of 1 to reach, because the recipient can now clear it (measured P6), and because the sender's own retry then delivers with no operator action on the sender's side (measured P6)."
+    },
+    {
+      "criterion": "Say what the wire looks like, whether the design can share T18's rollout or needs its own, and how the two interact",
+      "status": "met",
+      "evidence": "Sections 2.1, 7 and 9. The wire does not change: both closed strict schemas stay exactly as they are, because a pool is N calls to the existing single-bundle publish route. Every measurement P1-P6 ran against the deployed protocol using only the contracted bodies. Therefore no rollout flag at all, and the design must NOT share ECHOLET_REQUIRE_CLAIM_AUTH - sharing it would couple a change needing zero relay deployments to one needing two, and would make the victim's only recovery wait on a flag flip that by T18's own strict ordering cannot happen until every client is upgraded. Interaction if both land: none on the wire; same files but disjoint methods in outbound.ts, profile.ts and cli.ts; additive and small on the arithmetic (6.00 -> 5.95 victims/min at N=20); and jointly they make a per-claimant claim quota meaningful for the first time - Q/N victims per minted identity, the first bound in this flow that is not linear in the attacker's request budget."
+    },
+    {
+      "criterion": "Show that the permanent-reservation property is not weakened, and say exactly how",
+      "status": "met",
+      "evidence": "Section 5, four independent reasons, none of them 'we were careful'. (1) The design writes only new key material: measured P1 shows four distinct key ids and four distinct public keys, and rotateOneTimePreKey allocates max(allocated)+1 so a collision is unconstructible. (2) ClaimSignalV2 is not modified, so AC-02 and AC-02b are untouched. (3) SaveSignalV2's idempotent branch deliberately never re-adds the availability index, and top-up exercises that path N times per invocation. (4) Two earlier guards catch the mistake first - measured L4, a reused prekey under a fresh bundle_id is refused 400 INVALID_SIGNATURE before the tombstone runs. prekey_bundle_v2_test.go is not edited; it was run as a baseline on this tree and passes (go test -tags relayv2 -run TestSignalPreKeyBundleV2 -> ok, 1.756s). The one thing that would weaken it - a client pruning pre: records on refill - is explicitly forbidden and pinned by test A-5."
+    },
+    {
+      "criterion": "Say what replenishment costs the recipient, and what happens to bundles already claimed but not yet used",
+      "status": "met",
+      "evidence": "Sections 2.3, 2.6 and 2.7. `relay publish` becomes idempotent-with-top-up, never always-fresh: always-fresh would permanently tombstone N unused prekeys per invocation (80 in one existing e2e run at N=20), would destroy the byte-identical lost-response retry guarantee, and would falsify measured P2 (republishing the current stored publication returns claimable=true with the same bundle_id). Measured cost: 78 ms steady state (20 publish POSTs at 3.9 ms), 1.23 s full drain (20 mints at 57.7 ms), 17% of the 120/min budget, 67 KB per generation on each side. A claimed-but-unused bundle is untouched by construction: the relay's claim binding is not on the publish path, the sender's outbox re-encrypts and issues only /v1/messages/send (T12 section 4), and the recipient's private half survives because rotateOneTimePreKey never deletes a pre: record - measured P4, four senders decrypted after the recipient had rotated four times past the first prekey."
+    },
+    {
+      "criterion": "Be honest about what this does not fix",
+      "status": "met",
+      "evidence": "Sections 3, 8 and 10. Free identity creation stays open, unchanged (T18's 2.9 ms per identity, carried forward rather than re-derived). The price increase is linear and the exact function is given: R*S/N. N would have to be >= 120 to hold one source below one victim per minute, costing 7.4 s per publish and the operator's entire per-minute request budget - not practical here. The defender pays 30.6x per unit (measured C1/C2/C3), so two attacker source addresses out-drain a refilling victim and the limiter cannot help because it is keyed on the peer host. Also not closed and each named: automatic refill on poll (PREKEY_REFILL_THRESHOLD deliberately unused - without it a victim under sustained attack must notice and act), the missing relay-side per-identity availability cap, a malicious relay operator, and a legitimate contact claiming maliciously."
+    },
+    {
+      "criterion": "Deliver an executable plan: what the RED tests pin, in what order, which must exist on both sides of the wire, and the sequencing against claim authentication",
+      "status": "met",
+      "evidence": "Sections 6 and 9. Seventeen tests in five dependency-ordered groups with file paths. On the both-sides question the answer is 'none, and that is the finding': there is no wire change, no shared transcript and no shared fixture, so nothing must be built twice and kept byte-identical - T18 needed three such tests plus a new fixture file, this needs zero. Two Go tests (D-13, D-14) pin a relay property the client now depends on; both are honestly labelled as GREEN-today regression pins rather than RED tests, because P1 and P5 measured them passing and nothing in the tree asserts them. Sequencing: T26 lands first, five reasons, the strongest being that it is client-only and needs one deployment where T18 needs two in a strict order, and that it is the only one of the two that helps an already-drained victim."
+    },
+    {
+      "criterion": "Change no source, test, schema or documentation outside the deliverable; do not touch geekom or depr",
+      "status": "met",
+      "evidence": "Only .metaproject/flows/003-.../t26-replenishment-design.md and this dispatch result were written. All measurement probes live in the session scratchpad and were never written into the repository; the relay binary was built to the scratchpad. No connection was made to geekom or depr - every measurement ran against a locally built binary on loopback with throwaway data directories. The tree's other uncommitted modifications (apps/cli/package.json, deploy/relay/*, flow.json, journal.md) predate this task and T25 already records them as uncommitted at its own start."
+    },
+    {
+      "criterion": "Say explicitly whether the design changes what the deployed relays would accept",
+      "status": "met",
+      "evidence": "Section 7. It does not, and this is measured rather than argued: P1-P6 all ran against the binary built from this tree - the protocol geekom and depr run, byte-identical to the one T18 measured - using only the contracted three- and one-field bodies of the existing routes. New client against current relay: works. Old client against current relay: works, unchanged, because one bundle is a pool of size 1. Current relay with no redeploy: correct, there is nothing to deploy. The only change an operator sees is a traffic shape: `relay publish` goes from 1 request to 20 against the 120/min limiter."
+    },
+    {
+      "criterion": "Print or record no store key, private key, plaintext or HTTP request body",
+      "status": "met",
+      "evidence": "The design records only request paths, error codes, booleans, counts, byte sizes, key ids and elapsed times. Probe store keys were generated per run inside the scratchpad, passed through the environment, and destroyed with the temporary directories. No request or response body appears in the deliverable."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t26-replenishment-design.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Design for a pool of N=20 replenishable one-time bundles served by the unchanged publish route, with replenishment through `relay publish` as idempotent-with-top-up: the measurements the design rests on, who decides N and the failure mode of each alternative, why Signal's last-resort key is rejected on measured grounds, what a sender sees at exhaustion, the four reasons the permanent reservation survives, the attacker's cost as a function of N and the N that would be needed to matter, seventeen tests in five dependency-ordered groups, the zero-change effect on the deployed relays, what stays open, and the sequencing against T18.",
+      "hash": "626f639bef493db9b33108286c3e0dbcfa09acd79414b9589fdfb54f7f631826"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t26-replenishment-design.md",
+      "change": "created - the T26 design deliverable"
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T26-design-result.json",
+      "change": "created - this dispatch result"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T26-F-001",
+      "global_id": "003-T26-design#T26-F-001",
+      "reviewer": "replenishment-design",
+      "severity": "major",
+      "file": "apps/cli/src/runtime/outbound.ts",
+      "line": 41,
+      "symbol": "OutboundMessenger.publish",
+      "problem": "A recipient whose single published bundle has been consumed has no way to restore first contact. `relay publish` resubmits the identical stored bundle and reports claimable:false; `rotateBundle()` exists, is tested, has full relay support, and is unreachable behind the deliberately frozen eight-command surface. The relay cannot help, because only the recipient holds the private half of a one-time prekey.",
+      "impact": "One unauthenticated request from any party that knows a public identity id permanently destroys a victim's ability to receive first contact, and nothing the victim can run restores it. At the shipped 120 requests/minute per source that is up to 172 800 irreversible denials per day.",
+      "suggested_fix": "Publish a pool of N = LIMITS.PREKEY_MIN_COUNT = 20 independently signed bundles through the unchanged /v2/prekeys/publish route, one per call, and make `relay publish` an idempotent top-up that brings the published pool back to N. No relay, wire or schema change is needed. Measured feasible end to end at N=4 against the real binary: publish, four distinct senders deliver, recipient decrypts all four, fifth sender gets today's PREKEY_BUNDLE_UNAVAILABLE, one further publish restores availability and that sender's retry delivers.",
+      "evidence": "t26-replenishment-design.md sections 1.1 and 2. Measured P1 (pool of 4 all claimable, distinct key ids 1-4), P3 (four senders delivered), P4 (recipient decrypted 4/4 in one poll), P5 (404 PREKEY_BUNDLE_UNAVAILABLE), P6 (replenish -> claimable=true, refused sender's retry delivered). Relay binary sha256 f60b1570c4ac7c0631c8916b15abcc97abab42f0b94d98e3c3afbacf697ecca4, Node v26.5.0, loopback, throwaway data directories.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/outbound.ts:41 (publish() - submits the one stored bundle)",
+          "apps/cli/src/runtime/outbound.ts:43 (rotateBundle() - the capability, with no entry point)",
+          "apps/cli/src/runtime/profile.ts:313 (publicationBundle() - the single cli:publication record)",
+          "apps/cli/src/runtime/profile.ts:327 (rotatePublicationBundle() - overwrites that one record)",
+          "apps/cli/src/runtime/profile.ts:26 (const publicationKey = \"cli:publication\" - the single durable slot)",
+          "apps/cli/src/commands/cli.ts:334 (case \"relay publish\" - the only caller of publish())",
+          "apps/cli/src/commands/cli.ts:91 and :179 (the frozen eight-command tables, which have no rotate entry)"
+        ],
+        "enumeration_method": "keryx ctx rg \"publicationBundle|rotatePublicationBundle|hasPublication|cli:publication\" and keryx ctx rg \"publishBundle|rotateBundle|\\\"publish\\\"\" over apps/cli/src, both run for this task. The list is exhaustive rather than sampled because the durable publication has exactly one writer (publicationBundle, per its own doc comment and confirmed by the first search returning no other setter of publicationKey), publish() has exactly one caller (cli.ts:334), and rotateBundle() has zero callers outside tests - which is the defect."
+      }
+    },
+    {
+      "id": "T26-F-002",
+      "global_id": "003-T26-design#T26-F-002",
+      "reviewer": "replenishment-design",
+      "severity": "info",
+      "file": "packages/protocol/src/constants/limits.ts",
+      "line": 5,
+      "symbol": "LIMITS.PREKEY_MIN_COUNT",
+      "problem": "PREKEY_MIN_COUNT = 20 and PREKEY_REFILL_THRESHOLD = 10 are declared in the shared protocol package and in docs/PROTOCOL-07 section 22, and are referenced by no source file anywhere in the repository. The pool this task designs was specified from the start and never built.",
+      "impact": "Low as a defect, high as design authority: it means N does not have to be invented, and it means the project already decided that a recipient should hold twenty claimable one-time prekeys and refill at ten. A design that mints a second number for the same quantity would create exactly the kind of two-places-one-meaning drift the repository avoids elsewhere (MAX_MESSAGE_BYTES, maxSenderSignatureBytes).",
+      "suggested_fix": "Use LIMITS.PREKEY_MIN_COUNT as the pool target verbatim, with a guard test that no literal 20 appears in the runtime. Leave PREKEY_REFILL_THRESHOLD unused for now and file automatic refill-on-poll as an explicitly scoped follow-on, because giving an inbound-only command up to N outbound publish side effects is a separate decision.",
+      "evidence": "Measured with keryx ctx rg: the only occurrences of either constant in the whole tree are the declaration at packages/protocol/src/constants/limits.ts:5-6 and the documentation at docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md:941-942. t26-replenishment-design.md section 2.2.",
+      "confidence": "high"
+    },
+    {
+      "id": "T26-F-003",
+      "global_id": "003-T26-design#T26-F-003",
+      "reviewer": "replenishment-design",
+      "severity": "major",
+      "file": "apps/cli/test/e2e/publication-claimability.test.ts",
+      "line": 1,
+      "symbol": "reports whether a republished bundle is still claimable",
+      "problem": "Two assertions in this e2e become false under a pool and must be rewritten: step 6 asserts claimable === false after exactly one claim (under a pool, N-1 members remain, so it is true), and step 7 asserts a second distinct sender is refused with a PREKEY code (under a pool she succeeds, which is the entire point of the task). T18 section 9 records that this file's SHA-256 is cited as evidence in the T19 and T20 reports and chose a new file to keep it stable; this design cannot do that.",
+      "impact": "The implementer will edit a file whose hash is load-bearing evidence in two prior reports. Left undiscovered until implementation, it looks like an unexpected regression rather than a designed consequence; left unedited, the tree carries two knowingly-false assertions.",
+      "suggested_fix": "Rewrite step 6's property as pool.claimable === N-1 and pool.minted === 0 before top-up, N after - which is a sharper statement of the property step 6 was protecting (a publish that restored nothing must say so). Move step 7's exhausted-prekey vocabulary assertion behind a full drain. Leave steps 1-5 untouched, including every bundleId stability assertion and the SENDER_NOT_PUBLISHED assertion T19 and T20 rest on, which the anchor-bundleId design in section 2.4 keeps true. Record the new SHA-256 in the implementation report and note that the T19 and T20 citations refer to the pre-T26 revision.",
+      "evidence": "t26-replenishment-design.md sections 2.5 and 6 (test E-17). The file's steps 6 and 7 were read in full; the pool behaviour that falsifies them was measured at P1, P3 and P5.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/test/e2e/publication-claimability.test.ts step 6 (claimable === false after one claim - becomes false under a pool)",
+          "apps/cli/test/e2e/publication-claimability.test.ts step 7 (a second distinct sender is refused /PREKEY/ - becomes false under a pool)",
+          "apps/cli/test/e2e/publication-claimability.test.ts:13 (the file header prose stating the rule)",
+          "docs/requirements/echolet-cli-prototype/specification.md:118",
+          "docs/requirements/echolet-cli-prototype/README.md:33",
+          "docs/requirements/echolet-cli-prototype/runbook.md:246",
+          "docs/requirements/echolet-cli-prototype/deployment-runbook.md:1113",
+          "docs/STATUS_CURRENT.md:93",
+          "docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md:919",
+          "apps/cli/src/commands/cli.ts:34 (reportedRelayCodes rationale prose)",
+          "apps/cli/src/runtime/outbound.ts:65 (T20 guard rationale prose)",
+          "apps/cli/src/runtime/outbound.publicationPrecondition.test.ts:24, :85, :216 (test comment prose)"
+        ],
+        "enumeration_method": "keryx ctx rg \"exactly one first-contact sender|serves exactly one|one first-contact|\\u0440\\u043e\\u0432\\u043d\\u043e \\u043e\\u0434\\u043d\\u043e\\u0433\\u043e \\u043f\\u0435\\u0440\\u0432\\u043e\\u0433\\u043e \\u043e\\u0442\\u043f\\u0440\\u0430\\u0432\\u0438\\u0442\\u0435\\u043b\\u044f\" over the whole tree, run for this task in both English and Russian because the requirements documents are Russian. It returned twelve sites; apps/relay/internal/config/config.go:15 is 'serves exactly one scheme at a time' and is excluded as unrelated, leaving eleven. The two assertion sites in publication-claimability.test.ts were found by reading the file in full rather than by the search, because they assert the rule without stating it - which is exactly why a grep-only enumeration would have missed the load-bearing half."
+      }
+    },
+    {
+      "id": "T26-F-004",
+      "global_id": "003-T26-design#T26-F-004",
+      "reviewer": "replenishment-design",
+      "severity": "minor",
+      "file": "packages/session-node/src/SignalClient.ts",
+      "line": 266,
+      "symbol": "SignalClient.rotateOneTimePreKey",
+      "problem": "The client-side half of a pool already works and depends entirely on an unenforced negative property: rotateOneTimePreKey allocates pre:<next> and moves a pointer without ever deleting a previously allocated record, and Records.getPreKey resolves any allocated id. Nothing in the tree asserts that no code prunes pre: records. A future tidying pass that garbage-collected them would leave the relay correctly serving bundles whose private halves the recipient had thrown away.",
+      "impact": "Silently turns a refusable first contact into an undecryptable message - the exact outcome T18 section 6.6 rejects the reservation-expiry design for. It would also break AC-05's late retry from a sender's durable outbox, and it would break every pool member other than the newest.",
+      "suggested_fix": "Write test A-5 as a deliberately negative assertion: after building a pool of N and rotating past every slot, the store still resolves pre:<id> for every allocated id and no pre: key was deleted. Forbid a mechanism rather than prescribing one, and state in the design that no pool GC may be added.",
+      "evidence": "SignalClient.ts:262-284 (the retention comment and the allocate-only implementation) and 135-143 (getPreKey/removePreKey). Measured P4: after the recipient rotated four times past the first prekey, four distinct senders' first-contact messages all decrypted in one poll, rejected=0. t26-replenishment-design.md sections 1.1 and 2.6 item 3.",
+      "confidence": "high"
+    },
+    {
+      "id": "T26-F-005",
+      "global_id": "003-T26-design#T26-F-005",
+      "reviewer": "replenishment-design",
+      "severity": "minor",
+      "file": "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go",
+      "line": 86,
+      "symbol": "SaveSignalV2",
+      "problem": "The availability index v2:available:<identity>:<createdAtMS>:<bundleID> is an unbounded prefix and SaveSignalV2 counts nothing per identity, so any party can publish an unbounded number of 3350-byte bundles under an identity it minted for 2.9 ms. There is no per-identity cap anywhere on the publish path.",
+      "impact": "Relay storage growth by a party who is not attacking any particular user. This is true on the current tree and the pool neither creates nor worsens it, but a design that turns 'publish one bundle' into 'publish twenty' should not leave it unnamed.",
+      "suggested_fix": "File a relay-side per-identity availability cap as a follow-on, not as part of this task. It is the one option in this design space that changes what geekom and depr accept - a publish above the cap becomes a new refusal - so it needs its own flag and its own two-deployment ordering, and it can ride T18's rollout rather than forcing this client-only change to acquire one.",
+      "evidence": "signal_prekey_bundle_v2.go:86 writes the availability key with no count and no cap; no ECHOLET_ config variable bounds it (config.go read in full). Measured L0: one bundle is 3350 bytes on the wire. T18 measured identity minting at 2.9 ms. t26-replenishment-design.md sections 2.2 and 8.",
+      "confidence": "high"
+    },
+    {
+      "id": "T26-F-006",
+      "global_id": "003-T26-design#T26-F-006",
+      "reviewer": "replenishment-design",
+      "severity": "info",
+      "file": "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go",
+      "line": 31,
+      "symbol": "decodeV2Request",
+      "problem": "The publish route caps the request body at 64 KiB (http.MaxBytesReader, 64*1024 = 65 536). Twenty bundles at a measured 3350 bytes each is 67 000 bytes, which does not fit.",
+      "impact": "None as a defect - it decides a design question. A batch-publish route carrying the recommended pool size could not be built without also raising a cap the relay already enforces, which would be a wire-observable change to what geekom and depr accept. One bundle per request is therefore not merely the zero-change option; it is the only shape that fits.",
+      "suggested_fix": "Publish the pool as N sequential calls to the existing single-bundle route. Do not design a batch route.",
+      "evidence": "decodeV2Request wraps r.Body in http.MaxBytesReader(w, r.Body, 64*1024). Measured L0: one valid bundle serialises to 3350 bytes. 20 * 3350 = 67 000 > 65 536. t26-replenishment-design.md section 2.2.",
+      "confidence": "high"
+    },
+    {
+      "id": "T26-F-007",
+      "global_id": "003-T26-design#T26-F-007",
+      "reviewer": "replenishment-design",
+      "severity": "info",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 57,
+      "symbol": "reportedRelayCodes",
+      "problem": "A stored pool member whose seven-day window has closed is refused BUNDLE_EXPIRED (400) on re-submission. BUNDLE_EXPIRED is not in reportedRelayCodes, so left unhandled it reaches the operator as PROTOCOL_REJECTED at exit 3 and aborts the whole top-up, discarding the N-1 members that are perfectly fine.",
+      "impact": "A `relay publish` more than seven days after the last one would fail on the first expired member instead of refilling the pool - turning the design's recovery command into a dead end at exactly the moment it is needed.",
+      "suggested_fix": "Treat BUNDLE_EXPIRED on one member as 'this slot is dead, mint a replacement': handled locally, counted in pool.minted, never surfaced. `relay publish` fails only if nothing ends up claimable. No allowlist change is needed, and none should be made - the code never reaches classify().",
+      "evidence": "model/signal_prekey_bundle_v2.go:8 defines ErrV2Expired as BUNDLE_EXPIRED; v2Error maps it to 400; validation/signal_prekey_bundle_v2.go returns it when now >= expires, before storage. cli.ts:57 lists the three reported codes and BUNDLE_EXPIRED is not among them. Inferred from the tree - the seven-day window makes it expensive to measure directly and the code path is unambiguous. t26-replenishment-design.md section 2.7 and test B-8.",
+      "confidence": "medium"
+    }
+  ],
+  "questions": [
+    {
+      "id": "T26-Q-001",
+      "question": "Should automatic refill run during `poll` at PREKEY_REFILL_THRESHOLD = 10, or must replenishment stay an explicit `relay publish`?",
+      "why": "Without automatic refill, a victim under sustained attack must NOTICE they have been drained and act. The protocol already declares the threshold and the constant is unused. Against it: `poll` is an inbound-only command, and giving it up to twenty outbound publish side effects the operator did not ask for and cannot see is a change in what a command means, on a deliberately frozen surface. The cost is already measured (78 ms steady state, 1.23 s full drain), so this is a product decision rather than an engineering unknown.",
+      "options": [
+        {
+          "id": "explicit-only",
+          "label": "Replenishment stays explicit: `relay publish` only, as designed in T26",
+          "recommended": true
+        },
+        {
+          "id": "refill-on-poll",
+          "label": "Follow-on task: `poll` tops the pool up when claimable count falls to PREKEY_REFILL_THRESHOLD"
+        },
+        {
+          "id": "never",
+          "label": "Never - the operator must always ask"
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T26-Q-002",
+      "question": "Once both T26 and T18 have landed, should a per-claimant claim quota Q be added?",
+      "why": "T18 section 5 rejected a claim quota because at a pool of 1 it permanently silences an operator who makes more than Q first contacts, for a measured 5.8% price increase. With authentication making a claim attributable AND a pool making one victim cost N claims, Q bounds one minted identity to Q/N victims - the first bound in this flow that is not linear in the attacker's request budget. At Q = 64 and N = 20 a legitimate operator keeps 64 first contacts while a minted identity is worth 3 victims instead of unbounded. Neither change reaches that alone, so the decision only becomes available after both land.",
+      "options": [
+        {
+          "id": "file-after-both",
+          "label": "File as a joint follow-on once both T26 and T18 are landed and enforcing",
+          "recommended": true
+        },
+        {
+          "id": "now",
+          "label": "Design it now, alongside T18"
+        },
+        {
+          "id": "no",
+          "label": "No quota - free identity creation makes any per-claimant bound cosmetic"
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T26-Q-003",
+      "question": "Is editing apps/cli/test/e2e/publication-claimability.test.ts acceptable, given its SHA-256 is cited as evidence in the T19 and T20 reports?",
+      "why": "Two of its assertions become false under a pool (finding T26-F-003) and there is no way to keep the hash stable without leaving knowingly-false assertions in the tree. The design's recommendation is to edit steps 6 and 7, leave steps 1-5 including every bundleId and SENDER_NOT_PUBLISHED assertion untouched, and record the new hash with a note that the prior citations refer to the pre-T26 revision. Confirming this before implementation avoids it surfacing as an apparent regression.",
+      "options": [
+        {
+          "id": "edit-and-note",
+          "label": "Edit steps 6-7, record the new hash, annotate the T19/T20 citations",
+          "recommended": true
+        },
+        {
+          "id": "new-file",
+          "label": "Leave the file frozen and duplicate its scenario in a new file with the pool assertions"
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "relay_binaries_built": 1,
+    "relays_started": 3,
+    "relays_stopped": 3,
+    "measurement_scripts_run": 5,
+    "measurement_probe_files_written_to_scratchpad": 3,
+    "cli_profiles_created": 12,
+    "first_contact_sends_measured": 6,
+    "pool_bundles_published_against_local_relay": 61,
+    "raw_unauthenticated_claims_issued_against_local_relay": 24,
+    "go_test_packages_run": 1,
+    "source_files_read": 24,
+    "repo_files_modified_outside_deliverable": 0,
+    "connections_to_geekom_or_depr": 0,
+    "wire_schema_changes_designed": 0,
+    "relay_source_changes_designed": 0,
+    "rollout_flags_designed": 0,
+    "red_tests_specified": 15,
+    "green_regression_pins_specified": 2,
+    "cross_language_tests_required": 0
+  },
+  "timestamp_utc": "2026-09-08T07:20:00Z"
+}

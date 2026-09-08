@@ -1,0 +1,80 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T30-tests",
+  "status": "DONE",
+  "summary": "Closed T29 finding F-001: rewrote the six pre-existing publish-count assertions - apps/cli/src/commands/cli.test.ts:149, apps/cli/src/runtime/outbound.test.ts:141 and :182, and apps/cli/src/runtime/outbound.publish.test.ts:93, :116 and its rotation test (lines 124-162) - to the new exact truth under a pool of N = LIMITS.PREKEY_MIN_COUNT bundles. Every rewrite keeps `toEqual` or `toHaveLength` on an exact value derived from LIMITS.PREKEY_MIN_COUNT; nothing was loosened to `toContain` or to a bound. Two sites (outbound.publish.test.ts:116's `repeat` index and the rotation test's `.at(-1)` reads) needed an index fix, not just a length fix, because under a pool those expressions would silently read the wrong pool slot and either pass for the wrong reason or crash with a TypeError instead of a clean assertion failure; both are corrected to address slot 0 explicitly, exactly as F-001's suggested_fix said the rotation test would need. All six sites are RED today, each on a clean assertion (no compile error, no TypeError, no timeout), which is expected and correct since T26's implementation has not landed. TESTS ONLY: exactly these three files were opened for writing, all three are test files, and no product file, no other test, and no documentation file was touched.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Each of the six sites is rewritten to the new exact truth (N = LIMITS.PREKEY_MIN_COUNT publishes prefixing the unchanged claim-and-deposit tail), keeping toEqual/toHaveLength exact rather than loosening to toContain or a bound",
+      "status": "met",
+      "evidence": "cli.test.ts:149 (now ~153): `toEqual([...Array(LIMITS.PREKEY_MIN_COUNT).fill(\"/v2/prekeys/publish\"), \"/v2/prekeys/claim\", \"/v1/messages/send\", \"/v1/mailbox/challenge\", \"/v1/mailbox/poll\"])`. outbound.test.ts:141 (now ~144) and :182 (now ~185): same `[...Array(LIMITS.PREKEY_MIN_COUNT).fill(\"/v2/prekeys/publish\"), ...]` prefix, tails (`/v2/prekeys/claim, /v1/messages/send` and `/v2/prekeys/claim` alone) byte-for-byte unchanged. outbound.publish.test.ts:93 (now 97): `toHaveLength(LIMITS.PREKEY_MIN_COUNT)`. outbound.publish.test.ts:116 (now 122): `toHaveLength(2 * LIMITS.PREKEY_MIN_COUNT)`. Rotation test (was 124-148, now 133-163): both `.at(-1)` reads replaced with explicit `attempts[LIMITS.PREKEY_MIN_COUNT]` / `attempts[2 * LIMITS.PREKEY_MIN_COUNT]`, guarded by an explicit `toHaveLength`-style `expect(...).toBeGreaterThan(...)` so a short array fails on an assertion rather than an out-of-bounds TypeError. No literal `20` appears anywhere; every count is derived from `LIMITS.PREKEY_MIN_COUNT`, imported from `@echolet/protocol` in all three files (already present in cli.test.ts; added to outbound.test.ts and outbound.publish.test.ts)."
+    },
+    {
+      "criterion": "TESTS ONLY: only the six named sites' files are changed; no product file, no other test, no documentation",
+      "status": "met",
+      "evidence": "`git status --porcelain` after this task attributes exactly three modified files to it: apps/cli/src/commands/cli.test.ts, apps/cli/src/runtime/outbound.test.ts, apps/cli/src/runtime/outbound.publish.test.ts - the same three files the six sites live in. No product file under apps/, packages/, or docs/ was opened for writing. `npx tsc -p apps/cli/tsconfig.json --noEmit` exits 0."
+    },
+    {
+      "criterion": "Nothing weakened, skipped, narrowed or deleted",
+      "status": "met",
+      "evidence": "No `.skip`, no `.only`, no assertion removed. Every touched assertion stayed an exact `toEqual` or `toHaveLength`; the two index corrections (outbound.publish.test.ts:116's `repeat` and the rotation test's two `.at(-1)` reads) preserve the identical property each assertion pinned before N > 1 - slot 0's byte-identical idempotent resubmission, and slot 0 specifically being the rotated member - rather than weakening what is checked. Two assertions genuinely could not be preserved by a length-only edit and needed an index fix instead of being satisfied by coincidence; this is flagged below and is not a weakening."
+    },
+    {
+      "criterion": "Each correction is RED for the right reason: an assertion failure, not a compile error or a timeout",
+      "status": "met",
+      "evidence": "Isolated run of the three files (`npx vitest run src/commands/cli.test.ts src/runtime/outbound.test.ts src/runtime/outbound.publish.test.ts`) shows exactly six new failures, one per corrected site, each a clean AssertionError: 'expected [...] to deeply equal [...]' (cli.test.ts, outbound.test.ts x2) or 'expected [...] to have a length of N but got 1/2' (outbound.publish.test.ts x2) or 'expected 2 to be greater than 20' (rotation test, after adding the explicit length guard so a short array fails on assert rather than crashing on an out-of-bounds property read). None is a TypeError and none times out."
+    },
+    {
+      "criterion": "Report identity by SHA-256 before and after, never mtime",
+      "status": "met",
+      "evidence": "cli.test.ts: e7cea8ed3ce785235ec7ce75b50dd08f44ced935831ddc0338fff6a70ddb11ca (baseline, pre-T29) -> 49d200f1d9d13ef5c6a0217155b93bd5b18ed2c06df71e9566b1088cdb45a38d (T29's state, confirmed unchanged at the start of this task) -> 478b69a40532c482b0a487633f58871285de043351add2335586235b72c9538d (after this task). outbound.test.ts: 58d0dd98cdb94c8122eabdb7f204f3784bbf81be95d49d1fa6156d5c1f0c0921 -> 25a219e5d09a97057088f1f00d31f59fd9e149c5bbfea454e755f64e91e00246. outbound.publish.test.ts: fa49adfcf6f2604c9f5cec08fee8c8a09bef65e5869b2df1c39c2414102cf691 -> 84bbb5a7a104d1a2149c087d53cac2a36f4e358a778aaa1ab588e40fe9a6a90f. All via `shasum -a 256`, never mtime."
+    },
+    {
+      "criterion": "Suite counts separate this task's new reds from T29's existing red set",
+      "status": "met",
+      "evidence": "Full CLI suite (`npx vitest run`): 19 failed | 254 passed (273), 7 failed test files - up from T29's recorded baseline of 13 failed | 260 passed (273), 5 failed files. The delta is exactly the six sites this task corrected: cli.test.ts > 'routes publish/send/poll through HTTP...', outbound.test.ts > 'claims the pinned contact...' and 'rejects a claimed bundle that differs...', outbound.publish.test.ts > all three of its tests. The other 13 failures are named individually in the run log and match T29's red set one-for-one: profile.publicationPool.test.ts (5), outbound.publicationPool.test.ts (5), cli.test.ts's own group-C test ('reports the restored publication pool...'), prekey-pool-replenishment.test.ts (1), and publication-claimability.test.ts's authorised rewrite (1). No test outside these 19 failed; no CPU-contention flake was observed among the process-spawning tests under apps/cli/src/commands/ in this run."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T30-tests-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This document.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/commands/cli.test.ts",
+      "change": "modified - line 149's request-path assertion (in 'routes publish/send/poll through HTTP...') rewritten from a single '/v2/prekeys/publish' to LIMITS.PREKEY_MIN_COUNT repeats via `[...Array(LIMITS.PREKEY_MIN_COUNT).fill(\"/v2/prekeys/publish\")]`, prefixing the unchanged claim/send/challenge/poll tail. Before: asserted alice's ONE-request publish precedes the send-and-poll tail. After: asserts the top-up loop's N publishes (a fresh profile has an empty pool, so the very first `relay publish` mints and publishes all N members) still precede the identical, unchanged tail - exactly one claim, one send, one challenge, one poll. No weaker: still an exact toEqual, still pins the claim-and-deposit count at exactly one. LIMITS was already imported. sha256 before (T29's state): 49d200f1d9d13ef5c6a0217155b93bd5b18ed2c06df71e9566b1088cdb45a38d -> after: 478b69a40532c482b0a487633f58871285de043351add2335586235b72c9538d"
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.test.ts",
+      "change": "modified - two sites, plus added the `LIMITS` import. Line 141 (in 'claims the pinned contact...'): before, asserted the exact sequence ['/v2/prekeys/publish','/v2/prekeys/claim','/v1/messages/send'] for a send that presupposes one publish. After: the publish prefix becomes N repeats of '/v2/prekeys/publish' via LIMITS.PREKEY_MIN_COUNT, tail unchanged - still exactly one claim and one deposit, still an exact toEqual. Line 182 (in 'rejects a claimed bundle that differs...'): before, asserted ['/v2/prekeys/publish','/v2/prekeys/claim'] with NO deposit after a contact-pin mismatch. After: same N-repeat prefix, tail still exactly one claim and explicitly no '/v1/messages/send' - the property this test exists for (the pin is judged before anything is sent) is unchanged and still pinned exactly. sha256 before: 58d0dd98cdb94c8122eabdb7f204f3784bbf81be95d49d1fa6156d5c1f0c0921 -> after: 25a219e5d09a97057088f1f00d31f59fd9e149c5bbfea454e755f64e91e00246"
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.publish.test.ts",
+      "change": "modified - three sites, plus added the `LIMITS` import (previously only `type SignalPreKeyBundleV2` was imported). Line 93 (in 'resubmits the byte-identical signed bundle after a lost publish response and a restart'): before, `toHaveLength(1)` asserted the retried publish makes exactly one request. After, `toHaveLength(LIMITS.PREKEY_MIN_COUNT)`: the retry completes the whole pool - slot 0 was already durable from before the lost response and is resubmitted idempotently first, the remaining N-1 empty slots are freshly minted and published - so the retry issues N requests, not one; the byte-identity assertions immediately below, which compare `lost.attempts[0]` (the original failed attempt) against `replayed.attempts[0]` (the retry's first, slot-0 request), are untouched and still exact. Line 116 (in 'repeats an already successful publication without allocating a new bundle'): before, `toHaveLength(2)` asserted two publish() calls make two requests, and `relay.attempts[1]` was compared against `relay.attempts[0]` for byte-identity. After, `toHaveLength(2 * LIMITS.PREKEY_MIN_COUNT)`: two full-pool calls make 2N requests. The `repeat` variable could not stay `relay.attempts[1]` under a pool - that index is now the SECOND slot of the FIRST call, an unrelated bundle, not the second call's resubmission of slot 0 - so it is corrected to `relay.attempts[LIMITS.PREKEY_MIN_COUNT]`, the first attempt of the second call, which every stored-member resubmission visits in slot order starting at slot 0. This is an index fix required to keep the SAME property pinned (repeat publish of slot 0 is byte-identical to the original), not a weakening. Rotation test 'allocates a fresh bundle and one-time prekey only through an explicit rotation operation' (was lines 124-148): before, `relay.attempts.at(-1)` located 'the most recent publish' on the assumption that each publish() call makes exactly one request. After a pool, that assumption is false and `.at(-1)` would silently read slot N-1 - a member `rotateBundle()` never touches - making the 'this bundle differs from the original' assertion pass for an unrelated, coincidental reason (different slots naturally have different key material) rather than because rotation happened, and would make the later 'stays stable across retries' assertion compare two never-rotated slot-(N-1) resubmissions that are trivially equal to each other. Corrected to explicit indices: `relay.attempts[LIMITS.PREKEY_MIN_COUNT]` for the rotated bundle (the first attempt of the call following rotation, since slot 0 - the rotation anchor - is always resubmitted first) and `relay.attempts[2 * LIMITS.PREKEY_MIN_COUNT]` for its stability check one call later; each indexing is guarded by an explicit `expect(relay.attempts.length).toBeGreaterThan(...)` so a short array fails on a named assertion rather than an out-of-bounds TypeError. This is the case F-001 flagged as needing more care than a length-only edit, and 'address slot 0 explicitly instead' is exactly what was done. sha256 before: fa49adfcf6f2604c9f5cec08fee8c8a09bef65e5869b2df1c39c2414102cf691 -> after: 84bbb5a7a104d1a2149c087d53cac2a36f4e358a778aaa1ab588e40fe9a6a90f"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "sites_corrected": 6,
+    "sites_red": 6,
+    "index_fixes_beyond_length": 2,
+    "cli_suite_before_this_task": "13 failed | 260 passed (273), 5 failed files (T29 baseline)",
+    "cli_suite_after_this_task": "19 failed | 254 passed (273), 7 failed test files - delta of exactly 6 failures/2 files, all six corrected sites, no other file affected",
+    "typecheck": "npx tsc -p apps/cli/tsconfig.json --noEmit exits 0",
+    "relay_suite": "untouched by this task - no Go file opened for writing; T29's Go baseline stands"
+  },
+  "timestamp_utc": "2026-09-08T14:55:00Z"
+}

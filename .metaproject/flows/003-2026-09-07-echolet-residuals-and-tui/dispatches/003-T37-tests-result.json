@@ -1,0 +1,80 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T37-tests",
+  "status": "DONE",
+  "summary": "Fixed F-001 from 003-T36-tests-result.json: apps/cli/src/runtime/inbound.test.ts:324 ('commits outbound plaintext history with native state/outbox before send and rolls all three back on persistence failure') asserted that a snapshot of alice's native store (session:/inbox:/outbox:/pre:/used: prefixes) taken BEFORE any publish or send attempt equals a snapshot taken AFTER a send() that fails via an injected persistence error. Established the property by reading the test end to end: the test's actual subject is that a persistence failure inside send()'s own commit rolls back exactly what send() itself attempted to write (session establishment, outbox entry, history entry) and nothing else - it is an atomicity/no-partial-write pin, not a claim that send() as a whole is a no-op on the store. Under T31's pool, send()'s first step is publish(), which durably mints alice's own 20-member first-contact prekey pool as N=20 separate already-committed transactions before send() ever runs; that write is real, legitimate, and outside the transaction under test, so comparing against a pre-publish baseline conflated it with the rollback being pinned. The old baseline was a coincidence of pool size 1, not the property. Did not touch the pool-size literal, since the property has nothing to do with a count. Instead expressed the assertion as before/after around the operation under test: added an optional afterPublish hook to the file's shared send() test helper (used only by this test; every other call site leaves the new parameter undefined, so no other test's behavior changed), invoked immediately after messenger.publish() resolves and before messenger.send() runs, and used it to capture the native-store snapshot at exactly that point. The final assertion now compares the post-failure snapshot against that post-publish/pre-send snapshot instead of against a pre-publish one. This form is independent of LIMITS.PREKEY_MIN_COUNT or any pool size, present or future, since it never encodes a count - it pins the invariant directly via a same-run before/after comparison. Verified the corrected assertion actually exercises the rollback: session:, inbox:, outbox: and used: are all empty in both snapshots and pre: holds the full published pool unchanged in both, so the comparison still meaningfully proves session/outbox/history atomicity, it does not pass vacuously. No product file, no documentation file, and no file other than inbound.test.ts was changed.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Established what property the failing assertion at inbound.test.ts:324 actually protects, rather than only patching the arithmetic",
+      "status": "met",
+      "evidence": "Read the whole test ('commits outbound plaintext history with native state/outbox before send and rolls all three back on persistence failure', inbound.test.ts:318-351) plus the shared send() helper (lines 49-81) and failCommitOnce() (lines 116-127). The test injects a commit failure gated on the first transaction touching cli:outbox: keys, calls send() (which internally does publish() then send()), and expects: (a) observedSend (the /v1/messages/send beforeAccept hook) was never called, i.e. no HTTP send happened; (b) the native store snapshot after the failed send equals a baseline; (c) cli:outbox: and cli:history: are empty afterward. Read T31's implementation report (t31-implementation-report.md, section 1.1) confirming publish() now mints the pool via mintPublicationSlot, which 'stores the member durably before it can be offered to anyone' - i.e. as its own committed transaction(s), unrelated to and preceding the transaction failCommitOnce targets. Concluded the property is: a persistence failure inside send()'s own outbox-touching transaction rolls back exactly what that transaction wrote (session establishment + outbox entry + history entry) and nothing beyond it - not that send() as a whole leaves the store byte-identical to its state before send() was ever invoked, since send() legitimately writes durable pool material via publish() first."
+    },
+    {
+      "criterion": "Expressed the assertion in a form that survives the pool (before/after comparison or invariant, not a re-baselined literal)",
+      "status": "met",
+      "evidence": "Added `afterPublish?: () => Promise<void>` as a 5th, optional parameter to the shared send() helper (inbound.test.ts), invoked as `await afterPublish?.();` immediately after `await messenger.publish();` and before `await messenger.send(...)`. In the target test, passed a callback that captures `beforeSend = await snapshot(alice, nativePrefixes)` at that point, then compares the post-failure snapshot against `beforeSend` instead of a pre-publish `before`. This encodes no count anywhere - not LIMITS.PREKEY_MIN_COUNT, not a literal - so it is unaffected by any future change to the pool's target size. Every other call site of send() in the file (10 other invocations) passes no 5th argument, so afterPublish is undefined there and their behavior is byte-identical to before this change."
+    },
+    {
+      "criterion": "Did not weaken the assertion",
+      "status": "met",
+      "evidence": "The assertion is still an exact `.toEqual()` over the full nativePrefixes snapshot (session:, inbox:, outbox:, pre:, used:), not narrowed to a subset of prefixes, not loosened to toMatchObject/toContain/a length check, and not deleted. It still fails if session:, inbox:, outbox: or used: gain or lose any key, or if pre: changes at all between the two snapshot points - the only change is which two points are compared. Confirmed non-vacuous by inspection: at the afterPublish point pre: holds the full 20-member pool and session:/inbox:/outbox:/used: are empty; after the failed send those must still be empty and pre: must still hold exactly those same 20 members for the comparison to pass, which is exactly the rollback property being pinned."
+    },
+    {
+      "criterion": "Any derived count uses LIMITS.PREKEY_MIN_COUNT, never a literal",
+      "status": "not_applicable",
+      "evidence": "The corrected form makes no count comparison at all - it compares two runtime-captured store snapshots to each other, so there is no count to derive or hardcode."
+    },
+    {
+      "criterion": "Only the test file was changed; no product file, no documentation",
+      "status": "met",
+      "evidence": "`git diff --stat -- apps/cli/src/runtime/inbound.test.ts` shows the only change this session: 1 file changed, 15 insertions(+), 4 deletions(-). `git status --porcelain` shows no other file touched by this session; the docs/*.md modifications and untracked apps/relay/*_test.go files visible in git status predate this dispatch (concurrent flow-003 tasks, per the session's own gitStatus snapshot) and were not written by this task."
+    },
+    {
+      "criterion": "No store key, private key, plaintext or HTTP request body printed or recorded",
+      "status": "met",
+      "evidence": "All test output inspected was pass/fail summaries and stack traces from vitest/go test; snapshot() in this file returns key names and base64-encoded native store bytes, and neither the test code added nor any command run in this dispatch prints its return value - only its shape is asserted via toEqual against another snapshot object."
+    },
+    {
+      "criterion": "Verification: corrected test passes in isolation and the full CLI + Go suites are re-run and reported honestly",
+      "status": "met",
+      "evidence": "Isolated: `npx vitest run src/runtime/inbound.test.ts` on Node v26.5.0 - 1 file, 11 tests, all pass (43.4s), including the corrected test at 1.6s. Typecheck: `pnpm -r typecheck` - 7 workspace projects, all Done. Full CLI: `npx vitest run` in apps/cli (run concurrently with the two Go suites below, causing CPU contention) - 273 tests: 251 passed, 1 failed (test/e2e/relay-tls.test.ts, a process-spawn/timeout test, NOT inbound.test.ts, which passed fully in this run) plus 6 'vitest-worker: Timeout calling onTaskUpdate' unhandled-rejection warnings attributable to the same contention. Re-ran the one failure in isolation per the dispatch's own CPU-contention warning: `npx vitest run test/e2e/relay-tls.test.ts` - 3/3 pass in 12.2s, confirming it was contention, not a regression from this change. Go: `go -C apps/relay test -count=1 -race -tags relayv2 ./...` and `go -C apps/relay test -count=1 -race ./...` both all-`ok` across every package with test files, zero data races in either run."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T37-tests-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This document.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/runtime/inbound.test.ts",
+      "change": "modified - added an optional afterPublish hook to the shared send() test helper (invoked after messenger.publish() and before messenger.send(); undefined/no-op for every other call site). In the test 'commits outbound plaintext history with native state/outbox before send and rolls all three back on persistence failure', removed the pre-publish `before` snapshot and instead captured the native-store snapshot via the new afterPublish hook (immediately after alice's own prekey pool is durably minted by publish(), immediately before send() runs), then compared the post-failure snapshot against that post-publish baseline instead of the pre-publish one. Comment added explaining why the baseline must be taken after publish(), not before it, and that this makes the assertion independent of pool size. Nothing else in the file changed. sha256 before 15122e939361c5b3410d15fa2a75b579953092b226e09ac75dd3c95f2d9dc1ee -> after 002186733668e60c4b55d6dde637e5a3f6e0ab9e5dfe4faedeb3ddf5c1823e6f"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "test_files_changed": 1,
+    "product_files_changed": 0,
+    "target_defect_fixed": true,
+    "cli_suite_target_isolation": "src/runtime/inbound.test.ts: 1 file, 11 tests, all pass, 43.4s",
+    "cli_suite_full": "npx vitest run in apps/cli (run concurrently with both Go race suites): 51 of 52 files passed, 251 of 273 tests passed (1 failure: test/e2e/relay-tls.test.ts, unrelated to this change), 464.5s",
+    "cli_suite_cpu_contention_rerun": "npx vitest run test/e2e/relay-tls.test.ts in isolation: 3 of 3 tests pass, 12.2s - confirms the full-suite failure was CPU contention (concurrent Go race suites + typecheck), not a regression",
+    "relay_suite_tagged_race": "go -C apps/relay test -count=1 -race -tags relayv2 ./... : all ok, 0 data races",
+    "relay_suite_untagged_race": "go -C apps/relay test -count=1 -race ./... : all ok, 0 data races",
+    "typecheck": "pnpm -r typecheck: 7 workspace projects, all Done",
+    "node_version": "v26.5.0"
+  },
+  "timestamp_utc": "2026-09-08T20:20:00Z"
+}

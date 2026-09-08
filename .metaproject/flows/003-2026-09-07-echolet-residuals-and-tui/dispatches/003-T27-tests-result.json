@@ -1,0 +1,155 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T27-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Pinned the three properties T25 proved unpinned (V-001, V-006, V-007) with four test files and no product change. Each test was shown to kill the verifier's own mutation and to pass again once it was reverted, with every mutation applied outside the repository or under a restoring shell trap and every product file re-verified by SHA-256 afterwards. Two concerns are carried rather than hidden: the interrupted earlier attempt at this task had left the G7 mutation LIVE in apps/relay/internal/service/cleanup_service.go in the working tree, which I reverted to HEAD before taking any measurement; and T25's V-006 reproduction is inaccurate as written - relayClient.pollCapacity.test.ts does go red on both M-J and M-J2 in this tree, so the TypeScript direction was not quite as unguarded as reported, though the Go direction remained caught by nothing and is what limits_mirror_test.go now pins.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "V-001 - the trust modal's viewport guard is pinned by driving the real runTuiShell, refusing when the painted viewport was below the minimum and accepting when it was not, with the identifiers actually present in the painted frame in the accepting case",
+      "status": "met",
+      "evidence": "apps/cli/src/tui/tui-shell.trustViewport.test.ts, 5 tests, drives runTuiShell through io.onTrustIdentifiers - the seam that appeared in no test before this file. Mutation M-A' (delete `&& !isBelowMinViewport(painted)` from tui-shell.ts:343): FAIL src/tui/tui-shell.trustViewport.test.ts > V-001 ... > refuses the confirmation when the painted viewport was short on both axes, where no identifier is on the frame - AssertionError: expected [ true ] to deeply equal []; 3 failed | 110 passed (113), against a control of 113 passed. Two further mutations narrowing the guard to a single axis were each killed by exactly the boundary case for the other axis (1 failed | 112 passed each). Reverted; tui-shell.ts is sha256:185e8a9fc40c8ff9383c0f0c28f045c9bc4271ac1965564383bde65fb4333fda, byte-identical to HEAD."
+    },
+    {
+      "criterion": "V-006 - the message-size relationship fails on a divergence in EITHER direction, without any test holding a third hand-written copy of the number",
+      "status": "met",
+      "evidence": "Neither new test contains the literal 262144. apps/relay/internal/protocol/limits_mirror_test.go reads packages/protocol/src/constants/limits.ts and compares it with protocol.MaxMessageBytes; apps/cli/src/transport/relayClient.protocolMirror.test.ts reads apps/relay/internal/protocol/limits.go and compares it with the real LIMITS export, so a divergence is red whichever suite is run. MAX_MESSAGE_BYTES -> 131072: Go FAIL limits_mirror_test.go:76 'protocol.MaxMessageBytes = 262144 but LIMITS.MAX_MESSAGE_BYTES = 131072'; JS FAIL relayClient.protocolMirror.test.ts - AssertionError: expected 262144 to be 131072. MaxMessageBytes -> 524288: JS FAIL - AssertionError: expected 524288 to be 262144; Go FAIL limits_mirror_test.go:76 plus the three pre-existing assertions T25 recorded as G3. Both constants reverted and re-verified: limits.ts sha256:3e2cdb25e420554908cfdcf7d2518da15cd00959bb17ac4da2c97499dd47026a, limits.go sha256:0225c19e58269d93d99961dc1a190cf8bc0d65fd1e03d420f602bceab835af83."
+    },
+    {
+      "criterion": "V-007 - stopping the cleanup service is shown to WAIT for its goroutine, with 'waited' distinguished from 'got lucky'",
+      "status": "met",
+      "evidence": "apps/relay/internal/service/cleanup_service_stop_join_test.go holds the ticker goroutine inside runCleanup with a blocking slog handler, so the two shapes are forced by happens-before rather than by timing. A joining Stop can only return after close(stopped), which is after the handler was released and 'inside' went false, so the flag it reads is necessarily false. A signalling Stop returns before the releaser is allowed to act at all, because the releaser waits on stopReturned, which is closed only after the flag has been read - so the flag is necessarily true. Mutation G7 ('<-stopped' -> '_ = stopped'): FAIL cleanup_service_stop_join_test.go:209 'Stop() returned while the goroutine Start() launched was STILL executing runCleanup', 20 kills in 20 runs under -race with -count=20. Reverted: 20 passes in 20 runs under -race, 0 data races; cleanup_service.go sha256:3b4f42ce763e2d96a49e5778c73ea833cecab0271723860c7cf6846fac9a1e39, byte-identical to HEAD."
+    },
+    {
+      "criterion": "TESTS ONLY - no product file and no documentation touched; nothing weakened, skipped, narrowed or deleted",
+      "status": "met",
+      "evidence": "git status over apps/, packages/ and docs/ shows no tracked file modified by me. The only tracked product file that was dirty on arrival - apps/relay/internal/service/cleanup_service.go, carrying the G7 mutation from the interrupted earlier attempt - was RESTORED to HEAD, not changed. No existing test file was edited: all four deliverables are new files. No .skip, no .only, no assertion removed anywhere."
+    },
+    {
+      "criterion": "Deterministic synchronisation only - no sleep standing in for an event",
+      "status": "met",
+      "evidence": "The TUI tests wait on setImmediate, which fires once an already-empty microtask queue has drained; the injected TuiIo has no clock, no child process and no unsettled promise. The Go join test waits on channels (handler.entered, stopReturned) and on the process's own goroutine dump; every time.After is a deadline that turns a hang into a named failure, matching the existing cleanup_service_stop_test.go, and the single one-second cost is the service's own shortest accepted ticker interval, awaited through a channel rather than slept."
+    },
+    {
+      "criterion": "No store key, private key, plaintext or HTTP request body printed or recorded",
+      "status": "met",
+      "evidence": "The TUI fixture's four identifiers are the PUBLIC values a contact card carries - an identity id, a device UUID and two public keys - and are synthetic strings chosen to be distinctive so that 'contains' is a real assertion; the state fixture holds storeKeyEnv (a variable NAME) and no key value, matching state.ts's structural guarantee. The Go blocking handler formats no attribute and records no value, only the emitting function's frame name. No relay was contacted; geekom and depr were not touched."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T27-tests-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This document.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/tui/tui-shell.trustViewport.test.ts",
+      "change": "added - finished from the unverified draft left by the interrupted attempt. Its shell driver and prose were kept and verified; the single 40x10 refusal was replaced by a three-viewport table covering both halves of the isBelowMinViewport disjunction (40x10, 71x16, 72x15), and the acceptance case became a table over 72x16 and 96x28 with an added second-keystroke assertion. 5 tests. sha256:e5cfb69274272178b03754df2192e8540b455e02a22a64cb9acb6d30f11c23a3"
+    },
+    {
+      "path": "apps/cli/src/transport/relayClient.protocolMirror.test.ts",
+      "change": "added - draft kept verbatim after it was verified to kill both directions of the divergence. 1 test. sha256:df404e73e9f920b2e43268e565125b6ec56b4e347076ecff08e4f02c0bd916ba"
+    },
+    {
+      "path": "apps/relay/internal/protocol/limits_mirror_test.go",
+      "change": "added - draft kept verbatim after verification. 1 test, gofmt clean. sha256:71019ebe7c2b3e2ecfe3359c817271a9d1934bb81f57314d36e0593de313cfd7"
+    },
+    {
+      "path": "apps/relay/internal/service/cleanup_service_stop_join_test.go",
+      "change": "added - draft kept verbatim after verification: 20/20 kills under mutation G7 and 20/20 passes once reverted, both under -race. 1 test, gofmt clean. sha256:5431caf1932d7b93def17fe3b100e0109e283964c61c3bfa5401eb0f17d725ee"
+    },
+    {
+      "path": "apps/relay/internal/service/cleanup_service.go",
+      "change": "RESTORED to HEAD, not modified. It arrived carrying the G7 mutation ('_ = stopped' at line 102), left live in the working tree by the interrupted earlier attempt at this task. sha256:3b4f42ce763e2d96a49e5778c73ea833cecab0271723860c7cf6846fac9a1e39, byte-identical to c5fde09."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "003-T27-tests#F-001",
+      "reviewer": "003-T27-tests",
+      "severity": "major",
+      "repo": "echolet",
+      "file": "apps/relay/internal/service/cleanup_service.go",
+      "line": 102,
+      "problem": "The interrupted earlier attempt at T27 left the verifier's G7 mutation applied to PRODUCT code in the working tree: '<-stopped' had been replaced by '_ = stopped', so CleanupService.Stop signalled without joining. The tree was described to me as untouched since c5fde09; it was not.",
+      "impact": "Any measurement taken against that tree - including the concurrent tasks' suite runs - was taken against a relay whose shutdown sequence did not wait for the cleanup goroutine. Because no test could see the difference, which is exactly what V-007 says, the mutation was invisible to the whole matrix and would have been committed as product code.",
+      "suggested_fix": "Already reverted with 'git checkout --' and re-verified by digest before any measurement was taken. Mutation work for this task was then done in a 'git archive HEAD' export under the scratchpad, or in-repo under a shell trap that restores the file on every exit path, with the digest checked afterwards each time.",
+      "evidence": "git diff showed exactly '-\\t<-stopped' / '+\\t_ = stopped' at cleanup_service.go:102. After the revert, sha256:3b4f42ce763e2d96a49e5778c73ea833cecab0271723860c7cf6846fac9a1e39 and 'git status --porcelain -- apps/relay' reports no modified tracked file.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/service/cleanup_service.go:102 - the G7 mutation, live in the working tree on arrival; reverted",
+          "apps/cli/src/tui/tui-shell.ts:343 - M-A' would live here; checked, clean at HEAD",
+          "packages/protocol/src/constants/limits.ts:2 - M-J/M-J2 would live here; checked, clean at HEAD",
+          "apps/relay/internal/protocol/limits.go:21 - G3 would live here; checked, clean at HEAD",
+          "apps/cli/package.json:9 - modified, but it is the concurrent config agent's V-004 fix ('vitest run test/e2e/two-process.test.ts' -> 'vitest run test/e2e'), not a mutation",
+          "deploy/relay/docker-compose.yml, docker-compose.insecure-loopback.yml, run-relay.sh, env/depr.env.example, env/geekom.env.example, env/insecure-loopback.env.example and docs/requirements/echolet-cli-prototype/README.md - modified, all V-002/V-003 territory belonging to the concurrent documentation/config agent"
+        ],
+        "enumeration_method": "'git status --porcelain --untracked-files=no' over the whole repository listed every tracked modification; each was then read through 'keryx ctx diff' and attributed. The class is exhaustive for tracked files by construction, since a mutation left behind must show as a tracked modification. Untracked additions were listed separately and are all test files (four mine, two the concurrent replenishment agent's). The four constants each mutation in this task touches were additionally digested before and after every run."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "003-T27-tests#F-002",
+      "reviewer": "003-T27-tests",
+      "severity": "minor",
+      "repo": "echolet",
+      "file": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t25-verification-report.md",
+      "problem": "V-006's stated reproduction does not hold as written. T25 records M-J2 (MAX_MESSAGE_BYTES: 131072) as leaving 21 files / 83 tests green under 'npx vitest run src/transport src/runtime', and M-J (524288) as likewise green. Measured on this tree, discounting the two files T27 adds, M-J2 turns relayClient.pollCapacity.test.ts red on two tests and M-J turns it red on one.",
+      "impact": "The TypeScript side was less unguarded than the report says, which somewhat overstates V-006's severity. It does not change the conclusion or the fix: pollCapacity fails on its own internal sizing, not on any comparison with the Go constant, and changing protocol.MaxMessageBytes alone still left the entire JavaScript suite green before this task. That direction was genuinely pinned by nothing.",
+      "suggested_fix": "Correct V-006's reproduction line when the verification report is next revised; the finding itself stands. I did not edit the report, since this task is tests only.",
+      "evidence": "Control on this tree: 22 files / 84 tests passed. M-J2: '2 failed | 20 passed (22)' / '3 failed | 81 passed (84)', the failures being pollCapacity x2 plus the new mirror test. M-J: '2 failed | 82 passed (84)', pollCapacity x1 plus the mirror test. Both mutations reverted and limits.ts re-verified at sha256:3e2cdb25e420554908cfdcf7d2518da15cd00959bb17ac4da2c97499dd47026a.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-003",
+      "global_id": "003-T27-tests#F-003",
+      "reviewer": "003-T27-tests",
+      "severity": "info",
+      "repo": "echolet",
+      "file": "apps/cli/src/transport/relayClient.protocolMirror.test.ts",
+      "problem": "Pinning a cross-language constant requires one side to read the other's SOURCE, because an assertion written against a literal would be a third copy of the number and the closure taken in 5235a6d exists precisely to have two. Both new mirror tests therefore parse a file written in the other language with a regular expression.",
+      "impact": "Reformatting either declaration - 'const MaxMessageBytes int64 = 262144' or the LIMITS entry - makes the test fail loudly rather than silently stop checking. That is the intended failure mode and both tests say so in their diagnostics, but it is a maintenance cost worth recording rather than discovering.",
+      "suggested_fix": "Leave as is. The alternative - generating one side from the other at build time - is a product change and outside this task's scope; if it is ever taken, both mirror tests become redundant and should be retired together, with a note saying why.",
+      "evidence": "Each test asserts the declaration was found before comparing, and fails with a named message ('a mirror this test cannot read is a mirror it is not checking') rather than falling back to a default value.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "pnpm_typecheck_exit": 0,
+    "js_test_files": "64 (61 at c5fde09, +2 mine, +1 from the concurrent replenishment agent)",
+    "js_tests_total": 331,
+    "js_tests_passed": 326,
+    "js_tests_failed": 5,
+    "js_failures_mine": 0,
+    "js_failures_other_agent": "5, all in the untracked apps/cli/src/runtime/profile.publicationPool.test.ts",
+    "go_tests_race": "every package ok, 0 data races",
+    "go_run_count": 175,
+    "go_pass_count": 175,
+    "go_fail_count": 0,
+    "go_skip_count": 0,
+    "go_tests_added": 2,
+    "js_tests_added": 6,
+    "test_files_added": 4,
+    "product_files_changed": 0,
+    "product_files_restored": 1,
+    "mutations_run_and_reverted": 6,
+    "mutation_repeats_v007": "20 kills / 20 runs mutated, 20 passes / 20 runs reverted, both under -race"
+  },
+  "timestamp_utc": "2026-09-08T14:40:00Z"
+}

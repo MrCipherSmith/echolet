@@ -1,0 +1,215 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003-T23-implement-2026-09-08",
+  "dispatch_id": "003-T23-implement",
+  "status": "DONE",
+  "summary": "Verified, corrected and proved the push-gate hardening an interrupted session left on disk without a report, covering T23 (durability), T24 (the Go suite inside the gate) and T32 (mechanical documentation-staleness detection). Two of the interrupted work's own claims were false. First, .githooks/pre-push asserted in its header that it is tracked and therefore survives a clone; git status reported .githooks/ and scripts/ as untracked, so the entire durability argument for moving the gate out of .git/hooks did not hold - both directories are now staged, the header is corrected, and scripts/hooks/verify.sh now fails when any gate file is untracked. Second, moving the gate to core.hooksPath created a new silent-revert path the interrupted work did not address: core.hooksPath is local config that no commit carries, so one 'git config --unset' silently returns the repository to keryx's stock hook, the one that reports SKIPPED and allows a push having run nothing. That is closed by a tripwire which scripts/hooks/install.sh plants above keryx's markers in .git/hooks/pre-push (the only file git can reach when the gate is off): it announces the disabled gate by name and execs the tracked gate anyway, so the push is still verified. The interrupted work's four other claims were true and are now proved rather than assumed: 'hooksPath' occurs zero times in the installed keryx bundle and resolveGitHooksRoot() resolves git-common-dir/hooks only; keryx init, keryx update --hooks and keryx sync install-hooks all left a tracked .githooks/pre-push byte-identical, including a deliberately planted keryx:testing-pre-push decoy block inside it; content above keryx's markers in .git/hooks/pre-push survives all three; and -tags relayv2 is a strict superset because the single build-tagged file in apps/relay is itself a test file. Smaller defects found and fixed: verify.sh compared the working tree against the index rather than HEAD, so a staged weakening produced no note; pre-push shelled out to gate steps with no existence check, so a deleted step blocked with a bare exit 127; the keryx fallback tested package.json relative to the current directory; docs-freshness.sh spawned one git diff-tree per candidate commit, which gets slower the longer the pin is ignored, and is now a single git log pass with byte-identical output; and nothing would have noticed keryx installing a new hook type that core.hooksPath now suppresses. Gate cost measured before and after: ~220s to 246s measured end to end (+27s, +12%), the added time being 26s of race-enabled relay tests and ~1s of freshness check. The full race-enabled Go matrix was kept rather than subsetted, because -race costs only 3s (26s vs 23s) and the relay's guarantees are concurrency guarantees, and -tags relayv2 costs 1s and excludes nothing. Documentation freshness warns on drift and blocks only on a broken pin, argued in the report. A 27-row state table was made executable as scripts/gate/selftest.sh (pnpm run gate:selftest, ~20s, 27 ok 0 wrong 0 skipped) rather than asserted in prose, and three further rows were exercised against the live tree. The hook environment was independently re-checked rather than inherited from the diagnosis, and without contacting origin: a real git push --dry-run into a throwaway bare repository with core.hooksPath overridden for that one invocation showed node v26.5.0 with node:sqlite available (not the login-shell v22.12.0), go/bun/pnpm/keryx all on PATH, no GIT_* rewriting, the work-tree root as cwd, the push range on stdin, and PUSH_EXIT=1 - end-to-end proof through git itself that a non-zero pre-push hook stops a real push. The gate is strictly no weaker in any state: no failure made advisory, no scope narrowed, no bypass added, --no-verify never used, nothing pushed.",
+  "summary_markdown": "## T23 / T24 / T32 - the push gate, hardened and proved\n\n**Two claims of the interrupted work were false.**\n\n1. `.githooks/pre-push` said *\"it is tracked, so it survives a clone\"*. It was **untracked** (`?? .githooks/`, `?? scripts/`) - the whole reason for moving the gate out of `.git/hooks` did not hold. Both are now staged, the header is corrected, and `hooks:verify` **fails** when a gate file is untracked.\n2. Moving to `core.hooksPath` opened a **new** silent revert: one `git config --unset` returns the repo to keryx's stock hook - the one that reports `SKIPPED` and allows a push having run nothing - and nothing would have said so. Closed by a **tripwire** planted above keryx's markers in `.git/hooks/pre-push`: it names the disabled gate and `exec`s the tracked gate anyway.\n\n**Four claims were true and are now proved, not assumed:** `hooksPath` appears **zero** times in the keryx bundle; `keryx init`, `keryx update --hooks` and `keryx sync install-hooks` all left a tracked `.githooks/pre-push` **byte-identical** (with a planted `keryx:testing-pre-push` decoy inside it, untouched); content above keryx's markers survives all three; `-tags relayv2` excludes nothing.\n\n**Cost.** ~220 s -> **246 s (+27 s, +12 %)**: Go **26 s** (race-enabled, was **0 s** - no Go test had ever run in the gate), freshness ~1 s. Full matrix kept, not subsetted: `-race` costs **3 s** and the relay's guarantees *are* concurrency guarantees; `-tags relayv2` costs 1 s and is a strict superset.\n\n**Freshness: warns on drift, blocks on a broken pin.** Drift is the normal state after any code commit and a check that fails every push is deleted within a day; a deleted pin line cannot happen by writing code and is the cheapest way to switch the check off, so that is the one thing that blocks.\n\n**27-row state table, executable** - `pnpm run gate:selftest`, ~20 s, `27 ok, 0 wrong, 0 skipped`, including a failing Go test, a real data race, a missing toolchain, a deleted gate step, a red suite with no keryx, and an unset `core.hooksPath`. Plus three live-tree rows: project scope really runs the whole suite (`durationMs: 215147`), the real red suite really blocks (`GATE_EXIT=1`), and a real `git push --dry-run` into a throwaway bare repo confirms a non-zero hook stops a push (`PUSH_EXIT=1`) - the same probe re-checking the hook environment (node **v26.5.0**, `node:sqlite` available, not the login-shell v22.12.0).\n\n**Nothing was weakened**, and nothing needed to be. `.githooks/` and `scripts/` are staged but **not committed** - that and the push are yours.",
+  "acceptance": [
+    {
+      "criterion": "T23 - the fix survives keryx init and keryx update; state precisely what survives, what does not, and how a person would notice a silent revert",
+      "status": "met",
+      "evidence": "Measured in a throwaway repository with core.hooksPath=.githooks and a deliberately planted '# keryx:testing-pre-push:begin/end' decoy block inside the tracked hook: keryx init --yes, keryx update --skip-runtime --hooks and keryx sync install-hooks each exited 0 and left .githooks/pre-push at the identical sha256 (feee22bc...5763e) with the decoy intact, and left core.hooksPath untouched; all three regenerated .git/hooks/pre-push, which git no longer runs. A second probe planted a sentinel above every keryx marker in .git/hooks/pre-push: after_init_top=1, after_update_top=1, after_sync_top=1 with keryx's own block still present, which is what makes the tripwire possible. Root cause confirmed statically as well: the string 'hooksPath' occurs zero times in @mrciphersmith/keryx 0.2.80 dist/cli.js, and resolveGitHooksRoot() (line 314) resolves 'git rev-parse --git-common-dir' + '/hooks' and nothing else. Survival table in the report section 2.1: .githooks/**, scripts/** and above-marker content survive keryx; core.hooksPath survives keryx but NOT a clone. Silent-revert detection is a table of eight detectors (report section 2.2), each proved by a state-table row: tripwire banner (V3), tripwire still gating (V4), core.hooksPath unset (V2), gate replaced (V6), gate untracked (V5), gate weakened locally (diff against HEAD), gate step deleted (S1), keryx block or new hook type diverging (fingerprint and shim checks). hooks:verify runs automatically from 'prepare' on every pnpm install, so it is not a thing anyone must remember."
+    },
+    {
+      "criterion": "T24 - the Go suite runs inside the gate; measure the gate's cost before and after; if the full race-enabled matrix is too slow, name and justify the subset",
+      "status": "met",
+      "evidence": "Before: security ~5s + keryx project-scope 'pnpm -r test' 215s = ~220s, with apps/relay never touched (pnpm -r walks the pnpm workspace and the Go module is not in it; keryx changed-scope selection is JS/TS-only). After: 246s end-to-end, measured through the real hook fed git's ref lines on stdin (GATE_SECONDS=246, GATE_EXIT=1). The run was repeated after every change in this task and returned GATE_SECONDS=343, GATE_EXIT=1; that number is reported rather than dropped because it is the honest one about variance. None of the extra 97s is the hardening - the Go step's contribution is fixed at ~26s and was measured in isolation five times - it is the JavaScript suite under contention from the concurrent apps/cli agent and this task's own selftest runs, which is precisely why the Go step runs first. Added: 26s Go + ~1s docs = +27s, +12%. No subset was taken and none was needed: -count=1 timings on this machine are 23s plain, 25s -race without the tag, 26s for the full '-race -count=1 -tags relayv2 ./...' the gate runs (29s cold), across 11 test packages whose longest is internal/server at 23.5s. -race therefore costs 3s and is kept because the relay's guarantees are concurrency guarantees; state-table row G3 injects a genuine data race into a throwaway module and the step blocks, proving -race is really on rather than merely on the command line. -tags relayv2 costs 1s and is a strict superset: exactly one file in apps/relay carries a build tag (internal/storage/repository/prekey_bundle_v2_test.go) and it is itself a test file, so the tag excludes nothing. A failing Go test blocks (G2) and a missing Go toolchain blocks (G4), the same rule the JS half already applies to a missing package manager."
+    },
+    {
+      "criterion": "T32 - parse the pinned revision from STATUS_CURRENT.md, compare against HEAD over apps/ and packages/, report non-doc commits past the pin, and decide and justify blocking versus warning",
+      "status": "met",
+      "evidence": "scripts/gate/docs-freshness.sh reads the pin in three forms (the Russian prose header the document uses today, an explicit '<!-- status-pin: <sha> -->' marker, and an English fallback), validates it is a commit in this repository, and computes drift over '<pin>..<pushed tip>' - the tip git supplies on the pre-push hook's stdin, not HEAD, which was the mistake that made the old testing gate ask about the working tree instead of the push. Live output on this tree names 9 behaviour-changing commits since 4346e2b with subjects and the ready-to-paste replacement pin line. DRIFT WARNS: it appears the moment anyone commits to apps/ or packages/, so a check that failed there would be deleted or routed around within a day; this is the 'at minimum, a named visible warning' arm that t28-reconciliation-report.md section 6 itself allowed. Visibility is answered concretely: a boxed banner naming every offending commit, printed as the last thing before the push proceeds, plus 'pnpm run gate:docs' on demand and ECHOLET_DOCS_FRESHNESS_STRICT=1 to escalate. A BROKEN PIN BLOCKS: no parseable revision (D2) or a revision absent from history (D3), neither of which can arise from writing code, and deleting the pin line is otherwise the cheapest way to disable the check without appearing to. Deliberate non-blocks: no STATUS_CURRENT.md at all (D1), and a pin missing only because the clone is shallow. Cost ~1s, one git log invocation regardless of how far the pin has fallen behind (rewritten from one git diff-tree per commit, verified to produce byte-identical output)."
+    },
+    {
+      "criterion": "The gate ends up strictly no weaker than today in every state; build the state table and prove every row by exercising it",
+      "status": "met",
+      "evidence": "27 rows made executable as scripts/gate/selftest.sh (pnpm run gate:selftest, ~20s, '27 ok, 0 wrong, 0 skipped'), each building a disposable git repository and running the real gate files against it, touching no working tree, no repository git config and no remote. Blocking rows proved: failing Go test (G2, exit 1), genuine data race (G3, exit 1), missing Go toolchain (G4, exit 1), deleted pin (D2), unresolvable pin (D3), drift under STRICT (D6), red suite with no keryx (J2, exit 3), no runner at all (J3, exit 1, where the stock hook exited 0 and skipped), keryx too old for 'test status' falling back and still blocking (J4, exit 4), 'keryx test run --strict' failing (J5), a deleted gate step (S1). Allowing rows proved not to be vacuous: J1b observes a sentinel echoed by the project test script, J1c confirms keryx really was absent, J1d confirms a passing gate reaches the documentation step. Verification rows: V1 pass, V2 unset core.hooksPath fails, V3/V4 the tripwire announces the disabled gate and runs the tracked gate anyway, V5 untracked gate fails, V6 replaced pre-push fails. Three rows exercised on the live tree because they cannot be staged in a scratch repo: R1, project scope really runs the whole suite ('scope: project', 'runner: pnpm-script', 'command: pnpm run test', durationMs 215147 in .metaproject/data/testing/artifacts/latest.json, so it cannot report runner n/a and cannot pass vacuously); R2, the real red suite really blocks (full hook run over the pushed range twice, before and after the hardening: GATE_EXIT=1 at 246s and again at 343s, both with the Go step green and the report reading scope project, runner pnpm-script, '# Test Report: FAIL'); R3, a non-zero pre-push hook really stops git push, shown by a real 'git push --dry-run' into a throwaway bare repository with a probe hook exiting 1 (PUSH_EXIT=1, 'error: failed to push some refs'), which is the premise every BLOCK row rests on. Before/after comparison across 14 situations in report section 6. No failure was made advisory, no scope narrowed, no bypass added; the only environment variable that exists strengthens the gate."
+    },
+    {
+      "criterion": "Constraints: no test and no product file under apps/ or packages/ changed; no --no-verify; no push; relays untouched; no secret material recorded; searches through keryx ctx rg; commands and large logs through keryx ctx",
+      "status": "met",
+      "evidence": "Changed files are .githooks/pre-push, scripts/hooks/install.sh, scripts/hooks/verify.sh, scripts/gate/docs-freshness.sh, the new scripts/gate/selftest.sh, package.json (one script added), and the two flow artifacts. Nothing under apps/, packages/ or deploy/ was modified; the Go failure and data-race rows were staged in throwaway modules under a temp directory precisely so that no file in apps/relay had to be touched. --no-verify was never used and nothing was pushed; the end-to-end gate runs were the hook invoked directly with synthesised ref lines and a bogus remote URL, so no network push occurred. geekom and depr were not contacted at all. No store key, private key, plaintext or HTTP request body appears in any artifact; the security step's own findings are referred to by rule name only. Every search over project files went through keryx ctx rg and every command through keryx ctx run or keryx ctx read; the only raw grep/sed ran against the installed keryx bundle outside the repository, which is not project code and not indexed by keryx ctx rg, escaped inline with '# keryx:raw' and a stated reason."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t23-gate-hardening-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "What the interrupted work got wrong, the keryx durability probes, the silent-revert detector table, the Go cost measurements and scope argument, the block-or-warn decision for freshness, the 26-row state table with evidence, and the before/after weakness comparison."
+    },
+    {
+      "path": "scripts/gate/selftest.sh",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The state table, executable. 26 rows against disposable git repositories; pnpm run gate:selftest, 29s."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t23-push-gate-diagnosis.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Predecessor diagnosis of why the stock gate ran no tests. Read only, not modified; its open items 1, 2 and 4 are the ones this task closes."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t28-reconciliation-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Source of the T32 freshness proposal (section 6). Read only."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".githooks/pre-push",
+      "change": "Added an explicit existence check for each gate step so a deleted step blocks with a named reason instead of a bare exit 127; cd to the repository root and use absolute paths in the keryx fallback instead of relying on git's cwd; corrected the false 'it is tracked' claim in the header and documented the core.hooksPath survival story and the tripwire."
+    },
+    {
+      "path": "scripts/hooks/install.sh",
+      "change": "Installs and refreshes a core.hooksPath tripwire block above keryx's markers in .git/hooks/pre-push - the file git can only reach when the gate has been switched off - which announces the disabled gate and execs the tracked gate anyway. Rewritten on every run rather than skipped when already present, so the tripwire cannot itself go stale; verified idempotent."
+    },
+    {
+      "path": "scripts/hooks/verify.sh",
+      "change": "Fails when any gate file is untracked by git; compares .githooks/, scripts/gate/ and scripts/hooks/ against HEAD rather than the index, so a staged weakening is still reported; warns when .git/hooks holds a hook type with no passthrough shim in .githooks/ (core.hooksPath suppresses every hook, not just pre-push); warns when the tripwire is absent."
+    },
+    {
+      "path": "scripts/gate/docs-freshness.sh",
+      "change": "Drift is computed in a single 'git log --name-only' pass plus one awk instead of one 'git diff-tree' per candidate commit, so the step does not get slower the longer the pin is ignored. Output verified byte-identical on the live repository (same nine commits, same order). Uses only substr/length rather than ERE interval syntax, which the awk shipped on macOS has not always supported."
+    },
+    {
+      "path": "scripts/gate/selftest.sh",
+      "change": "New. The gate's 26-row state table, executable against disposable git repositories; skips rows whose toolchain is absent rather than reporting them as failures."
+    },
+    {
+      "path": "package.json",
+      "change": "Added the gate:selftest script."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t23-gate-hardening-report.md",
+      "change": "New: this task's report."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T23-implement-result.json",
+      "change": "New: this result."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T23-F-001",
+      "global_id": "003-T23-implement#T23-F-001",
+      "reviewer": "003-T23-implement",
+      "severity": "blocker",
+      "class_scope": {
+        "sites": [
+          ".githooks/pre-push",
+          ".githooks/post-commit",
+          ".githooks/post-merge",
+          ".githooks/post-checkout",
+          ".githooks/keryx-blocks.sha256",
+          "scripts/hooks/install.sh",
+          "scripts/hooks/verify.sh",
+          "scripts/gate/go-tests.sh",
+          "scripts/gate/docs-freshness.sh"
+        ],
+        "enumeration_method": "git status --porcelain at session start listed exactly two untracked directory roots, '?? .githooks/' and '?? scripts/'; 'git ls-files -s .githooks scripts' after staging enumerates the nine files those roots contained, which is the complete class. scripts/gate/selftest.sh was added afterwards by this task and is staged with them."
+      },
+      "file": ".githooks/pre-push",
+      "line": 22,
+      "symbol": "header comment",
+      "problem": "The interrupted session's hook asserted in its own header that it is tracked and therefore survives a clone. It was untracked: git status reported '?? .githooks/' and '?? scripts/'. The entire justification for moving the gate out of .git/hooks - that a tracked directory travels with the repository - was false in the tree as left.",
+      "impact": "Any clone would have received no gate whatsoever, exactly the failure the move was meant to fix, and no code review could have seen a change to the gate. The claim being written down as fact made it less likely, not more, that anyone would check.",
+      "suggested_fix": "Both directories are staged and the header is corrected; scripts/hooks/verify.sh now fails when any gate file is untracked (state-table row V5). The commit itself is deliberately left to the repository owner, per the dispatch's instruction not to push.",
+      "evidence": "git status --porcelain at session start: '?? .githooks/', '?? scripts/'. After 'git add .githooks scripts', git ls-files -s shows all nine files with mode 100755 except keryx-blocks.sha256 at 100644.",
+      "confidence": "high"
+    },
+    {
+      "id": "T23-F-002",
+      "global_id": "003-T23-implement#T23-F-002",
+      "reviewer": "003-T23-implement",
+      "severity": "major",
+      "class_scope": {
+        "sites": [
+          "core.hooksPath (git local config, set by scripts/hooks/install.sh)"
+        ],
+        "enumeration_method": "The class is 'settings that make the tracked gate the one git runs, and that no commit can carry'. git offers exactly one such mechanism, core.hooksPath, so the class has one member. Confirmed by reading git's hook resolution and by grepping the installed keryx bundle for 'hooksPath' (zero matches, so keryx neither sets nor reads it and adds no second site)."
+      },
+      "file": "scripts/hooks/install.sh",
+      "line": null,
+      "symbol": "core.hooksPath",
+      "problem": "Moving the gate to core.hooksPath traded a revert path for a cheaper one. core.hooksPath is local git config: no commit carries it, git clone does not reproduce it, and one 'git config --unset core.hooksPath' switches the whole gate off without changing a tracked file. git then falls back to .git/hooks/pre-push, which keryx keeps regenerating - the stock hook that reports SKIPPED and allows a push having run nothing. The interrupted work left nothing that would report this.",
+      "impact": "The repository could have returned, silently and in one command, to the exact broken gate this flow exists to remove.",
+      "suggested_fix": "Closed: install.sh plants a tripwire block above keryx's markers in .git/hooks/pre-push (proved to survive keryx init, update --hooks and sync install-hooks). It prints 'echolet: THE PUSH GATE IS NOT INSTALLED' naming the actual core.hooksPath value, and execs the tracked gate anyway, so the push is still verified while the misconfiguration is announced on every push until someone runs pnpm run hooks:install.",
+      "evidence": "State-table rows V2 (hooks:verify exits 1), V3 (banner observed) and V4 (tracked gate output observed) in scripts/gate/selftest.sh.",
+      "confidence": "high"
+    },
+    {
+      "id": "T23-F-003",
+      "global_id": "003-T23-implement#T23-F-003",
+      "reviewer": "003-T23-implement",
+      "severity": "minor",
+      "file": "scripts/hooks/verify.sh",
+      "line": 48,
+      "symbol": "git diff --quiet -- .githooks scripts/gate",
+      "problem": "The 'has the gate been changed locally' check compared the working tree against the index, not against HEAD, and did not cover scripts/hooks/. A weakening that had been 'git add'ed produced no note at all, and with the files untracked the check was silently vacuous.",
+      "impact": "The detector meant to make a local weakening visible could be defeated by the single most ordinary git action.",
+      "suggested_fix": "Changed to 'git diff HEAD --quiet -- .githooks scripts/gate scripts/hooks'. Applied.",
+      "evidence": "Running scripts/hooks/verify.sh on the live tree now emits the 'differ from HEAD' note for the staged-but-uncommitted gate; it emitted nothing before.",
+      "confidence": "high"
+    },
+    {
+      "id": "T23-F-004",
+      "global_id": "003-T23-implement#T23-F-004",
+      "reviewer": "003-T23-implement",
+      "severity": "info",
+      "file": "scripts/hooks/verify.sh",
+      "line": null,
+      "symbol": "core.hooksPath scope",
+      "problem": "core.hooksPath replaces .git/hooks wholesale - every hook type, not only pre-push. The three passthrough shims cover what keryx installs today (post-commit, post-merge, post-checkout), but if keryx ever begins installing another hook type it would simply stop running, with nothing reporting it.",
+      "impact": "A future keryx release could silently disable a maintenance hook (gdgraph rebuild, wiki freshness, testing-context staleness) in this repository only.",
+      "suggested_fix": "verify.sh now warns for any non-sample hook in .git/hooks with no counterpart in .githooks/, telling the reader to add a passthrough shim or confirm the hook is meant to be gone. Applied.",
+      "evidence": "New loop in scripts/hooks/verify.sh over '<git-common-dir>/hooks/*', excluding *.sample and pre-push.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T23-F-005",
+      "global_id": "003-T23-implement#T23-F-005",
+      "reviewer": "003-T23-implement",
+      "severity": "info",
+      "file": "apps/relay/internal/config/config.go",
+      "line": null,
+      "symbol": "gate coverage boundary",
+      "problem": "The gate now runs the whole Go module, but only apps/relay. There is no other Go module in the tree today, so this is complete as of c5fde09; a Go module added elsewhere would not be gated, because scripts/gate/go-tests.sh hardcodes apps/relay.",
+      "impact": "None today. It becomes a hole the moment a second Go module appears, and it would appear as silently as the original one did.",
+      "suggested_fix": "Left as is deliberately - discovering modules by walking for go.mod would change the step's cost characteristics and its failure modes, and there is nothing to discover. If a second Go module lands, extend go-tests.sh in the same commit. Reported rather than pre-emptively generalised.",
+      "evidence": "scripts/gate/go-tests.sh sets RELAY_DIR=\"$REPO_ROOT/apps/relay\" and exits 0 with a notice when that go.mod is absent (state-table row G5).",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "gate_seconds_before": 220,
+    "gate_seconds_after": 247,
+    "gate_seconds_added": 27,
+    "gate_percent_added": 12,
+    "go_suite_seconds_race_tagged": 26,
+    "go_suite_seconds_no_race": 23,
+    "go_suite_seconds_race_untagged": 25,
+    "go_test_packages": 11,
+    "js_suite_seconds": 215,
+    "docs_freshness_seconds": 1,
+    "state_table_rows": 27,
+    "state_table_rows_wrong": 0,
+    "state_table_live_tree_rows": 3,
+    "selftest_seconds": 20,
+    "keryx_commands_probed_for_durability": 3,
+    "silent_revert_detectors": 8,
+    "product_files_changed": 0,
+    "test_files_changed": 0,
+    "gate_seconds_after_repeat_under_concurrent_load": 343
+  },
+  "timestamp_utc": "2026-09-08T15:40:00Z"
+}

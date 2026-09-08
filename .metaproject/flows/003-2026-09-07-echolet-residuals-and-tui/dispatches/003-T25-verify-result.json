@@ -1,0 +1,418 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003-T25-verify",
+  "dispatch_id": "003-T25-verify",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent verification of flow 003 on HEAD c5fde09, node v26.5.0, go1.26.1, macOS 26.5.1 arm64. Whole matrix re-run and green: typecheck exit 0; pnpm -r test exit 0 with 61 files / 320 tests / 0 failed; pnpm --filter @echolet/cli test:e2e exit 0 with 1 file / 3 tests; go test -count=1 ./... , -race and -race -tags relayv2 all exit 0 with 171 tests, 0 failures and 0 data races (the first uninstrumented pass returned cached results, so every figure quoted is from -count=1). Repository integrity checked by SHA-256 over all 973 tracked files: 971 byte-identical, the only two differing are the flow tracker's own flow.json and journal.md. No test was weakened, skipped, narrowed or deleted anywhere in the wave; the one authorised re-authoring is strictly stronger than what it replaced, verified by my own mutations rather than by the report. Nineteen mutations were run outside the tree; seventeen were killed. Two survived and are the headline findings: deleting the viewport guard on the trust modal's painted-at record leaves all 108 TUI tests green because no test ever opens a modal through the shell, and lowering LIMITS.MAX_MESSAGE_BYTES on the TypeScript side leaves 83 tests green while reintroducing RI-09's exact failure mode. Four acceptance criteria are not met (AC1, AC2, AC3, AC4) and AC10 is partial: the size-closure commit 5235a6d bundles a re-authored test and a brand-new config test with the product change, so red-first ordering is unprovable for both. The wave should not close as it stands.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC1: every residual inventory item dispositioned by evidence, with a disposition table naming the evidence for each",
+      "status": "not_met",
+      "evidence": "The T1 table carries a verdict and named evidence for all 62 items (FIX NOW 21, FIX WITH CARE 15, RECORD PERMANENTLY 14, STALE 12) and its STALE verdicts hold on spot-check, but there is no post-wave disposition saying for each item whether it was fixed, re-verified open with a reason, or deleted. flow.json is in-progress with 8 tasks still todo, including FIX NOW work (T15, T16, T17, T22, T23, T24) and T20, which is recorded todo although e949aae landed it. Re-verified still open with no wave-level record: apps/relay/relay (18094306 bytes, untracked, ignored at .gitignore:94) and three gofmt -l apps/relay files."
+    },
+    {
+      "criterion": "AC2: no document states something the tree contradicts",
+      "status": "not_met",
+      "evidence": "The three clauses AC2 names are clean (no clean-shutdown claim, `keryx ctx rg -i oracle docs/` returns 0 matches, no AC4-blocked paragraph, no mislabelled e2e figure). But T7 reconciled at 4346e2b and six behaviour-changing commits landed after it. Unqualified and now false: docs/STATUS_CURRENT.md limitation 3 (poll byte budget unrelated to ECHOLET_MAX_MESSAGE_BYTES, contradicted by 5235a6d), limitation 4 (one undecodable record aborts the backfill; no conflict retry, contradicted by 18afa36), limitation 10 and docs/requirements/echolet-cli-prototype/README.md:37 (ticker started with no stop channel and not part of the shutdown sequence, contradicted by 18afa36), and three documents stating depr's certificate-renewal timer is not installed after T14 installed it."
+    },
+    {
+      "criterion": "AC3: `pnpm --filter @echolet/cli test:e2e` runs every e2e file, or the scripts are renamed; every document quotes the corrected name and count",
+      "status": "not_met",
+      "evidence": "Second half met and checked: STATUS_CURRENT.md (four sites plus a dedicated section), requirements README.md:10, metrics-and-validation.md:17,25,28 and specification.md:21 all name the script, the file and the count; no bare 3/3 remains. First half not met: apps/cli/package.json still declares \"test:e2e\": \"vitest run test/e2e/two-process.test.ts\" and was neither repointed nor renamed. Measured: exit 0, 1 file, 3 tests, 18.13 s, against six files under test/e2e/ holding 29 tests (two-process 3, flood-closure 9, init-relay-url 9, rewalk-crash-safety 4, relay-tls 3, publication-claimability 1), all of which pass under the plain `test` script. No root test:e2e script exists."
+    },
+    {
+      "criterion": "AC4: configuration that binds nothing is made to bind or removed; the relay's background timer is stoppable and covered by tests",
+      "status": "not_met",
+      "evidence": "Second half met: CleanupService gained stop/stopped channels under a mutex, Stop() is wired into cmd/relay/main.go:stopBackgroundWorkAndCloseStorage on all four store-closing paths, and both pinning tests were red at 7af8492 and are green now; mutation G5 (drop r.Stop()) turns TestRelayStopsTheCleanupServiceBeforeClosingStorage red. First half not met: runCleanup() is still two slog.Debug calls (cleanup_service.go:106-111) while ECHOLET_CLEANUP_INTERVAL_SECONDS is still presented in docker-compose.yml:64, docker-compose.insecure-loopback.yml:85, run-relay.sh:194, depr.env.example:61, geekom.env.example:64 and insecure-loopback.env.example:102. It was documented as binding nothing, which AC4 does not accept."
+    },
+    {
+      "criterion": "AC5: a single malformed record does not deny service to unrelated identities, and a single configuration value cannot silently make a mailbox undeliverable; both demonstrated by a test that fails before the fix",
+      "status": "met",
+      "evidence": "Red-before replayed at 7af8492: TestBackfillSkipsUndecodableRecordAndBindsTheHealthyOnes, TestBackfillReportsTheNumberOfSkippedRecords and TestPreBindingIdentityStillAuthorizesWhenAnotherDeviceRecordIsUndecodable all FAIL. Mutation G4 on HEAD (restore `return err` on json.Unmarshal failure) turns the same three red. Mutation G2 (delete the > protocol.MaxMessageBytes refusal in config.Validate) turns TestValidateRefusesAMaxMessageBytesTheRelayCannotDeliver (both subtests) and TestLoadRefusesAMaxMessageBytesAboveTheProtocolMaximum red. Residual: ECHOLET_MAX_MESSAGE_BYTES=0 still validates and makes the relay refuse every envelope, but loudly with PAYLOAD_TOO_LARGE, so not silent; T22 remains todo."
+    },
+    {
+      "criterion": "AC6: the console runs one command at a time, tells the operator why, and reports the exit class the CLI actually returned, demonstrated against a real driven process",
+      "status": "met",
+      "evidence": "Red-before replayed at cc854ec: all four tui-shell.singleFlight tests and all three main.processDriven tests FAIL. On HEAD both gates are load-bearing: mutation M-E (drop the mapKey busy gate) turns the input-model test red and M-D (drop `if (state.busy) return` in reduce) turns the effect test red. main.processDriven.test.ts bundles src/tui/main.ts with esbuild and drives real children, so the process-level requirement is met literally. The exit class is not remapped: applyOutcome and note already reported outcome.code and outcome.exitCode verbatim; removing the concurrency removes the fabricated PERSISTENCE_FAILURE."
+    },
+    {
+      "criterion": "AC7: a truncated pane states that it is truncated and how many rows are not shown, and keeps the rows an operator needs",
+      "status": "met",
+      "evidence": "Red-before at cc854ec: three shell-chrome.overflow and three shell-chrome.recency tests FAIL. On HEAD mutation M-F (fitPane takes a silent prefix, the pre-fix behaviour) turns all six red and M-G (keep the head instead of the tail) turns the three recency tests red. I checked the arithmetic directly: the assembled array is headRoom + shown + 1 + tailRoom <= cap by construction, so the final slice can never drop the truncation marker itself."
+    },
+    {
+      "criterion": "AC8: every advertised key visible at the minimum viewport, a discoverable key list, and no emitted line wider than the viewport at any viewport",
+      "status": "met",
+      "evidence": "Red-before at cc854ec: all three shell-chrome.legend tests and tui-shell.smallViewport FAIL. On HEAD mutation M-I (delete the ? binding) turns 'binds a help key' red and M-A (restore the MIN_VIEWPORT clamp in viewport()) turns tui-shell.smallViewport red. I probed renderFrame at 1x1, 2x2, 10x3, 20x6, 40x10, 71x15, 72x16, 72x17, 73x16, 80x20, 200x60 and 500x200, with and without a modal: every frame was exactly rows lines of exactly cols code points with no ESC byte. One measured edge (V-009): the unaudited-prototype notice is present in full from about 20x6 upward but not at 10x3 or below, and no test covers a viewport smaller than 40x10."
+    },
+    {
+      "criterion": "AC9: flow 002's properties re-verified unchanged on the final tree, including that the trust modal cannot confirm what was never painted, with the full matrix green and zero data races",
+      "status": "met",
+      "evidence": "renderFrame pure, total, deterministic, escape-free and exactly rows x cols: confirmed by my own probe across twelve viewports including 1x1, and by shell-chrome.test.ts 12/12. No key material in any frame or child argv: tui.keyMaterial.test.ts 9/9. Notice on every frame: green, with the V-009 edge. Trust modal: the property HOLDS - reduce refuses on modal.renderedAt === null (tui-shell.ts:166) and paint() stamps renderedAt only when the painted viewport is not below MIN_VIEWPORT (tui-shell.ts:343); my probe confirms the degraded frame carries none of the four identifiers below 72x16 and that all four are painted in full at 72x16 and every larger viewport tested, since MODAL_PANEL_MIN_WIDTH 56 gives 52 inner columns and modalBodyRows(height >= 14) >= 10, exactly the ten body lines the four identifiers need. Matrix green with 0 data races in all three Go configurations. Caveat recorded as V-001: the shell-side half of that gate is protected by no test."
+    },
+    {
+      "criterion": "AC10: no test weakened, skipped, narrowed or deleted, and every fix lands after a test that failed for the right reason first, with the ordering provable from git history",
+      "status": "partial",
+      "evidence": "Nothing weakened: git diff --numstat 4346e2b..c5fde09 over *_test.go and *.test.ts shows 30 files touched and every deletion is a comment or a try/finally refactor; the request-path assertions in 5b51309 were strengthened, and the 'names an exhausted prekey' assertion moved rather than disappeared. No .skip, no .only, no assertion removed. The one authorised re-authoring is strictly stronger (verified by mutations G1, G2, G3). Ordering proven by replaying parent trees: at 7af8492 six relay tests FAIL, at cc854ec 7 files / 18 tests FAIL, at 5b51309 seven claim/publication tests FAIL, at d6d5f8f the two transport tests FAIL; none of the three corresponding fix commits touches a test file. Not provable for one commit: 5235a6d contains product code plus mailbox_poll_byte_budget_derivation_test.go (+219/-115, the authorised re-authoring) and a brand-new max_message_bytes_config_test.go (+153). Neither ever existed red in history, and neither can be made red on the parent tree because both import echolet/apps/relay/internal/protocol, a package that same commit creates. The new config test is not covered by the re-authoring authorisation."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t25-verification-report.md",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "Full independent verification report: matrix figures, per-AC verdicts, the two named leads, the nineteen-mutation table and thirteen findings.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T25-verify-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This result document.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t25-verification-report.md",
+      "change": "added"
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T25-verify-result.json",
+      "change": "added"
+    }
+  ],
+  "findings": [
+    {
+      "id": "V-001",
+      "global_id": "003-T25-verify#V-001",
+      "reviewer": "T25-independent-verifier",
+      "severity": "major",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 343,
+      "symbol": "runTuiShell.paint",
+      "problem": "The viewport condition on the trust modal's painted-at record - the security half of T6's D-4 - is covered by no test. Deleting `&& !isBelowMinViewport(painted)` from paint() leaves the entire TUI suite green, because no test in the repository ever opens a trust modal through runTuiShell: nothing supplies onTrustIdentifiers, and no state handed to the shell carries a modal. The renderedAt stamp and the whole answer-trust-prompt effect path are exercised at no viewport.",
+      "impact": "The property AC9 requires - a trust confirmation cannot be answered for identifiers that were never on screen - holds today but is unguarded. A future edit that reinstated the unconditional stamp would make a trust confirmation answerable on a 40x10 terminal for a modal whose four identifiers were never painted, and the suite would stay green. This is the same shape as the previous wave's two green-because-of-the-defect tests.",
+      "suggested_fix": "Add a shell-level test that drives runTuiShell with an injected 40x10 stdout, delivers a modal through io.onTrustIdentifiers, presses `y`, and asserts io.answerTrustPrompt was never called - together with the same scenario at 72x16 asserting it WAS called, so the pin cannot be satisfied by breaking confirmation everywhere.",
+      "evidence": "Out-of-tree `git archive HEAD` copy; control `npx vitest run src/tui` in apps/cli = 15 files / 108 tests passed. After deleting `&& !isBelowMinViewport(painted)`: 15 files / 108 tests passed, unchanged. `keryx ctx rg 'answerTrustPrompt|onTrustIdentifiers' apps/cli/src` returns 8 matches in 4 files, of which the only test-file matches are two inert `answerTrustPrompt: () => undefined` stubs; onTrustIdentifiers appears in no test.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:343 (paint(): the uncovered viewport condition)",
+          "apps/cli/src/tui/tui-shell.ts:166 (reduce(): the renderedAt gate - this half IS covered, by tui-shell.test.ts:124)",
+          "apps/cli/src/tui/tui-shell.ts:398-404 (io.onTrustIdentifiers listener: reached by no test)",
+          "apps/cli/src/tui/tui-shell.ts:381-384 (answer-trust-prompt effect: reached by no test)"
+        ],
+        "enumeration_method": "`keryx ctx rg 'renderedAt' apps/cli/src` (16 matches, 7 files) and `keryx ctx rg 'answerTrustPrompt|onTrustIdentifiers' apps/cli/src` (8 matches, 4 files), cross-checked by reading every test that imports ./tui-shell (`keryx ctx rg 'tui-shell|tui/main' apps/cli --glob '*.test.ts'`, 6 files) and confirming none constructs a modal-bearing state for runTuiShell; the surviving mutation is the executable proof."
+      }
+    },
+    {
+      "id": "V-002",
+      "global_id": "003-T25-verify#V-002",
+      "reviewer": "T25-independent-verifier",
+      "severity": "major",
+      "file": "deploy/relay/docker-compose.yml",
+      "line": 64,
+      "symbol": "ECHOLET_CLEANUP_INTERVAL_SECONDS",
+      "problem": "AC4's first half is not met. The acceptance criterion says the cleanup interval must not be presented to an operator in compose files and env examples while the service it names does nothing. CleanupService.runCleanup() is still two slog.Debug calls with mailboxRepo, challengeRepo and mailboxTTL stored and never read, and the variable is still set in both compose files, run-relay.sh and all three env examples. It was documented as binding nothing rather than made to bind or removed.",
+      "impact": "An operator tuning ECHOLET_CLEANUP_INTERVAL_SECONDS changes only how often two debug lines are emitted, while the relay logs `Cleanup service started interval_sec=60` at boot as though a retention policy were in force. Retention is in fact entirely Badger's TTL from ECHOLET_MAILBOX_TTL_HOURS. The wave closed the stoppability half of the residual and left the presentation half.",
+      "suggested_fix": "Either give runCleanup() the work its name implies (RI-63, now unblocked because Stop() joins before the store closes), or remove the variable from the six operator-facing files and from config.Config, leaving ECHOLET_MAILBOX_TTL_HOURS as the single retention control.",
+      "evidence": "`keryx ctx rg ECHOLET_CLEANUP_INTERVAL_SECONDS .` -> 13 matches in 12 files, six of them operator-facing configuration. Read apps/relay/internal/service/cleanup_service.go:106-111 on HEAD c5fde09: runCleanup() is slog.Debug(\"Running cleanup...\") followed by slog.Debug(\"Cleanup completed\") and nothing else.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "deploy/relay/docker-compose.yml:64",
+          "deploy/relay/docker-compose.insecure-loopback.yml:85",
+          "deploy/relay/run-relay.sh:194",
+          "deploy/relay/env/depr.env.example:61",
+          "deploy/relay/env/geekom.env.example:64",
+          "deploy/relay/env/insecure-loopback.env.example:102",
+          "docs/OPS-23_LOCAL_ENV_VARS.md:88,109 (documents it, correctly noting it binds nothing)",
+          "apps/relay/internal/config/config.go:58 (the field that reads it)"
+        ],
+        "enumeration_method": "`keryx ctx rg ECHOLET_CLEANUP_INTERVAL_SECONDS .` over the whole repository, which returned every occurrence including tests and documentation; the operator-facing subset is the six deploy files."
+      }
+    },
+    {
+      "id": "V-003",
+      "global_id": "003-T25-verify#V-003",
+      "reviewer": "T25-independent-verifier",
+      "severity": "major",
+      "file": "docs/STATUS_CURRENT.md",
+      "line": 94,
+      "symbol": null,
+      "problem": "AC2 is not met. T7 reconciled the documents at 4346e2b and six behaviour-changing commits landed afterwards with no second pass, so four unqualified assertions now contradict the tree: the poll byte budget is described as unrelated to ECHOLET_MAX_MESSAGE_BYTES (fixed by 5235a6d), the backfill is described as aborting on one undecodable record and as having no bounded conflict retry (both fixed by 18afa36), the cleanup ticker is described as having no stop channel and not being part of the shutdown sequence (fixed by 18afa36), and three documents state that depr's certificate-renewal timer is not installed (T14 installed it).",
+      "impact": "STATUS_CURRENT.md is the document a reader consults for the current state, and it presents three closed defects as open limitations while presenting itself as the status of a commit ten behind HEAD. A reader planning work from it would re-open finished items, and the wave's own AC2 - the criterion this flow exists partly to satisfy - is violated by the flow's own changes.",
+      "suggested_fix": "Run a second reconciliation pass at c5fde09 covering the six commits after 4346e2b: rewrite STATUS_CURRENT limitations 3, 4 and 10 and requirements README.md:37 to what the tree now does, update the revision header, and correct the renewal-timer statements in all three documents against t14-renewal-report.md (or, if the host is to be re-checked first, mark them as unverified rather than as not installed).",
+      "evidence": "Read docs/STATUS_CURRENT.md lines 86-120 and docs/requirements/echolet-cli-prototype/README.md:36-38 on HEAD c5fde09, against apps/relay/internal/api/handler/mailbox_handler.go (clientPollResponseBound = 4 * protocol.MaxMessageBytes), apps/relay/internal/config/config.go Validate(), apps/relay/internal/storage/repository/device_record_repo.go:148-155 (skipped++ / return nil) and apps/relay/internal/service/cleanup_service.go:50-104 (stop/stopped channels, Stop joins). t14-renewal-report.md §0 records the depr timer as enabled and active.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "docs/STATUS_CURRENT.md limitation 3 (poll byte budget)",
+          "docs/STATUS_CURRENT.md limitation 4 (backfill resilience and conflict retry)",
+          "docs/STATUS_CURRENT.md limitation 10 (ticker with no stop channel)",
+          "docs/STATUS_CURRENT.md limitation 11 (depr renewal timer not installed)",
+          "docs/requirements/echolet-cli-prototype/README.md:37 (ticker with no stop channel)",
+          "docs/requirements/echolet-cli-prototype/README.md (AC4 paragraph: renewal timer not installed)",
+          "docs/requirements/echolet-cli-prototype/deployment-runbook.md §4 and §14 (renewal timer not installed)",
+          "docs/requirements/echolet-cli-prototype/deployment-runbook.md:1079-1085 (cleanup interval bounds nothing - still true, listed for completeness)"
+        ],
+        "enumeration_method": "Targeted `keryx ctx rg` sweeps over docs/ for each behaviour the six post-4346e2b commits changed - '1 MiB|1024 \\* 1024|poll byte budget|undeliverable|MAX_MESSAGE_BYTES', 'backfill|CleanupService|cleanup timer|stop channel|канала остановки', 'renew' - followed by reading each hit in context and comparing it to the source at HEAD."
+      }
+    },
+    {
+      "id": "V-004",
+      "global_id": "003-T25-verify#V-004",
+      "reviewer": "T25-independent-verifier",
+      "severity": "major",
+      "file": "apps/cli/package.json",
+      "line": null,
+      "symbol": "scripts.test:e2e",
+      "problem": "AC3's first clause is not met. The script still reads \"test:e2e\": \"vitest run test/e2e/two-process.test.ts\" and was neither repointed at all six end-to-end files nor renamed to say what it runs. AC3 offers a choice between those two remediations, not the option to decline both; the documentation half was done instead.",
+      "impact": "A reader or a CI job invoking the script by its name gets 3 of 29 end-to-end tests and 1 of 6 files, and the name asserts otherwise. The gate command in metrics-and-validation.md still cannot be run as a bare root `pnpm test:e2e` because no root script exists. The broader coverage does run under the plain `test` script, so nothing is untested - the defect is that the name lies.",
+      "suggested_fix": "Either repoint the script at the directory (`vitest run test/e2e`) and update the quoted count to 6 files / 29 tests, or rename it to `test:e2e:two-process` and add a `test:e2e` that runs the directory. Update the five documents that quote it in the same change.",
+      "evidence": "Measured on c5fde09: `pnpm --filter @echolet/cli test:e2e` -> exit 0, `vitest run test/e2e/two-process.test.ts`, Test Files 1 passed (1), Tests 3 passed (3), 18.13 s. `git ls-files apps/cli` lists six files under test/e2e/; the full `pnpm -r test` run shows relay-tls 3, init-relay-url 9, two-process 3, rewalk-crash-safety 4, flood-closure 9, publication-claimability 1 = 29 tests, all passing.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "apps/cli/package.json scripts.test:e2e",
+          "package.json (root: no test:e2e script, so the documented gate command cannot run as written)",
+          "docs/STATUS_CURRENT.md:17,35,45,47 (quote it accurately)",
+          "docs/requirements/echolet-cli-prototype/README.md:10 (quotes it accurately)",
+          "docs/requirements/echolet-cli-prototype/metrics-and-validation.md:14,17,25,28 (quotes it accurately)",
+          "docs/requirements/echolet-cli-prototype/specification.md:21 (quotes it accurately)"
+        ],
+        "enumeration_method": "`keryx ctx rg 'test:e2e' docs` returned 13 matches in 4 files, each read in context; the script definitions were read from every workspace package.json via a node one-liner over apps/*/package.json and packages/*/package.json."
+      }
+    },
+    {
+      "id": "V-005",
+      "global_id": "003-T25-verify#V-005",
+      "reviewer": "T25-independent-verifier",
+      "severity": "major",
+      "file": "apps/relay/internal/config/max_message_bytes_config_test.go",
+      "line": null,
+      "symbol": null,
+      "problem": "AC10's ordering requirement is not provable for the size closure. Commit 5235a6d contains the product change together with two test-file changes: the authorised re-authoring of mailbox_poll_byte_budget_derivation_test.go (+219/-115) and a brand-new max_message_bytes_config_test.go (+153) pinning the startup refusal. Neither ever existed in a red state in git history, and neither can be made red on the parent tree, because both import echolet/apps/relay/internal/protocol - a package the same commit creates, so on d6d5f8f they do not compile. The new config test is not covered by the re-authoring authorisation.",
+      "impact": "For the one fix in this wave that changed behaviour on both sides of the wire, the red-first discipline that makes the other three pairs trustworthy is absent from the record. The tests are good ones - I killed three mutations with them - but nobody can show from history that they ever failed for the right reason, which is exactly what AC10 asks for.",
+      "suggested_fix": "Record the ordering explicitly in the flow journal and the T21 result, stating that the re-authored test and the new config test could not be committed red because they depend on the package the fix introduces, and that their non-vacuity was established by mutation instead. For future two-sided closures, land the new package (internal/protocol) in the test commit so the tests can be committed red.",
+      "evidence": "`git show --numstat --format= 5235a6d -- '*_test.go' '*.test.ts'` -> mailbox_poll_byte_budget_derivation_test.go 219/115 and max_message_bytes_config_test.go 153/0. `git log --oneline --all -- apps/relay/internal/api/handler/mailbox_poll_byte_budget_derivation_test.go` -> 5235a6d, 7af8492 only. Both files' import blocks name echolet/apps/relay/internal/protocol, and apps/relay/internal/protocol/limits.go is added by 5235a6d. Contrast: 18afa36, d26bd58 and e949aae each touch zero test files, and their preceding test commits were confirmed red by replaying the parent trees.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "5235a6d: apps/relay/internal/api/handler/mailbox_poll_byte_budget_derivation_test.go (+219/-115)",
+          "5235a6d: apps/relay/internal/config/max_message_bytes_config_test.go (+153, new)",
+          "7af8492 -> 18afa36 (relay pair: clean, fix touches no test file)",
+          "cc854ec -> d26bd58 (TUI pair: clean)",
+          "5b51309 -> e949aae (claim/publication pair: clean)",
+          "d6d5f8f -> 5235a6d (size pair: clean for the two client tests only)"
+        ],
+        "enumeration_method": "Per-commit `git show --numstat --format= <sha> -- '*_test.go' '*.test.ts'` over every commit in 4346e2b..c5fde09, which enumerates every test-file change in the wave; the four test/fix pairs were then each replayed from a `git archive <parent>` export and run."
+      }
+    },
+    {
+      "id": "V-006",
+      "global_id": "003-T25-verify#V-006",
+      "reviewer": "T25-independent-verifier",
+      "severity": "major",
+      "file": "packages/protocol/src/constants/limits.ts",
+      "line": 2,
+      "symbol": "LIMITS.MAX_MESSAGE_BYTES",
+      "problem": "The claim that one shared protocol constant governs message size on both sides of the wire is enforced in only one direction. Changing the Go mirror is caught (three tests go red). Changing the TypeScript source of truth is not: lowering LIMITS.MAX_MESSAGE_BYTES to 131072 leaves 21 files / 83 tests green in apps/cli, while the relay still accepts 262144-byte ciphertexts and may still produce poll responses up to 1 MiB. Nothing anywhere ties protocol.MaxMessageBytes (Go) to LIMITS.MAX_MESSAGE_BYTES (TypeScript), and the Go test's clientPollResponseBoundFor is a hand-written restatement of the client's rule rather than a reading of it.",
+      "impact": "RI-09's exact failure mode - the relay accepts and stores an envelope, answers the poll with a body above the bound the recipient enforces, the recipient refuses the whole batch, nothing is ever acknowledged and the mailbox is undeliverable while both sides look healthy - is reachable again by a one-line edit to the very constant the closure is built on, with no test red. limits.go's comment says the two must be changed together; nothing makes that true.",
+      "suggested_fix": "Make the Go mirror derived rather than restated: generate internal/protocol/limits.go from packages/protocol/src/constants/limits.ts, or add a check (a Go test that parses the TypeScript constant, or a JS test that parses the Go one) asserting the two numbers are equal. Pin the client's response-bound factor and wrapper on the TypeScript side too, so clientPollResponseBoundFor restates something that is itself fixed.",
+      "evidence": "Out-of-tree `git archive HEAD` copy. Control: `npx vitest run src/transport` = 8 files / 28 tests passed. With MAX_MESSAGE_BYTES: 524288 -> 8 files / 28 tests passed. With MAX_MESSAGE_BYTES: 131072 -> `npx vitest run src/transport src/runtime` = 21 files / 83 tests passed, Go untouched. Contrast G3: changing protocol.MaxMessageBytes from 262144 to 524288 turns TestPollResponseBoundsAreDerivedFromTheProtocolMaximum, TestMailboxPollHonoursAggregateResponseByteBudget and TestLoadDefaultsToTheProtocolMaximum red.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "packages/protocol/src/constants/limits.ts:2 (LIMITS.MAX_MESSAGE_BYTES, the declared source of truth)",
+          "apps/relay/internal/protocol/limits.go:21 (protocol.MaxMessageBytes, the hand-written Go mirror)",
+          "apps/relay/internal/config/config.go:45 (envDefault:\"262144\", a third hand-written copy, pinned to the mirror by config.Validate)",
+          "apps/cli/src/transport/relayClient.ts:87-90 (pollResponseWrapperBytes 64 KiB and pollResponseEnvelopeBudgetFactor 4)",
+          "apps/relay/internal/api/handler/mailbox_poll_byte_budget_derivation_test.go clientPollResponseBoundFor (the hand-written Go restatement of those two)",
+          "apps/relay/internal/api/handler/mailbox_poll_capacity_test.go:43 (maxPollResponseBytes, kept in step by the Go test only)"
+        ],
+        "enumeration_method": "`keryx ctx rg 'MAX_MESSAGE_BYTES|MaxMessageBytes|responseByteBound|pollResponseEnvelopeBudgetFactor|maxPollResponseBytes'` across apps/ and packages/, which enumerates every statement of the number and every derivation from it; each site was then read to determine which direction, if any, is machine-checked."
+      }
+    },
+    {
+      "id": "V-007",
+      "global_id": "003-T25-verify#V-007",
+      "reviewer": "T25-independent-verifier",
+      "severity": "minor",
+      "file": "apps/relay/internal/service/cleanup_service.go",
+      "line": 102,
+      "symbol": "CleanupService.Stop",
+      "problem": "The join in Stop() - which T9 §1 calls 'the property being bought', as distinct from a Stop that merely signals - is pinned by no test. Replacing `<-stopped` with `_ = stopped` leaves internal/service and internal/server green under -race. The existing tests establish that the ticker goroutine ends and that the stop is logged before the storage close; neither establishes that Stop does not return while runCleanup is still running.",
+      "impact": "Harmless today because runCleanup has an empty body. The moment RI-63 gives it real Badger work - which T9 explicitly says is now unblocked - a regression to a signal-only Stop would reintroduce a transaction against a closing store, silently, with the suite green. That is the precise hazard the residual was raised about.",
+      "suggested_fix": "Add a service-level test whose runCleanup body blocks on a channel the test controls, asserting that Stop() has not returned while the body is in flight and does return once it completes; or, if runCleanup stays empty, record explicitly that the join is unpinned so whoever implements RI-63 pins it first.",
+      "evidence": "Out-of-tree copy: replacing `close(stop); <-stopped` with `close(stop); _ = stopped`, then `go test -count=1 -race ./internal/service/ ./internal/server/` -> both `ok` (service 2.313s, server 16.400s). Contrast G5 (dropping r.Stop() from cmd/relay/main.go's shutdown), which turns TestRelayStopsTheCleanupServiceBeforeClosingStorage red.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "V-008",
+      "global_id": "003-T25-verify#V-008",
+      "reviewer": "T25-independent-verifier",
+      "severity": "minor",
+      "file": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/flow.json",
+      "line": null,
+      "symbol": null,
+      "problem": "AC1 has no deliverable behind it. The T1 inventory is a pre-wave table with a verdict and evidence per item, but no document records, for each of the 62 items, what the wave did with it. Eight tasks remain todo, several of them FIX NOW items (T15, T16, T17, T22, T23, T24), and T20 is recorded todo in flow.json although e949aae landed it and t20-implementation-report.md is on disk.",
+      "impact": "Without a post-wave disposition, an item that was quietly not reached is indistinguishable from one deliberately deferred with a reason - which is the failure mode AC1 was written against. The T20 bookkeeping error also means flow.json understates what has landed.",
+      "suggested_fix": "Write a disposition table over the 62 T1 items with columns id / bucket / what the wave did / evidence (commit, test name, or the reason it is deferred), and correct T20's status in flow.json.",
+      "evidence": "Read .metaproject/flows/003-.../flow.json (status in-progress; 8 tasks todo, T20 among them) and journal.md (T20 has no task-done line although its report exists and e949aae landed it). `keryx ctx rg -i disposition` over the flow directory returns 5 matches, none of them a post-wave table. Two FIX NOW residuals re-verified still open: `ls -la apps/relay/relay` = 18094306 bytes untracked, and `gofmt -l apps/relay` lists three files.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "V-009",
+      "global_id": "003-T25-verify#V-009",
+      "reviewer": "T25-independent-verifier",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/shell-chrome.ts",
+      "line": 223,
+      "symbol": "tooSmallFrame",
+      "problem": "The unaudited-prototype notice is not present in full below roughly 20x6. tooSmallFrame wraps UNAUDITED_NOTICE to the terminal's width and renderFrame then slices the result to `rows`, so at 10x3 only the first 30 code points survive, and at 2x2 or 1x1 almost nothing does. No test covers a viewport smaller than 40x10, where the notice happens to fit in two of the ten rows.",
+      "impact": "AC9 asks for the notice on every frame and AC8's stated purpose is that it cannot be pushed out of view. At very small terminals it is, in the row dimension rather than the column dimension. The frames remain total and correctly shaped, so this is a completeness gap on a warning, not a crash.",
+      "suggested_fix": "At viewports too small to carry the wrapped notice, paint a short fallback that fits (an abbreviated 'UNAUDITED PROTOTYPE' or a truncation marker), and extend tui-shell.smallViewport.test.ts with a 10x3 case asserting whichever rule is chosen.",
+      "evidence": "Out-of-tree probe calling renderFrame directly at 1x1, 2x2, 10x3, 20x6, 40x10, 71x15, 72x16, 72x17, 73x16, 80x20, 200x60 and 500x200, with and without a modal. Whitespace-stripped containment of UNAUDITED_NOTICE: false at 1x1, 2x2 and 10x3; true from 20x6 upward. Every frame was exactly rows x cols with no ESC byte at all twelve sizes.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "V-010",
+      "global_id": "003-T25-verify#V-010",
+      "reviewer": "T25-independent-verifier",
+      "severity": "info",
+      "file": "apps/relay/internal/api/handler/mailbox_poll_byte_budget_derivation_test.go",
+      "line": null,
+      "symbol": "clientPollResponseBoundFor",
+      "problem": "The Go restatement of the client's response-bound rule hard-codes factor 4 and a 64 KiB wrapper, while the TypeScript tests constrain the real factor only to roughly the open interval (3, 5) - relayClient.pollCapacity.test.ts accepts 3 maximum-size envelopes and refuses 5, and responseBoundDerivation accepts 1 and refuses 8 at a mocked maximum.",
+      "impact": "A change to pollResponseEnvelopeBudgetFactor within that interval, or to pollResponseWrapperBytes, would leave the Go restatement measuring the relay against a rule the client no longer follows, with nothing red. This is the same one-way-mirror shape as V-006 and would be closed by the same fix.",
+      "suggested_fix": "Pin the client's factor and wrapper on the TypeScript side with a direct assertion on responseByteBoundFor, or derive the Go restatement from the TypeScript constants rather than restating them.",
+      "evidence": "Read the two constants at apps/cli/src/transport/relayClient.ts:87-88 and clientPollResponseBoundFor in the Go test; computed the interval the existing TypeScript assertions leave open (bound must exceed ~3 x 262144 to accept 3 and stay below ~5 x 262144 to refuse 5).",
+      "confidence": "medium",
+      "blocking_merge": false
+    },
+    {
+      "id": "V-011",
+      "global_id": "003-T25-verify#V-011",
+      "reviewer": "T25-independent-verifier",
+      "severity": "info",
+      "file": "apps/relay/internal/validation/validate.go",
+      "line": 88,
+      "symbol": "ValidatePreKeyBundle",
+      "problem": "The identifier bound on /v1/prekeys/publish is pinned for bundle_id and device_id but not for identity_id: neutralising the bound leaves the identity_id subtest green, because an over-long identity_id then fails signature verification instead and still produces a typed 4xx.",
+      "impact": "None today - the case is refused either way. But identity_id's refusal remains incidental to its double life as the ed25519 verification key, exactly as T9 §3 described, so if identity_id ever stops being the verification key the bound would be unpinned. T9-R-5 records the related code change; this records that the subtest does not hold the bound.",
+      "suggested_fix": "Assert the error code for the identity_id subtest (INVALID_SCHEMA rather than any typed 4xx), so the bound rather than the signature path is what keeps it green.",
+      "evidence": "Out-of-tree mutation G6: change `len(identifier.Value) > MaxIdentifierBytes` to `> 1<<30` in ValidatePreKeyBundle only (the second of three occurrences). `go test -count=1 ./internal/api/handler/` -> TestPublishPreKeyBundleRejectsOversizedIdentifiersWithClientError FAILS on bundle_id and device_id; identity_id does not appear in the failure list.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "V-012",
+      "global_id": "003-T25-verify#V-012",
+      "reviewer": "T25-independent-verifier",
+      "severity": "info",
+      "file": "apps/relay/relay",
+      "line": null,
+      "symbol": null,
+      "problem": "Two FIX NOW residuals from the T1 inventory are still open on the final tree with no wave-level record of the reason: apps/relay/relay is an 18,094,306-byte untracked binary matching no commit (now matched by .gitignore:94), and three files still fail gofmt.",
+      "impact": "Low. The binary is ignored rather than committed, so it cannot be pushed; the gofmt files are the pre-existing RI-35 set and none of the wave's changes was added to it. Recorded because AC1 asks for a reason, and no document gives one for these two.",
+      "suggested_fix": "Delete apps/relay/relay (or move the build output under a build directory), run gofmt -w on the three files, or record both explicitly as deferred with the reason.",
+      "evidence": "`ls -la apps/relay/relay` -> 18094306 bytes; `git check-ignore -v apps/relay/relay` -> .gitignore:94. `gofmt -l apps/relay` -> internal/api/handler/mailbox_read_mark_test.go, internal/api/handler/signal_prekey_bundle_v2.go, internal/storage/repository/signal_prekey_bundle_v2.go.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "V-013",
+      "global_id": "003-T25-verify#V-013",
+      "reviewer": "T25-independent-verifier",
+      "severity": "info",
+      "file": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t23-push-gate-diagnosis.md",
+      "line": null,
+      "symbol": null,
+      "problem": "The push-gate diagnosis is sound and its central claim - that the gate reported a selection failure as a test failure with runner n/a and command n/a, and passed vacuously on a clean tree - is well evidenced. But the fix lives in untracked .git/hooks, T23's own §8 says keryx init/update will revert it, and both T23 and T24 remain todo, so the Go suite is still outside the gate and the change that triggered the episode was mostly Go.",
+      "impact": "The gate is stronger than it was for as long as the hook survives, and a fresh clone or a keryx update returns to the vacuous behaviour. No Go change can select a test, so the relay work in this wave would not have been gated even by the fixed hook.",
+      "suggested_fix": "Complete T23 (a repo-tracked hooks directory plus core.hooksPath, or a keryx setting that survives regeneration) and T24 (add `go -C apps/relay test -race -count=1 -tags relayv2 ./...` to the pre-push block).",
+      "evidence": "Read t23-push-gate-diagnosis.md in full against flow.json, where T23 and T24 are both todo. .git/hooks is untracked and outside my write scope, so I verified the diagnosis by reading it against the recorded keryx artifacts rather than by pushing.",
+      "confidence": "medium",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "For AC3, should `test:e2e` be repointed at `test/e2e` (6 files, 29 tests) or renamed to `test:e2e:two-process` with a new `test:e2e` covering the directory?",
+      "why": "AC3 requires one of the two and every quoting document must then carry the corrected name and count. T7 §6.1 records that the choice has not been made, and it cannot be made by a verifier: repointing changes what the documented gate command measures and roughly triples its runtime, which is a project decision.",
+      "options": [
+        { "id": "repoint", "label": "Repoint test:e2e at test/e2e (6 files, 29 tests) and update the five quoting documents", "recommended": true },
+        { "id": "rename", "label": "Rename to test:e2e:two-process and add a test:e2e that runs the directory" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q-002",
+      "question": "For AC4, should runCleanup() be given real work (RI-63) or should ECHOLET_CLEANUP_INTERVAL_SECONDS be removed from the six operator-facing files and from config.Config?",
+      "why": "AC4 accepts either but not the third option that was taken (documenting it). RI-30 was RI-63's stated prerequisite and is now closed, so both routes are open, and the choice determines whether retention stays entirely Badger's TTL.",
+      "options": [
+        { "id": "implement", "label": "Implement RI-63 so the interval binds real cleanup work" },
+        { "id": "remove", "label": "Remove the variable from the six deploy files and from config.Config, leaving ECHOLET_MAILBOX_TTL_HOURS as the single retention control", "recommended": true }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tracked_files_hashed": 973,
+    "tracked_files_unchanged": 971,
+    "js_test_files": 61,
+    "js_tests_passed": 320,
+    "js_tests_failed": 0,
+    "js_suite_exit_code": 0,
+    "js_suite_wall_seconds": 175.53,
+    "typecheck_exit_code": 0,
+    "e2e_script_exit_code": 0,
+    "e2e_script_files": 1,
+    "e2e_script_tests": 3,
+    "e2e_script_wall_seconds": 18.13,
+    "e2e_files_in_package": 6,
+    "e2e_tests_in_package": 29,
+    "go_tests_run": 171,
+    "go_tests_passed": 171,
+    "go_tests_failed": 0,
+    "go_tests_skipped": 0,
+    "go_untagged_exit_code": 0,
+    "go_race_exit_code": 0,
+    "go_race_relayv2_exit_code": 0,
+    "go_data_races_untagged": 0,
+    "go_data_races_race": 0,
+    "go_data_races_race_relayv2": 0,
+    "go_untagged_wall_seconds": 22.25,
+    "go_race_wall_seconds": 22.39,
+    "go_race_relayv2_wall_seconds": 21.96,
+    "mutations_run": 19,
+    "mutations_killed": 17,
+    "mutations_survived": 2,
+    "acceptance_met": 5,
+    "acceptance_partial": 1,
+    "acceptance_not_met": 4,
+    "node_version": "v26.5.0",
+    "go_version": "go1.26.1 darwin/arm64",
+    "pnpm_version": "10.0.0",
+    "loaded_machine_figures": "none"
+  },
+  "timestamp_utc": "2026-09-08T07:05:00Z"
+}
