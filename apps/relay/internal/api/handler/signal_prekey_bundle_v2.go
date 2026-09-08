@@ -94,7 +94,7 @@ func (h *PreKeyBundleHandler) PublishSignalPreKeyBundleV2(w http.ResponseWriter,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"ok": true,
+		"ok":   true,
 		"data": map[string]any{"stored": true, "bundle_id": published.BundleID, "claimable": claimable},
 	})
 }

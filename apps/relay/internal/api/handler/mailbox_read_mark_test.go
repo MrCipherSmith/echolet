@@ -145,8 +145,8 @@ func TestAckSignatureMustBindReadThrough(t *testing.T) {
 	response := ackWithReadThrough(t, handler, mailboxID, deviceID, deviceKey, ids[:1], "2")
 
 	if response.Code == http.StatusOK {
-		t.Fatalf("AckMailbox(read_through=2, signed with a transcript that does not mention it) status = 200. "+
-			"The presented signature covers only (recipient_mailbox_id, device_id, envelope_ids), so the read position is unauthenticated: a caller who never held the recipient's device key could advance the mark and make every envelope behind it unreachable. "+
+		t.Fatalf("AckMailbox(read_through=2, signed with a transcript that does not mention it) status = 200. " +
+			"The presented signature covers only (recipient_mailbox_id, device_id, envelope_ids), so the read position is unauthenticated: a caller who never held the recipient's device key could advance the mark and make every envelope behind it unreachable. " +
 			"`createMailboxAckMessage` (packages/crypto-core/src/mailbox/auth.ts:22-27) and its Go twin `CreateMailboxAckMessage` (cryptoutil/signatures.go:37) must bind read_through TOGETHER, under a new version prefix, so the two sides of the wire cannot disagree about what was signed")
 	}
 	if response.Code < http.StatusBadRequest || response.Code >= http.StatusInternalServerError {
