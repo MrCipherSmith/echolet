@@ -9,7 +9,7 @@
     "build": "node build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:e2e": "vitest run test/e2e/two-process.test.ts"
+    "test:e2e": "vitest run test/e2e"
   },
   "dependencies": {
     "@echolet/client-core": "workspace:*",

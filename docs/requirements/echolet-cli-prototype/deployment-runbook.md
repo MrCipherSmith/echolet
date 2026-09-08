@@ -1,5 +1,5 @@
 # Echolet Relay Deployment Runbook
-Version: 0.5.0
+Version: 0.5.1
 
 Copyable commands for standing up a relay on a tailnet host, and for standing it
 up again on a clean one. Companion to
@@ -1076,13 +1076,18 @@ Everything in this section is true **after** a successful deployment.
   It hard-requires `ECHOLET_HOST_DATA_DIR` and has no `ECHOLET_DATA_VOLUME`
   branch, so `docker compose config` fails outright for a host whose store lives
   in `echolet-relay-data`. Only `run-relay.sh` can perform that switch. See §6.
-- **`ECHOLET_CLEANUP_INTERVAL_SECONDS` bounds nothing.** Both compose files, all
-  three env examples and `run-relay.sh` set it, and the relay logs `Cleanup
-  service started interval_sec=60` at boot — but `CleanupService.runCleanup()`
-  is two `slog.Debug` calls and does no work. Retention is enforced entirely by
-  Badger's own TTL from `ECHOLET_MAILBOX_TTL_HOURS`. Tuning the cleanup interval
-  changes only how often two debug lines are emitted. Open; recorded here so no
-  operator tunes it expecting an effect.
+- **`ECHOLET_CLEANUP_INTERVAL_SECONDS` is removed from every operator-facing
+  file** (flow 003 T28): both compose files, `run-relay.sh` and all three env
+  examples no longer set it, because `CleanupService.runCleanup()` is still two
+  `slog.Debug` calls and does no work, and a dial that turns nothing is worse
+  than no dial. Retention is enforced entirely by Badger's own TTL from
+  `ECHOLET_MAILBOX_TTL_HOURS` and needs no interval. The relay still logs
+  `Cleanup service started interval_sec=60` at boot — `internal/config/config.go`
+  still declares the field with `envDefault:"60"`, so an operator who sets the
+  variable anyway will still have it read; retiring the Go field is a product
+  change outside this document's scope. The ticker itself is stoppable and part
+  of the shutdown sequence (`18afa36`); only the empty body and the
+  now-unpresented interval are open.
 - **The pinned `@signalapp/libsignal-client@0.102.0` is not a permanent
   decision.** It was taken for this prototype.
 
