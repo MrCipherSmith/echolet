@@ -1,5 +1,5 @@
 # Echolet CLI Prototype Specification
-Version: 0.1.1
+Version: 0.1.2
 
 ## Module identity
 
@@ -18,7 +18,7 @@ Version: 0.1.1
 | Encrypted transactional Node session/inbox/outbox persistence | Implemented reference | Implemented |
 | Relay v2 publication and atomic claim | Planned | Implemented over the network path, with `claimable` on the publish response |
 | CLI profiles, contact commands, transport, history, and demo | Planned | Implemented; the eight-command surface below is frozen |
-| Networked two-process end-to-end evidence | Planned | Implemented and passing: `test/e2e/two-process.test.ts`, 3/3 unfiltered iterations of one scenario (`t55-final-verification.md`). That file is what `pnpm --filter @echolet/cli test:e2e` runs; the other five files under `apps/cli/test/e2e/` run under `pnpm test` |
+| Networked two-process end-to-end evidence | Planned | Implemented and passing: `test/e2e/two-process.test.ts`, 3/3 unfiltered iterations of one scenario (`t55-final-verification.md`). As of flow 003 T28, `pnpm --filter @echolet/cli test:e2e` runs `vitest run test/e2e` — all six files under `apps/cli/test/e2e/`, 29 tests, measured green in 291.5s (real 4m52.6s) on `c5fde09`; the same five files continue to run under `pnpm test` as well |
 
 ## Repository and storage structure
 

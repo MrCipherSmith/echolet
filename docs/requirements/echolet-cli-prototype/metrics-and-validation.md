@@ -1,5 +1,5 @@
 # Echolet CLI Prototype Metrics and Validation
-Version: 0.1.2
+Version: 0.1.3
 
 ## Gate
 
@@ -14,21 +14,28 @@ go -C apps/relay test -race ./...
 pnpm --filter @echolet/cli test:e2e
 ```
 
-Read the fourth command narrowly. **`pnpm --filter @echolet/cli test:e2e` is
-`vitest run test/e2e/two-process.test.ts` — one file, 3 tests**, being three
-iterations of a single two-process scenario. It is not the end-to-end suite.
-`apps/cli/test/e2e/` holds **six files and 29 tests** (`two-process` 3,
-`flood-closure` 9, `init-relay-url` 9, `rewalk-crash-safety` 4, `relay-tls` 3,
-`publication-claimability` 1); the other five are executed by the second command,
-`pnpm test`, because `apps/cli/vitest.config.ts` sets no `include` and vitest's
-default pattern reaches them. So the broader end-to-end coverage is real and it
-comes from `pnpm test`, not from `test:e2e`. There is **no root `test:e2e`
-script** — the fourth command works only with `--filter @echolet/cli`.
+**As of flow 003 T28, the fourth command is the whole end-to-end suite.**
+`pnpm --filter @echolet/cli test:e2e` is `vitest run test/e2e` — the directory,
+repointed rather than renamed because the script's name already said what it
+should run. `apps/cli/test/e2e/` holds **six files and 29 tests** (`two-process`
+3, `flood-closure` 9, `init-relay-url` 9, `rewalk-crash-safety` 4, `relay-tls`
+3, `publication-claimability` 1); all six now run under the fourth command
+itself. Measured twice on `c5fde09` (macOS arm64, Node v26.5.0): a clean run of
+**6 files, 29 tests, all passed**, real wall-clock **4m52.6s** (vitest-internal
+291.5s); an earlier run measured 3m30.0s with one transient failure in
+`flood-closure.test.ts` that did not reproduce on retry with identical code, so
+it is recorded as observed flakiness rather than a gate regression. The same
+five files are *also* reached by the second command, `pnpm test` — its default
+`include` was never narrowed — so the gate now exercises them twice under two
+different scripts; that redundancy is accepted rather than removed, because
+narrowing `pnpm test`'s scope was not this task's decision to make. There is
+**no root `test:e2e` script** — the fourth command still works only with
+`--filter @echolet/cli`.
 
 The CLI commands and the `test:e2e` script existed as planned surfaces when this
-document was written; both are implemented now. Any evidence recorded against
-this gate must name the script, the files and the test count rather than a bare
-figure.
+document was written; both are implemented now, and the fourth command now runs
+what its name says. Any evidence recorded against this gate must name the
+script, the files and the test count rather than a bare figure.
 
 `pnpm lint` is deliberately absent from the list above, and should stay absent
 until it means something: the root script is `pnpm -r lint`, no workspace package

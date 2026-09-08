@@ -85,11 +85,28 @@
 * **Пример:** `120`
 * **Default:** `120`
 
-### `ECHOLET_CLEANUP_INTERVAL_SECONDS`
-* **Назначение:** интервал тикера cleanup job.
-* **Пример:** `60`
-* **Default:** `60`
-* **Открытое ограничение: сегодня эта переменная ничего не ограничивает.** `CleanupService.runCleanup()` (`apps/relay/internal/service/cleanup_service.go`) состоит из двух вызовов `slog.Debug` и не выполняет никакой работы; сохранённые конструктором `mailboxRepo`, `challengeRepo` и `mailboxTTL` не читаются; тестов у пакета `internal/service` нет. Удержание записей обеспечивает исключительно TTL самого Badger по `ECHOLET_MAILBOX_TTL_HOURS`. Изменение этого интервала меняет только частоту двух debug-строк. Оставлено как есть намеренно — исправление относится к отдельной задаче.
+### `ECHOLET_CLEANUP_INTERVAL_SECONDS` — удалена как настройка (flow 003, T28)
+Эта переменная **больше не документируется как рабочая настройка** и убрана из
+`.env.local` примера ниже, обоих compose-файлов, `run-relay.sh` и всех трёх
+env-примеров в `deploy/relay/env/`. Причина: `CleanupService.runCleanup()`
+(`apps/relay/internal/service/cleanup_service.go`) состоит из двух вызовов
+`slog.Debug` и не выполняет никакой работы — сохранённые конструктором
+`mailboxRepo`, `challengeRepo` и `mailboxTTL` не читаются нигде. Циферблат,
+который ничего не поворачивает, хуже, чем отсутствие циферблата, поэтому он
+снят с операторской поверхности, а не имплементирован задним числом.
+
+**Удержание записей обеспечивает исключительно TTL самого Badger по
+`ECHOLET_MAILBOX_TTL_HOURS`** (см. выше) и не нуждается ни в каком интервале.
+
+Что осталось открытым и не тронуто этой задачей: сам таймер `CleanupService`
+теперь останавливаем и входит в последовательность завершения relay (`18afa36`,
+`cmd/relay/main.go:178`) — это исправлено раньше и не является предметом
+удаления переменной. Поле `CleanupIntervalSec` в
+`apps/relay/internal/config/config.go:58` по-прежнему объявлено с
+`envDefault:"60"`: если переменную всё же задать вручную, она будет прочитана
+и изменит только частоту двух debug-строк. Удаление самого поля из Go-кода —
+изменение продукта и требует отдельной задачи с тестами, вне области
+документации.
 
 ---
 
@@ -106,7 +123,8 @@ ECHOLET_MAILBOX_TTL_HOURS=168
 ECHOLET_CHALLENGE_TTL_SECONDS=60
 ECHOLET_MAX_MAILBOX_BATCH=100
 ECHOLET_RATE_LIMIT_PER_MINUTE=120
-ECHOLET_CLEANUP_INTERVAL_SECONDS=60
+# No ECHOLET_CLEANUP_INTERVAL_SECONDS: removed as an operator-facing setting
+# (flow 003, T28). Retention is Badger's own TTL from ECHOLET_MAILBOX_TTL_HOURS.
 ```
 
 ---
