@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { deriveMailboxId, generateIdentityKeyPair, signUtf8Message } from "@echolet/crypto-core";
+import { CLI_CHILD_TIMEOUT_MS } from "../childProcessTimeouts";
 
 /**
  * RED suite for finding T10R3-F-001 — the contact-import re-walk is not crash-safe.
@@ -67,7 +68,7 @@ const suite = mkdtempSync(join(tmpdir(), "echolet-rewalk-crash-e2e-"));
 const binary = join(suite, "relay"), cli = join(project, "apps/cli/dist/cli.js");
 
 interface Result { code: number | null; stdout: string; stderr: string }
-function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = 20000): Promise<Result> {
+function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = CLI_CHILD_TIMEOUT_MS): Promise<Result> {
   return new Promise((done, reject) => {
     const child = spawn(executable, args, { cwd: project, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "";

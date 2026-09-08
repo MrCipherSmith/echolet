@@ -11,12 +11,13 @@ import { EncryptedSqliteStore } from "@echolet/session-node";
 import { createIdentityProfile } from "@echolet/client-core";
 import { decodeBase64Url, signUtf8Message } from "@echolet/crypto-core";
 import { LIMITS } from "@echolet/protocol";
+import { CLI_CHILD_TIMEOUT_MS, E2E_TEST_TIMEOUT_MS } from "../childProcessTimeouts";
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const suite = mkdtempSync(join(tmpdir(), "echolet-real-e2e-"));
 const binary = join(suite, "relay"), cli = join(project, "apps/cli/dist/cli.js");
 interface Result { code: number | null; stdout: string; stderr: string }
-function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = 20000): Promise<Result> {
+function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = CLI_CHILD_TIMEOUT_MS): Promise<Result> {
   return new Promise((done, reject) => {
     const child = spawn(executable, args, { cwd: project, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "";
@@ -222,4 +223,4 @@ it.each([1, 2, 3])("clean real two-process run %i: offline, restart, exact retry
     if (listening) await close(proxy);
     await stop(relay);
   }
-}, 90000);
+}, E2E_TEST_TIMEOUT_MS);

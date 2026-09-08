@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { LIMITS } from "@echolet/protocol";
 import { importVerifiedSignalBundleV2 } from "@echolet/session-node";
 import { openProfile, type ContactCard } from "../runtime/profile";
+import { CLI_CHILD_TIMEOUT_MS, CLI_TEST_TIMEOUT_MS } from "../../test/childProcessTimeouts";
 
 const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const manifest = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8")) as { bin?: string | { echolet?: string } };
@@ -20,7 +21,7 @@ function child(executable: string, args: string[], environment: Record<string, s
   return new Promise((resolveResult, reject) => {
     const processChild = spawn(executable, args, { cwd, env: { ...process.env, ...environment }, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "", stderr = "";
-    const timeout = setTimeout(() => { processChild.kill("SIGKILL"); reject(new Error("CLI child timed out")); }, 15000);
+    const timeout = setTimeout(() => { processChild.kill("SIGKILL"); reject(new Error("CLI child timed out")); }, CLI_CHILD_TIMEOUT_MS);
     processChild.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
     processChild.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
     processChild.on("error", (error) => { clearTimeout(timeout); reject(error); });
@@ -78,7 +79,7 @@ describe("Echolet command line process contract", () => {
     json(await run(alice, ["init", "--relay-url", "http://127.0.0.1:1", "--store-key-env", "ECHOLET_TEST_KEY"]), 2);
     expect(readFileSync(join(alice.profileDir, "client.sqlite"))).toEqual(db);
     expect(readFileSync(join(alice.profileDir, "config.json"))).toEqual(config);
-  }, 30000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("rejects unknown flags and missing values for every documented command with exit 2 and one JSON object", async () => {
     const owner = fixture();
@@ -87,7 +88,7 @@ describe("Echolet command line process contract", () => {
       const missing = await child(process.execPath, [entry, ...command, "--json", "--profile"], owner.environment);
       json(missing, 2);
     }
-  }, 30000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("exports verified contacts offline, requires explicit confirmation, and rejects forged imports even with --yes", async () => {
     const alice = fixture(), bob = fixture(); await init(alice); await init(bob);
@@ -103,7 +104,7 @@ describe("Echolet command line process contract", () => {
     card.signal_bundle.device_record.signature = Buffer.alloc(64).toString("base64url");
     const forged = join(bob.profileDir, "forged.json"); writeFileSync(forged, JSON.stringify(card));
     json(await run(alice, ["contact", "import", "--from", forged, "--yes"]), 3);
-  }, 30000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("keeps doctor/history offline and maps invalid keys to input or persistence failures without leaking them", async () => {
     const owner = fixture(); await init(owner); const { card } = await exportCard(owner);
@@ -113,7 +114,7 @@ describe("Echolet command line process contract", () => {
     const wrong = await run(owner, ["doctor"], "", { ECHOLET_TEST_KEY: randomBytes(32).toString("base64url") }); json(wrong, 5); redacted(wrong, owner);
     writeFileSync(join(owner.profileDir, "client.sqlite"), "invalid database");
     const corrupt = await run(owner, ["doctor"]); json(corrupt, 5); redacted(corrupt, owner);
-  }, 30000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("routes publish/send/poll through HTTP and exposes plaintext only through explicitly requested history", async () => {
     const requests: Array<{ path: string; body: Record<string, unknown> }> = [];
@@ -156,7 +157,7 @@ describe("Echolet command line process contract", () => {
     expect(history.stdout.includes(marker)).toBe(true); expect(history.stderr.includes(marker)).toBe(false);
     mode = "unavailable"; const unavailable = await run(alice, ["relay", "publish"]); json(unavailable, 4); redacted(unavailable, alice, marker);
     mode = "malformed"; const malformed = await run(alice, ["poll"]); json(malformed, 3); redacted(malformed, alice, marker);
-  }, 30000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("maps untrusted sends to exit 3 and unavailable relay connections to exit 4 with redacted diagnostics", async () => {
     const owner = fixture(), peer = fixture(); await init(owner); await init(peer);
@@ -164,7 +165,7 @@ describe("Echolet command line process contract", () => {
     const untrusted = await run(owner, ["send", "--to", exported.card.signal_bundle.device_record.identity_id, "--text", marker]);
     json(untrusted, 3); redacted(untrusted, owner, marker);
     const unavailable = await run(owner, ["relay", "publish"]); json(unavailable, 4); redacted(unavailable, owner);
-  }, 30000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   // Flow 003 / T26 group C — what the operator is TOLD once `relay publish` means "bring my
   // published pool back up to N".
@@ -220,5 +221,5 @@ describe("Echolet command line process contract", () => {
     for (const rejected of [["relay", "publish", "--to", "x"], ["relay", "publish", "--out", "x"], ["relay", "pool"]]) {
       json(await run(owner, rejected), 2);
     }
-  }, 60000);
+  }, CLI_TEST_TIMEOUT_MS);
 });

@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { deriveMailboxId } from "@echolet/crypto-core";
 import type { ContactCard } from "../runtime/profile";
+import { CLI_CHILD_TIMEOUT_MS, CLI_TEST_TIMEOUT_MS } from "../../test/childProcessTimeouts";
 
 // Review findings F-002 and F-003.
 // F-002: the interactive contact-import confirmation must settle on a completed newline
@@ -66,7 +67,7 @@ function runCli(args: string[], options: RunOptions = {}): Promise<CliRun> {
       cwd: packageDir, env: { ...process.env, ...options.environment }, stdio: ["pipe", "pipe", "pipe"],
     });
     let stdout = "", stderr = "", timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, options.timeoutMs ?? 8000);
+    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, options.timeoutMs ?? CLI_CHILD_TIMEOUT_MS);
     child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
     child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); options.onStderr?.(stderr, child); });
     child.stdin.on("error", () => { /* the entrypoint may reject before reading stdin */ });
@@ -172,7 +173,7 @@ describe("interactive contact-import confirmation (F-002)", () => {
     const result = await run(alice, ["contact", "import", "--from", peer.path], { stdin: "yes\n", keepStdinOpen: true });
 
     expect(outcome(result)).toMatchObject({ timedOut: false, code: 0, errorCode: "ok" });
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("settles on a completed negative line without waiting for stdin to close", async () => {
     const alice = fixture(), bob = fixture();
@@ -182,7 +183,7 @@ describe("interactive contact-import confirmation (F-002)", () => {
     const result = await run(alice, ["contact", "import", "--from", peer.path], { stdin: "n\n", keepStdinOpen: true });
 
     expect(outcome(result)).toMatchObject({ timedOut: false, code: 3, errorCode: "CONTACT_NOT_CONFIRMED" });
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("still settles on end of input without a trailing newline", async () => {
     const alice = fixture(), bob = fixture();
@@ -192,7 +193,7 @@ describe("interactive contact-import confirmation (F-002)", () => {
     const result = await run(alice, ["contact", "import", "--from", peer.path], { stdin: "yes" });
 
     expect(outcome(result)).toMatchObject({ timedOut: false, code: 0, errorCode: "ok" });
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("still settles on an overlong answer without waiting for stdin to close", async () => {
     const alice = fixture(), bob = fixture();
@@ -202,7 +203,7 @@ describe("interactive contact-import confirmation (F-002)", () => {
     const result = await run(alice, ["contact", "import", "--from", peer.path], { stdin: "y".repeat(64), keepStdinOpen: true });
 
     expect(outcome(result)).toMatchObject({ timedOut: false, code: 3, errorCode: "CONTACT_NOT_CONFIRMED" });
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 });
 
 describe("runtime persistence failure classification (F-003)", () => {
@@ -228,7 +229,7 @@ describe("runtime persistence failure classification (F-003)", () => {
       expect(lock).toBeDefined();
       expect(outcome(result)).toMatchObject({ timedOut: false, code: 5, errorCode: "PERSISTENCE_FAILURE" });
     } finally { lock?.release(); }
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("classifies the inbound poll commit failure as PERSISTENCE_FAILURE with exit 5", async () => {
     const alice = fixture();
@@ -244,7 +245,7 @@ describe("runtime persistence failure classification (F-003)", () => {
       expect(lock).toBeDefined();
       expect(outcome(result)).toMatchObject({ timedOut: false, code: 5, errorCode: "PERSISTENCE_FAILURE" });
     } finally { lock?.release(); }
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("classifies the contact-import commit failure as PERSISTENCE_FAILURE with exit 5", async () => {
     const alice = fixture(), bob = fixture();
@@ -266,7 +267,7 @@ describe("runtime persistence failure classification (F-003)", () => {
       expect(lock).toBeDefined();
       expect(outcome(result)).toMatchObject({ timedOut: false, code: 5, errorCode: "PERSISTENCE_FAILURE" });
     } finally { lock?.release(); }
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("keeps typed validation, trust and native decrypt failures on exit 3", async () => {
     const alice = fixture(), bob = fixture();

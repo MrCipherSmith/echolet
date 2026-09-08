@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { LIMITS } from "@echolet/protocol";
+import { CLI_CHILD_TIMEOUT_MS } from "../childProcessTimeouts";
 
 // Flow 003 / T26 group E — the property the whole task exists for, against the REAL relay binary.
 //
@@ -49,7 +50,7 @@ const binary = join(suite, "relay"), cli = join(project, "apps/cli/dist/cli.js")
 const poolTarget = LIMITS.PREKEY_MIN_COUNT;
 
 interface Result { code: number | null; stdout: string; stderr: string }
-function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = 30000): Promise<Result> {
+function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = CLI_CHILD_TIMEOUT_MS): Promise<Result> {
   return new Promise((done, reject) => {
     const child = spawn(executable, args, { cwd: project, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "";

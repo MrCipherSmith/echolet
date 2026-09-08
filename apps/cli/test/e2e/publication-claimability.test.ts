@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { LIMITS } from "@echolet/protocol";
+import { CLI_CHILD_TIMEOUT_MS, E2E_TEST_TIMEOUT_MS } from "../childProcessTimeouts";
 
 // T44-002 (and the end-to-end reproduction of T44-001) against the real relay binary.
 //
@@ -46,7 +47,7 @@ const suite = mkdtempSync(join(tmpdir(), "echolet-claimability-e2e-"));
 const binary = join(suite, "relay"), cli = join(project, "apps/cli/dist/cli.js");
 
 interface Result { code: number | null; stdout: string; stderr: string }
-function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = 20000): Promise<Result> {
+function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = CLI_CHILD_TIMEOUT_MS): Promise<Result> {
   return new Promise((done, reject) => {
     const child = spawn(executable, args, { cwd: project, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "";
@@ -280,4 +281,4 @@ it("reports whether a republished bundle is still claimable, and names an exhaus
   } finally {
     await stop(relay);
   }
-}, 90000);
+}, E2E_TEST_TIMEOUT_MS);

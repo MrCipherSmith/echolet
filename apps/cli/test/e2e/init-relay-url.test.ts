@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { CLI_CHILD_TIMEOUT_MS, E2E_TEST_TIMEOUT_MS } from "../childProcessTimeouts";
 
 /**
  * RED suite for flow 002 / T10-F-003 — `echolet init` must refuse a relay URL that every later
@@ -49,7 +50,7 @@ const project = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const cli = join(project, "apps/cli/dist/cli.js");
 
 interface Result { code: number | null; stdout: string; stderr: string }
-function command(args: string[], env: Record<string, string> = {}, timeoutMs = 30000): Promise<Result> {
+function command(args: string[], env: Record<string, string> = {}, timeoutMs = CLI_CHILD_TIMEOUT_MS): Promise<Result> {
   return new Promise((done, reject) => {
     const child = spawn(process.execPath, [cli, ...args], { cwd: project, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "";
@@ -121,7 +122,7 @@ it.each(contradictory)("RED: `init` refuses a relay URL carrying $label as a con
     // discover later: `init` either produced a usable profile or produced nothing.
     expect(existsSync(join(profile, "config.json")), "a refused init must not write a profile").toBe(false);
   } finally { rmSync(directory, { recursive: true, force: true }); }
-}, 60000);
+}, E2E_TEST_TIMEOUT_MS);
 
 it.each(agreed)("guard: `init` still accepts $label", async ({ url }) => {
   const directory = mkdtempSync(join(tmpdir(), "echolet-init-relay-url-ok-"));
@@ -133,7 +134,7 @@ it.each(agreed)("guard: `init` still accepts $label", async ({ url }) => {
     expect(result.stdout.includes(storeKey)).toBe(false);
     expect(result.stderr.includes(storeKey)).toBe(false);
   } finally { rmSync(directory, { recursive: true, force: true }); }
-}, 60000);
+}, E2E_TEST_TIMEOUT_MS);
 
 /**
  * The complement of the RED above, and the reason its exit code matters: exit 5 must mean the
@@ -161,4 +162,4 @@ it("guard: an unreachable relay is not reported as a local persistence failure",
     expect(publish.stdout.includes(storeKey)).toBe(false);
     expect(publish.stderr.includes(storeKey)).toBe(false);
   } finally { rmSync(directory, { recursive: true, force: true }); }
-}, 60000);
+}, E2E_TEST_TIMEOUT_MS);

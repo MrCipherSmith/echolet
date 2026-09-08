@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { deriveMailboxId, generateIdentityKeyPair, signUtf8Message } from "@echolet/crypto-core";
+import { CLI_CHILD_TIMEOUT_MS } from "../childProcessTimeouts";
 
 /**
  * RED suite for flow 002 / T5 — closing the mailbox-flooding class against the REAL relay binary.
@@ -64,7 +65,7 @@ const suite = mkdtempSync(join(tmpdir(), "echolet-flood-closure-e2e-"));
 const binary = join(suite, "relay"), cli = join(project, "apps/cli/dist/cli.js");
 
 interface Result { code: number | null; stdout: string; stderr: string }
-function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = 20000): Promise<Result> {
+function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = CLI_CHILD_TIMEOUT_MS): Promise<Result> {
   return new Promise((done, reject) => {
     const child = spawn(executable, args, { cwd: project, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "";
@@ -372,10 +373,10 @@ async function world(label: string, body: (world: World) => Promise<void>) {
     const proxyPort = await listen(proxy); listening = true;
     const proxyUrl = `http://127.0.0.1:${proxyPort}`;
 
-    async function runRaw(profile: string, args: string[], timeoutMs = 20000) {
+    async function runRaw(profile: string, args: string[], timeoutMs = CLI_CHILD_TIMEOUT_MS) {
       return command(process.execPath, [cli, ...args, "--profile", profile, "--json"], { ECHOLET_E2E_KEY: keys.get(profile)! }, timeoutMs);
     }
-    async function run(profile: string, args: string[], expected: number | null = 0, timeoutMs = 20000) {
+    async function run(profile: string, args: string[], expected: number | null = 0, timeoutMs = CLI_CHILD_TIMEOUT_MS) {
       const result = await runRaw(profile, args, timeoutMs);
       const value = JSON.parse(result.stdout) as { ok: boolean; data?: Record<string, unknown>; error?: { code: string } };
       const errorCode = /^[A-Z_]+$/.test(value.error?.code ?? "") ? value.error!.code : "none";
