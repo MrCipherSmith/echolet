@@ -9,7 +9,7 @@
   "title": "Echolet: close the recorded residuals and make the operator TUI usable",
   "status": "in-progress",
   "createdAt": "2026-09-07T19:26:13.895Z",
-  "updatedAt": "2026-09-08T21:51:09.147Z",
+  "updatedAt": "2026-09-08T22:54:35.066Z",
   "source": {
     "type": "description",
     "ref": null
@@ -533,10 +533,10 @@
       "id": "T25",
       "title": "Independent verification of everything flow 003 has landed",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 4,
+        "count": 5,
         "log": [
           {
             "at": "2026-09-08T06:19:33.737Z",
@@ -557,12 +557,18 @@
             "at": "2026-09-08T17:55:14.261Z",
             "outcome": "failed",
             "detail": "R2-001 major: the gate's two blocking steps test the WORKING TREE, not the pushed range - a red committed suite with a green uncommitted tree passes with exit 0, and no self-test row can see it because the self-test exercises the working tree too. R2-002/R2-003: nine of eleven prose sites and two documents still describe the pre-pool world. R2-004: test:e2e exits 143 with 11 child timeouts because seven process-spawning files start at once with no pool limit. R2-005/R2-006: the design understates a full-drain publish as 20 requests when it is 40, and says two source addresses out-drain a refilling victim when one suffices at 2:1."
+          },
+          {
+            "at": "2026-09-08T22:02:17.319Z",
+            "outcome": "started",
+            "detail": "Round 3, on the pushed tree ac51393. Rounds 1-2 returned DONE_WITH_CONCERNS; the properties they found unpinned were pinned by T27, and the wave has since gained the prekey pool, the zero-max-message-size refusal, the two-tree push gate and the measured test ceilings."
           }
         ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T26",
@@ -757,15 +763,22 @@
       "id": "T35",
       "title": "TUI as a usable client: registration, conversations, address book (next wave)",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T22:03:50.265Z",
+            "outcome": "started",
+            "detail": "Design only, in parallel with the T25 round-3 verification. The designer is forbidden to run any test suite so the verifier's measurements stay on a quiet machine."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T36",
@@ -851,6 +864,21 @@
       "id": "T40",
       "title": "Size the e2e and runtime-publish test ceilings from measurement (registered after the fact)",
       "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T41",
+      "title": "Disposition every recorded residual by evidence (registered after the fact, as T40 was)",
+      "kind": "docs",
       "status": "done",
       "dependsOn": [],
       "attempts": {
@@ -1446,6 +1474,36 @@
       "at": "2026-09-08T21:51:09.147Z",
       "event": "task-done",
       "detail": "T40: Size the e2e and runtime-publish test ceilings from measurement (registered after the fact)"
+    },
+    {
+      "at": "2026-09-08T22:02:17.320Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 5) — Round 3, on the pushed tree ac51393. Rounds 1-2 returned DONE_WITH_CONCERNS; the properties they found unpinned were pinned by T27, and the wave has since gained the prekey pool, the zero-max-message-size refusal, the two-tree push gate and the measured test ceilings."
+    },
+    {
+      "at": "2026-09-08T22:03:50.265Z",
+      "event": "task-attempt",
+      "detail": "T35: started (attempt 1) — Design only, in parallel with the T25 round-3 verification. The designer is forbidden to run any test suite so the verifier's measurements stay on a quiet machine."
+    },
+    {
+      "at": "2026-09-08T22:54:15.481Z",
+      "event": "task-added",
+      "detail": "T41: Disposition every recorded residual by evidence (registered after the fact, as T40 was)"
+    },
+    {
+      "at": "2026-09-08T22:54:20.907Z",
+      "event": "task-done",
+      "detail": "T41: Disposition every recorded residual by evidence (registered after the fact, as T40 was)"
+    },
+    {
+      "at": "2026-09-08T22:54:23.242Z",
+      "event": "task-done",
+      "detail": "T35: TUI as a usable client: registration, conversations, address book (next wave)"
+    },
+    {
+      "at": "2026-09-08T22:54:35.066Z",
+      "event": "task-done",
+      "detail": "T25: Independent verification of everything flow 003 has landed"
     }
   ]
 }

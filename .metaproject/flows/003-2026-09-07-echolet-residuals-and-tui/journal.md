@@ -117,3 +117,9 @@
 - 2026-09-08T21:50:43.402Z - task-done: T38: Close the gate's working-tree hole: it must verify the pushed range
 - 2026-09-08T21:50:45.971Z - task-done: T39: Correct the pool's overstated cost claims and the eleven prose sites
 - 2026-09-08T21:51:09.147Z - task-done: T40: Size the e2e and runtime-publish test ceilings from measurement (registered after the fact)
+- 2026-09-08T22:02:17.320Z - task-attempt: T25: started (attempt 5) — Round 3, on the pushed tree ac51393. Rounds 1-2 returned DONE_WITH_CONCERNS; the properties they found unpinned were pinned by T27, and the wave has since gained the prekey pool, the zero-max-message-size refusal, the two-tree push gate and the measured test ceilings.
+- 2026-09-08T22:03:50.265Z - task-attempt: T35: started (attempt 1) — Design only, in parallel with the T25 round-3 verification. The designer is forbidden to run any test suite so the verifier's measurements stay on a quiet machine.
+- 2026-09-08T22:54:15.481Z - task-added: T41: Disposition every recorded residual by evidence (registered after the fact, as T40 was)
+- 2026-09-08T22:54:20.907Z - task-done: T41: Disposition every recorded residual by evidence (registered after the fact, as T40 was)
+- 2026-09-08T22:54:23.242Z - task-done: T35: TUI as a usable client: registration, conversations, address book (next wave)
+- 2026-09-08T22:54:35.066Z - task-done: T25: Independent verification of everything flow 003 has landed
