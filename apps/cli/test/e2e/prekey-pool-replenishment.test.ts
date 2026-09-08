@@ -32,9 +32,12 @@ import { CLI_CHILD_TIMEOUT_MS } from "../childProcessTimeouts";
 // WHAT THIS IS NOT. It is not a fix for denial of first contact and must not be read as one.
 // Measured (T26 §1.2, §3): one attacking source goes from 120 silenced victims per minute to 6 —
 // a 20x price increase and nothing more — while per bundle the attacker pays 2.0 ms and the victim
-// 61.6 ms to mint and publish, a 30.6x asymmetry running against the defender. Two source
-// addresses drain a pool faster than its owner can refill it. What changes is that a drained
-// recipient now has a way back at all.
+// 61.6 ms to mint and publish, a 30.6x asymmetry running against the defender. ONE source address
+// already drains a pool faster than its owner can refill it, at two to one: one request destroys a
+// member, two (a resubmit plus a fresh mint-and-publish) restore one, so 120 destroyed per minute
+// meet a recovery ceiling of at most 60. (Corrected per T25 round 2, finding R2-006: this comment
+// said "two source addresses", which overstated what it costs to beat the defence.) What changes is
+// that a drained recipient now has a way back at all.
 //
 // Signal's shared last-resort key is deliberately NOT adopted (T26 §4): it is refused by this wire
 // in both of its possible shapes, it contradicts the permanent one-time-prekey reservation the Go

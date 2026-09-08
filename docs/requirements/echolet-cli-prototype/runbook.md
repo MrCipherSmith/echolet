@@ -86,12 +86,17 @@ b relay publish
 ```
 
 ```json
-{"ok":true,"data":{"stored":true,"bundleId":"1e8648b5-43cc-4a77-981a-de491e7b0cc4","claimable":true}}
+{"ok":true,"data":{"stored":true,"bundleId":"1e8648b5-43cc-4a77-981a-de491e7b0cc4","claimable":true,"pool":{"target":20,"claimable":20,"minted":20}}}
 ```
 
-`claimable` reports whether the published bundle can still be claimed. A
-republish after the bundle has been claimed answers `claimable: false` rather
-than a bare success — see the limitation in §11.
+`claimable` reports whether the bundle named by `bundleId` can still be claimed.
+`pool` describes the whole publication pool: `target` is `LIMITS.PREKEY_MIN_COUNT`,
+`claimable` how many members are claimable now, and `minted` how many this
+invocation had to create to reach the target. A republish after members have been
+consumed therefore answers `claimable: true` with a non-zero `minted` — it is a
+top-up, not a report of failure. Before `1ed5b2a` there was a single bundle and a
+republish answered `claimable: false`; §11 describes the pool that replaced that,
+and its limits.
 
 ## 6. Offline delivery
 
