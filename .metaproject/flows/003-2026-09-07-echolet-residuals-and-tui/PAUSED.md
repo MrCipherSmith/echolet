@@ -29,8 +29,8 @@ Two warnings for whoever implements it: `publication-claimability.test.ts` steps
 
 The independent verification (`t25-verification-report.md`) returned DONE_WITH_CONCERNS and should be read first on resume. Four criteria are not met, and two properties this wave presents as load-bearing are pinned by no test at all:
 
-- **The trust-modal viewport guard.** Deleting `&& !isBelowMinViewport(painted)` from `tui-shell.ts:343` leaves 15 files and 108 TUI tests green. `onTrustIdentifiers` appears in no test — nothing ever opens a trust modal through the real shell. This was credited to the user as a strengthening; it is currently a comment with no enforcement.
-- **The size relationship, in one direction only.** Lowering `MAX_MESSAGE_BYTES` in the TypeScript protocol constants to 131072 leaves 21 files and 83 tests green while the Go mirror stays put — RI-09's exact failure mode, reintroduced with nothing red. The Go direction is caught.
+- ~~**The trust-modal viewport guard.**~~ **Closed (T27, re-verified by mutation on 2026-09-09).** Deleting `&& !isBelowMinViewport(painted)` from `tui-shell.ts:343` now fails three tests in `tui-shell.trustViewport.test.ts`, one per axis, which drive the real shell through `onTrustIdentifiers` at four viewports. The claim below — that it was a comment with no enforcement — was true when written and is false at `ac51393`.
+- ~~**The size relationship, in one direction only.**~~ **Closed (re-verified by mutation on 2026-09-09).** Lowering `MAX_MESSAGE_BYTES` to 131072 now fails the Go mirror test and three TypeScript tests; lowering `MaxMessageBytes` on the Go side fails the mirror test. Both directions are dead. Round 1's "83 tests green" reproduction was itself wrong.
 
 ## Decisions already taken — do not re-open them
 

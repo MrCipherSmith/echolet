@@ -440,12 +440,23 @@ push; or push an older branch while the working tree carries newer code. (R2-001
 | MU-2 | `LIMITS.MAX_MESSAGE_BYTES` → 131072 | **killed** — TS: `protocolMirror` ×1 + `pollCapacity` ×2 (3 failed / 91 passed); Go: `TestMaxMessageBytesMirrorsTheTypeScriptProtocolConstant` FAIL |
 | MU-2b | `protocol.MaxMessageBytes` → 131072 | **killed** — Go mirror test FAIL with the mirrored diagnosis |
 | MU-3 | `CleanupService.Stop`: `<-stopped` → `_ = stopped` | **killed** — `…StopWaitsForItsGoroutineInsteadOfOnlySignallingIt` FAIL; `internal/server` still `ok` |
-| MU-4 | `SaveSignalV2` idempotent branch re-adds the availability index | **killed** — `TestSignalV2PoolNeverReOffersAConsumedMember` FAIL |
+| MU-4 | `SaveSignalV2` idempotent branch re-adds the availability index | **survives** — see the correction below; this row said "killed", and it was wrong |
 | MU-5 | `mintPublicationSlot` never rotates (all members share one prekey) | **killed** — `profile.publicationPool` ×1 + `outbound.publicationPool` ×1 |
 | MU-6 | `publish()` stops re-submitting stored members | **killed** — all 5 `outbound.publicationPool` tests |
 | MU-P | probe: instrument `publish()` and print request counts | measurement only — 20 / 20 / 21 / **40** |
 | ATT-1 | 80 concurrent claims against a 20-member pool (my own test) | **property holds** — 20 served, 20 distinct prekeys, 5/5 runs, 0 races |
 | GP-1 | push gate against a red commit with a green working tree | **gate exit 0** — R2-001 |
+
+**Correction to MU-4, entered 2026-09-09 by the round-3 verification (`003-T25-verify-r3-result.json`).**
+Round 3 re-applied this exact mutation — inserting the `v2:available:…` write back into the
+`bytes.Equal(stored.Raw, bundle.Raw)` arm of `signal_prekey_bundle_v2.go` — and both `repository`
+and `handler` stayed `ok`. The mutation SURVIVES, and that is the correct outcome rather than a hole
+in the pin: re-adding the availability key cannot re-offer a consumed member while `Claimed` still
+guards the scan. The mutation that expresses the defect the test is named for is MU-4b — the same
+edit **plus** clearing `Claimed` — and that one does kill
+`TestSignalV2PoolNeverReOffersAConsumedMember`. The error was in this report, not in the test: a
+mutation was credited with a kill it did not produce, which is the same failure as crediting a fix
+with a test that never ran.
 
 Reverted digests, all matching: `tui-shell.ts` `185e8a9f…`, `limits.ts` `3e2cdb25…`, `limits.go`
 `0225c19e…`, `cleanup_service.go` `3b4f42ce…`, `signal_prekey_bundle_v2.go` `48f02d2d…`,
