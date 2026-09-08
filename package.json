@@ -6,9 +6,15 @@
     "node": ">=22"
   },
   "scripts": {
+    "prepare": "sh scripts/hooks/install.sh",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
+    "test:go": "sh scripts/gate/go-tests.sh",
+    "hooks:install": "sh scripts/hooks/install.sh",
+    "hooks:verify": "sh scripts/hooks/verify.sh",
+    "gate:docs": "sh scripts/gate/docs-freshness.sh",
+    "gate:selftest": "sh scripts/gate/selftest.sh",
     "mobile:start": "pnpm --filter @echolet/mobile start",
     "relay:dev": "go run ./apps/relay/cmd/relay"
   },

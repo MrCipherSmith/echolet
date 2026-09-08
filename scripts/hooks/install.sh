@@ -1,0 +1,126 @@
+#!/usr/bin/env sh
+# Echolet — point git at the repository's tracked hooks (flow 003 / T23).
+#
+# Git never clones .git/hooks, and keryx rewrites the blocks it owns inside
+# .git/hooks/pre-push on every `keryx init` / `keryx update`. So the gate cannot
+# live there. It lives in the tracked directory .githooks/, and this script is
+# what makes git use it: `core.hooksPath = .githooks`.
+#
+# keryx resolves its hook target as `git rev-parse --git-common-dir`/hooks and
+# never consults core.hooksPath (verified against the installed bundle and by
+# running `keryx init` and `keryx update` against a scratch repository with
+# core.hooksPath set: both wrote .git/hooks/* and left .githooks/* byte-identical).
+# Once this is set, keryx keeps regenerating a hook git no longer executes, and
+# the repository's gate survives untouched.
+#
+# It runs automatically from the root `prepare` script, i.e. on every
+# `pnpm install`, so a fresh clone is gated as soon as anyone installs deps.
+set -eu
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -z "$REPO_ROOT" ]; then
+  # Installed from a tarball or in a sandbox with no git: nothing to wire up.
+  echo "echolet hooks: not a git work tree; skipping hook installation" >&2
+  exit 0
+fi
+
+cd "$REPO_ROOT"
+
+if [ ! -d .githooks ]; then
+  echo "echolet hooks: .githooks/ is missing from the work tree — the push gate" >&2
+  echo "  cannot be installed. Restore it (git checkout -- .githooks) and re-run" >&2
+  echo "  'pnpm run hooks:install'." >&2
+  exit 1
+fi
+
+for hook in .githooks/*; do
+  [ -f "$hook" ] || continue
+  case "$hook" in
+    *.sha256|*.md) continue ;;
+  esac
+  [ -x "$hook" ] || chmod +x "$hook"
+done
+
+current="$(git config --get core.hooksPath || true)"
+if [ "$current" != ".githooks" ]; then
+  git config core.hooksPath .githooks
+  echo "echolet hooks: core.hooksPath -> .githooks (was: ${current:-unset})" >&2
+fi
+
+# --- the tripwire -----------------------------------------------------------
+# core.hooksPath is local config. No commit carries it, `git clone` does not
+# reproduce it, and one `git config --unset core.hooksPath` switches the entire
+# gate off without changing a single tracked file. That is the gate's one silent
+# failure mode: git then quietly falls back to .git/hooks/pre-push — keryx's
+# stock hook, the one that reports SKIPPED and allows a push having run nothing.
+#
+# So plant a block in .git/hooks/pre-push that only git can reach when the gate
+# has been switched off. It says so, loudly, and then execs the tracked gate
+# anyway, so the push is still gated while the misconfiguration is announced on
+# every push until someone fixes it.
+#
+# It is written ABOVE keryx's own `# keryx:<id>:begin/end` markers. keryx
+# rewrites only what is between its markers and leaves everything else in the
+# file alone — verified against `keryx init`, `keryx update --hooks` and
+# `keryx sync install-hooks`, all three of which left a planted preamble intact.
+GIT_COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null || true)"
+GIT_HOOKS_DIR=""
+if [ -n "$GIT_COMMON_DIR" ]; then
+  GIT_HOOKS_DIR="$GIT_COMMON_DIR/hooks"
+fi
+GIT_PRE_PUSH="$GIT_HOOKS_DIR/pre-push"
+TRIPWIRE_BEGIN='# echolet:hookspath-tripwire:begin'
+TRIPWIRE_END='# echolet:hookspath-tripwire:end'
+
+install_tripwire() {
+  mkdir -p "$GIT_HOOKS_DIR" 2>/dev/null || return 0
+
+  # Always rewrite the block rather than skipping when a marker is already
+  # present: a tripwire that never updates is a second thing that can silently
+  # go stale, which is the class of bug this whole change exists to remove.
+  tmp="$GIT_PRE_PUSH.echolet.$$"
+  {
+    echo '#!/usr/bin/env sh'
+    echo "$TRIPWIRE_BEGIN"
+    echo '# Installed by scripts/hooks/install.sh (pnpm run hooks:install).'
+    echo '# git reaches this file ONLY when core.hooksPath is not .githooks, i.e.'
+    echo "# when the repository's tracked push gate has been switched off."
+    echo '_echolet_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"'
+    echo '_echolet_gate="$_echolet_root/.githooks/pre-push"'
+    echo 'if [ -f "$_echolet_gate" ]; then'
+    echo '  [ -x "$_echolet_gate" ] || chmod +x "$_echolet_gate" 2>/dev/null || true'
+    echo '  _echolet_hp="$(git config --get core.hooksPath 2>/dev/null || true)"'
+    echo '  echo "" >&2'
+    echo '  echo "=============================================================================" >&2'
+    echo '  echo " echolet: THE PUSH GATE IS NOT INSTALLED." >&2'
+    echo '  echo "   core.hooksPath is \"${_echolet_hp:-unset}\", not \".githooks\", so git ran" >&2'
+    echo '  echo "   .git/hooks/pre-push instead of the tracked gate. Running the tracked" >&2'
+    echo '  echo "   gate anyway so this push is not left unverified." >&2'
+    echo '  echo "   Fix it permanently:  pnpm run hooks:install" >&2'
+    echo '  echo "=============================================================================" >&2'
+    echo '  echo "" >&2'
+    echo '  exec sh "$_echolet_gate" "$@"'
+    echo 'fi'
+    echo "$TRIPWIRE_END"
+    if [ -f "$GIT_PRE_PUSH" ]; then
+      # Keep whatever is already there (keryx's managed blocks), minus its
+      # shebang and minus any previous copy of this block.
+      sed '1{/^#!/d;}' "$GIT_PRE_PUSH" |
+        awk -v b="$TRIPWIRE_BEGIN" -v e="$TRIPWIRE_END" '
+          $0 == b { skip = 1; next }
+          $0 == e { skip = 0; next }
+          !skip   { print }
+        '
+    fi
+  } > "$tmp" 2>/dev/null || { rm -f "$tmp"; return 0; }
+
+  chmod +x "$tmp" 2>/dev/null || true
+  mv "$tmp" "$GIT_PRE_PUSH" 2>/dev/null || { rm -f "$tmp"; return 0; }
+  echo "echolet hooks: core.hooksPath tripwire refreshed in $GIT_PRE_PUSH" >&2
+}
+
+if [ -n "$GIT_HOOKS_DIR" ]; then
+  install_tripwire
+fi
+
+exec sh "$REPO_ROOT/scripts/hooks/verify.sh"

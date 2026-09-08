@@ -1,0 +1,375 @@
+#!/usr/bin/env sh
+# echolet:push-gate:v1
+#
+# THE ECHOLET PUSH GATE — tracked, version-controlled, and the one git actually
+# runs (core.hooksPath = .githooks; run `pnpm run hooks:install` to set it, and
+# `pnpm run hooks:verify` to check it).
+#
+# Why this file is here and not in .git/hooks
+# -------------------------------------------
+# The gate used to live in .git/hooks/pre-push, where it had two fatal
+# properties: git does not clone .git/hooks, so no one else ever got it, and
+# keryx rewrites everything between its own `# keryx:<id>:begin/end` markers on
+# every `keryx init` / `keryx update`, so the repository's fix to a keryx-owned
+# block was one command away from being silently reverted.
+#
+# keryx resolves its hook directory as `git rev-parse --git-common-dir`/hooks and
+# never reads core.hooksPath. Verified twice, not assumed: by reading
+# resolveGitHooksRoot() in the installed bundle, and by running `keryx init` and
+# `keryx update` against a scratch repository with core.hooksPath = .githooks —
+# both wrote .git/hooks/{pre-push,post-commit} and left .githooks/pre-push
+# byte-identical, including a deliberately planted `# keryx:testing-pre-push`
+# block inside it. `keryx sync install-hooks` behaves the same way, and the word
+# "hooksPath" does not appear anywhere in the installed bundle. So this file
+# survives a keryx update, and — once committed — it is tracked, so it survives a
+# clone.
+#
+# What does NOT travel with a clone is `core.hooksPath` itself: it is local
+# config, no commit can carry it, and one `git config --unset` switches the whole
+# gate off without changing a tracked file. Two things answer that:
+#   * the root `prepare` script re-runs scripts/hooks/install.sh on every
+#     `pnpm install`, so a fresh clone is gated as soon as anyone installs deps;
+#   * install.sh plants a tripwire in .git/hooks/pre-push — the file git falls
+#     back to when core.hooksPath is not .githooks — which announces the disabled
+#     gate on every push and execs this file anyway.
+#
+# Full diagnosis of what the gate used to do (and why it gated nothing):
+#   .metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t23-push-gate-diagnosis.md
+#   .metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t23-gate-hardening-report.md
+#
+# What it runs, in order
+# ----------------------
+#   1. keryx security scan over the pushed range      (advisory per security.config.json)   ~5 s
+#   2. Go relay suite, race-enabled                   (blocks)                             ~26 s
+#   3. keryx project-scope test run -> pnpm -r test   (blocks)                            ~215 s
+#   4. documentation freshness                        (warns; blocks on a broken pin)       ~1 s
+#
+# Measured end to end at 246 s on c5fde09, 343 s under concurrent load
+# (t23-gate-hardening-report.md §3.1). The variable part is step 3, which is why
+# step 2 runs first.
+# `pnpm run gate:selftest` exercises every state this file can be in.
+#
+# There is no bypass in this file, no advisory downgrade of a test failure, and
+# no changed-file narrowing. If nothing can run a suite, the push is blocked
+# rather than left ungated.
+
+# --- PATH -------------------------------------------------------------------
+# Git hooks inherit the environment of whatever invoked git. From a terminal that
+# is the login shell; from a GUI client, an IDE or launchd it is a reduced PATH.
+# Every step below shells out to `keryx` (a `#!/usr/bin/env bun` script), to the
+# project package manager, or to `go`; off PATH, any of them fails in a way that
+# looks like a code failure. Append — never prepend — so an explicit PATH from
+# the caller still wins.
+for _echolet_dir in \
+  "$HOME/.bun/bin" \
+  "$HOME/.local/bin" \
+  "$HOME/Library/pnpm" \
+  "$HOME/.volta/bin" \
+  /opt/homebrew/bin \
+  /opt/homebrew/sbin \
+  /usr/local/bin
+do
+  if [ -d "$_echolet_dir" ]; then
+    case ":$PATH:" in
+      *":$_echolet_dir:"*) : ;;
+      *) PATH="$PATH:$_echolet_dir" ;;
+    esac
+  fi
+done
+unset _echolet_dir
+export PATH
+
+ECHOLET_REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+export REPO_ROOT="$ECHOLET_REPO_ROOT"
+cd "$ECHOLET_REPO_ROOT" 2>/dev/null || true
+
+# --- the steps must be present ----------------------------------------------
+# `sh <missing file>` exits 127, which does block — but with "No such file or
+# directory" and nothing to act on. Deleting a step is also the cheapest way to
+# quietly remove half the gate, so name it rather than let it surface as a shell
+# error. A missing step is a blocked push, never a skipped one.
+for _echolet_step in scripts/gate/go-tests.sh scripts/gate/docs-freshness.sh; do
+  if [ ! -f "$ECHOLET_REPO_ROOT/$_echolet_step" ]; then
+    echo "push gate: FAILED — $_echolet_step is missing from the work tree." >&2
+    echo "  A gate step cannot be absent and the push still be verified, so the" >&2
+    echo "  push is blocked. Restore it: git checkout -- scripts/gate" >&2
+    exit 1
+  fi
+done
+unset _echolet_step
+
+# --- the pushed range -------------------------------------------------------
+# git feeds the pre-push hook one line per pushed ref on stdin:
+#   "<local ref> <local sha> <remote ref> <remote sha>"
+# stdin can only be consumed once, and more than one step below wants it, so it
+# is read here and replayed to each consumer. Reading it also lets the gate ask
+# about the commits actually being pushed rather than about the working tree —
+# which is the mistake that made the old gate pass vacuously on a clean tree.
+if [ -t 0 ]; then
+  ECHOLET_PUSH_REFS=""
+else
+  ECHOLET_PUSH_REFS="$(cat)"
+fi
+
+# Tip of the first non-deleted ref in this push, for range-aware steps.
+ECHOLET_PUSH_TIP="$(printf '%s\n' "$ECHOLET_PUSH_REFS" | awk '
+  NF >= 2 && $2 !~ /^0+$/ { print $2; exit }
+')"
+[ -n "$ECHOLET_PUSH_TIP" ] || ECHOLET_PUSH_TIP="HEAD"
+
+# keryx:security-pre-push:begin
+keryx_security_pre_push() {
+  # Run the Metaproject Security guard over the changed/committable content before
+  # a push. Blocking is delegated to the CLI, which honors security.config.json
+  # mode: 'advisory' (default) always exits 0 (warn, never block); 'enforced'/'ci'
+  # exit non-zero on a blocking (secret/critical) finding. This hook never
+  # duplicates the mode->action mapping; it only propagates the CLI exit code.
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  gdm=""
+  if command -v keryx >/dev/null 2>&1; then
+    gdm="keryx"
+  elif [ -x "$HOME/.local/bin/keryx" ]; then
+    gdm="$HOME/.local/bin/keryx"
+  else
+    echo "keryx pre-push: keryx command not found, skipped security gate" >&2
+    return 0
+  fi
+
+  # Degrade gracefully on version skew: a keryx on PATH that predates the
+  # 'security' command would return "Unknown command" (non-zero) for every file
+  # and block every push. Probe once; if security is unsupported, skip the gate
+  # with a warning instead of blocking.
+  if ! "$gdm" security status >/dev/null 2>&1; then
+    echo "keryx pre-push: installed keryx does not support 'security' (update it); skipped security gate" >&2
+    return 0
+  fi
+
+  # Determine the changed files being pushed. git passes one line per pushed ref
+  # on stdin: "<local ref> <local sha> <remote ref> <remote sha>". Scanning that
+  # range covers EVERY new commit in the push, so a secret introduced in an
+  # earlier commit of a multi-commit first push cannot slip through (the old
+  # HEAD-only heuristic under-scanned a first push). Fall back to the tracked
+  # push/upstream range only when stdin yields nothing usable.
+  changed_files=""
+  while read -r local_ref local_sha remote_ref remote_sha; do
+    [ -z "$local_ref" ] && continue
+    # Skip deleted refs (local sha all-zero): there is nothing to scan.
+    case "$local_sha" in
+      *[!0]*) : ;;
+      *) continue ;;
+    esac
+    case "$remote_sha" in
+      *[!0]*)
+        # Updating an existing remote ref: scan remote..local.
+        range_files="$(git diff --name-only --diff-filter=ACMR "$remote_sha".."$local_sha" 2>/dev/null || true)"
+        ;;
+      *)
+        # New ref: scan all commits unique to this push. Use the merge-base with
+        # any existing remote as the base, falling back to the empty tree when
+        # the branch shares no history with a remote (truly first push).
+        remotes="$(git for-each-ref --format='%(objectname)' refs/remotes 2>/dev/null | tr '\n' ' ')"
+        base=""
+        if [ -n "$remotes" ]; then
+          base="$(git merge-base "$local_sha" $remotes 2>/dev/null || true)"
+        fi
+        if [ -z "$base" ]; then
+          base="$(git hash-object -t tree /dev/null 2>/dev/null)"
+        fi
+        range_files="$(git diff --name-only --diff-filter=ACMR "$base".."$local_sha" 2>/dev/null || true)"
+        ;;
+    esac
+    if [ -n "$range_files" ]; then
+      changed_files="$changed_files
+$range_files"
+    fi
+  done
+
+  # Fall back to the tracked push/upstream range (then HEAD) when stdin was empty
+  # (e.g. the hook was invoked manually without ref lines).
+  if [ -z "$(printf '%s' "$changed_files" | tr -d '[:space:]')" ]; then
+    range="HEAD"
+    push_ref="$(git rev-parse --abbrev-ref --symbolic-full-name '@{push}' 2>/dev/null || true)"
+    if [ -n "$push_ref" ]; then
+      range="${push_ref}..HEAD"
+    else
+      up_ref="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+      if [ -n "$up_ref" ]; then
+        range="${up_ref}..HEAD"
+      fi
+    fi
+    changed_files="$(git diff --name-only --diff-filter=ACMR "$range" 2>/dev/null || true)"
+    if [ -z "$changed_files" ]; then
+      changed_files="$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null || true)"
+    fi
+  fi
+
+  # Deduplicate the changed-file list before scanning.
+  changed_files="$(printf '%s\n' "$changed_files" | sed '/^[[:space:]]*$/d' | sort -u)"
+  if [ -z "$changed_files" ]; then
+    return 0
+  fi
+
+  blocked=0
+  old_ifs="$IFS"
+  IFS='
+'
+  for file in $changed_files; do
+    IFS="$old_ifs"
+    if [ -f "$file" ]; then
+      scan_out="$("$gdm" security scan "$file" --source trusted-project 2>&1)"
+      scan_code=$?
+      if [ "$scan_code" -ne 0 ]; then
+        # enforced/ci mode blocked on this file.
+        echo "keryx pre-push: security gate blocked on $file" >&2
+        printf '%s\n' "$scan_out" >&2
+        blocked=1
+      elif printf '%s\n' "$scan_out" | grep -Eq 'findings: [1-9]'; then
+        # advisory mode: surface findings but allow the push.
+        echo "keryx pre-push (advisory): security findings in $file; push allowed" >&2
+        printf '%s\n' "$scan_out" >&2
+      fi
+    fi
+    IFS='
+'
+  done
+  IFS="$old_ifs"
+
+  if [ "$blocked" -ne 0 ]; then
+    echo "keryx pre-push: security gate failed; push blocked. Resolve the findings, or set security mode to 'advisory' to override." >&2
+    return 1
+  fi
+
+  return 0
+}
+
+# keryx:security-pre-push:end
+
+# --- 1. security ------------------------------------------------------------
+# The block above is keryx's, vendored verbatim except for its invocation, which
+# here is fed the saved ref lines instead of reading stdin directly. Blocking is
+# still delegated entirely to the CLI and .metaproject/security.config.json
+# ("advisory" today: findings print, the push proceeds). Nothing about that
+# mapping is duplicated or overridden here.
+#
+# Because it is a copy, it can age: scripts/hooks/verify.sh fingerprints keryx's
+# own block in .git/hooks/pre-push against .githooks/keryx-blocks.sha256 and says
+# so when keryx ships a different one.
+printf '%s\n' "$ECHOLET_PUSH_REFS" | keryx_security_pre_push || exit $?
+
+# --- 2. + 3. tests ----------------------------------------------------------
+echolet_testing_gate() {
+  # Run the project test suites before push. Blocking on test failure.
+  #
+  # This is the repository's gate, not keryx's. keryx's stock line —
+  #
+  #     keryx test run --changed --strict
+  #
+  # cannot gate this repository, for two independent reasons:
+  #
+  #   1. `--changed` means "files that differ from HEAD in the working tree plus
+  #      untracked files". It has nothing to do with the commits being pushed. On
+  #      a clean tree it selects nothing, reports SKIPPED and exits 0 without
+  #      running a single test — a vacuous pass that lets any commit through. On
+  #      a dirty tree it fails for the reason below.
+  #
+  #   2. Changed-scope selection maps changed files to test files and then runs
+  #      `<pm> run test <selected paths...>`. This repo's root `test` script is
+  #      `pnpm -r test`, so those repo-relative paths fan out to every workspace
+  #      package as vitest filters; each package resolves them against its own
+  #      directory, finds nothing, and exits 1. Selection is also JS/TS-only
+  #      (keryx SOURCE_FILE_RE / TEST_FILE_RE), so Go, docs and .metaproject
+  #      changes can never select a test — which under --strict is reported as the
+  #      P0 failure `no-related-tests-selected` with `runner: n/a`, `command: n/a`.
+  #      That is a selection failure reported as a test failure, and it blocked
+  #      every push.
+  #
+  # Project scope needs no selection: it always resolves the runner and runs the
+  # whole suite, so it is strictly stronger than either stock outcome.
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # Fall back to the project's own test script when keryx is missing or too old
+  # to run the gate. This is a different route to the same suite, not a bypass:
+  # it still runs every test and still blocks on failure. Only a machine with no
+  # JavaScript package manager at all cannot be gated, and that blocks the push.
+  echolet_testing_fallback_run() {
+    cd "$ECHOLET_REPO_ROOT" 2>/dev/null || true
+    if [ -f "$ECHOLET_REPO_ROOT/package.json" ]; then
+      if [ -f "bun.lockb" ] && command -v bun >/dev/null 2>&1; then
+        echo "push gate (js): running fallback test gate: bun run test" >&2
+        bun run test
+        return $?
+      fi
+      if [ -f "pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
+        echo "push gate (js): running fallback test gate: pnpm run test" >&2
+        pnpm run test
+        return $?
+      fi
+      if [ -f "yarn.lock" ] && command -v yarn >/dev/null 2>&1; then
+        echo "push gate (js): running fallback test gate: yarn test" >&2
+        yarn test
+        return $?
+      fi
+      if command -v npm >/dev/null 2>&1; then
+        echo "push gate (js): running fallback test gate: npm run test" >&2
+        npm run test
+        return $?
+      fi
+    fi
+    echo "push gate (js): no usable test runner found (no keryx, no package manager);" >&2
+    echo "  push blocked rather than left ungated." >&2
+    return 1
+  }
+
+  # 2. Go first: it is the cheap half (~25 s warm against ~160 s for the JS
+  #    suite), so a relay regression is reported in seconds instead of minutes.
+  #    Until this step existed no Go test ran in the gate at all — `pnpm -r test`
+  #    walks the pnpm workspace and apps/relay is not in it.
+  sh "$ECHOLET_REPO_ROOT/scripts/gate/go-tests.sh" || return $?
+
+  # 3. The JavaScript/TypeScript suite, via keryx when usable and via the
+  #    project's own script otherwise.
+  gdm=""
+  if command -v keryx >/dev/null 2>&1; then
+    gdm="keryx"
+  elif [ -x "$HOME/.local/bin/keryx" ]; then
+    gdm="$HOME/.local/bin/keryx"
+  fi
+
+  if [ -z "$gdm" ]; then
+    echo "push gate (js): keryx command not found; falling back to the project test script" >&2
+    echolet_testing_fallback_run
+    return $?
+  fi
+
+  # Probe once, so a keryx that cannot run the testing module is distinguished
+  # from a failing test suite instead of blocking the push with a confusing
+  # error. An unusable keryx routes to the fallback gate, never to a skip.
+  if ! "$gdm" test status >/dev/null 2>&1; then
+    echo "push gate (js): installed keryx cannot run 'test status' (update it);" >&2
+    echo "  falling back to the project test script" >&2
+    echolet_testing_fallback_run
+    return $?
+  fi
+
+  "$gdm" test run --strict
+  return $?
+}
+
+echolet_testing_gate || exit $?
+
+# --- 4. documentation freshness --------------------------------------------
+# Last, deliberately: this step's normal outcome is a warning, and a warning
+# printed before three minutes of test output is a warning nobody reads. It
+# blocks only when docs/STATUS_CURRENT.md has lost its pinned revision entirely,
+# which cannot happen by writing code — see scripts/gate/docs-freshness.sh for
+# the full block-or-warn argument.
+sh "$ECHOLET_REPO_ROOT/scripts/gate/docs-freshness.sh" "$ECHOLET_PUSH_TIP" || exit $?
+
+exit 0

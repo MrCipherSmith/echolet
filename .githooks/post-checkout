@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+# echolet:hook-passthrough:v1
+#
+# Setting core.hooksPath = .githooks makes git ignore .git/hooks entirely — every
+# hook, not just pre-push. keryx installs its maintenance hooks there (gdgraph
+# rebuild, wiki freshness queue, health, testing-context staleness warning,
+# dashboard), so without this shim, moving the gate into a tracked directory
+# would have silently switched all of that off. That would be a regression, and
+# the point of this change is that nothing gets quietly weaker.
+#
+# So: keryx keeps owning .git/hooks/post-checkout, `keryx update` keeps updating it
+# in place, and this file just forwards to it. Nothing here duplicates keryx's
+# logic, so nothing here can drift from it.
+#
+# All keryx post-checkout blocks are non-blocking by design; the exit code is
+# forwarded anyway rather than swallowed.
+
+hooks_dir="$(git rev-parse --git-common-dir 2>/dev/null)/hooks"
+target="$hooks_dir/post-checkout"
+
+if [ -x "$target" ]; then
+  exec "$target" "$@"
+fi
+
+exit 0

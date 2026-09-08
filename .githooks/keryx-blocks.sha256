@@ -1,0 +1,23 @@
+# Fingerprints of the keryx-managed blocks in .git/hooks/pre-push, as they stood
+# when .githooks/pre-push was vendored from them (2026-09-08, HEAD c5fde09).
+#
+# Since core.hooksPath = .githooks, git no longer runs .git/hooks/pre-push, but
+# keryx keeps regenerating it on `keryx init` / `keryx update`. Two things are
+# worth noticing when it does:
+#
+#   security-pre-push  — .githooks/pre-push carries a verbatim copy of this
+#                        block. A changed fingerprint means keryx shipped a
+#                        different security gate and the copy is now behind.
+#   testing-pre-push   — the fingerprint here is of the repository-hardened
+#                        block, not keryx's stock one. A change means keryx
+#                        regenerated (i.e. reverted) it — harmless now that it
+#                        is inert, and also the signal that upstream may have
+#                        landed a real fix worth adopting.
+#
+# scripts/hooks/verify.sh compares these and reports divergence; `pnpm run
+# hooks:verify` runs it on demand and `pnpm install` runs it automatically.
+# Refresh a line only after reviewing the new block.
+#
+# <sha256 of the block, begin/end markers included>  <block id>
+5895b7db981a0adcf7d6e749fe89146b4e7a85f47e399051b987399056ce7e42 security-pre-push
+e879a2a4616d2852c32285812f969ae9a7193c07bed6145f45007aa205a091e9 testing-pre-push
