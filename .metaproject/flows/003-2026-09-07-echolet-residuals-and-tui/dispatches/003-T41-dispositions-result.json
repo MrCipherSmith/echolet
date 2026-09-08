@@ -1,0 +1,194 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-003-t41-dispositions",
+  "dispatch_id": "003-T41-dispositions",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Post-wave disposition of every item in t1-residual-inventory.md, written to t41-final-dispositions.md against HEAD 4fdb658 (one commit past the ac51393 round 3 verified). The inventory holds 72 distinct items, not the 62 its own summary line claims and that both the dispatch and round 3's R3-001 inherited: 95 table rows carry ids RI-01..RI-72 with none missing. All 72 are dispositioned. FIXED 10 (RI-09, RI-10, RI-19, RI-23, RI-30, RI-31, RI-35, RI-52, RI-61, RI-62). FIXED-IN-PART 5, each with its residue named (RI-36, RI-39, RI-63, RI-67, RI-70). STALE and confirmed still stale 12; the three that had a live document site are evidenced as deleted (RI-52 from deployment-runbook.md by da24daa, RI-58 and RI-59 from STATUS_CURRENT.md:111 with the removal stated in place). OPEN 45, split into by-design-and-recorded 13, recorded 12, unrecorded-until-now 18, and unverifiable-here 2 (RI-55 compose volume adoption, RI-66 vitest birpc ceiling). No test suite was run - not a full one and not a single-file one; no row needed one. Round 3's twenty mutation outcomes are carried as its evidence and labelled as carried, never restated as mine. Three inventory items are themselves wrong about the tree: the 62-item count; RI-60's claim that the repository root has no engines field, which git diff shows as a context line at 4346e2b and therefore false when written; and RI-29's citation of main.go, whose shape changed even though its conclusion holds. One new contradiction was found that round 3 could not have seen: STATUS_CURRENT.md:114 still lists three gofmt-dirty files as an open residual, and 4fdb658 formatted them, so `gofmt -l apps/relay` now prints nothing. That is a fourth AC2 site. The tree moved twice under this pass: every row was established at 4fdb658, and a concurrent session then committed b3b37a8 ('docs: correct the five places a third verification caught contradicting the tree'), which is now HEAD and which lands answers to round 3's three AC2 sites. b3b37a8 touches five files, none of them docs/STATUS_CURRENT.md and none load-bearing for a verdict here, so the fourth site survives it - re-checked after it landed. AC1 as frozen is now satisfiable on the artifact; AC2 is not, and AC10 stays PARTIAL for the reason recorded at RI-49.",
+  "summary_markdown": "# T41 - post-wave dispositions at `4fdb658`\n\nThe table is `t41-final-dispositions.md`. Every row names a commit, a `file:line`, a test name, or a command and what it printed. Where a row's closure would have rested on a document, the document was checked against the tree or the row was left OPEN.\n\n## What the numbers are\n\n| verdict | count |\n|---|---|\n| FIXED by this wave | 10 |\n| FIXED-IN-PART (residue named and open) | 5 |\n| STALE, confirmed still stale | 12 |\n| OPEN - by design, recorded | 13 |\n| OPEN - recorded | 12 |\n| OPEN - unrecorded until this table | 18 |\n| OPEN - unverifiable here | 2 |\n| **total** | **72** |\n\n**Forty-five of seventy-two are open in some form.** Ten of the closures were made by work that never named the item it closed: `keryx ctx rg 'RI-0[1-9]|RI-[1-7][0-9]' tasks.md` returns zero matches, which is the mechanical reason AC1 failed twice - a reached item and an unreached one looked identical from outside.\n\n## Method, and what it deliberately excludes\n\n- `Δ 4346e2b` in an evidence cell means `git diff --name-only 4346e2b..HEAD -- <path>` is empty, so the file is byte-identical to the tree T1 verified and T1's `file:line` still resolves. Nine of the twelve STALE rows and most of the untouched OPEN rows rest on this rather than on T1's prose.\n- **No test suite was run.** Not `pnpm -r test`, not `go test ./...`, not `test:e2e`, not a single file. No row needed one. Round 3's twenty mutation outcomes appear as *its* evidence, labelled carried, in the rows for RI-09, RI-23, RI-30 and RI-62.\n- Commands used: `git log/status/diff`, `ls`, `find`, `gofmt -l apps/relay`, and two `python3` extractions (flow.json parsing, and the inventory's own row count) routed through `keryx ctx run` because gdctx compaction would have destroyed the counts being taken.\n\n## Three things the inventory gets wrong about the tree\n\n1. **The count.** `t1-residual-inventory.md:38` says 62 items; the document contains 95 `| RI-` rows carrying **72 distinct ids, RI-01..RI-72, none missing**. The printed bucket counts (21/15/14/12) understate three of four buckets. The dispatch and round 3's R3-001 both repeat the 62.\n2. **RI-60's root-`engines` clause.** T1 asserts the repository root has no `engines` field. `git diff 4346e2b..HEAD -- package.json` shows `\"node\": \">=22\"` as a *context* line, so it was present on the tree T1 verified. The substance survives - `>=22` does not encode the `>=22.13` that matters, and `.nvmrc`/`.node-version`/`.npmrc` are all absent - but the clause is false as written.\n3. **RI-29's citation.** T1 cites `main.go:118-148` as `Close()` then `closeStorage`. The current shape drains through `srv.Shutdown(ctx)` first and stops background work before Badger. The conclusion holds - `sync.WaitGroup` occurs in five *test* files under `apps/relay` and in no production file - but the cited shape is not the current one.\n\n## A fourth AC2 site, created after round 3 measured\n\n`docs/STATUS_CURRENT.md:114` still lists, under open limitations, «три файла, не прошедшие `gofmt`». `gofmt -l apps/relay` on this tree prints **nothing**, exit 0, because `4fdb658` - HEAD, the commit after round 3's `ac51393` - formatted exactly those three files. The fix landed without the document following it: the same shape as RI-52 and RI-61, in the same file, one commit later. Round 3's three AC2 sites (R3-002/003/004) were answered and committed as `b3b37a8` while this pass ran; `git show --stat b3b37a8` lists five files and `docs/STATUS_CURRENT.md` is not among them, so this one has no answer at all.\n\n## The tree moved twice under this pass\n\nEvery row was established at `4fdb658`. A concurrent session then committed `b3b37a8` ('docs: correct the five places a third verification caught contradicting the tree'), which is now HEAD. It touches `runbook.md`, `README.md`, `apps/cli/test/e2e/prekey-pool-replenishment.test.ts`, `PAUSED.md` and `t25-verification-report-r2.md` - **none load-bearing for any verdict here**, which was checked rather than assumed, and the section-5 finding was re-checked after it landed. Recorded rather than absorbed, so the `4fdb658` in this heading is read correctly.\n\n## Where I differ from round 3\n\n- **RI-35 is closed at HEAD and round 3 was right at `ac51393`** - a tree that moved under a verifier, not an error by one. But it created the contradiction above.\n- **72 items, not 62** - R3-001's verdict is unaffected; its number is not.\n- **Round 3's three AC2 answers were committed while this pass ran** (`b3b37a8`), so those three are closed on HEAD; AC2 is still NOT MET on the fourth site above, which no commit has touched.\n- **RI-70's documentation closure is recorded without endorsing the host fact behind it.** The documents are now internally consistent and say AC4 is established; that rests on a measurement no one in this flow could verify, and a document is a claim.\n- **R3-005 (round 2's MU-4 not reproducing) I neither confirm nor dispute** - I did not re-run it, and say so rather than passing it on as mine.\n",
+  "acceptance": [
+    {
+      "criterion": "Every item in t1-residual-inventory.md appears in the table exactly once, with no item silently dropped and no item merged away",
+      "status": "met",
+      "evidence": "The inventory's ids were enumerated mechanically rather than counted by eye: a python3 pass over lines beginning '| RI-' finds 95 rows, 72 distinct ids, 23 ids recurring in the sub-tables of sections 2.3, 2.4 and 3, and zero gaps in RI-01..RI-72. t41-final-dispositions.md section 2 carries exactly 72 rows, one per distinct id, and section 0 records that T1's own '62 items' line and its 'ten numbers unused' note are wrong - a number the dispatch and round 3's R3-001 both inherited."
+    },
+    {
+      "criterion": "Each verdict names evidence a reader can check without trusting me: a commit, a file and line, a test name, or a command with its output",
+      "status": "met",
+      "evidence": "Every FIXED row names a commit plus something else checkable: RI-19 validate.go:83-91 + prekey_bundle_identifier_bounds_test.go + 7af8492/18afa36; RI-30 cleanup_service.go:103-116 + TestCleanupServiceStopWaitsForItsGoroutineInsteadOfOnlySignallingIt; RI-31 the three test names in process_shutdown_escalation_test.go read out of `keryx ctx rg '^func Test'`; RI-35 `gofmt -l apps/relay` -> no output, exit 0; RI-52 `keryx ctx rg 'Exited \\(2\\)' docs` -> 0 matches plus deployment-runbook.md:740. Untouched-file rows carry a stronger primitive than prose: `git diff --name-only 4346e2b..HEAD -- <path>` empty, so the file is byte-identical to the tree T1 verified and its file:line still resolves. No row says 'reviewed and fine'."
+    },
+    {
+      "criterion": "Items closed by a document rather than by the tree are marked as such, and any item whose closure rests on a document not verified against the tree is OPEN",
+      "status": "met",
+      "evidence": "RI-70 is the case the criterion is aimed at and is split explicitly: the documentation half is FIXED (STATUS_CURRENT.md:77, README.md:40, deployment-runbook.md:51,779-791, all read here), the host fact behind it is recorded as OPEN (unverifiable here) with what is missing named, and the row states that I decline to endorse it. RI-51 was re-derived against docs/ with a search rather than accepted from STATUS_CURRENT.md:106's claim of its own closure. RI-18 and RI-50 were re-read at source (mailbox_handler.go:748-774; validate.go:120) rather than inherited from T1. RI-55 and RI-66 are OPEN (unverifiable here) with the missing apparatus named - a Docker daemon and an externally created volume; a ~30x oversubscribed machine."
+    },
+    {
+      "criterion": "The table separates what the wave fixed from what predates it and from what was found to be stale",
+      "status": "met",
+      "evidence": "Section 3 of t41-final-dispositions.md splits them by name: fixed by this wave (10 ids, each in the commit range 4346e2b..4fdb658, five of them clean RED->GREEN pairs); fixed in part (5 ids with residues); already closed before this wave and confirmed still closed (12 STALE ids, nine of them by byte-identity to 4346e2b, two re-read at source). Section 3 also records which stale items had a live document site and evidences each deletion: RI-52 from deployment-runbook.md by da24daa, RI-58 and RI-59 from STATUS_CURRENT.md:111 with the removal stated in place, RI-44's parenthetical gone from STATUS_CURRENT.md:114."
+    },
+    {
+      "criterion": "A short section lists what remains open after this wave, ordered by what it would cost someone to hit it",
+      "status": "met",
+      "evidence": "Section 6, 23 ordered entries covering all 45 open items. The order is cost-first and cheapness-last: RI-02 (identity is free) then RI-01 (no storage cap at all) then RI-05 (quadratic CPU under the project's own attack) then RI-26/RI-27 (unsigned transcript fields) then RI-55 (an operator can silently get a fresh volume and believe stored mail is gone). The one-line tidies that would be easiest to fix - RI-20, RI-21, RI-46, RI-47 - sit at 18 and 19, and the thirteen deliberate design positions sit last at 23 with a note that they are true rather than being work."
+    },
+    {
+      "criterion": "Nothing in the table contradicts the round-3 verification result; where I disagree with it, I say so explicitly and give my evidence",
+      "status": "met",
+      "evidence": "Section 7 states four differences and their evidence. (1) RI-35 is closed at HEAD 4fdb658 (`gofmt -l apps/relay` empty) while round 3 measured it open at ac51393 - the tree moved under a verifier, and I say the verifier was right on its own tree. (2) The item count is 72, not the 62 R3-001 inherited from T1 - verdict unaffected, number corrected. (3) Round 3's three AC2 sites were answered and committed as b3b37a8 while this pass ran, so those three are closed on HEAD while AC2 stays NOT MET on the fourth site, which no commit touches. (4) RI-70's documentation closure is recorded without endorsing the host fact. R3-005 is explicitly neither confirmed nor disputed because I did not re-run round 2's MU-4, and all twenty round-3 mutation outcomes are labelled as carried rather than restated as mine."
+    },
+    {
+      "criterion": "Dispatch constraint: no full test suite; targeted single-file run only if it is the only way to evidence a row",
+      "status": "met",
+      "evidence": "No test suite was run at all - not `pnpm -r test`, not `go test ./...`, not `pnpm --filter @echolet/cli test:e2e`, and not a single-file run either, because no row required one. The only executions were `git log/status/diff`, `ls`, `find`, `gofmt -l apps/relay`, and two `python3` extractions. Nothing was piped through `tail` or `head`; every command ran through `keryx ctx run`, which preserves the exit code and writes the raw log under .metaproject/data/gdctx/."
+    },
+    {
+      "criterion": "Dispatch constraint: change no source file and no test; output is one new document plus the result JSON",
+      "status": "met",
+      "evidence": "changed_files below lists exactly two paths, both new, both inside the flow package. acceptance-criteria.md and flow.json were read and not written. `git status --porcelain` was taken at the start and again at the end; between them a concurrent session committed b3b37a8 and HEAD moved off 4fdb658. Both states are recorded in the document's header rather than absorbed, together with the check that b3b37a8 touches no file any verdict rests on and does not touch docs/STATUS_CURRENT.md."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t41-final-dispositions.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "The post-wave disposition table: all 72 distinct inventory items, one row each, with the evidence for every verdict; plus the corrections to the inventory's own arithmetic, the fourth AC2 site, the cost-ordered list of what remains open, and the differences from round 3."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T41-dispositions-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This result."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t41-final-dispositions.md",
+      "change": "added - the disposition table AC1 requires. No source file, test file, document or configuration was touched."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T41-dispositions-result.json",
+      "change": "added - this result."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T41-001",
+      "global_id": "003-T41-dispositions#T41-001",
+      "reviewer": "disposition-pass",
+      "severity": "major",
+      "file": "docs/STATUS_CURRENT.md",
+      "line": 114,
+      "problem": "A fourth AC2 site, created one commit after round 3 measured. STATUS_CURRENT.md:114 lists, under the heading 'Открытые ограничения', the flow-002 residual «три файла, не прошедшие `gofmt`, из которых два — до этого flow». `gofmt -l apps/relay` on HEAD 4fdb658 prints nothing and exits 0, because that very commit - titled 'style(relay): format the three files gofmt has been listing' - formatted mailbox_read_mark_test.go, api/handler/signal_prekey_bundle_v2.go and storage/repository/signal_prekey_bundle_v2.go. The document asserts as open a residual the tree closed.",
+      "impact": "AC2 is absolute: no document may state something the tree contradicts. This is the same failure mode as RI-52 (a runbook claiming the relay exits 2 after it had been fixed) and RI-61 (STATUS_CURRENT.md not recording the fix), in the same file, one commit later - a fix landing without the document following it. It also misleads in the direction that costs time: a reader is told to go clean three files that are already clean, and the surrounding items on the same line (the takeMailboxRewalk comments, the untracked binary, the byte-identical wording, the IPv4-mapped loopback) ARE still open, so the stale clause borrows their credibility. Round 3 could not have seen it; it verified ac51393, and 4fdb658 is the next commit.",
+      "suggested_fix": "Delete the gofmt clause from STATUS_CURRENT.md:114 and, if the flow-002 residual list is to stay honest, add the closure the way line 109 and line 110 already do it for RI-09 and RI-23 - struck through, with the commit (4fdb658) and the check that proves it (`gofmt -l apps/relay`, no output). The four other residuals on that line are correctly still open and must stay.",
+      "evidence": "`keryx ctx run -- gofmt -l apps/relay` -> exit 0, stdout 0 bytes, no output. `keryx ctx rg gofmt docs` -> exactly one match, STATUS_CURRENT.md:114. `git log --oneline -32` -> 4fdb658 is HEAD, 'style(relay): format the three files gofmt has been listing', immediately after ac51393 which round 3 verified. `git diff --stat 4346e2b..HEAD` shows the three files at 4, 2 and 1 changed lines respectively. Re-checked after b3b37a8 landed mid-pass: `git show --stat b3b37a8` lists five files and docs/STATUS_CURRENT.md is not among them, and `keryx ctx rg gofmt docs` still returns the single stale match at :114.",
+      "class_scope": {
+        "sites": [
+          "docs/STATUS_CURRENT.md:114 - the only document site, and it is STALE: it lists the three gofmt-dirty files as an open flow-002 residual",
+          "apps/relay/internal/api/handler/mailbox_read_mark_test.go - formatted by 4fdb658, now clean",
+          "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go - formatted by 4fdb658, now clean",
+          "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go - formatted by 4fdb658, now clean",
+          "docs/STATUS_CURRENT.md:114, same sentence - the takeMailboxRewalk comments (RI-47), the untracked apps/relay/relay binary (RI-48), the byte-identical wording (RI-46), the IPv4-mapped loopback (RI-45) and the unserialised concurrent polls (RI-14): all CORRECT and still open, and none may be deleted with the gofmt clause",
+          "docs/STATUS_CURRENT.md:109-110,116 - the pattern to copy: RI-09, RI-23 and RI-63's knob are struck through in place with their commit and their pin, rather than silently dropped"
+        ],
+        "enumeration_method": "`keryx ctx rg gofmt docs .metaproject/flows/003-.../journal.md` returns exactly one match across the whole of docs/ and the flow journal - STATUS_CURRENT.md:114 - so the document class has one member and the deletion cannot be missed elsewhere. The three code sites came from `git diff --stat 4346e2b..HEAD` (the only three apps/relay files 4fdb658 touches) and were confirmed clean by running `gofmt -l apps/relay`, which is the same command STATUS_CURRENT.md:114 is asserting the output of. The five sibling residuals sharing the sentence were read out of line 114 itself and each was independently re-verified open in t41-final-dispositions.md's rows for RI-14, RI-45, RI-46, RI-47 and RI-48, so the class separates what must be deleted from what must stay."
+      },
+      "confidence": "high"
+    },
+    {
+      "id": "T41-002",
+      "global_id": "003-T41-dispositions#T41-002",
+      "reviewer": "disposition-pass",
+      "severity": "major",
+      "file": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t1-residual-inventory.md",
+      "line": 38,
+      "problem": "The inventory's own count is wrong, and every downstream artifact has repeated it. Line 38 states '62 items' with bucket counts 'FIX NOW 21 · FIX WITH CARE 15 · RECORD PERMANENTLY 14 · STALE 12' summing to 62, and the note at :115-119 explains that ten id numbers are unused. Counted mechanically, the file contains 95 rows beginning '| RI-' carrying 72 DISTINCT ids, RI-01 through RI-72 with no gaps; 23 ids recur because sections 2.3, 2.4 and 3 restate them in sub-tables. The real distribution is FIX NOW 26, FIX WITH CARE 15, RECORD PERMANENTLY 18, STALE 13.",
+      "impact": "Ten items were outside the number every later actor was working to. The dispatch for this task says '62 recorded residuals'; round 3's finding R3-001 says \"T1's 62 RI- items\"; a reader who dispositioned 62 rows and stopped would have believed the criterion satisfied with ten items untouched and no way to see which. AC1 says 'every item', so an undercount in the source document is a way to fail it while appearing to pass.",
+      "suggested_fix": "Correct t1-residual-inventory.md:38 to 72 items with the real bucket distribution, and delete or rewrite the 'ten numbers unused' note at :115-119, which is the sentence that made the undercount look deliberate. Anything quoting 62 - this flow's dispatch text and R3-001's problem statement - should be read as 72 thereafter.",
+      "evidence": "python3 over the file, routed through `keryx ctx run` so gdctx compaction could not alter the counts: rows beginning '| RI-' = 95; distinct ids = 72; duplicated ids = 23 (RI-04, RI-11, RI-13, RI-14, RI-15, RI-16, RI-18, RI-29, RI-30, RI-31, RI-32, RI-33, RI-34, RI-35, RI-43, RI-44, RI-47, RI-50, RI-51, RI-52, RI-53, RI-58, RI-59); missing ids in RI-01..RI-72 = none.",
+      "class_scope": {
+        "sites": [
+          ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t1-residual-inventory.md:38 - the source of the error: '62 items' plus bucket counts 21/15/14/12",
+          ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t1-residual-inventory.md:115-119 - the note that makes the undercount look deliberate ('ten numbers unused')",
+          ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t25-verification-report.md:90,384 - round 1 repeating '62 items' and the bucket counts verbatim",
+          ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T25-verify-result.json:12,268,270 - round 1's acceptance evidence, V-008 and its suggested fix",
+          ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t25-verification-report-r2.md:101,478 - round 2 repeating it",
+          ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T25-verify-r2-result.json:12,233 - round 2's acceptance evidence and R2-007",
+          ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T25-verify-r3-result.json - round 3's AC1 evidence and R3-001, \"T1's 62 RI- items\"",
+          "this task's own dispatch document, which describes the inventory as '62 recorded residuals'"
+        ],
+        "enumeration_method": "`keryx ctx rg '62 (items|residual|recorded)' .metaproject/flows/003-2026-09-07-echolet-residuals-and-tui docs` over the whole flow package and docs/, then each hit read to separate a repetition of the count from an unrelated 62 (t2-tui-usability-design.md:435,594 is the notice's column width; 003-T12-tests-result.json:111 is outbound.ts:62; STATUS_CURRENT.md:37 is a test count of 162). Every remaining hit is a downstream repetition of T1's line 38, and no site in docs/ carries it - the error never reached a shipped document. The true figures came from a python3 pass over the file rather than from any of these, so the class and the correction have independent sources."
+      },
+      "confidence": "high"
+    },
+    {
+      "id": "T41-003",
+      "global_id": "003-T41-dispositions#T41-003",
+      "reviewer": "disposition-pass",
+      "severity": "minor",
+      "file": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t1-residual-inventory.md",
+      "problem": "Two inventory rows are wrong about the tree in a way that survived T1's own verification pass. RI-60 asserts 'the repository root has **no** `engines` field'; `git diff 4346e2b..HEAD -- package.json` shows `\"node\": \">=22\"` inside `engines` as a CONTEXT line, so it was present on the very tree T1 verified and the clause was false when written. RI-29 cites main.go:118-148 as '`Close()` then `closeStorage(st, 0)`', while the current sequence drains through `srv.Shutdown(ctx)` at :119-123 and forces `srv.Close()` only on a deadline or a second signal, with background work stopped before Badger at :177-180.",
+      "impact": "Both findings' substance survives - the root's `>=22` does not encode the `>=22.13` that apps/cli actually requires, and there is still no in-flight handler tracking anywhere in production code - so neither is a false positive. The cost is that a fixer following the row's own prescription would write a fix for a tree that does not exist: adding a root `engines` field that is already there, or hardening a shutdown ordering that has already been reordered. That is the specific way an inventory row wastes someone's afternoon.",
+      "suggested_fix": "Restate RI-60 as 'the root declares `engines: node >=22`, which is below the `>=22.13` apps/cli requires, and there is no .nvmrc, .node-version or .npmrc engine-strict to make pnpm refuse rather than warn'. Restate RI-29 against the current sequence: the drain and the ticker stop are now correct, and what is missing is a counting middleware whose WaitGroup is awaited after Close().",
+      "evidence": "`git diff 4346e2b..HEAD -- package.json`: the engines block appears as context, the added lines are all scripts (prepare, test:go, hooks:*, gate:*). `ls -la .nvmrc .node-version .npmrc` -> all three 'No such file or directory'; apps/cli/package.json:6 is `\"engines\": { \"node\": \">=22.13\" }`. main.go:119-156 read directly; `keryx ctx rg 'sync.WaitGroup' apps/relay` -> five test files (rate_limit_test.go, mailbox_ordering_test.go, prekey_bundle_v2_test.go, challenge_repo_test.go, tlsx/reloader_test.go) and no production file.",
+      "confidence": "high"
+    },
+    {
+      "id": "T41-004",
+      "global_id": "003-T41-dispositions#T41-004",
+      "reviewer": "disposition-pass",
+      "severity": "minor",
+      "file": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/tasks.md",
+      "problem": "The wave never tracked the residual inventory by id. `keryx ctx rg 'RI-0[1-9]|RI-[1-7][0-9]'` over tasks.md returns zero matches, and flow.json carries dispositionReason on 2 of 40 tasks, both scaffold placeholders. Ten inventory items were nevertheless closed by the wave's work - RI-09, RI-10, RI-19, RI-23, RI-30, RI-31, RI-35, RI-52, RI-61, RI-62 - and five more were closed in part.",
+      "impact": "This is the mechanical cause of AC1 failing three rounds, and it is worth separating from the missing table. Because no fix commit or task named the item it closed, an item that was reached and an item that was never looked at are indistinguishable from outside, which is exactly what AC1 exists to prevent. It also cost this pass most of its time: every one of the ten closures had to be rediscovered from the tree rather than read off a ledger.",
+      "suggested_fix": "For the next flow, require the inventory id in the task title or the fix commit's body, so that `git log --grep` answers 'what closed RI-nn' without a re-derivation. Nothing needs changing in this tree; t41-final-dispositions.md now carries the mapping that was missing.",
+      "evidence": "`keryx ctx rg 'RI-0[1-9]|RI-[1-7][0-9]' .metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/tasks.md` -> exit 1, 0 matches, 0 files. flow.json parsed with python3: 40 tasks, 38 done, todo = T25 and T35. Round 3's R3-001 independently records the two scaffold dispositionReason fields.",
+      "confidence": "high"
+    },
+    {
+      "id": "T41-005",
+      "global_id": "003-T41-dispositions#T41-005",
+      "reviewer": "disposition-pass",
+      "severity": "info",
+      "file": "apps/relay/internal/validation/validate.go",
+      "line": 120,
+      "problem": "RI-50's grammar nit rides on unfixed in a file the wave edited. validate.go:120-124 reads 'Since T51 /v1/messages/send authenticates the sender against an already-published, root-signed DeviceRecord, but that binding is verified in the handler and costs an attacker only one unauthenticated /v1/device-records/publish (finding T52-F-001), so these identifiers must still be treated as attacker-controlled here' - a Since/but/so chain with no main clause. T1 flagged it as a nit riding along with the RI-46/RI-47 comment pass; the wave added 34 lines to this file for the identifier bounds and did not touch the sentence.",
+      "impact": "None functional. It is recorded because the sentence carries the reasoning for why every identifier on three routes is bounded, so it is a paragraph future readers will actually depend on, and because it demonstrates the pattern behind RI-46 and RI-47: a comment-only correction is never anyone's task, so it survives every pass that edits the file around it.",
+      "suggested_fix": "Fold it into whichever change finally takes RI-46 and RI-47, as T1 proposed: 'T51 authenticates the sender against an already-published, root-signed DeviceRecord, but that binding is verified in the handler and costs an attacker only one unauthenticated /v1/device-records/publish (finding T52-F-001), so these identifiers must still be treated as attacker-controlled here.'",
+      "evidence": "validate.go:117-133 read directly on 4fdb658. `git diff --stat 4346e2b..HEAD` shows apps/relay/internal/validation/validate.go at 34 changed lines in this wave.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "inventory_ids_dispositioned": 72,
+    "inventory_table_rows": 95,
+    "inventory_count_claimed_by_t1": 62,
+    "verdict_fixed": 10,
+    "verdict_fixed_in_part": 5,
+    "verdict_stale": 12,
+    "verdict_open_by_design_recorded": 13,
+    "verdict_open_recorded": 12,
+    "verdict_open_unrecorded": 18,
+    "verdict_open_unverifiable_here": 2,
+    "verdict_open_total": 45,
+    "inventory_items_found_stale_about_the_tree": 3,
+    "new_ac2_contradictions_found": 1,
+    "test_suites_run": 0,
+    "single_file_test_runs": 0,
+    "mutations_run": 0,
+    "tree_head_rows_established_on": "4fdb658",
+    "tree_head_at_completion": "b3b37a8",
+    "tree_head_round3": "ac51393",
+    "working_tree_clean": false,
+    "concurrent_commit_during_pass": "b3b37a8",
+    "verdicts_affected_by_concurrent_commit": 0
+  },
+  "timestamp_utc": "2026-09-09T00:00:00Z"
+}

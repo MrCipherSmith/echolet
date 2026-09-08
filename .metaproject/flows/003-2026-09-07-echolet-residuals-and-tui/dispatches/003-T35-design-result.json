@@ -1,0 +1,270 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-003-t35-design",
+  "dispatch_id": "003-T35-design",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Designed the operator console as a usable client across three areas (registration, conversations, address book) against the tree at HEAD c5fde09, without changing any source file, running any test suite, or running any build. Registration is a setup checklist rendered on the profile pane, driving init -> relay publish -> contact export -> contact import -> doctor in that order, one operator keystroke per step, with a step 0 that only checks the PRESENCE of the store-key environment variable (Object.hasOwn, never an index) because the console may never hold the 32-byte key. Conversations are a chat pane replacing the history pane, with a compose row and a send path whose body leaves argv entirely and travels on the child's stdin; a send is a two-request run sequence (send then history --with) so the pane shows what the store holds rather than two fields the console would have to invent, since send's result carries neither sequence nor timestamp. The address book is a contacts pane merging three provenances by identity_id: pinned contacts from an added doctor field, contacts observed being imported this session, and unpinned card candidates parsed from --card files at startup; pinned and unpinned render distinctly, the four out-of-band identifiers are shown in full for the selected entry, and importing a card remains the only thing that creates trust with the modal still built from the CHILD's printed identifiers rather than from the console's parse. Three CLI prerequisites are specified, all inside the dispatch's scope and none of them a ninth command, a relay change or a wire change: send reads its body from stdin when --text is absent, doctor reports the pinned contacts from the already-existing Profile.listContacts(), and the relay-URL rule moves to one leaf module both config.ts and the console import. Eight properties this design costs are named with the rejected alternative for each; sixteen tests are ordered, eleven pure-layer and five needing a real driven process. Status is DONE_WITH_CONCERNS rather than DONE for two reasons: three of the seven open questions could only be settled by running a build or by reading operator wrapper scripts that live outside this repository, and both are outside what this dispatch permitted.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Registration is designed as a flow a person completes without leaving the console, and the design states exactly which CLI invocations it drives and in what order, including relay publish.",
+      "status": "met",
+      "evidence": "Design §2.1 gives a six-row table (steps 0-5) naming the exact argv for each: init --relay-url --store-key-env --profile --json; relay publish --profile --json; contact export --out --profile --json; contact import --from --profile --json; doctor --profile --json. Step 0 spawns no child and is a presence check on the store-key variable. Ordering constraints are stated with their reasons (publish before any send; a card is useful for seven days). Operands come from the input row designed in §3.1."
+    },
+    {
+      "criterion": "Conversations are designed with the send path included, and the design states how an in-flight send interacts with the existing single-command-at-a-time rule rather than assuming it away.",
+      "status": "met",
+      "evidence": "Design §2.2 gives the six-step send path and §3.3 the run-sequence mechanism. The rule is not evaded: busy is set by reduce when the sequence starts and cleared once, after the last request settles, so no two children are ever alive; the unit changes from 'one keystroke, one child' to 'one operator action, one sequence, one child at a time'. Two bounding invariants are stated (a sequence is at most two requests and the second never starts one; a sequence stops at the first non-zero exit and names the abandoned request). Exactly two sequences exist and are tabulated. Costed explicitly in §5 item 1 with two rejected alternatives."
+    },
+    {
+      "criterion": "The address book is designed against the real trust model: importing a card is the only thing that creates trust, the four out-of-band comparison values are shown, and an unpinned identity is visibly distinct from a pinned one.",
+      "status": "met",
+      "evidence": "Design §2.3. Trust is created only by contact import (profile.ts:423-446 is the only writer of cli:contact:); a card candidate is drawn with a distinct glyph, sorted below pinned rows, and its only action re-runs contact import without --yes so the modal opens on the CHILD's identifiers, never on the console's parse of the file. TRUST_IDENTIFIER_FIELDS are rendered in full for the selected entry under the modal's own no-elision rule. Card expiry (seven days, wire.ts:40/82) is shown before the misleading INVALID_CONTACT_CARD it would otherwise produce."
+    },
+    {
+      "criterion": "Every design decision that costs a property named in the task description says so explicitly, with the alternative that was rejected and why.",
+      "status": "met",
+      "evidence": "Design §5 lists eight costed items, each with its rejected alternative: the single-flight unit; two of the eight commands changing interface; code-point rather than display-width exactness; operator bytes entering a frame; one body row spent while composing; one console-initiated startup doctor; two panes removed and the c cycle retired; doctor's output growing to enumerate correspondents. It also names what is explicitly NOT cost (the unaudited notice, key material in frames and argv, the trust modal's painted-at gate) with the reason each survives."
+    },
+    {
+      "criterion": "The design names the tests that would have to exist first, in the order they would be written, and which of them are pure-layer and which need a real driven process.",
+      "status": "met",
+      "evidence": "Design §7 lists sixteen tests in dependency order with a layer column: T-1..T-11 pure-layer, T-12 and T-13 driving the real CLI child, T-14..T-16 driving the real console binary through the existing control-socket harness. It also records one test NOT proposed because it already exists in the tree (tui-shell.trustViewport.test.ts), contradicting PAUSED.md."
+    },
+    {
+      "criterion": "Anything the design cannot settle is listed as an open question with the specific evidence that would settle it - not left implicit.",
+      "status": "met",
+      "evidence": "Design §8 lists seven open questions, each with the specific evidence that settles it: an enumeration of doctor JSON consumers including three operator wrapper scripts outside this repository (Q1); one build of dist/tui.js with an @echolet/protocol import, which this dispatch forbade running (Q2); what the live wrappers do about trailing newlines (Q3) and fixed-path re-export (Q4); a count of whole-frame equality assertions in the TUI suite (Q5); one recorded live session (Q6); and one product decision recorded as unreachable-by-construction rather than answered (Q7)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t35-console-client-design.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "The design: three areas, the mechanisms they need, the exit-class behaviour per screen, eight costed properties with rejected alternatives, three CLI prerequisites, sixteen ordered tests, seven open questions, and a routing audit.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T35-design-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t35-console-client-design.md",
+      "change": "added (design document; no source file was modified)"
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T35-design-result.json",
+      "change": "added (subagent result)"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T35-F-001",
+      "reviewer": "003-T35-design",
+      "severity": "major",
+      "file": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/PAUSED.md",
+      "line": 32,
+      "problem": "PAUSED.md and t25-verification-report.md state that the trust-modal viewport guard is pinned by no test and that `onTrustIdentifiers` appears in no test. The tree contradicts both: apps/cli/src/tui/tui-shell.trustViewport.test.ts is committed and drives the real runTuiShell through onTrustIdentifiers at 40x10, 71x16, 72x15 and 72x16, asserting the refusal and the acceptance together.",
+      "impact": "A resuming agent reading the pause note would write a test that already exists, or would treat an enforced security property as unenforced and re-litigate it. The flow's own resume document is the first thing anyone reads.",
+      "suggested_fix": "Correct the two sentences in PAUSED.md 'Why the wave is not closed' and mark T25 V-001 as closed by tui-shell.trustViewport.test.ts, naming the file.",
+      "evidence": "apps/cli/src/tui/tui-shell.trustViewport.test.ts lines 1-38 (header comment names flow 003 T27 V-001 and the four viewports); the file is tracked and clean at HEAD c5fde09 (git status --porcelain apps/cli/src/tui/ reports nothing for it).",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/PAUSED.md:32",
+          ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t25-verification-report.md (V-001)"
+        ],
+        "enumeration_method": "keryx ctx rg over the flow directory for the claim's distinguishing phrase plus a direct read of PAUSED.md; the two documents are the only ones in the flow that assert the property is unpinned."
+      }
+    },
+    {
+      "id": "T35-F-002",
+      "reviewer": "003-T35-design",
+      "severity": "major",
+      "file": "docs/requirements/echolet-cli-prototype/specification.md",
+      "line": 98,
+      "problem": "specification.md §Contact contract says `contact export` writes a card 'containing the current complete signed Signal bundle v2 and an optional local display name'. No card this tree can produce carries a display name: Profile.exportContact() builds {type, version, signal_bundle} only, and Profile.importContact() reads exactly the four identifiers, so a display_name that did arrive would be discarded.",
+      "impact": "Any design that assumes a contact card can carry a human-readable name - which an address book naturally does - is designing against a document rather than against the code. This design had to route naming through argv and the session instead, and would have been wrong if it had believed the specification.",
+      "suggested_fix": "Either amend §Contact contract to say the schema permits display_name and the CLI neither emits nor stores it, or make exportContact emit it and importContact store it - a change to what a trust record holds, which needs its own decision (a sender-chosen name beside a pin is a phishing surface).",
+      "evidence": "apps/cli/src/runtime/profile.ts:302-304 (exportContact builds three fields), :74-78 (cardSchema permits display_name), :428-431 (importContact derives identifiers only), :79-82 (contactSchema is strict and has no name field).",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "docs/requirements/echolet-cli-prototype/specification.md:98",
+          "docs/requirements/echolet-cli-prototype/schemas/contact-card.schema.json:11",
+          "apps/cli/src/runtime/profile.ts:76"
+        ],
+        "enumeration_method": "keryx ctx rg for display_name across the repository returned four sites; packages/client-db/src/schema/types.ts:5 is an unrelated DB column and docs/PROTOCOL-07 is an illustrative payload, leaving the three listed as the card-contract sites."
+      }
+    },
+    {
+      "id": "T35-F-003",
+      "reviewer": "003-T35-design",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/config.ts",
+      "line": 5,
+      "problem": "ConfigurationError carries a fixed code, INVALID_CONFIGURATION, and cli.ts writeResult emits only {ok:false, error:{code}} - so six distinct causes (unparseable config.json, relay URL with a path or query, relay URL with credentials, plain HTTP to a non-loopback host, missing store key, malformed store key) are one code at exit 2 to every caller, and the constructor's explanatory message is discarded.",
+      "impact": "Registration is the exact workflow where these six causes are most likely and least distinguishable. A new operator is told 'INVALID_CONFIGURATION' and has six things to check. The same drop hides OutboundError SENDER_NOT_PUBLISHED's actionable sentence, which names the fix and never reaches the operator.",
+      "suggested_fix": "Not proposed for this wave. The console mitigates by refusing values before they become argv and by naming the one cause it can check locally (store-key variable presence). A CLI-side fix - distinct configuration codes, or carrying error.message in the JSON envelope - is a change to the failure vocabulary of every command and belongs to a task about the CLI's error model.",
+      "evidence": "apps/cli/src/runtime/config.ts:4-6 (fixed code), :42, :46, :49, :57, :62 (five distinct throws with the same code); apps/cli/src/commands/cli.ts:391-393 (writeResult emits code only); apps/cli/src/runtime/outbound.ts:152-157 (the dropped sentence).",
+      "confidence": "high"
+    },
+    {
+      "id": "T35-F-004",
+      "reviewer": "003-T35-design",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/outbound.ts",
+      "line": 118,
+      "problem": "The plaintext bound 65536 is a literal in two places in one file - the zod schema at :22 and the byte-length re-check at :118 - in a package whose profile.ts:30-38 argues at length that 'a second literal for one quantity is how two numbers drift apart'. LIMITS.MAX_MESSAGE_BYTES (262144) bounds the envelope, a different quantity, so there is no named constant for the plaintext bound at all.",
+      "impact": "A compose surface must bound its buffer at the same number or it will let an operator type a message the CLI then refuses at exit 2 after they finished writing it. Adding the console makes a third literal the path of least resistance, in the same wave that landed 'one protocol constant governs message size on both sides of the wire' (5235a6d).",
+      "suggested_fix": "Name the quantity once and have both readers import it. Open question Q2 in the design gives the two candidate homes and the single build that decides between them.",
+      "evidence": "apps/cli/src/runtime/outbound.ts:22 (z.string().max(65536)) and :118 (Buffer.byteLength(...) > 65536); packages/protocol/src/constants/limits.ts:2 (MAX_MESSAGE_BYTES: 262144, a different quantity); apps/cli/src/runtime/profile.ts:30-38 (the standing argument against a second literal).",
+      "confidence": "high"
+    },
+    {
+      "id": "T35-F-005",
+      "reviewer": "003-T35-design",
+      "severity": "minor",
+      "file": "packages/session-node/src/wire.ts",
+      "line": 40,
+      "problem": "A contact card expires seven days after export, and an import past that window is reported as INVALID_CONTACT_CARD at exit 3 - the same code and class as a forged or malformed card. Nothing tells the operator the card is merely old.",
+      "impact": "On the live system an operator handed a nine-day-old card is told their contact's card is invalid at the trust exit class, which sends them looking for tampering. Re-export is therefore routine, and contact export writes with flag 'wx', so re-exporting over the same path answers PERSISTENCE_FAILURE (exit 5) - a local-storage class for a workflow that is working correctly. T34 recorded the second half of this from the live system.",
+      "suggested_fix": "The design's address book reads the card's public created_at_ms/expires_at_ms, marks an expired candidate before the import is attempted, and defaults every export path to a timestamped filename so wx is never met. A CLI-side alternative (a distinct expiry code, or contact export --force) is named and not recommended.",
+      "evidence": "packages/session-node/src/wire.ts:40 (expires = created + 7 days) and :82 (now >= expires_at_ms rejects); apps/cli/src/commands/cli.ts:317-320 (the rejection becomes trustFailure('INVALID_CONTACT_CARD'), exit 3) and :302 (flag 'wx' -> persistenceFailure, exit 5); t34-second-user-report.md 'Things that failed or surprised me' item 4.",
+      "confidence": "high"
+    },
+    {
+      "id": "T35-F-006",
+      "reviewer": "003-T35-design",
+      "severity": "info",
+      "file": "apps/cli/src/tui/state.ts",
+      "line": 23,
+      "problem": "Two of the five panes render nothing their neighbours do not already render: formatProfilesLines already appends the health line as its tail, and formatMailboxLines already renders the rejection list. The health and rejections panes are duplicates, while the header tab strip already truncates at 72 columns with five panes.",
+      "impact": "The console spends two of five navigation ordinals on duplicates while the two surfaces an operator would live in - a contacts list and a conversation - do not exist. This is what pays for the new panes in the design without growing the header.",
+      "suggested_fix": "Fold health into the profile pane and rejections into the mailbox pane, keeping both existing renderers unchanged, and spend the freed ordinals on contacts and chat. Design §3.4.",
+      "evidence": "apps/cli/src/tui/profiles-pane.ts:116 (tail: ['', snapshot.healthLine]); apps/cli/src/tui/mailbox-pane.ts:56-61 (the rejection head and rows); apps/cli/src/tui/shell-chrome.ts:64-68 (headerLine builds all five tabs with no fitting) and :39 (MIN_VIEWPORT.cols = 72).",
+      "confidence": "high"
+    },
+    {
+      "id": "T35-F-007",
+      "reviewer": "003-T35-design",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 398,
+      "problem": "A latent hazard that does not exist today but would the moment any keyboard mode is added: onTrustIdentifiers overwrites state.modal unconditionally and repaints, and the paint sets renderedAt. If the operator were in a text-entry mode when a contact-import child printed its identifiers, the next keystroke intended as text would be routed to a freshly painted trust modal, where 'y' confirms.",
+      "impact": "The one irreversible decision on the surface would be reachable by a keystroke the operator intended as a letter. It is unreachable today only because there is no text entry at all, which is exactly what this design adds.",
+      "suggested_fix": "Refuse to open the input mode while state.busy is set. Only a running child can produce a trust modal, so the refusal makes the collision structurally impossible rather than defended against. Pinned by design test T-4.",
+      "evidence": "apps/cli/src/tui/tui-shell.ts:398-404 (the listener replaces state.modal and paints), :333-346 (paint stamps renderedAt after any non-degraded frame), :70-76 (an open modal takes exclusive control of the keyboard).",
+      "confidence": "high"
+    },
+    {
+      "id": "T35-F-008",
+      "reviewer": "003-T35-design",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 200,
+      "problem": "decodeKey lower-cases the first code point of every chunk and keeps nothing else, so capitals are destroyed, 0x7f (backspace) decodes to a name nothing binds, and a paste keeps only its first character. The full chunk survives on KeyEvent.sequence, which is unused by every current binding.",
+      "impact": "This is the whole of why the console has no init, contact export or send key: the surface cannot take an operand. It is a one-module gap, not an architectural one - the seam the input mode needs is already on the event.",
+      "suggested_fix": "Add an input mode that reads key.sequence and filters control characters at the reducer boundary, rather than widening decodeKey into an escape-sequence decoder. Design §3.1; pinned by T-2 and T-3.",
+      "evidence": "apps/cli/src/tui/tui-shell.ts:200-212 (decodeKey); apps/cli/src/tui/state.ts:26-31 (KeyEvent carries sequence); no current caller of mapKey reads key.sequence.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [
+    {
+      "id": "T35-Q1",
+      "question": "Does adding a `contacts` array to `doctor`'s JSON result count as changing the frozen eight-command surface, and does any consumer outside this repository break?",
+      "why": "The address book cannot name a single contact on a fresh session without it: Profile.listContacts() has no entry point, and reading the encrypted store from the console would require the 32-byte key AC5 forbids. The two in-tree consumers are additive-safe, but three operator wrapper scripts that parse doctor output live outside this repository.",
+      "options": [
+        { "id": "extend-doctor", "label": "Add contacts to doctor's result (additive; no new command)", "recommended": true },
+        { "id": "ninth-command", "label": "Add a ninth command `contact list` (reopens a decision recorded as retired)" },
+        { "id": "keep-session-roster", "label": "Keep the session-observed roster (address book stays empty on a fresh session)" }
+      ],
+      "can_be_resolved_by_agent": "Partly: the in-tree consumers were enumerated (apps/cli/src/tui/tui-shell.ts:272-280 and main.processDriven.test.ts:278, both additive-safe). The three wrapper scripts named in t34-second-user-report.md are outside this repository and were not read. The policy half is the flow owner's."
+    },
+    {
+      "id": "T35-Q2",
+      "question": "Where should the plaintext byte bound (65536) live so the console's compose buffer and the CLI cannot disagree, and may `src/tui` import `@echolet/protocol` without harming `dist/tui.js`?",
+      "why": "The bound is currently a literal in two places in outbound.ts and named nowhere; the console needs it and must not mint a third. The candidate home is packages/protocol/src/constants/limits.ts, which already holds a client-only constant, but the TUI bundle currently imports nothing outside src/tui.",
+      "options": [
+        { "id": "protocol-limits", "label": "MAX_PLAINTEXT_BYTES in packages/protocol/src/constants/limits.ts, imported by both", "recommended": true },
+        { "id": "cli-leaf", "label": "A leaf module under apps/cli imported by runtime and tui" }
+      ],
+      "can_be_resolved_by_agent": "No. It is settled by one build of dist/tui.js with the import present, plus its size; this dispatch forbade running any build because another agent is measuring this machine."
+    },
+    {
+      "id": "T35-Q3",
+      "question": "When `send` reads its body from stdin, is a trailing newline stripped?",
+      "why": "Untrimmed means the same message typed two ways produces two ciphertexts and two history entries; stripping one newline fixes the common shell case and silently alters a message that legitimately ends in one. Nothing in the live system depends on either answer yet, so the decision is free now and expensive later.",
+      "options": [
+        { "id": "no-strip", "label": "Send exactly the bytes read; the console never appends a newline", "recommended": true },
+        { "id": "strip-one", "label": "Strip at most one trailing newline" }
+      ],
+      "can_be_resolved_by_agent": "No - it is a product decision. The evidence that informs it (what ~/.echolet/peer and the depr wrapper do) is outside this repository."
+    },
+    {
+      "id": "T35-Q4",
+      "question": "Is a timestamped export path enough, or should `contact export` gain `--force`?",
+      "why": "Cards expire every seven days, so re-export is routine, and `wx` turns the second export to a fixed path into exit 5 PERSISTENCE_FAILURE. The design needs no CLI change; whether the live wrappers already hit this decides whether --force is earning its keep.",
+      "options": [
+        { "id": "timestamped-path", "label": "Console defaults every export to a fresh timestamped filename; no CLI change", "recommended": true },
+        { "id": "force-flag", "label": "Add contact export --force" }
+      ],
+      "can_be_resolved_by_agent": "No. It is settled by reading ~/.echolet/peer and /home/ubuntu/.echolet-peer/echolet, which keep fixed card files (peer-card.json, owner-card.json) and are outside this repository."
+    },
+    {
+      "id": "T35-Q5",
+      "question": "Should card expiry be aged against a clock reading folded into state, or precomputed as a boolean at parse and refresh time?",
+      "why": "renderFrame must not read a clock. Folding a timestamp into state keeps it pure but makes many frames differ in one field, which every whole-frame equality assertion in the existing suite would then have to account for.",
+      "options": [
+        { "id": "observed-at", "label": "state.observedAtMs, refreshed after each settled command", "recommended": true },
+        { "id": "precomputed", "label": "A precomputed expired boolean, refreshed at the same moments" }
+      ],
+      "can_be_resolved_by_agent": "Yes, cheaply: a count of whole-frame equality assertions across apps/cli/src/tui/*.test.ts decides it. Not done here to keep this dispatch to a design."
+    },
+    {
+      "id": "T35-Q6",
+      "question": "Should the sync sequence (poll then history) exist, or should the operator press two keys?",
+      "why": "It is the operator's own `read` verb from their wrapper script, and it is the second of only two places where one keystroke produces two children.",
+      "options": [
+        { "id": "keep-sequence", "label": "Keep poll -> history as one key on the chat pane", "recommended": true },
+        { "id": "two-keys", "label": "Two keys; sequences are used only for send -> history" }
+      ],
+      "can_be_resolved_by_agent": "No. It is settled by one recorded session against the live relay - whether an operator ever wants poll without history - and this dispatch could not drive the live system."
+    },
+    {
+      "id": "T35-Q7",
+      "question": "What happens to a composed message when the operator switches profile?",
+      "why": "The buffer belongs to a (profile, contact) pair; discarding it silently loses work, keeping it risks sending it from the wrong identity.",
+      "options": [
+        { "id": "inert", "label": "The profile key is inert while composing, so the question is unreachable", "recommended": true },
+        { "id": "discard", "label": "Switching discards the buffer with a notice" }
+      ],
+      "can_be_resolved_by_agent": "Yes - it is a product decision, and the design proposes making it unreachable by construction rather than answering it. Recorded because 'unreachable' is itself a decision."
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "files_read": 24,
+    "source_files_changed": 0,
+    "test_suites_run": 0,
+    "builds_run": 0,
+    "findings_count": 8,
+    "open_questions": 7,
+    "tests_specified": 16,
+    "tests_pure_layer": 11,
+    "tests_process_driven": 5,
+    "cli_prerequisites": 3
+  },
+  "timestamp_utc": "2026-09-09T00:00:00Z"
+}
