@@ -6,6 +6,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { LIMITS } from "@echolet/protocol";
 import { importVerifiedSignalBundleV2 } from "@echolet/session-node";
 import { openProfile, type ContactCard } from "../runtime/profile";
 
@@ -145,7 +146,11 @@ describe("Echolet command line process contract", () => {
     for (const args of [["relay", "publish"], ["send", "--to", peer.signal_bundle.device_record.identity_id, "--text", marker], ["poll"]]) {
       const result = await run(alice, args); json(result); redacted(result, alice, marker);
     }
-    expect(requests.map(({ path }) => path)).toEqual(["/v2/prekeys/publish", "/v2/prekeys/claim", "/v1/messages/send", "/v1/mailbox/challenge", "/v1/mailbox/poll"]);
+    // Flow 003 / T26: `relay publish` now tops up a pool of LIMITS.PREKEY_MIN_COUNT independently
+    // signed bundles rather than submitting a single one, so alice's very first publish (empty
+    // profile) mints and publishes all of them before the claim-and-deposit tail. The tail itself -
+    // exactly one claim, one send, one challenge, one poll - is unchanged and stays pinned exactly.
+    expect(requests.map(({ path }) => path)).toEqual([...Array(LIMITS.PREKEY_MIN_COUNT).fill("/v2/prekeys/publish"), "/v2/prekeys/claim", "/v1/messages/send", "/v1/mailbox/challenge", "/v1/mailbox/poll"]);
     expect(JSON.stringify(requests).includes(marker)).toBe(false);
     const history = await run(alice, ["history", "--with", peer.signal_bundle.device_record.identity_id]); json(history);
     expect(history.stdout.includes(marker)).toBe(true); expect(history.stderr.includes(marker)).toBe(false);
@@ -160,4 +165,60 @@ describe("Echolet command line process contract", () => {
     json(untrusted, 3); redacted(untrusted, owner, marker);
     const unavailable = await run(owner, ["relay", "publish"]); json(unavailable, 4); redacted(unavailable, owner);
   }, 30000);
+
+  // Flow 003 / T26 group C — what the operator is TOLD once `relay publish` means "bring my
+  // published pool back up to N".
+  //
+  // `claimable` changes meaning from "the bundle I published can be claimed" to "at least one pool
+  // member can serve a first-contact sender", which is the only question the operator is actually
+  // asking. The per-member truth moves into `pool`, and `pool.target` is read from the protocol's
+  // own `LIMITS.PREKEY_MIN_COUNT` rather than a second literal minted for the same quantity.
+  //
+  // The command surface is FROZEN at eight commands and `relay publish` gains no option: N is a
+  // client constant agreed in advance, never negotiated on the wire and never an operator knob
+  // (the relay is the adversary-adjacent component). The enumeration above must keep passing
+  // verbatim; this adds to it rather than relaxing it.
+  it("reports the restored publication pool and adds no option to the frozen relay publish command", async () => {
+    const publishes: string[] = [];
+    const server = createServer((request, reply) => {
+      void (async () => {
+        const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
+        const body = JSON.parse(Buffer.concat(chunks).toString()) as { bundle?: { bundle_id: string } };
+        reply.setHeader("content-type", "application/json");
+        if (request.url !== "/v2/prekeys/publish" || !body.bundle) { reply.statusCode = 404; reply.end("{}"); return; }
+        // Every member here is freshly stored and unclaimed, so the relay answers claimable: true
+        // for each — one bundle per request, which is also the only shape that fits the relay's
+        // 64 KiB request cap at N = 20.
+        publishes.push(body.bundle.bundle_id);
+        reply.end(JSON.stringify({ ok: true, data: { stored: true, bundle_id: body.bundle.bundle_id, claimable: true } }));
+      })().catch(() => { reply.statusCode = 500; reply.end("{}"); });
+    });
+    servers.push(server); await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("Missing test server address");
+    const owner = fixture(); await init(owner, `http://127.0.0.1:${address.port}`);
+
+    const published = json(await run(owner, ["relay", "publish"]));
+    redacted(await run(owner, ["doctor"]), owner);
+    const data = published.data as { stored?: unknown; bundleId?: unknown; claimable?: unknown; pool?: Record<string, unknown> };
+    expect(
+      data.pool,
+      "`relay publish` must report {target, claimable, minted}: the operator's only recovery path has to say what it actually restored",
+    ).toBeDefined();
+    expect(Object.keys(data).sort()).toEqual(["bundleId", "claimable", "pool", "stored"]);
+    expect(Object.keys(data.pool!).sort()).toEqual(["claimable", "minted", "target"]);
+    expect(data.pool!.target).toBe(LIMITS.PREKEY_MIN_COUNT);
+    expect(publishes).toHaveLength(LIMITS.PREKEY_MIN_COUNT);
+    expect(new Set(publishes).size).toBe(LIMITS.PREKEY_MIN_COUNT);
+    expect(data.pool!.claimable).toBe(LIMITS.PREKEY_MIN_COUNT);
+    expect(data.pool!.minted).toBe(LIMITS.PREKEY_MIN_COUNT);
+    expect(data.stored).toBe(true);
+    // `claimable` is true exactly when some member can serve a first-contact sender.
+    expect(data.claimable).toBe((data.pool!.claimable as number) > 0);
+    expect(typeof data.bundleId).toBe("string");
+
+    // No ninth command, and no new option on this one.
+    for (const rejected of [["relay", "publish", "--to", "x"], ["relay", "publish", "--out", "x"], ["relay", "pool"]]) {
+      json(await run(owner, rejected), 2);
+    }
+  }, 60000);
 });

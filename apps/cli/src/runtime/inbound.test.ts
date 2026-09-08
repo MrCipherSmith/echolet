@@ -46,7 +46,7 @@ async function snapshot(owner: Local, prefixes?: string[]) {
   } finally { await store.close(); }
 }
 const nativePrefixes = ["session:", "inbox:", "outbox:", "pre:", "used:"];
-async function send(sender: Local, recipient: Local, plaintext: string, beforeAccept?: () => Promise<void>) {
+async function send(sender: Local, recipient: Local, plaintext: string, beforeAccept?: () => Promise<void>, afterPublish?: () => Promise<void>) {
   const envelopes: MailboxEnvelope[] = [];
   const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const path = new URL(String(input)).pathname;
@@ -74,6 +74,7 @@ async function send(sender: Local, recipient: Local, plaintext: string, beforeAc
   handles.push(messenger);
   try {
     await messenger.publish();
+    await afterPublish?.();
     await messenger.send({ recipientIdentityId: recipient.record.identity_id, messageId: randomUUID(), plaintext });
   } finally { await messenger.close(); }
   expect(envelopes).toHaveLength(1);
@@ -315,13 +316,23 @@ describe("CLI incoming messages and encrypted history", () => {
   });
 
   it("commits outbound plaintext history with native state/outbox before send and rolls all three back on persistence failure", async () => {
-    const { alice, bob } = await pair(), before = await snapshot(alice, nativePrefixes);
+    const { alice, bob } = await pair();
     const failure = failCommitOnce((tx) => tx.keys("cli:outbox:").length > 0);
     const observedSend = vi.fn(async () => {});
-    await expect(send(alice, bob, "atomic outbound history", observedSend)).rejects.toThrow();
+    let beforeSend: Record<string, string> | undefined;
+    // `send()` calls `publish()` first, and since T31 that durably mints alice's own first-contact
+    // prekey pool (real, already-committed state, unrelated to the transactional write this test is
+    // pinning) before `messenger.send()` ever runs. The property under test is that a persistence
+    // failure inside `send()` rolls back exactly what `send()` itself attempted to write - so the
+    // baseline is captured right after `publish()` finishes and right before `send()` starts, not
+    // before either call. That baseline is unaffected by however large the published pool is.
+    await expect(send(alice, bob, "atomic outbound history", observedSend, async () => {
+      beforeSend = await snapshot(alice, nativePrefixes);
+    })).rejects.toThrow();
     expect(failure.wasInjected()).toBe(true); failure.restore();
     expect(observedSend).not.toHaveBeenCalled();
-    expect(await snapshot(alice, nativePrefixes)).toEqual(before);
+    expect(beforeSend).toBeDefined();
+    expect(await snapshot(alice, nativePrefixes)).toEqual(beforeSend);
     expect(await snapshot(alice, ["cli:outbox:", "cli:history:"])).toEqual({});
     let committed = false;
     await send(alice, bob, "atomic outbound history", async () => {
