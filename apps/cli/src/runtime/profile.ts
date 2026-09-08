@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
 import { createIdentityProfile, createSignedDeviceRecord } from "@echolet/client-core";
 import { decodeBase64Url, deriveMailboxId, createMailboxCreateChallengeMessage, createMailboxChallengeMessage, createMailboxAckMessage, hashMailboxEnvelopeCiphertext, signMailboxEnvelopeMessage, signUtf8Message } from "@echolet/crypto-core";
-import { DeviceRecordSchema, SignalPreKeyBundleV2Schema, signalAddressForDevice, type DeviceRecord, type SignalPreKeyBundleV2 } from "@echolet/protocol";
+import { DeviceRecordSchema, LIMITS, SignalPreKeyBundleV2Schema, signalAddressForDevice, type DeviceRecord, type SignalPreKeyBundleV2 } from "@echolet/protocol";
 import { EncryptedSqliteStore, SignalClient, exportSignedSignalBundleV2, importVerifiedSignalBundleV2, type StoreTransaction, type TransactionalStore } from "@echolet/session-node";
 import { ConfigurationError, parseClientConfig, readStoreKey, type ClientConfig, type Environment } from "./config";
 
@@ -24,6 +24,26 @@ export class PersistenceError extends Error {
 
 const metadataKey = "cli:profile";
 const publicationKey = "cli:publication";
+/**
+ * How many independently signed bundles one profile keeps published.
+ *
+ * Read from the protocol rather than transcribed: `LIMITS.PREKEY_MIN_COUNT` was declared for
+ * exactly this quantity beside `PREKEY_REFILL_THRESHOLD` and had no reader anywhere in the tree —
+ * the pool was specified and never built. A second literal for one quantity is how two numbers
+ * drift apart, so there is none here.
+ *
+ * It is a CLIENT constant. The relay neither learns it nor enforces it, in the same way
+ * `LIMITS.MAX_MESSAGE_BYTES` is agreed in advance rather than negotiated on the wire.
+ */
+const poolTarget = LIMITS.PREKEY_MIN_COUNT;
+/**
+ * Where one pool member lives.
+ *
+ * Slot 0 keeps writing `cli:publication` with the unchanged schema and the same bytes it would have
+ * had before the pool existed, because that key is the sole witness `hasPublication()` consults for
+ * the send precondition; the remaining members go beside it under `cli:publication:<slot>`.
+ */
+const publicationSlotKey = (slot: number) => (slot === 0 ? publicationKey : `${publicationKey}:${String(slot)}`);
 /**
  * An UNFINISHED re-walk of the mailbox, held as the position it has reached.
  *
@@ -287,10 +307,11 @@ export class Profile {
    * Whether `relay publish` has ever been ATTEMPTED for this profile.
    *
    * This is the deliberately CONSERVATIVE reading of the publication precondition. `cli:publication`
-   * is written by `publicationBundle()` alone — reached only from `publish()` and `rotateBundle()` —
-   * and it is written inside the transaction that precedes the relay call, so its absence is durable
-   * proof that no publication was ever offered. Only under that proof is a mailbox deposit CERTAIN to
-   * be refused: since T50 `/v1/messages/send` authenticates the sender against an already-published,
+   * is slot 0 of the publication pool, written by `publicationBundle()`, by the pool fill and by
+   * `rotatePublicationBundle()` — reached only from `publish()` and `rotateBundle()` — and it is
+   * written inside the transaction that precedes the relay call, so its absence is durable proof
+   * that no publication was ever offered. Only under that proof is a mailbox deposit CERTAIN to be
+   * refused: since T50 `/v1/messages/send` authenticates the sender against an already-published,
    * root-signed device record.
    *
    * The converse is intentionally not claimed. A profile whose publication the relay rejected, or
@@ -306,33 +327,97 @@ export class Profile {
   }
 
   /**
-   * The exact signed bundle offered to the relay. It is written durably before any publication
-   * attempt and returned unchanged afterwards, so a lost response is retried with the identical
-   * bundle_id around the identical reserved one-time prekey.
+   * The exact signed bundle offered to the relay for slot 0, the pool's anchor. It is written
+   * durably before any publication attempt and returned unchanged afterwards, so a lost response is
+   * retried with the identical bundle_id around the identical reserved one-time prekey.
    */
   async publicationBundle(): Promise<SignalPreKeyBundleV2> {
+    return this.transact(async (tx) => this.readPublicationSlot(tx, 0) ?? this.mintPublicationSlot(tx, 0, false));
+  }
+
+  /** One pool slot's durable member, or `undefined` when the slot is empty. */
+  private readPublicationSlot(tx: StoreTransaction, slot: number): SignalPreKeyBundleV2 | undefined {
+    const stored = tx.get(publicationSlotKey(slot));
+    return stored ? publicationSchema.parse(decode(stored)).bundle : undefined;
+  }
+
+  /**
+   * Allocate one slot's bundle and store it durably BEFORE it can be offered to anyone.
+   *
+   * `rotate` allocates a fresh one-time prekey first, and is false only for the very first bundle a
+   * profile ever produces — the one signed around the initial prekey, exactly as before the pool
+   * existed. Every other member must carry key material of its own: the relay reserves a one-time
+   * prekey permanently and refuses a second bundle built around one it already holds, and two
+   * members sharing a prekey would collapse the pool back towards a pool of one.
+   */
+  private async mintPublicationSlot(tx: StoreTransaction, slot: number, rotate: boolean): Promise<SignalPreKeyBundleV2> {
+    if (rotate) {
+      const record = readMetadata(tx).device_record;
+      const client = await SignalClient.create(within(tx), signalAddressForDevice(record.identity_id, record.device_id));
+      // Allocation only. The previously allocated `pre:` records are RETAINED, which is what keeps
+      // a first contact against an earlier member decryptable days later; nothing here prunes them.
+      await client.rotateOneTimePreKey();
+    }
+    const bundle = await this.signBundle(tx);
+    tx.set(publicationSlotKey(slot), encode(publicationSchema.parse({ version: 1, bundle })));
+    return bundle;
+  }
+
+  /**
+   * The whole published pool, completed: N durable members indexed by slot.
+   *
+   * Each member is an independent publication — its own bundle id, its own reserved one-time prekey,
+   * its own signature over the same device record — because a claim consumes one member rather than
+   * the publication. Stored members are returned byte-identical on every call, so the lost-response
+   * retry guarantee that used to belong to one publication now belongs to each of them.
+   */
+  async publicationPool(): Promise<SignalPreKeyBundleV2[]> {
+    return (await this.restorePublicationPool()).members;
+  }
+
+  /**
+   * The same fill, reporting how many slots this call had to allocate — what `relay publish` tells
+   * the operator it minted.
+   *
+   * Empty slots are filled from the HIGHEST index down, so slot 0 carries the youngest
+   * `created_at_ms` of the pool. The relay serves the oldest available member first, so this is what
+   * makes slot 0 the last member consumed, which in turn is what keeps the anchor bundle id the
+   * publish result reports stable while any member is still live.
+   */
+  async restorePublicationPool(): Promise<{ members: SignalPreKeyBundleV2[]; minted: number }> {
     return this.transact(async (tx) => {
-      const stored = tx.get(publicationKey);
-      if (stored) return publicationSchema.parse(decode(stored)).bundle;
-      const bundle = await this.signBundle(tx);
-      tx.set(publicationKey, encode(publicationSchema.parse({ version: 1, bundle })));
-      return bundle;
+      const members: Array<SignalPreKeyBundleV2 | undefined> = [];
+      for (let slot = 0; slot < poolTarget; slot += 1) members.push(this.readPublicationSlot(tx, slot));
+      let minted = 0;
+      for (let slot = poolTarget - 1; slot >= 0; slot -= 1) {
+        if (members[slot] !== undefined) continue;
+        members[slot] = await this.mintPublicationSlot(tx, slot, members.some((member) => member !== undefined));
+        minted += 1;
+      }
+      return { members: members as SignalPreKeyBundleV2[], minted };
     });
   }
 
   /**
-   * Explicit, separate allocation: a newly generated one-time prekey and a new independently
-   * signed bundle. Never performed implicitly by a publication retry.
+   * Replace one slot's member with fresh key material, durably, before it is offered.
+   *
+   * Called for a slot the relay has just reported as no longer claimable — consumed by a
+   * first-contact sender, or outside its validity window. The member it replaces is forgotten as a
+   * PUBLICATION only: its private half stays in the store, because a sender may hold a claim on it
+   * for days and the relay replays the exact bundle bytes bound to that claim forever.
+   */
+  async replacePublicationSlot(slot: number): Promise<SignalPreKeyBundleV2> {
+    if (!Number.isInteger(slot) || slot < 0 || slot >= poolTarget) throw new ProfileError("Publication slot is outside the pool");
+    return this.transact((tx) => this.mintPublicationSlot(tx, slot, true));
+  }
+
+  /**
+   * Explicit, separate allocation for the pool's anchor slot: a newly generated one-time prekey and
+   * a new independently signed bundle. Never performed implicitly by a publication retry, and never
+   * by a pool top-up, which replaces only the slots the relay reported as no longer claimable.
    */
   async rotatePublicationBundle(): Promise<SignalPreKeyBundleV2> {
-    return this.transact(async (tx) => {
-      const metadata = readMetadata(tx);
-      const client = await SignalClient.create(within(tx), signalAddressForDevice(metadata.device_record.identity_id, metadata.device_record.device_id));
-      await client.rotateOneTimePreKey();
-      const bundle = await this.signBundle(tx);
-      tx.set(publicationKey, encode(publicationSchema.parse({ version: 1, bundle })));
-      return bundle;
-    });
+    return this.transact((tx) => this.mintPublicationSlot(tx, 0, true));
   }
 
   async importContact(input: unknown, options: { confirm?: (identifiers: Readonly<ContactIdentifiers>) => boolean | Promise<boolean> }): Promise<boolean> {

@@ -23,6 +23,15 @@ const inputSchema = z.object({ recipientIdentityId: z.string().min(1), messageId
 type SendInput = z.infer<typeof inputSchema>;
 interface Outbox { contentHash: string; envelope: MailboxEnvelope; status: "pending" | "delivered" }
 const keyFor = (id: string) => `cli:outbox:${id}`;
+/**
+ * A stored pool member the relay will not accept back because its validity window has closed.
+ *
+ * It is read here and nowhere else: `BUNDLE_EXPIRED` is carried inland by the transport allowlist so
+ * this loop can tell a dead slot from a malformed one, and it is deliberately absent from the CLI's
+ * reported-code allowlist, so the operator's failure vocabulary is unchanged and `classify()` never
+ * sees it.
+ */
+const expiredPublication = (error: unknown): boolean => error instanceof RelayError && error.remoteCode === "BUNDLE_EXPIRED";
 const receipt = (record: Outbox) => ({ messageId: record.envelope.message_id, envelopeId: record.envelope.envelope_id, status: "delivered" as const });
 type Options = Pick<OpenProfileOptions, "profileDir" | "environment"> & { relay: RelayClient; idFactory?: (kind: "claim" | "envelope") => string; now?: () => number };
 
@@ -37,8 +46,71 @@ class OutboundMessenger {
     this.queue = result.catch(() => {});
     return result;
   }
-  /** Submits the durable publication bundle; a retry resubmits the identical signed bytes. */
-  publish() { return this.serial(async () => this.options.relay.publishBundle(await this.profile.publicationBundle())); }
+  /**
+   * Bring the published pool back up to N — the recovery a drained recipient has never had.
+   *
+   * `relay publish` used to mean "submit my publication". A publication served exactly one
+   * first-contact sender, a claim is permanent, and `/v2/prekeys/claim` carries no authentication,
+   * so one unauthenticated request from anyone who knew an identity id silenced a recipient with no
+   * way back through the frozen command surface. It now means "bring my pool back up to N",
+   * idempotent-with-top-up.
+   *
+   * The loop, and why each half is the shape it is:
+   *
+   * 1. Re-submit EVERY stored member, slot 0 first. Each re-submission is idempotent — the relay
+   *    re-stores byte-identical bytes and deliberately never re-adds the availability index — and it
+   *    answers `claimable` truthfully per member. There is no "how many are left" route to ask
+   *    instead, and adding one would be a wire change; the re-submission IS the query. Every member
+   *    is asked, including the ones last seen as live, because that belief goes stale the moment a
+   *    claim lands and a client that trusted it would report a full pool while holding a drained one.
+   * 2. Mint one replacement per slot the relay refused to keep serving, highest slot first, and
+   *    publish it. Nothing else is re-minted: an unconsumed member keeps its exact stored bytes, so
+   *    the lost-response retry guarantee that used to belong to one publication now belongs to each
+   *    member, and no one-time prekey is reserved that no sender will ever use.
+   *
+   * A member whose seven-day window has closed is answered `BUNDLE_EXPIRED` and is a dead slot, not
+   * a failed command: the whole pool is minted within seconds of itself and therefore ages together,
+   * so treating expiry as fatal would break the recovery path in the case it is most needed. Every
+   * other refusal is surfaced, because a malformed or mis-signed member re-minted in silence would
+   * hide a real defect behind an endless supply of fresh key material.
+   *
+   * What this buys, stated honestly: one attacking source goes from silencing 120 recipients a
+   * minute to 6, while the recipient pays about thirty times per bundle what the attacker pays to
+   * destroy it. It is a price increase and a recovery path, not a closure.
+   */
+  publish() {
+    return this.serial(async () => {
+      const restored = await this.profile.restorePublicationPool();
+      const members = [...restored.members];
+      let minted = restored.minted;
+      let claimable = 0;
+      const dead: number[] = [];
+      for (const [slot, member] of members.entries()) {
+        let answer;
+        try { answer = await this.options.relay.publishBundle(member); }
+        catch (error) { if (!expiredPublication(error)) throw error; dead.push(slot); continue; }
+        if (answer.claimable) claimable += 1; else dead.push(slot);
+      }
+      // Highest slot first, for the reason `restorePublicationPool()` fills in that order: slot 0
+      // stays the youngest member, so it is the last one a claim reaches and the reported anchor
+      // holds still while anything else is live.
+      for (const slot of [...dead].reverse()) {
+        const replacement = await this.profile.replacePublicationSlot(slot);
+        members[slot] = replacement;
+        minted += 1;
+        if ((await this.options.relay.publishBundle(replacement)).claimable) claimable += 1;
+      }
+      // `claimable` answers the only question the operator is asking - can anyone still reach me for
+      // the first time - and the per-member truth is right beside it, so a publish that restored
+      // nothing cannot report plain success.
+      return {
+        stored: true as const,
+        bundleId: members[0]!.bundle_id,
+        claimable: claimable > 0,
+        pool: { target: members.length, claimable, minted },
+      };
+    });
+  }
   /** Explicit fresh allocation: a new one-time prekey and a new independently signed bundle. */
   rotateBundle() { return this.serial(async () => { await this.profile.rotatePublicationBundle(); }); }
   send(input: SendInput) {
@@ -62,9 +134,10 @@ class OutboundMessenger {
     // `/v1/messages/send`. `/v2/prekeys/claim` carries no authentication at all, so without this
     // guard the doomed send takes the irreversible step first: it permanently consumes the
     // recipient's one-time prekey on its way to a deposit that could never have been accepted.
-    // Through the frozen eight-command surface a published bundle serves exactly one first-contact
-    // sender and the recipient has no way to allocate a replacement, so one operator's own
-    // misconfiguration would otherwise destroy a third party's ability to receive first contact.
+    // Each published bundle serves exactly one first-contact sender, and since T26 the recipient's
+    // pool of them is finite and refilled only when they run `relay publish` themselves, so every
+    // wasted claim costs a third party a top-up they did not ask for - and a pool drained faster
+    // than its owner notices still ends in the denial the pool only makes rarer.
     //
     // This is not a new restriction — publication was already a hard precondition of a successful
     // deposit. Only the MOMENT the operator is told changes: here, at no cost, instead of one

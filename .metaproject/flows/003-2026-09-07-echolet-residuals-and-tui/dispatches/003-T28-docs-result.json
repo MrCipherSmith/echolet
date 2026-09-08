@@ -1,0 +1,167 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003-T28-docs-2026-09-08",
+  "dispatch_id": "003-T28-docs",
+  "status": "DONE",
+  "summary": "Closed the three non-code gaps V-002, V-003, V-004 from t25-verification-report.md. V-004: repointed apps/cli/package.json's test:e2e from one file to the whole test/e2e directory (decision honoured: repointed, not renamed). Measured twice on c5fde09: a clean run of 6 files / 29 tests, 291.5s vitest-internal (4m52.611s real); an earlier run measured 3m29.961s with one transient failure in flood-closure.test.ts that did not reproduce on retry with identical code and is attributed to concurrent CPU/IO load from the two other in-flight test-writing agents, not to this change. Every document quoting the old 1-file/3-test figure was corrected with the new counts and the measured wall-clock. V-003: verified and corrected STATUS_CURRENT.md limitations 3 (poll byte budget, closed by 5235a6d), 4 (backfill skip-and-count plus bounded retry, closed by 18afa36) and 10 (CleanupService ticker now stoppable and in the shutdown sequence, closed by 18afa36; the empty runCleanup() body itself stays open), plus the depr renewal-timer claim across STATUS_CURRENT.md and the requirements README.md (T14 installed a root systemd timer, independently re-confirmed here with a read-only GET /health). deployment-runbook.md needed no change for the renewal claim - already correct, verified rather than assumed. The renewal claim sat beside an equally stale 'geekom is on loopback' claim in the same paragraphs; both were corrected together with evidence from t11-geekom-tls-report.md and a read-only re-check of both hosts, since fixing one half of a sentence and leaving the other stale would reintroduce exactly the defect this task exists to close. V-002: removed ECHOLET_CLEANUP_INTERVAL_SECONDS from both compose files, run-relay.sh and all three env examples, replacing each with a comment stating retention is Badger's own TTL; corrected OPS-23, STATUS_CURRENT.md and the requirements README.md and deployment-runbook.md to match. Go source (config.go's envDefault:60 field) was verified but not touched, as required - reported as the one place a full fix would need a Go change. This session resumed a prior, paused attempt at the same task whose partial edits (the package.json repoint, the compose/env changes, and a partial README.md rewrite) were found already on disk; every claim in that partial work was independently re-verified against the tree rather than trusted, and nothing was reverted.",
+  "summary_markdown": "## T28 - closed V-002, V-003, V-004\n\n**V-004.** `test:e2e` repointed to `vitest run test/e2e` (decision: repoint, not rename). Measured twice on `c5fde09`: clean run **6 files / 29 tests / 291.5s** (real `4m52.611s`); an earlier run hit one transient failure in `flood-closure.test.ts` that did not reproduce and is attributed to concurrent load from the two other in-flight agents, not to this change. Every document quoting the old figure corrected with the new counts and measured cost.\n\n**V-003.** `STATUS_CURRENT.md` limitations 3 (byte budget, `5235a6d`), 4 (backfill retry, `18afa36`) and 10 (ticker stop, `18afa36`) corrected with tree evidence and pinning tests named. The `depr` renewal-timer claim corrected in `STATUS_CURRENT.md` and the requirements `README.md` (T14's root `systemd` timer, re-confirmed with a read-only health check); `deployment-runbook.md` needed no edit here - already correct. That claim sat beside an equally stale `geekom`-on-loopback claim in the same text; both fixed together with evidence, not left half-corrected.\n\n**V-002.** `ECHOLET_CLEANUP_INTERVAL_SECONDS` removed from both compose files, `run-relay.sh` and all three env examples; retention documented as Badger's TTL, needing no interval. `config.go`'s Go-side field verified untouched and reported as the one piece that would need a source change.\n\n**Resumed, not restarted.** A prior paused attempt had left seven files already edited; every claim in that work was re-verified against the tree before being kept.",
+  "acceptance": [
+    {
+      "criterion": "V-004 - repoint test:e2e at the whole test/e2e directory (not rename), measure and report the wall-clock cost, name any file that cannot run in that context",
+      "status": "met",
+      "evidence": "apps/cli/package.json: \"test:e2e\": \"vitest run test/e2e\". Measured twice on c5fde09 through keryx ctx run: run 1 3m29.961s real (208.6s vitest-internal, 1 transient failure not reproduced on retry), run 2 4m52.611s real (291.5s vitest-internal, 29/29 passed). No file needed exclusion - all six already matched vitest.config.ts's default include pattern under the plain test script. Every document quoting the old 1-file/3-test figure (STATUS_CURRENT.md, requirements README.md, metrics-and-validation.md, specification.md) corrected with the new counts and the measured cost."
+    },
+    {
+      "criterion": "V-003 - reconcile STATUS_CURRENT.md limitations 3, 4, 10 and requirements README.md:37 (and the depr renewal-timer claim in three documents) against the current tree, verifying each claim before changing it",
+      "status": "met",
+      "evidence": "Limitation 3: struck through and replaced citing mailbox_handler.go:70/config.go:109-114 and 5235a6d. Limitation 4: replaced citing device_record_repo.go:136-212 and 18afa36. Limitation 10: replaced citing cleanup_service.go:29-104, cmd/relay/main.go:178 and 18afa36, keeping the still-true empty-runCleanup() clause. Renewal timer: corrected in STATUS_CURRENT.md and requirements README.md citing t14-renewal-report.md and a read-only re-check of depr; deployment-runbook.md checked directly and found already correct, so left unchanged rather than edited unnecessarily. The adjacent geekom-loopback claim in the same paragraphs, found stale via t11-geekom-tls-report.md and independently re-confirmed with a read-only health check, was corrected alongside it - reported and justified in t28-reconciliation-report.md section 4 as one step beyond the four literally-named claims, for the same category of staleness in text already being edited."
+    },
+    {
+      "criterion": "V-002 - remove ECHOLET_CLEANUP_INTERVAL_SECONDS from the operator-facing surface (not implement retention behind it); state plainly that retention is the store's TTL; scope care around the stoppable service/its Stop(); report exactly what would need a Go change and stop there",
+      "status": "met",
+      "evidence": "Removed from deploy/relay/docker-compose.yml, docker-compose.insecure-loopback.yml, run-relay.sh, and all three env examples, each replaced with a comment naming Badger's TTL as the retention mechanism. docs/OPS-23_LOCAL_ENV_VARS.md, STATUS_CURRENT.md and the requirements README.md and deployment-runbook.md updated to match. CleanupService and its stoppable ticker/Stop() (cleanup_service.go, wired into cmd/relay/main.go:178) were not touched - verified via keryx ctx rg that no test file referencing the service was modified. Go source not touched: apps/relay/internal/config/config.go:58 still declares CleanupIntervalSec with envDefault:\"60\"; reported in the report and in every corrected document as the one piece needing a Go change with its own task and tests, not attempted here."
+    },
+    {
+      "criterion": "Constraints: documentation, package.json scripts, deploy/relay/** and env examples only; no test/Go/TS source changed; geekom and depr not touched (redeployed/reconfigured); no secret material recorded; searches routed through keryx ctx; wiki check-links clean",
+      "status": "met",
+      "evidence": "git diff --stat shows only the intended 13 files plus two files and flow.json/journal.md from other in-flight agents/the tracker, none touched by this task. No apps/relay or apps/cli source file changed; only apps/cli/package.json's scripts block. Neither geekom nor depr was configured, redeployed or written to - two single read-only GET /health requests only, same class of check T25 performed. No store key, private key, plaintext or request body recorded anywhere. Every search ran through keryx ctx rg, every command through keryx ctx run; two find invocations over flow directories were escaped with a stated reason. keryx wiki check-links: 19 pages, 38 internal links, 0 broken, run after all edits."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t28-reconciliation-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Full account of every claim verified, every deletion's evidence, the two measured test:e2e runs, why the geekom/renewal correction went one step beyond the four literally-named V-003 claims, and the answer on preventing staleness a third time."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t25-verification-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Source of findings V-002, V-003, V-004 closed by this task. Read only, not modified."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t14-renewal-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Source for the depr renewal-timer correction. Read only."
+    },
+    {
+      "path": ".metaproject/flows/002-2026-09-07-echolet-close-the-flood-class-operator-c/t11-geekom-tls-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Source for the geekom TLS/renewal correction made alongside the named depr claim. Read only."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/package.json",
+      "change": "test:e2e repointed from vitest run test/e2e/two-process.test.ts to vitest run test/e2e (V-004)."
+    },
+    {
+      "path": "deploy/relay/docker-compose.yml",
+      "change": "Removed ECHOLET_CLEANUP_INTERVAL_SECONDS; added a comment stating retention is the store's TTL (V-002)."
+    },
+    {
+      "path": "deploy/relay/docker-compose.insecure-loopback.yml",
+      "change": "Same removal and comment as docker-compose.yml."
+    },
+    {
+      "path": "deploy/relay/run-relay.sh",
+      "change": "Removed the -e ECHOLET_CLEANUP_INTERVAL_SECONDS=... line; replaced with a comment."
+    },
+    {
+      "path": "deploy/relay/env/depr.env.example",
+      "change": "Removed ECHOLET_CLEANUP_INTERVAL_SECONDS=60; added a comment explaining the removal."
+    },
+    {
+      "path": "deploy/relay/env/geekom.env.example",
+      "change": "Same removal and comment."
+    },
+    {
+      "path": "deploy/relay/env/insecure-loopback.env.example",
+      "change": "Same removal and comment."
+    },
+    {
+      "path": "docs/OPS-23_LOCAL_ENV_VARS.md",
+      "change": "ECHOLET_CLEANUP_INTERVAL_SECONDS entry rewritten from 'here is the setting' to 'removed, and why'; dropped from the .env.local example."
+    },
+    {
+      "path": "docs/STATUS_CURRENT.md",
+      "change": "Corrected limitations 3, 4, 10, 11; the AC4/geekom/renewal section; every test:e2e mention and the dedicated section on it; near-term gate 5; added a point-in-time note on this reconciliation's scope."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/README.md",
+      "change": "Corrected the test:e2e paragraph with the measured wall-clock; verified and refined the geekom/renewal AC4 section; fixed a docker-compose.yml line reference. Version 0.2.2 -> 0.2.3."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/deployment-runbook.md",
+      "change": "Rewrote the cleanup-knob limitation bullet from 'bounds nothing' to 'removed, and why'. Version 0.5.0 -> 0.5.1."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/metrics-and-validation.md",
+      "change": "Rewrote the fourth gate command's explanation for the repointed script with measured counts and wall-clock. Version 0.1.2 -> 0.1.3."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/specification.md",
+      "change": "Corrected the e2e implementation-state cell for the repointed script. Version 0.1.1 -> 0.1.2."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t28-reconciliation-report.md",
+      "change": "New: this report."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T28-docs-result.json",
+      "change": "New: this result."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T28-F-001",
+      "global_id": "003-T28-docs#T28-F-001",
+      "reviewer": "003-T28-docs",
+      "severity": "minor",
+      "file": "apps/relay/internal/config/config.go",
+      "line": 58,
+      "symbol": "Config.CleanupIntervalSec",
+      "problem": "ECHOLET_CLEANUP_INTERVAL_SECONDS was removed from every operator-facing compose/env/script file, but the Go field that binds it (env:\"ECHOLET_CLEANUP_INTERVAL_SECONDS\" envDefault:\"60\") still exists and is still read if an operator sets the variable anyway.",
+      "impact": "An operator who copies an old env file, or sets the variable from muscle memory, will have it silently accepted and read exactly as before - it changes only the frequency of two debug log lines, never anything observable. Not a regression (identical to pre-task behaviour for anyone who still sets it), but the removal is not airtight without a matching source change.",
+      "suggested_fix": "Remove the CleanupIntervalSec field from config.go and the corresponding NewCleanupService parameter, so an operator-set variable is either ignored outright or rejected at startup - whichever a future task with tests decides. Out of scope for a documentation-only task per the dispatch's explicit instruction to report and stop rather than touch Go source.",
+      "evidence": "apps/relay/internal/config/config.go:58; apps/relay/internal/api/router/router.go:68 (NewCleanupService(...cfg.CleanupIntervalSec...)); apps/relay/internal/service/cleanup_service.go:106-111 (runCleanup is two slog.Debug calls).",
+      "confidence": "high"
+    },
+    {
+      "id": "T28-F-002",
+      "global_id": "003-T28-docs#T28-F-002",
+      "reviewer": "003-T28-docs",
+      "severity": "info",
+      "file": "apps/cli/test/e2e/flood-closure.test.ts",
+      "line": null,
+      "symbol": "closure and cost at '4 identities x 49 maximum-size poison...'",
+      "problem": "One of two full test:e2e runs measured for this task showed a transient failure in this scenario (poll exit codes [3,3,3,3] instead of the expected final 0), which did not reproduce on an immediate retry against byte-identical code.",
+      "impact": "Not attributed to this task's change (the script's repoint does not alter test behaviour, only which script name reaches these files), and not reported as a regression per the dispatch's instruction to ignore the two concurrent test-writing agents' effects. Worth a look by whoever owns test stability, since the same scenario is exercised by the plain test script too and could flake there under load.",
+      "suggested_fix": "No action taken by this task. If it recurs outside concurrent-load conditions, it would warrant its own investigation - out of scope here (no test file may be changed by this task).",
+      "evidence": "Full transcript in t28-reconciliation-report.md section 1: run 1 (3m29.961s real) showed the failure with the T52-F-001 wedge message; run 2 (4m52.611s real), same commit c5fde09, same script, 29/29 passed. git diff --stat at session end shows concurrent uncommitted edits to apps/cli/src/commands/cli.test.ts and apps/cli/test/e2e/publication-claimability.test.ts from the two other in-flight agents.",
+      "confidence": "medium"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "documents_changed": 13,
+    "cleanup_knob_sites_removed": 6,
+    "stale_status_current_limitations_corrected": 4,
+    "e2e_script_files_before": 1,
+    "e2e_script_tests_before": 3,
+    "e2e_script_files_after": 6,
+    "e2e_script_tests_after": 29,
+    "e2e_measured_wall_clock_seconds_clean_run": 291.5,
+    "e2e_measured_real_seconds_clean_run": 292.611,
+    "e2e_measured_real_seconds_first_run": 209.961
+  },
+  "timestamp_utc": "2026-09-08T14:40:10Z"
+}

@@ -1,0 +1,102 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T36-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Corrected the two test defects T31 diagnosed and refused to touch, in the two named files only. Defect 1 (publication-claimability.test.ts:270): independently re-derived the pool timeline (start 20 -> alice's claim at step 5 leaves 19 -> step 6's top-up mints 1 replacement, confirmed against outbound.publicationPool.test.ts's B-7 assertion that `pool.claimable` reports live-members-after-top-up, i.e. back to 20 -> carol's step-7 claim leaves 19 for the step-8 raw-drain loop) and confirmed the implementer's suggested reading (N-1 = 19) is the only one consistent with the file's own step 6 and with B-7; the rejected reading (N-2 = 18, treating the two claims as if the step-6 top-up never happened) would falsify B-7 instead. Changed `LIMITS.PREKEY_MIN_COUNT - 2` to `LIMITS.PREKEY_MIN_COUNT - 1` and corrected the comment above it. Defect 2 (two-process.test.ts:168): imported LIMITS from @echolet/protocol and changed the publish-traffic filter's expected length from the literal 2 to `2 * LIMITS.PREKEY_MIN_COUNT`, derived rather than hardcoded. Searched the whole of apps/cli for other publish traffic counted through a filter/reduce/length shape rather than a direct assertion (`keryx ctx rg` for the route literal, for `.filter(...=>...path`, and for reduce/length-comparison patterns across test/e2e): found exactly four traffic.filter(...).toHaveLength(...) sites in two-process.test.ts (168 publish, 175 send, 177 claim, 185 ack) plus filter-based helpers in four other files keyed on /poll, /ack, /claim and /send - none of those other seven touch /v2/prekeys/publish, so none is affected by the pool multiplier; line 168 was the only site needing correction. Both target files pass in isolation on Node v26.5.0. Full CLI suite (`npx vitest run` in apps/cli): 272 passed, 1 failed of 273 - the failure is a THIRD, previously unflagged site (src/runtime/inbound.test.ts:324) that the pool also invalidates, reported below as F-001 and deliberately NOT fixed because it is a different class (a local one-time-prekey store snapshot equality, not publish-traffic counting) outside this dispatch's two-defect-plus-publish-count-search mandate; a follow-up task was spawned for it. Both cli.relayErrorCodes.test.ts and cli.senderQuota.test.ts (the CPU-contention class T31 flagged) passed in this full-suite run with no isolation re-run needed. Go: both `-count=1 -race` runs (tagged relayv2 and untagged) are all ok with zero data races, and the three named reservation-guard tests pass with all five/two subtests green, both guard test files byte-identical to T29's recorded digests. Workspace typecheck (`pnpm -r typecheck`) is clean across all 7 projects, confirming the new LIMITS import compiles. No product file, no documentation file and no file beyond the two named tests was changed. No store key, private key, plaintext or HTTP request body was printed or recorded.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Defect 1 fixed with the arithmetic independently verified, not merely applied from the implementer's suggestion",
+      "status": "met",
+      "evidence": "Read the full test file end to end and traced the pool state by hand across every step that touches bob's pool: step 5 (alice's claim, 20->19), step 6 (bob's top-up, minted 1 -> pool back to 20 live, per the test's own pool!.minted===1 and pool!.claimable===LIMITS.PREKEY_MIN_COUNT assertions at lines 219-222), step 7 (carol's claim via secondSender, 20->19), step 8 (raw drain loop starting from 19 live). Cross-checked the meaning of pool.claimable against apps/cli/src/runtime/outbound.publicationPool.test.ts:219 (B-7: `expect(poolOf(second.result).claimable).toBe(target)` after 3 members were consumed and topped up), which fixes claimable as live-members-after-top-up and rules out the N-2 reading (which requires claimable to mean something else, falsifying B-7). Changed line 270 from `LIMITS.PREKEY_MIN_COUNT - 2` to `LIMITS.PREKEY_MIN_COUNT - 1` and reworded the comment above it to name the step-6 top-up explicitly. The file's own SHA-256 moved from 723613f226c3331c49c81b1d14fb968b7ec6a36a04b5aa3d4e75c4404296b10a to 055117248ed34d2525b963ae3c882f9109456da334bd6def166833f9e614b504."
+    },
+    {
+      "criterion": "Defect 2 fixed, count derived from LIMITS.PREKEY_MIN_COUNT rather than written as a literal",
+      "status": "met",
+      "evidence": "apps/cli/test/e2e/two-process.test.ts: added `import { LIMITS } from \"@echolet/protocol\";` and changed line 168's `toHaveLength(2)` to `toHaveLength(2 * LIMITS.PREKEY_MIN_COUNT)`, with a one-line comment naming why. SHA-256 moved from cb6ff6fa76b1ffa0471a7273d59632f88008f8c375b38cdc0bea74b3d85e0ae9 to 36e0f1353f7f5a93b83ff10e318ed40c06dd1ed5948e0569dbb3477ceffe8c7e. `npx vitest run apps/cli/test/e2e/two-process.test.ts` (3 tests) passes."
+    },
+    {
+      "criterion": "Search for other indirect publish-traffic counting (filter/reduce/length rather than a direct assertion) performed and reported",
+      "status": "met",
+      "evidence": "`keryx ctx rg 'prekeys/publish'` over apps/cli (26 hits, 19 files) separated fake-relay route handlers (dispatch on path, no counting) from the seven genuine count sites already known from T31's F-002 class_scope. `keryx ctx rg '\\.filter\\(.*=>.*path'` over apps/cli (17 hits, 7 files) found two-process.test.ts's four traffic.filter(...).toHaveLength(...) assertions (168 publish - the fixed defect; 175 send=2; 177 claim=1; 185 ack=2) plus filter-based helper closures in inbound.pollProgress.test.ts, inbound.readMark.test.ts, inbound.batchIsolation.test.ts, outbound.claimResidual.test.ts, outbound.concurrentSend.test.ts and inbound.test.ts keyed on /poll, /ack, /claim or /send - none reference /v2/prekeys/publish, so the pool's N-multiplier does not touch them and none needs correction. `keryx ctx rg 'reduce\\(|\\.length ===|\\.length =='` over apps/cli/test/e2e returned zero hits. Two-process.test.ts:168 was the only site in this class."
+    },
+    {
+      "criterion": "Nothing weakened; every corrected count stays exact and derived from LIMITS.PREKEY_MIN_COUNT",
+      "status": "met",
+      "evidence": "Both corrections keep `toBe`/`toHaveLength` with an exact expected value; neither was loosened to a range, a bound, `toContain`, `toBeGreaterThan` or similar. Both computed values reference `LIMITS.PREKEY_MIN_COUNT`, imported from @echolet/protocol in both files (two-process.test.ts needed a new import; publication-claimability.test.ts already had one). No other assertion in either file was touched: `keryx ctx diff` shows two-process.test.ts at +4/-1 lines (one import line, one comment line, one changed toHaveLength argument) and publication-claimability.test.ts's session diff against its own pre-edit content is exactly the two lines shown above (the file's larger diff against git HEAD predates this session, from T29/T30/T31)."
+    },
+    {
+      "criterion": "Only the two named files (plus any site the search justifies) were changed; no product file, no documentation",
+      "status": "met",
+      "evidence": "`keryx ctx diff -- apps/cli/test/e2e/two-process.test.ts apps/cli/test/e2e/publication-claimability.test.ts` shows exactly these two files touched this session, both test files. No other file was opened for writing. The search for indirect publish-counting justified zero further edits (see above) beyond the two named defects."
+    },
+    {
+      "criterion": "Verification: both corrected files pass in isolation, and the full CLI + Go suites are re-run and reported honestly",
+      "status": "partial",
+      "evidence": "`npx vitest run apps/cli/test/e2e/publication-claimability.test.ts apps/cli/test/e2e/two-process.test.ts` on Node v26.5.0: 2 files, 4 tests, all pass. Full CLI suite `npx vitest run` (apps/cli, 250.04 s): 51 of 52 files pass, 272 of 273 tests pass. The one remaining failure, src/runtime/inbound.test.ts:324, is NOT either of the two named defects and is reported as finding F-001 rather than fixed, because it is a different assertion class (local one-time-prekey store state, not publish-request counting) that this dispatch's mandate does not cover; a follow-up task was spawned. Go: `go test -count=1 -race -tags relayv2 ./...` and `go test -count=1 -race ./...` both all-ok, zero data races; the three named reservation-guard tests (`-run 'TestSignalPreKeyBundleV2OneTimePreKeyReservationsArePermanent|TestSignalV2Pool'`) pass, all 5 subtests of the first green; both guard test files' SHA-256 confirmed unchanged from T29's recorded values. `pnpm -r typecheck` clean across 7 projects. cli.relayErrorCodes.test.ts and cli.senderQuota.test.ts (T31's flagged CPU-contention class) both passed inside this full-suite run, so no isolation re-run was needed for them this time."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T36-tests-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This document.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/test/e2e/publication-claimability.test.ts",
+      "change": "modified - line 270's assertion changed from `expect(drained).toBe(LIMITS.PREKEY_MIN_COUNT - 2)` to `expect(drained).toBe(LIMITS.PREKEY_MIN_COUNT - 1)`, with the comment above it corrected to name the step-6 top-up that replaces alice's claimed member before carol's claim. Nothing else in the file changed. sha256 before 723613f226c3331c49c81b1d14fb968b7ec6a36a04b5aa3d4e75c4404296b10a -> after 055117248ed34d2525b963ae3c882f9109456da334bd6def166833f9e614b504"
+    },
+    {
+      "path": "apps/cli/test/e2e/two-process.test.ts",
+      "change": "modified - added `import { LIMITS } from \"@echolet/protocol\";`, and line 168's `expect(traffic.filter(...)).toHaveLength(2)` changed to `toHaveLength(2 * LIMITS.PREKEY_MIN_COUNT)` with a one-line comment. Nothing else in the file changed. sha256 before cb6ff6fa76b1ffa0471a7273d59632f88008f8c375b38cdc0bea74b3d85e0ae9 -> after 36e0f1353f7f5a93b83ff10e318ed40c06dd1ed5948e0569dbb3477ceffe8c7e"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "003-T36-tests#F-001",
+      "reviewer": "003-T36-tests",
+      "severity": "major",
+      "repo": null,
+      "file": "apps/cli/src/runtime/inbound.test.ts",
+      "line": 324,
+      "problem": "A third, previously unflagged pre-existing assertion that the T31 pool implementation invalidates, of a different class from the two this dispatch was scoped to fix. `expect(await snapshot(alice, nativePrefixes)).toEqual(before)` expects that a send() which fails (via an injected persistence failure gated on the first transaction to touch `cli:outbox:` keys) leaves ALL native store state, including the `pre:` prefix, identical to `before` (captured right after `pair()`, before any publish, at which point only `pre:1` exists from identity creation). Measured: after the failed send, the store holds `pre:1` through `pre:20`. Root cause: the `send()` test helper (lines 49-81) calls `messenger.publish()` before `messenger.send()`; under T31's pool implementation, publish() durably mints the full N=20-member pool via mintPublicationSlot, which by design commits each member as its own transaction BEFORE it can be offered to anyone (t31-implementation-report.md section 1.1) - so the pool top-up is real, durable, deliberate state that is NOT part of the send's own atomic outbox-commit transaction and therefore is not rolled back by the injected failure.",
+      "impact": "Deterministic failure (reproduced twice: full suite and isolated `npx vitest run src/runtime/inbound.test.ts`), not the CPU-contention class T31's F-003 named. It sits outside this dispatch's mandate (the two named defects, plus only sites found by searching for indirect publish-TRAFFIC counting) because this assertion counts local one-time-prekey STORE state, not HTTP publish requests - it matched neither this session's filter/reduce/length search nor T29's F-001 or T31's F-002 enumerations, all of which were scoped to request counting. Fixing it here would exceed the explicit two-file change authorization.",
+      "suggested_fix": "Not attempted under this dispatch's scope. A follow-up task was spawned (mcp__ccd_session__spawn_task, task_7406ec35) with the full diagnosis: likely fixes are capturing `before` after a publish rather than before it, or asserting the outbox/history/session rollback property separately from the pre: prefix count, keeping any pool-size expectation derived from LIMITS.PREKEY_MIN_COUNT rather than a literal.",
+      "evidence": "`cd apps/cli && npx vitest run src/runtime/inbound.test.ts`: 1 failed, 10 passed. `AssertionError: expected { …(20) } to deeply equal { Object (pre:1) }` at inbound.test.ts:324, with the received object showing pre:1 through pre:20 and the expected object showing only pre:1. Reproduced identically inside the full-suite run (272 passed, 1 failed of 273).",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/inbound.test.ts:324"
+        ],
+        "enumeration_method": "Surfaced by running the full CLI suite after fixing the two named defects, not by a targeted search (this dispatch's search was scoped to publish-traffic counting via filter/reduce/length, which this site is not an instance of). No broader search for this class (native-store snapshot equality assertions invalidated by durable pool minting) was performed, since doing so and acting on results would have exceeded this dispatch's two-file mandate; the follow-up task is asked to determine whether other sites share this shape."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "test_files_changed": 2,
+    "product_files_changed": 0,
+    "target_defects_total": 2,
+    "target_defects_fixed": 2,
+    "cli_suite_target_isolation": "publication-claimability.test.ts + two-process.test.ts: 2 files, 4 tests, all pass",
+    "cli_suite_full": "npx vitest run in apps/cli: 51 of 52 files passed, 272 of 273 tests passed, 250.04 s; the 1 remaining failure is inbound.test.ts:324 (F-001), out of this dispatch's scope",
+    "cli_suite_cpu_contention_class": "cli.relayErrorCodes.test.ts and cli.senderQuota.test.ts (T31's F-003) both passed inside the full-suite run this time; no isolation re-run needed",
+    "relay_suite_tagged_race": "go -C apps/relay test -count=1 -race -tags relayv2 ./... : all ok, 0 data races",
+    "relay_suite_untagged_race": "go -C apps/relay test -count=1 -race ./... : all ok, 0 data races",
+    "reservation_guards": "go -C apps/relay test -count=1 -race -v -tags relayv2 -run 'TestSignalPreKeyBundleV2OneTimePreKeyReservationsArePermanent|TestSignalV2Pool' ./internal/storage/repository/ ./internal/api/handler/ : 3 tests PASS (TestSignalPreKeyBundleV2OneTimePreKeyReservationsArePermanent with 5 subtests, TestSignalV2PoolServesOneClaimPerMemberAndRefusesTheNextSender, TestSignalV2PoolNeverReOffersAConsumedMember), 0 data races; both guard test files' SHA-256 unchanged from T29's recorded values (44e4c27da8a274d29496c3ab07a97fcb2b0e1685d7057c280829fdcda580a91d, c27f133318c2805d8c85af9b69ea9230d7c4538e7d9adf6978e0039b439348ac)",
+    "typecheck": "pnpm -r typecheck: 7 workspace projects, all Done",
+    "node_version": "v26.5.0"
+  },
+  "timestamp_utc": "2026-09-08T16:05:00Z"
+}

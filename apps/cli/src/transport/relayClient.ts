@@ -26,7 +26,15 @@ const success = <T extends z.ZodType>(data: T) => z.object({ ok: z.literal(true)
 // can fix, and the relay answers it as a NON-retryable 403 precisely so this allowlist can carry it
 // inland: `retryable` is decided from the HTTP status alone, and classify() never reads `remoteCode`
 // for a retryable error.
-const remoteCodes = new Set(["BUNDLE_ID_CONFLICT", "CLAIM_ID_CONFLICT", "PREKEY_BUNDLE_UNAVAILABLE", "UNAUTHORIZED_MAILBOX_ACCESS", "SENDER_QUOTA_EXCEEDED", "NOT_FOUND", "INVALID_REQUEST", "UNAUTHORIZED", "ENVELOPE_ID_CONFLICT", "RATE_LIMITED"]);
+// `BUNDLE_EXPIRED` is the fourth (T26). `relay publish` re-submits every stored member of the
+// published pool, and a member whose seven-day window has closed is refused 400 under this code
+// before it reaches storage. Without it here that 400 arrives with `remoteCode: undefined` and is
+// indistinguishable from INVALID_SCHEMA or INVALID_SIGNATURE, leaving the publish loop to choose
+// between re-minting silently over a real defect and aborting the recovery command in exactly the
+// case it exists for - the whole pool is minted within seconds of itself, so it expires together.
+// It changes nothing the operator sees: `reportedRelayCodes` in cli.ts is a separate, smaller
+// allowlist and does not carry it, so the code is read by the publish loop and never by classify().
+const remoteCodes = new Set(["BUNDLE_ID_CONFLICT", "BUNDLE_EXPIRED", "CLAIM_ID_CONFLICT", "PREKEY_BUNDLE_UNAVAILABLE", "UNAUTHORIZED_MAILBOX_ACCESS", "SENDER_QUOTA_EXCEEDED", "NOT_FOUND", "INVALID_REQUEST", "UNAUTHORIZED", "ENVELOPE_ID_CONFLICT", "RATE_LIMITED"]);
 const invalid = () => new RelayError("INVALID_RELAY_RESPONSE", false);
 const authorizationSchema = z.object({ recipient_mailbox_id: z.string().min(1), device_id: z.string().uuid(), signature: z.string().min(1) }).strict();
 type Authorization = z.infer<typeof authorizationSchema>;

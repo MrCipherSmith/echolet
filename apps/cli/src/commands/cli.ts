@@ -31,11 +31,12 @@ const persistenceFailure = (): CliFailure => new CliFailure("PERSISTENCE_FAILURE
  * `PREKEY_BUNDLE_UNAVAILABLE` is that case. The relay reports it whenever its availability scan
  * finds no unexpired, unclaimed bundle matching the selector (`ClaimSignalV2`,
  * storage/repository/signal_prekey_bundle_v2.go), which covers four conditions and not only the
- * first: the recipient's published bundle was already claimed (it serves exactly one first-contact
- * sender), the recipient never published one at all, every published bundle is outside its validity
- * window, or the requested `device_id` selector matches no available bundle. None of the four is a
- * trust violation, and all four were previously indistinguishable from a forged signature. The exit
- * code stays 3, as documented in specification.md.
+ * first: every member of the recipient's published pool has been claimed (each bundle serves exactly
+ * one first-contact sender, so an exhausted recipient is one whose whole pool is gone), the
+ * recipient never published at all, every published bundle is outside its validity window, or the
+ * requested `device_id` selector matches no available bundle. None of the four is a trust violation,
+ * and all four were previously indistinguishable from a forged signature. The exit code stays 3, as
+ * documented in specification.md.
  *
  * `UNAUTHORIZED_MAILBOX_ACCESS` is the second. Since T50 (finding T49-F-001) `/v1/messages/send`
  * authenticates the sender against an already-published, root-signed device record, so `send` now

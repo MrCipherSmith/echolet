@@ -1,0 +1,187 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T29-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Wrote the T26 prekey-pool test suite: 12 new tests across four files plus one authorised rewrite of an existing e2e. Ten TypeScript tests are RED and each fails on its own assertion (never on a compile error or a timeout); the two Go tests are GREEN REGRESSION PINS, exactly as T26 §6 group D said in advance, and are labelled as such in the file. The permanent-reservation guards in apps/relay/internal/storage/repository/prekey_bundle_v2_test.go are untouched (sha256 44e4c27d..., byte-identical to its state before this task) and still pass with -count=1. The concerns are two: THREE pre-existing test sites beyond the two the design enumerated become false under a pool - cli.test.ts:149, outbound.test.ts:141 and :182, plus the attempt counts in outbound.publish.test.ts - and I did not touch them because the dispatch authorised only the two e2e steps; and T26 §2.7's rule that BUNDLE_EXPIRED is 'handled locally and never reaches classify()' is unreachable without a change to apps/cli/src/transport/relayClient.ts, a file the design's own file list does not name.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "A pool of N is published, its members are independent, and one claim consumes exactly one member while the rest stay claimable",
+      "status": "met",
+      "evidence": "TypeScript: profile.publicationPool.test.ts test 2 pins N = LIMITS.PREKEY_MIN_COUNT members with distinct bundle_id, distinct one_time_prekey.key_id and distinct one_time_prekey.public_key, each independently accepted by importVerifiedSignalBundleV2 against the profile's own device record. Go: prekey_pool_test.go TestSignalV2PoolServesOneClaimPerMemberAndRefusesTheNextSender publishes 20 independently signed bundles NEWEST FIRST and requires 20 claims under 20 distinct claim ids to return the 20 members OLDEST-CREATED FIRST (the v2:available:<identity>:<created_at_ms>:<bundle_id> ordering, which is what stops the member closest to expiry being the one left behind), with 20 distinct one-time prekeys. Go tests pass on this tree with -count=1: ok echolet/apps/relay/internal/api/handler 1.708s."
+    },
+    {
+      "criterion": "`relay publish` tops up rather than replacing: after members are consumed, re-running it restores the pool to N, and re-submitting an unconsumed member is idempotent and byte-identical rather than an error",
+      "status": "met",
+      "evidence": "outbound.publicationPool.test.ts tests 6 and 7. Test 6 (full pool): exactly N requests, the same bundle-id set and the same key-id set as the first run, every request body byte-identical to the stored member (compared as a boolean, never rendered), pool.minted === 0. Test 7 (partial drain of 3): every stored member re-submitted INCLUDING the ones last seen as live - because belief goes stale the moment a claim lands and there is no 'how many are left' route to ask instead - and exactly 3 fresh bundles minted, carrying key ids never offered before. Both RED today: 'expected [ { …(2) } ] to have a length of 20 but got 1'."
+    },
+    {
+      "criterion": "A drained recipient recovers, and the sender's OWN retry does it with no action on the sender's side",
+      "status": "met",
+      "evidence": "apps/cli/test/e2e/prekey-pool-replenishment.test.ts, against the real relay binary built from this tree on loopback, with the relay stopped in the test's own finally. 20 distinct published first-contact senders each deliver; the recipient polls once and gets received === 20 with rejected === []; the 21st sender is refused exit 3 under PREKEY_BUNDLE_UNAVAILABLE; the recipient runs `relay publish` ONCE (pool.minted === 20, pool.claimable === 20); and that same sender re-runs the identical send with the identical --message-id and no other change, and it delivers. A final `relay publish` reports minted === 1, pinning that her retry consumed exactly one member. RED today at the first pool assertion, in 20 s."
+    },
+    {
+      "criterion": "At exhaustion the sender sees today's answer unchanged: 404, PREKEY_BUNDLE_UNAVAILABLE, exit 3; Signal's last-resort key is not admitted",
+      "status": "met",
+      "evidence": "Three sites, none of which would pass if a shared last-resort key were introduced. Go prekey_pool_test.go: the (N+1)st claim is asserted as HTTP 404 with code PREKEY_BUNDLE_UNAVAILABLE, and a re-signed bundle around an already-published one-time prekey is asserted as 409 ONE_TIME_PREKEY_REUSED. e2e prekey-pool-replenishment.test.ts step 4: exit 3, errorCode PREKEY_BUNDLE_UNAVAILABLE, explicitly not PROTOCOL_REJECTED. e2e publication-claimability.test.ts step 8: the same exit-3 /PREKEY/ assertion the old step 7 carried, moved behind a full drain, together with the raw exhaustion probe asserting {status: 404, code: PREKEY_BUNDLE_UNAVAILABLE}. Nothing anywhere asserts a bundle served after exhaustion."
+    },
+    {
+      "criterion": "The permanent-reservation property survives, and a client refilling a pool never prunes or re-uses consumed key material",
+      "status": "met",
+      "evidence": "Two independent pins. Client side, profile.publicationPool.test.ts test 5 (A-5, the load-bearing negative): after building a pool, refilling it and rotating twice past every slot, EVERY `pre:<id>` key present before the refill must still be present afterwards, and no allocated id may appear twice. It is written as 'nothing disappeared', not as 'the mechanism is X', so it forbids a future tidying pass without prescribing an implementation. The reason is stated in the file: pruning would not re-offer a key on the relay - it would leave the relay correctly serving a bundle whose private half the recipient has thrown away, an UNDECRYPTABLE message rather than a refused one. Relay side, prekey_pool_test.go TestSignalV2PoolNeverReOffersAConsumedMember: after one claim, a byte-identical re-publish of the consumed member answers claimable:false while every other member still answers claimable:true; a fresh bundle_id around the same one-time prekey is refused 409 ONE_TIME_PREKEY_REUSED; and no later claim id ever reaches the consumed member's bundle id or one-time prekey."
+    },
+    {
+      "criterion": "The existing Go reservation guards stay green and untouched",
+      "status": "met",
+      "evidence": "apps/relay/internal/storage/repository/prekey_bundle_v2_test.go sha256:44e4c27da8a274d29496c3ab07a97fcb2b0e1685d7057c280829fdcda580a91d, recorded before I wrote anything and re-read afterwards - identical. apps/relay/internal/api/handler/signal_prekey_bundle_v2_test.go likewise untouched (sha256:1c069d0964eb1de829dce1d8d0088f1bc8de4f4331fa3fe7ecf5c91b6ef0c911). Baseline `go -C apps/relay test -count=1 -tags relayv2 -run TestSignalPreKeyBundleV2 ./internal/storage/repository/` -> ok 1.374s; after my new file, `-count=1 -tags relayv2 ./internal/storage/repository/ ./internal/api/handler/` -> ok 4.362s / ok 11.889s, and untagged `./internal/api/handler/ ./internal/storage/repository/ ./internal/validation/ ./internal/api/router/` -> all ok."
+    },
+    {
+      "criterion": "Every new test is RED for the right reason and fails on its assertion, not on a compile error or a timeout",
+      "status": "partial",
+      "evidence": "All ten TypeScript tests fail on an expect() with a sentence naming the contract; none throws a TypeError and none times out (the slowest RED is the new e2e at 20 s against a 600 s budget). Missing API surface is PROBED with expect(typeof accessor).toBe('function') - the idiom outbound.publish.test.ts already uses for rotateBundle - so a missing Profile.publicationPool() is an assertion failure rather than a bare TypeError. PARTIAL for one honest reason: the two Go tests in group D CANNOT be red. Both properties are already true of this tree (T26 measured them at P1 and P5), the pool changes no relay file, and nothing in the tree asserted them - so they are written and labelled as regression pins, and the file says so in its first paragraph rather than pretending otherwise. This is what T26 §6 group D instructed."
+    },
+    {
+      "criterion": "TESTS ONLY - no product file and no documentation touched",
+      "status": "met",
+      "evidence": "`git status --porcelain -- apps packages docs` attributes to me exactly two modified files (apps/cli/src/commands/cli.test.ts, apps/cli/test/e2e/publication-claimability.test.ts) and four new files, all of them tests. The other dirty paths belong to the two concurrent agents (docs/*, apps/cli/src/tui/tui-shell.trustViewport.test.ts, apps/cli/src/transport/relayClient.protocolMirror.test.ts, apps/relay/internal/protocol/limits_mirror_test.go, apps/relay/internal/service/cleanup_service_stop_join_test.go) or predate this flow (apps/cli/package.json). No product file was opened for writing. `npx tsc -p apps/cli/tsconfig.json --noEmit` exits 0; gofmt reports the new Go file clean."
+    },
+    {
+      "criterion": "Nothing weakened, skipped, narrowed or deleted beyond the two authorised e2e steps",
+      "status": "met",
+      "evidence": "No .skip, no .only, no assertion removed. In publication-claimability.test.ts steps 1-5 are byte-identical, including every bundleId stability assertion and the SENDER_NOT_PUBLISHED assertion T19/T20 rest on, and the bundleId assertion inside step 6 is kept verbatim. Step 6's boolean `claimable === false` became a set of exact counts (pool.minted === 1, pool.claimable === N, target === N) plus `claimable === true`; step 7's refusal became a delivery, and its exhausted-prekey assertion moved intact to a new step 8 behind a full drain. In cli.test.ts I only APPENDED one `it`; the eight-command enumeration at line 84 and the exact request-path assertion at line 149 are unchanged."
+    },
+    {
+      "criterion": "Deterministic synchronisation only; no relay but a local one; no secret material printed",
+      "status": "met",
+      "evidence": "No sleep stands in for an event anywhere I wrote: the new e2e reuses the existing suite's bounded /health readiness poll and its SIGTERM-with-deadline teardown, and every other wait is an await on the child's own close. The drain loop in publication-claimability.test.ts is a bounded sequential for-loop terminated by the relay's own 404, not by a timer. Both e2e suites build a private relay binary into a per-suite temp dir, bind an ephemeral loopback port and stop the process in `finally`; nothing addresses geekom or depr. Every child's stdout and stderr is checked against the run's store keys and plaintexts before anything is asserted; bundle bodies are compared with === and reported as booleans; the raw claim body is never rendered, only its status and the relay's own error code."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T29-tests-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This document.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/runtime/profile.publicationPool.test.ts",
+      "change": "added - T26 group A, 5 RED tests. The pool target is the protocol's own LIMITS.PREKEY_MIN_COUNT; N independent members; byte-exact durability per member across calls and across a restart; slot 0 keeps writing `cli:publication` unchanged so the T19/T20 send precondition does not regress; and A-5, the negative that forbids any pool GC of `pre:` records. sha256:2244189c78df19796fb56b55806f01115e8e5ff3bb53daf2f1a229c6244eb345"
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.publicationPool.test.ts",
+      "change": "added - T26 group B, 5 RED tests against a fake relay that reproduces the measured Go publish semantics (first store claimable, byte-identical re-store idempotent and never re-adding the availability index, out-of-window bundle refused 400 BUNDLE_EXPIRED). Full pool is a no-op; partial drain tops up; an expired member is replaced rather than fatal; bundleId stays anchored to slot 0; total failure is still a failure. sha256:d7a8db800ff7038903392d11334230628d613117b66751028c24d6ae11190b3b"
+    },
+    {
+      "path": "apps/cli/src/commands/cli.test.ts",
+      "change": "modified - APPENDED one RED test (T26 group C) and added the `LIMITS` import. Nothing existing was edited: the eight-command enumeration at line 84 and the exact request-path assertion at line 149 are untouched. The new test pins the {stored, bundleId, claimable, pool:{target, claimable, minted}} result shape, target === LIMITS.PREKEY_MIN_COUNT, one bundle per request, `claimable` true iff pool.claimable > 0, and that `relay publish` gains no option and no ninth command appears. Previous sha256:e7cea8ed3ce785235ec7ce75b50dd08f44ced935831ddc0338fff6a70ddb11ca -> now sha256:49d200f1d9d13ef5c6a0217155b93bd5b18ed2c06df71e9566b1088cdb45a38d"
+    },
+    {
+      "path": "apps/cli/test/e2e/prekey-pool-replenishment.test.ts",
+      "change": "added - T26 group E tests 15 and 16 in one test against the real relay binary, because test 16's premise is test 15's exhaustion. 20 senders deliver from one pool, the recipient decrypts all 20 in one poll, the 21st is refused at exit 3 under PREKEY_BUNDLE_UNAVAILABLE, one `relay publish` restores the pool, and that same sender's own retry delivers with nothing done on her side. sha256:18abbb069b24c6f5fda024a3546c632953df18b71ba5a36d306f8cd15b26ee3f"
+    },
+    {
+      "path": "apps/cli/test/e2e/publication-claimability.test.ts",
+      "change": "modified - the AUTHORISED rewrite of steps 6 and 7 (T26 §2.5 / §6 test 17), plus the three lines that rewrite needs: the `LIMITS` import, a fourth profile `dave`, and `dave` in the init loop. Steps 1-5 are byte-identical. Its SHA-256 is cited as evidence in the T19 and T20 reports; those citations refer to the PRE-T26 revision, sha256:a8037c56cc054b26d006d8ec7a75a1de7af1a4f8747966b902f59c35352a2b24. New sha256:723613f226c3331c49c81b1d14fb968b7ec6a36a04b5aa3d4e75c4404296b10a"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/prekey_pool_test.go",
+      "change": "added - T26 group D, 2 GREEN regression pins (labelled as such in the file's first paragraph, per §6). Bundles are minted in-process from fresh ed25519 keys, reproducing the relay's own transcript serialization, so a real pool of 20 distinct signed bundles is exercised at the HTTP boundary. gofmt clean; passes with -count=1. sha256:c27f133318c2805d8c85af9b69ea9230d7c4538e7d9adf6978e0039b439348ac"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "003-T29-tests#F-001",
+      "reviewer": "003-T29-tests",
+      "severity": "major",
+      "repo": null,
+      "file": "apps/cli/src/commands/cli.test.ts",
+      "line": 149,
+      "problem": "T26 §6 enumerated TWO existing assertions that become false under a pool - publication-claimability.test.ts steps 6 and 7 - and eleven prose sites. It missed a third category entirely: existing UNIT tests whose assertions count publish requests. Six pre-existing sites assert either an exact request-path sequence containing exactly one /v2/prekeys/publish, or an exact publish-attempt count, and all of them are computed from a `relay publish` that issues ONE request. Under the top-up loop that call issues N = 20, or 2N-k when members have been consumed.",
+      "impact": "The implementer will make the pool work, run the suite, and find between four and six unrelated-looking failures in files the design told them they would not touch. Worse, the natural reflex - relaxing an exact `toEqual([...])` into a `toContain` - would quietly destroy what those assertions actually pin: that a send issues exactly ONE claim and exactly ONE deposit and nothing else, which is the T12/T13 residual work. The count that must change is the publish prefix; the claim/deposit tail must stay exact.",
+      "suggested_fix": "Rewrite each site to the new exact truth rather than loosening it. outbound.test.ts:141 and :182 and cli.test.ts:149: keep `toEqual` and build the expected array as `[...Array(LIMITS.PREKEY_MIN_COUNT).fill('/v2/prekeys/publish'), '/v2/prekeys/claim', ...]`, so the claim-and-deposit tail stays exactly as pinned. outbound.publish.test.ts:93 and :116: the byte-identity assertions on slot 0 stay correct as written; only the lengths change, to N and 2N. Its third test ('allocates a fresh bundle... only through an explicit rotation') needs more care: it reads `relay.attempts.at(-1)`, which under a pool is the last slot rather than the rotated slot 0 - address slot 0 explicitly instead. outbound.publish.test.ts:87 stays true either way, because the first publish throws on its first request.",
+      "evidence": "`keryx ctx rg 'toEqual\\(\\[\"/v[12]|attempts\\).toHaveLength|requests\\).toHaveLength'` over the tree returns exactly these sites and no others; the mailbox sequences in inbound.test.ts:162/:269/:273 and the send-only retry at outbound.test.ts:216 carry no publish and are unaffected. All six are GREEN today and were green in my full-suite baseline run.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/commands/cli.test.ts:149",
+          "apps/cli/src/runtime/outbound.test.ts:141",
+          "apps/cli/src/runtime/outbound.test.ts:182",
+          "apps/cli/src/runtime/outbound.publish.test.ts:87 (stays true; listed for completeness)",
+          "apps/cli/src/runtime/outbound.publish.test.ts:93",
+          "apps/cli/src/runtime/outbound.publish.test.ts:116",
+          "apps/cli/src/runtime/outbound.publish.test.ts:139-147 (rotation test, reads attempts.at(-1))"
+        ],
+        "enumeration_method": "keryx ctx rg over the whole tree for the two shapes that can express a publish count - an exact request-path array literal beginning \"/v1 or \"/v2, and a toHaveLength on a recorded attempts/requests array - then each of the 12 hits read in context to separate publish-bearing sequences from mailbox-only ones."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "003-T29-tests#F-002",
+      "reviewer": "003-T29-tests",
+      "severity": "major",
+      "repo": null,
+      "file": "apps/cli/src/transport/relayClient.ts",
+      "line": 29,
+      "problem": "T26 §2.7 requires that a BUNDLE_EXPIRED on one pool member is read as 'this slot is dead, mint a replacement' - locally, silently - and states 'No allowlist changes: BUNDLE_EXPIRED is handled locally and never reaches classify()'. But the client cannot SEE that code. RelayClient's `remoteCodes` allowlist does not contain BUNDLE_EXPIRED, so a 400 carrying it arrives at the publish loop as RelayError('RELAY_HTTP_ERROR', retryable:false, httpStatus:400, remoteCode: undefined) - indistinguishable from INVALID_SCHEMA, INVALID_SIGNATURE or any other 400.",
+      "impact": "Without a change to relayClient.ts the loop has only two options, and both are wrong. Treat every non-retryable publish refusal of a stored member as a dead slot, and a genuinely malformed or mis-signed bundle is silently re-minted forever, hiding a real defect behind an infinite supply of new key material. Treat none of them as a dead slot, and the seven-day case aborts `relay publish` at exit 3 under PROTOCOL_REJECTED - which is exactly the case the recovery command exists for, since all N members are minted within a second of each other and therefore expire together. The design's own file list (§6 'Files the implementer will touch') names profile.ts, outbound.ts, cli.ts and limits.ts, and not relayClient.ts.",
+      "suggested_fix": "Add \"BUNDLE_EXPIRED\" to `remoteCodes` in relayClient.ts and nothing else. That allowlist decides only what a code the RELAY chose may be carried inland; it does not change the CLI's reported vocabulary, because `reportedRelayCodes` in cli.ts is a separate, smaller set and stays unchanged - so §2.7's real claim, that the operator never sees a new code and classify() never sees BUNDLE_EXPIRED, holds exactly as written. outbound.publicationPool.test.ts test 8 is the RED test for this and will not pass without it.",
+      "evidence": "relayClient.ts:29 lists BUNDLE_ID_CONFLICT, CLAIM_ID_CONFLICT, PREKEY_BUNDLE_UNAVAILABLE, UNAUTHORIZED_MAILBOX_ACCESS, SENDER_QUOTA_EXCEEDED, NOT_FOUND, INVALID_REQUEST, UNAUTHORIZED, ENVELOPE_ID_CONFLICT, RATE_LIMITED - and no BUNDLE_EXPIRED. relayClient.ts:189 discards any code outside that set before the RelayError is constructed. The relay emits BUNDLE_EXPIRED as a 400 from validation (handler/signal_prekey_bundle_v2.go v2Error, model.ErrV2Expired), asserted at handler/signal_prekey_bundle_v2_test.go:86.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/transport/relayClient.ts:29 (remoteCodes)",
+          "apps/cli/src/commands/cli.ts:57 (reportedRelayCodes - must NOT change)"
+        ],
+        "enumeration_method": "The two allowlists are the only places a relay-chosen code is filtered on the client. Found by reading the code path a 400 takes from `request()` (relayClient.ts:187-190) to `classify()` (cli.ts:380-384); there is no third filter."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "003-T29-tests#F-003",
+      "reviewer": "003-T29-tests",
+      "severity": "info",
+      "repo": null,
+      "file": "docs/requirements/echolet-cli-prototype/specification.md",
+      "line": 118,
+      "problem": "The sentence 'a published bundle serves exactly one first-contact sender' becomes false at the eleven sites T26 §6 enumerated. This task may not edit documentation, so they are listed here for the implementer rather than fixed. One of them is inside a file I DID edit - publication-claimability.test.ts:13, in the header comment - and I deliberately left it, because the dispatch authorised only steps 6 and 7 and said to keep everything else. That file therefore currently carries a header sentence its own step 7 now contradicts, and fixing it is on the implementer's list, not mine.",
+      "impact": "Left alone, the tree carries a statement the code contradicts, in the two documents an operator reads first (specification.md, README.md) and in the rationale comments of the guards that stay correct.",
+      "suggested_fix": "Edit all eleven in the same change: docs/requirements/echolet-cli-prototype/specification.md:118, docs/requirements/echolet-cli-prototype/README.md:33, docs/requirements/echolet-cli-prototype/runbook.md:246, docs/requirements/echolet-cli-prototype/deployment-runbook.md:1113, docs/STATUS_CURRENT.md:93, docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md:919, apps/cli/src/commands/cli.ts:34, apps/cli/src/runtime/outbound.ts:65, apps/cli/src/runtime/outbound.publicationPrecondition.test.ts:24, :85 and :216, and apps/cli/test/e2e/publication-claimability.test.ts:13. The last five are RATIONALE PROSE for guards that stay correct - the T20 precondition and the exhausted-prekey vocabulary are both unaffected by the pool - so the reasoning sentence changes from 'the recipient has no way to allocate a replacement' to 'the recipient's pool is finite and each wasted claim costs them a top-up'. Do not delete the guards. docs/API-11_JSON_SCHEMAS.md needs no schema change, only the `relay publish` result description. Note T20 residual #2: existing test comments cite specification.md:92 and :130 by line number, so append rather than insert, or fix the citations in the same change.",
+      "evidence": "The list is transcribed from T26 §6, which derived it with `keryx ctx rg` over the whole tree and separately excluded the false positive at apps/relay/internal/config/config.go:15 ('serves exactly one scheme at a time'). I did not re-derive it; the concurrent documentation agent has since modified several of these files, so the line numbers should be re-checked before editing.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-004",
+      "global_id": "003-T29-tests#F-004",
+      "reviewer": "003-T29-tests",
+      "severity": "info",
+      "repo": null,
+      "file": "apps/cli/src/runtime/outbound.publicationPool.test.ts",
+      "line": 202,
+      "problem": "T26 §6 test 7 specifies 'exactly N requests and exactly N-k mints' for a partial drain, but §2.3's own loop issues N re-submissions PLUS N-k fresh publishes, i.e. 2N-k requests. The §2.3 cost figures have the same slip: a full-drain `relay publish` is priced at '20 requests' when it is 20 re-submissions plus 20 publishes, and only a FIRST publish on an empty profile is genuinely 20.",
+      "impact": "Small, but it matters for the traffic-shape claim: against the shipped 120/min limiter a full-drain top-up is 40 requests, a third of the minute budget rather than a sixth, and three of them in a minute hits the limiter rather than six. Nothing about the design changes; the number an operator is told does.",
+      "suggested_fix": "Read §2.3's request figures as 'N mint-and-publish operations' and add the N re-submissions when quoting a per-invocation request count. My tests deliberately pin the two COMPONENTS - every stored member re-submitted, exactly N-k fresh bundles published - and not a single literal total, so they are correct under either reading and will not need rewriting when the figure is corrected.",
+      "evidence": "T26 §2.3 steps 2 and 3, read against §2.3's 'A full-drain `relay publish`: 20 x 61.6 ms, and 20 requests - 17% of the shipped 120/min budget' and §6 test 7's 'exactly N requests'. 61.6 ms is stated in §1.2 as mint (57.7) + publish (3.9), so the 20 counted are the fresh publishes only.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "tests_added": 12,
+    "tests_red": 10,
+    "tests_green_regression_pins": 2,
+    "existing_tests_rewritten": 1,
+    "cli_suite": "13 failed | 260 passed (273), 5 failed files - every failure mine; the 273 includes the concurrent agent's new tui-shell.trustViewport and relayClient.protocolMirror tests, which passed",
+    "relay_suite": "go test -count=1 over internal/api/handler, internal/storage/repository, internal/validation, internal/api/router: all ok, untagged and with -tags relayv2"
+  },
+  "timestamp_utc": "2026-09-08T14:40:00Z"
+}

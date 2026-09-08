@@ -54,3 +54,41 @@
 - 2026-09-07T23:08:45.980Z - task-attempt: T21: started (attempt 1) — 003-T21-reauthor-poll-budget-test
 - 2026-09-07T23:23:38.181Z - task-done: T21: Re-author the poll-budget test: pin deliverability at the protocol maximum, not at a refused configuration
 - 2026-09-07T23:23:38.263Z - task-attempt: T22: started (attempt 1) — 003-T22-zero-max-refusal
+- 2026-09-08T04:07:48.019Z - task-added: T23: The push-gate fix lives in untracked .git/hooks and keryx update will revert it; make it durable
+- 2026-09-08T04:07:48.101Z - task-added: T24: Bring the Go suite inside the push gate: no Go change can currently select a test
+- 2026-09-08T06:19:27.244Z - task-attempt: T18: started (attempt 1) — 003-T18-claim-auth-design
+- 2026-09-08T06:19:27.329Z - task-added: T25: Independent verification of everything flow 003 has landed
+- 2026-09-08T06:19:33.737Z - task-attempt: T25: started (attempt 1) — 003-T25-verify
+- 2026-09-08T06:41:04.441Z - task-done: T18: Design: authenticate /v2/prekeys/claim to close the denial-of-first-contact primitive
+- 2026-09-08T06:41:04.527Z - task-done: T17: Add a CLI entry point for bundle rotation so a consumed bundle is recoverable
+- 2026-09-08T06:41:04.611Z - task-added: T26: Design automatic bundle replenishment: the cost fix that authentication is not
+- 2026-09-08T06:41:11.423Z - task-attempt: T26: started (attempt 1) — 003-T26-replenishment-design
+- 2026-09-08T06:50:05.388Z - task-attempt: T25: failed (attempt 2) — V-001: the trust-modal guard is pinned by no test - deleting it leaves 108 TUI tests green. V-006: lowering the TS protocol constant leaves 83 tests green with the Go mirror untouched, reintroducing RI-09's exact failure mode. V-005: commit 5235a6d still mixes product code with two tests, so the orchestrator's own split was incomplete. Plus the cleanup knob still advertised, docs stale again after six later commits, and test:e2e still 1 of 6.
+- 2026-09-08T06:50:05.477Z - task-added: T27: RED tests for the three properties the verification found unpinned
+- 2026-09-08T06:50:05.567Z - task-added: T28: Second documentation reconciliation, repoint test:e2e, remove the cleanup knob
+- 2026-09-08T14:14:02.887Z - task-attempt: T27: started (attempt 1) — 003-T27-tests (re-dispatch after pause)
+- 2026-09-08T14:14:02.979Z - task-attempt: T28: started (attempt 1) — 003-T28-docs (re-dispatch after pause)
+- 2026-09-08T14:14:03.071Z - task-added: T29: RED tests for bundle replenishment: a pool of N, top-up through relay publish
+- 2026-09-08T14:15:00.561Z - task-attempt: T29: started (attempt 1) — 003-T29-replenishment-tests
+- 2026-09-08T14:41:36.003Z - task-added: T30: Correct the six publish-count assertions that become false at N=20, without loosening them
+- 2026-09-08T14:41:36.117Z - task-added: T31: Implement bundle replenishment: a pool of N with top-up through relay publish
+- 2026-09-08T14:41:42.177Z - task-depends-set: T31: dependsOn T29, T30 (was empty) — Implementation follows the RED tests and the corrected fixtures
+- 2026-09-08T14:41:42.274Z - task-attempt: T30: started (attempt 1) — 003-T30-publish-count-fixtures
+- 2026-09-08T14:43:10.475Z - task-done: T28: Second documentation reconciliation, repoint test:e2e, remove the cleanup knob
+- 2026-09-08T14:43:10.685Z - task-added: T32: Wire a documentation-freshness check into the push gate so staleness is reported mechanically
+- 2026-09-08T14:43:10.801Z - task-added: T33: Remove the dead cleanup-interval field from Go config and its call site
+- 2026-09-08T14:43:16.850Z - task-attempt: T23: started (attempt 1) — 003-T23-gate-durability (bundled with T24 and T32)
+- 2026-09-08T14:55:22.512Z - task-done: T30: Correct the six publish-count assertions that become false at N=20, without loosening them
+- 2026-09-08T14:55:22.594Z - task-done: T29: RED tests for bundle replenishment: a pool of N, top-up through relay publish
+- 2026-09-08T14:55:22.674Z - task-attempt: T31: started (attempt 1) — 003-T31-replenishment-implement
+- 2026-09-08T15:26:57.178Z - task-added: T34: Simulate a second user on depr: a containerised CLI client the user can exchange messages with
+- 2026-09-08T15:26:57.342Z - task-added: T35: TUI as a usable client: registration, conversations, address book (next wave)
+- 2026-09-08T15:26:57.621Z - task-attempt: T34: started (attempt 1) — 003-T34-depr-second-user
+- 2026-09-08T15:46:55.460Z - task-done: T23: The push-gate fix lives in untracked .git/hooks and keryx update will revert it; make it durable
+- 2026-09-08T15:46:55.563Z - task-done: T31: Implement bundle replenishment: a pool of N with top-up through relay publish
+- 2026-09-08T15:46:55.667Z - task-added: T36: Correct two test defects the pool exposed: a self-contradicting drain count and a filtered publish count
+- 2026-09-08T15:47:02.152Z - task-attempt: T36: started (attempt 1) — 003-T36-test-defects
+- 2026-09-08T16:06:00.951Z - task-done: T36: Correct two test defects the pool exposed: a self-contradicting drain count and a filtered publish count
+- 2026-09-08T16:06:01.048Z - task-added: T37: Fix the inbound store-snapshot test the pool's mint-before-offer design invalidated
+- 2026-09-08T16:06:01.155Z - task-attempt: T37: started (attempt 1) — 003-T37-inbound-snapshot
+- 2026-09-08T16:29:12.000Z - task-done: T37: Fix the inbound store-snapshot test the pool's mint-before-offer design invalidated

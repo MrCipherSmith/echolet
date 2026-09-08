@@ -1,0 +1,267 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T18-design",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Designed authentication for POST /v2/prekeys/claim and measured, against the real relay binary built from c5fde09, both the hole and the price of closing it. The hole reproduces end to end: a third party with no profile, no key material, no publication and no session issued one raw POST knowing only the victim's public identity_id and received the bundle in 5 ms (http=200), after which the victim's republish reported claimable=false and a properly published first-contact sender was refused exit 3 PREKEY_BUNDLE_UNAVAILABLE. At the shipped default rate limit of 120/min per source host (measured: 116 of 200 claims reached the handler on a fresh bucket that had already spent four requests) that is up to 120 permanently destroyed first-contact bundles per minute from one address. The design requires the claimant to be an identity the relay already holds a published root-signed DeviceRecord for, resolved through the same authorizeMailboxDevice binding /v1/messages/send uses, with a device-key signature over a new versioned transcript echolet-prekey-claim:v1:<claim_id>:<identity_id>:<device_id or \"\">:<claimant_identity_id>:<claimant_device_id> pinned literally in TypeScript and Go, verified before the claim transaction; the request grows three closed fields (claimant_identity_id, claimant_device_id, claimant_signature bounded at the existing 256 bytes) and the response does not change. It is a consistency and attribution fix, not a cost fix, and the report says so in the brief's own words: minting a fresh publishable identity through the unauthenticated /v1/device-records/publish was measured at 2.9 ms and one POST (50/50 identities in 143 ms, 349.7/s), and the minted identity was measured to satisfy the very predicate the design adds, so the attacker's price per destroyed bundle goes from one request to one request - 0.8 percent worse in the first minute, 0 percent thereafter, 5.8 percent if a per-claimant quota of 16 were added. Free identity creation is a documented open limitation and this design merely moves the cost; the denial-of-first-contact class stays open. What it does buy is stated as capability rather than cost: the keyless attacker class disappears, consumption becomes attributable, T20 residual #4 (a profile whose publication the relay REJECTED still spends the recipient's key) closes, and every non-CLI caller is covered where T20's client-side guard cannot reach. Rejected: per-source rate limiting (already exists, is the real bound, defeated by a second address), per-victim limits (the resource is already bounded at one), per-claimant quotas (5.8 percent, against permanently silencing a sociable operator), proof of work (20 percent of one core at the maximum rate the limiter permits, and it needs a negotiated parameter on a wire whose stated principle is closed pre-agreed schemas), and both expiring-reservation shapes (re-offering a consumed one-time prekey can hand one OTPK to two senders, and in X3DH the second PreKeySignalMessage then fails to decrypt permanently and silently - an undecryptable message is worse than a denied one; the relay also cannot bound how long a sender's durable outbox holds the ciphertext, which AC-05 requires to keep working). Automatic replenishment is NOT rejected on merit: it is the only measure that raises the attacker's per-victim price linearly (a pool of N costs N requests, 120/N victims per minute against this design's 120) and the only one that gives the victim recovery through a command that already exists, and it is recommended as the companion task rather than dismissed. Deployment: the v2 decoder is exactly closed - measured, an extra field and an omitted field both answer 400 INVALID_SCHEMA - so there is no additive rollout and geekom and depr would refuse a new client today; the design therefore ships behind ECHOLET_REQUIRE_CLAIM_AUTH defaulting to off, where deploying changes nothing an existing client can observe, with the strict order deploy-relays, upgrade-clients, flip-flag. Seventeen RED tests are planned in six dependency-ordered groups, three of them explicitly on both sides of the wire. Design only; no source, test, schema or documentation file outside this deliverable was created, edited or deleted, and no connection was made to geekom or depr.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Design a way for the relay to refuse a claim from a caller who has no business making one, without breaking a genuine first-contact sender",
+      "status": "met",
+      "evidence": "t18-claim-authentication-design.md sections 2 and 4. The predicate is authorizeMailboxDevice on the claimant's own published DeviceRecord - the deposit route's predicate applied to the claimant - plus a device-key signature over a new versioned transcript, verified before the claim transaction. Section 4 enumerates every change a first-contact sender sees and shows each is either already required since T50/T20 or an improvement; the check is on the claimant's own publication and never on any relationship with the recipient, so the no-session-yet property is untouched. Response shape, AC-02 and AC-02b are unchanged."
+    },
+    {
+      "criterion": "State plainly whether requiring a published identity raises the attacker's cost or merely adds a step, and by how much",
+      "status": "met",
+      "evidence": "Section 3, with a before/after table. Measured: minting a publishable identity through the unauthenticated /v1/device-records/publish costs 2.9 ms and one POST (N3: 50/50 identities in 143 ms, 349.7/s), and the minted identity was measured to satisfy the added predicate (N2: /v1/mailbox/challenge http=200). Victims per minute from one source at the shipped 120/min limit: 120 before, 119 in the first minute and 120 thereafter after, 113 with a hypothetical per-claimant quota of 16. The report states in the brief's words: this does not raise the cost, it adds a step."
+    },
+    {
+      "criterion": "Enumerate what breaks for a first-contact sender",
+      "status": "met",
+      "evidence": "Section 4, a nine-row table covering the publication precondition (not new since T50 and T20), the signing key (the same key that signs the envelope milliseconds later, profile.ts:234), ordering, per-relay publication, a lost publish response, a rejected publish, AC-02b, AC-02 and the response shape. Conclusion: nothing a legitimate first-contact sender does today stops working."
+    },
+    {
+      "criterion": "Say exactly which fields and which transcript version change on the wire, with both sides keeping closed strict schemas",
+      "status": "met",
+      "evidence": "Section 2.3 tables the six request fields with shapes, reusing $defs/base64url32 for claimant_identity_id and the existing 256-byte signature bound (maxSenderSignatureBytes, MaxIdentifierBytes, the client's z.string().max(256)). Section 2.2 pins the transcript echolet-prekey-claim:v1:<claim_id>:<identity_id>:<device_id or \"\">:<claimant_identity_id>:<claimant_device_id>, justifies each bound field, justifies the single version (device_id is always present on the wire, so absent and null are not distinguishable states here), and justifies omitting a nonce (a replayed claim_id consumes nothing new, and determinism preserves AC-02b byte for byte). The response does not change."
+    },
+    {
+      "criterion": "Say whether it interacts with the sender-authentication extension on the deposit route and with the per-sender quota",
+      "status": "met",
+      "evidence": "Section 5. Sender authentication: same predicate, same helper, same error code, same before-the-irreversible-step ordering, deliberately reused rather than duplicated; the transcripts share no prefix so a signature for one is never valid for the other. Per-sender quota: no interaction (a claim stores no envelope and occupies no mailbox byte), and no quota is added to the claim route, priced at 5.8 percent against permanently silencing an operator with more than Q contacts, citing the relay's own arithmetic at mailbox_handler.go:278-283."
+    },
+    {
+      "criterion": "Consider the listed alternatives honestly and reject them with reasons, not preferences",
+      "status": "met",
+      "evidence": "Section 6, seven subsections. Per-source and per-victim rate limiting, per-claimant quotas, proof of work, deposit-bound claims and expiring reservations are rejected with measurements or with a named correctness hazard. Automatic replenishment is explicitly NOT rejected on merit: it is shown to be strictly better on the cost axis (N-fold against 1.0x) and the only option that gives the victim recovery through an existing command, and is recommended as the companion task."
+    },
+    {
+      "criterion": "Say what the fix does NOT close, in the brief's own words if the design merely moves the cost",
+      "status": "met",
+      "evidence": "Section 7 opens with 'Free identity creation is a documented open limitation; this design merely moves the cost', backed by the 2.9 ms / 350 per second minting measurement, and records that this is the identical residue the sender quota left, already stated in the relay's own source at mailbox_handler.go:278-283. Also lists the unauthenticated publish routes, the absent replenish command, the malicious relay operator and the malicious contact as out of scope."
+    },
+    {
+      "criterion": "Say explicitly whether a deployed relay's behaviour changes",
+      "status": "met",
+      "evidence": "Section 8, with measurements V1-V4 showing the v2 decoder is exactly closed (an omitted field and an extra field both answer 400 INVALID_SCHEMA), so there is no additive rollout in either direction. Answer given directly: yes, but only when ECHOLET_REQUIRE_CLAIM_AUTH is turned on; with the flag off, deploying alters nothing an existing client can observe on any route. Rollout order is stated as deploy relays flag-off, upgrade clients, flip flag, never in reverse, with removal of the flag filed as a follow-up."
+    },
+    {
+      "criterion": "Deliver an executable plan: what the RED tests must pin, in what order, and which exist on both sides of the wire, in the repository's tests-first-then-implementation shape",
+      "status": "met",
+      "evidence": "Section 9: seventeen RED tests in six dependency-ordered groups (transcript agreement, relay refusals, existing-contract non-regression, the rollout switch, the client half, the real-binary e2e), three marked as required on both sides of the wire, each naming its file. Every refusal test asserts both the code the caller was told and that the target's bundle is still claimable, following publication-claimability.test.ts. The implementer's file list follows, including the two implementation constraints (decodeV2Request consumes the body so a two-decode fallback is broken, and authorizeMailboxDevice must be extracted rather than duplicated) and the specification.md line-citation hazard T20 recorded."
+    },
+    {
+      "criterion": "Distinguish measured from inferred, and settle locally what can be settled by running something",
+      "status": "met",
+      "evidence": "The report labels Measured and Inferred throughout and names the binary by SHA-256. Five measurement blocks were run against the real relay binary: M1-M5 (the hole end to end with two real CLI profiles), N1-N3 (identity minting cost and that a minted identity satisfies the added predicate), W4 (the real per-source ceiling at the shipped default), and V1-V4 (decoder tolerance, i.e. deployed-relay compatibility). No connection was made to geekom or depr."
+    },
+    {
+      "criterion": "Design only: change no source, no test, no schema, no documentation outside the deliverable",
+      "status": "met",
+      "evidence": "Only the two deliverable files were written. The relay binary and all probe scripts were built into the session scratchpad, and every relay run used a throwaway data directory under the system temp directory that was removed afterwards. No store key, private key, plaintext or HTTP request body is printed or recorded in the report."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t18-claim-authentication-design.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Design for authenticating POST /v2/prekeys/claim: the measured hole, the predicate and transcript, the wire change, measured attacker cost before and after, six rejected alternatives with reasons, what stays open, the deployed-relay rollout with its mode switch, and a seventeen-test RED plan in six dependency-ordered groups.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T18-design-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "subagent-result for 003-T18-design.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t18-claim-authentication-design.md",
+      "change": "added - claim authentication design"
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T18-design-result.json",
+      "change": "added - subagent-result for 003-T18-design"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T18-F-001",
+      "global_id": "003-T18-design#T18-F-001",
+      "reviewer": "claim-authentication-design",
+      "severity": "blocker",
+      "file": "apps/relay/internal/api/router/router.go",
+      "line": 91,
+      "symbol": "ClaimSignalPreKeyBundleV2",
+      "problem": "POST /v2/prekeys/claim carries no authentication. Any party that can reach the relay and knows a recipient's public identity_id - the value the recipient hands out in their own contact card - permanently consumes that recipient's one-time prekey bundle. The same party's deposit is refused 403 UNAUTHORIZED_MAILBOX_ACCESS by /v1/messages/send since T50, so the claim route grants unauthenticated a capability whose only legitimate use the adjacent route refuses.",
+      "impact": "A cheap, silent denial of first contact. Measured against the real relay binary: one raw POST, 5 ms, no key material, http=200 with the bundle; the victim's republish then reports claimable=false and a properly published first-contact sender is refused exit 3 PREKEY_BUNDLE_UNAVAILABLE. The victim cannot recover - relay publish resubmits the identical stored bundle and rotateBundle() is unreachable behind the frozen eight-command surface. At the shipped default rate limit of 120 requests per minute per source host, one address destroys up to 120 first-contact bundles per minute, permanently.",
+      "suggested_fix": "Require the claimant to be an identity the relay holds a published root-signed DeviceRecord for, resolved through the same authorizeMailboxDevice binding /v1/messages/send uses, with a device-key signature over the new versioned transcript echolet-prekey-claim:v1 pinned literally in TypeScript and Go, verified before the claim transaction. Ship behind ECHOLET_REQUIRE_CLAIM_AUTH defaulting to off so geekom and depr stay deployable until every client is upgraded. Full design in t18-claim-authentication-design.md sections 2 and 8.",
+      "evidence": "Measured against the relay binary built from c5fde09 (sha256 f60b1570c4ac7c0631c8916b15abcc97abab42f0b94d98e3c3afbacf697ecca4): M1 bob relay publish -> claimable=true; M3 stranger raw claim -> http=200 ok=true hasBundle=true elapsedMs=5; M4 bob relay publish again -> claimable=false; M5 published alice send -> exit=3 code=PREKEY_BUNDLE_UNAVAILABLE. W4: 200 claims from one source -> reached_handler=116 rate_limited=84, on a fresh bucket that had already spent four requests against the shipped 120/min default.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/api/router/router.go:91 POST /v2/prekeys/claim - unauthenticated AND permanently consumes a third party's scarce key material (the sole member of the class)",
+          "apps/relay/internal/api/router/router.go:86 POST /v1/device-records/publish - unauthenticated, but writes only the caller's own self-signed state",
+          "apps/relay/internal/api/router/router.go:89 POST /v1/prekeys/publish - unauthenticated, caller's own state only",
+          "apps/relay/internal/api/router/router.go:90 POST /v2/prekeys/publish - unauthenticated, caller's own state only",
+          "apps/relay/internal/api/router/router.go:92 GET /v1/prekeys/{identityID} - unauthenticated, read-only, consumes nothing",
+          "apps/relay/internal/api/router/router.go:98 POST /v1/messages/send - authenticated (authenticateSender, mailbox_handler.go:199)",
+          "apps/relay/internal/api/router/router.go:99 POST /v1/mailbox/challenge - authenticated (authorizeMailboxDevice + VerifyMessageSignature, mailbox_handler.go:365-375)",
+          "apps/relay/internal/api/router/router.go:100 POST /v1/mailbox/poll - authenticated (mailbox_handler.go:371 site)",
+          "apps/relay/internal/api/router/router.go:101 POST /v1/mailbox/ack - authenticated (mailbox_handler.go:553 site)"
+        ],
+        "enumeration_method": "Read every route registration in apps/relay/internal/api/router/router.go:78-101 - the single place the mux is built - and classified each handler by whether it calls cryptoutil.VerifyMessageSignature against a resolved device record. `keryx ctx rg \"VerifyMessageSignature\" apps/relay packages` returns exactly three handler call sites (mailbox_handler.go:218, :371, :553) plus the bundle's own self-signature check in validation/signal_prekey_bundle_v2.go:227,232, so no route outside that list authenticates a caller. Intersecting the unauthenticated routes with those that mutate state belonging to somebody other than the caller leaves one member."
+      }
+    },
+    {
+      "id": "T18-F-002",
+      "global_id": "003-T18-design#T18-F-002",
+      "reviewer": "claim-authentication-design",
+      "severity": "major",
+      "file": "apps/relay/internal/validation/validate.go",
+      "line": 10,
+      "symbol": "ValidateDeviceRecord",
+      "problem": "Authenticating the claim does not raise the attacker's price, because becoming an authenticatable identity is free. POST /v1/device-records/publish is unauthenticated by construction - the record only has to verify against its own freshly generated identity key, and identity_id IS that verification key - and it writes both the device record and the (mailbox identity, device UUID) binding that every authorization on this relay resolves through.",
+      "impact": "The denial-of-first-contact class stays open after the fix. Measured: minting a publishable identity costs 2.9 ms and one POST (50 of 50 sequentially in 143 ms, 349.7 per second), and the minted identity was measured to satisfy the exact predicate the design adds. Attacker price per destroyed bundle goes from one request to one request: 0.8 percent worse in the first minute, 0 percent thereafter, 5.8 percent if a per-claimant quota of 16 were added. This is the identical residue the T54 sender quota left, already recorded in the relay's own source at mailbox_handler.go:278-283.",
+      "suggested_fix": "Do not claim the class is closed. Record it next to the existing sender-quota residue rather than as a new finding, in the words: free identity creation is a documented open limitation and this design merely moves the cost. The measure that would actually raise the price is letting a recipient hold and restore more than one claimable bundle - a pool of N costs an attacker N requests per victim, i.e. 120/N victims per minute against this design's 120 - which needs no ninth CLI command, only a changed meaning for relay publish. Filed as T18-F-003.",
+      "evidence": "N1 mint+publish one identity -> http=200 stored=true elapsedMs=17. N2 minted identity authenticates -> http=200 ok=true (the authorizeMailboxDevice plus device-key-transcript pair, exercised through /v1/mailbox/challenge). N3 minted 50/50 identities sequentially in 143 ms -> 349.7 identities/s, 2.9 ms each. All against the real relay binary from c5fde09.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/storage/repository/device_record_repo.go:54 - DeviceRecordRepository.Save, reached from POST /v1/device-records/publish (unauthenticated); the measured cheapest mint",
+          "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go:112 - saveSignalV2Authorization idempotent branch, reached from POST /v2/prekeys/publish (unauthenticated)",
+          "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go:124 - saveSignalV2Authorization first-store branch, reached from POST /v2/prekeys/publish (unauthenticated)",
+          "apps/relay/internal/storage/repository/device_record_repo.go:205 - saveDeviceMailboxBindingWithRetry, the startup backfill; not caller-reachable"
+        ],
+        "enumeration_method": "`keryx ctx rg \"SaveDeviceMailboxBinding\" apps/relay` returns every writer of the device_mailbox: binding, which is the sole index authorizeMailboxDevice resolves through (device_record_repo.go:86 GetByMailboxAndDevice reads only that key space). Three of the four writers are caller-reachable and all three sit behind unauthenticated routes; the fourth is the startup backfill. The list is therefore exhaustive for 'ways a caller mints an identity the relay will authenticate'."
+      }
+    },
+    {
+      "id": "T18-F-003",
+      "global_id": "003-T18-design#T18-F-003",
+      "reviewer": "claim-authentication-design",
+      "severity": "major",
+      "file": "apps/cli/src/runtime/outbound.ts",
+      "line": 41,
+      "symbol": "OutboundMessenger.publish",
+      "problem": "A recipient can hold exactly one claimable bundle and has no way to restore it. relay publish resubmits the one stored bundle and never re-adds the availability index, so a republish after a claim reports claimable:false; rotateBundle(), which generates a fresh independently signed bundle with a new one-time prekey and is fully supported by the relay, is deliberately unreachable behind the frozen eight-command surface.",
+      "impact": "Authentication decides who may spend the bundle; it does nothing about how much there is to spend. Because the pool is one, any single successful claim - hostile or accidental - is a permanent denial of first contact with no operator recovery. This is the only axis on which the attacker's price rises linearly: a pool of N raises it N-fold, to 120/N victims per minute from one source against the present 120.",
+      "suggested_fix": "File a companion task to let relay publish maintain a pool of N claimable bundles, which needs no ninth command - only a changed meaning for an existing one. It contradicts test/e2e/publication-claimability.test.ts step 2's assertion that bundleId is stable across republish, and specification.md:118's statement that a published bundle serves exactly one first-contact sender, so both must be revisited deliberately rather than incidentally.",
+      "evidence": "Measured M4: bob relay publish again -> claimable=false, after a single claim. specification.md:118 and :110 (permanent one-time-prekey tombstones; a device may publish another bundle only with a newly generated one-time prekey). T12 section 3 measured that an independently signed bundle with a fresh one-time prekey publishes and becomes claimable, so the relay side already works end to end.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/outbound.ts:41 OutboundMessenger.publish() - the only publication path with a CLI entry point (`relay publish`); resubmits the identical stored bundle",
+          "apps/cli/src/runtime/outbound.ts:43 OutboundMessenger.rotateBundle() - generates a fresh independently signed bundle with a new one-time prekey; deliberately no CLI entry point",
+          "apps/cli/src/runtime/profile.ts:313 Profile.publicationBundle() - the single writer of the cli:publication row both paths go through",
+          "apps/relay/internal/storage/repository/signal_prekey_bundle_v2.go:86 - the v2:available: index, written only on a first store, which is why a republish restores no availability"
+        ],
+        "enumeration_method": "`keryx ctx rg \"publicationBundle|rotateBundle\" apps/cli/src` returns both runtime callers and the profile writer; profile.ts:290's own comment states that cli:publication is written by publicationBundle() alone, reached only from publish() and rotateBundle(). The relay-side site is the sole writer of the availability index in SaveSignalV2, which the claim transaction deletes. Together these are every place the size of a recipient's claimable pool is decided."
+      }
+    },
+    {
+      "id": "T18-F-004",
+      "global_id": "003-T18-design#T18-F-004",
+      "reviewer": "claim-authentication-design",
+      "severity": "major",
+      "file": "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go",
+      "line": 30,
+      "symbol": "decodeV2Request",
+      "problem": "The v2 request decoder is exactly closed: every contracted key is required, no additional key is tolerated, and a body whose key count differs from the required list is refused. There is therefore no additive path on this route in either direction - a client carrying new authentication fields is refused by a relay that predates them, and a relay that requires them refuses every older client.",
+      "impact": "geekom and depr are live on their tailnet addresses running the current protocol. Shipping the claim fields without a compatibility mode makes every deployed client fail its first-contact send with 400 INVALID_SCHEMA, which classify() reports as PROTOCOL_REJECTED at exit 3 with the diagnosis discarded, because INVALID_SCHEMA is not in relayClient.ts's remoteCodes.",
+      "suggested_fix": "Ship behind ECHOLET_REQUIRE_CLAIM_AUTH defaulting to off, accepting both the three-field and six-field shapes while always verifying a signature that is present, and roll out in the order deploy relays flag-off, upgrade clients, flip flag. File removal of the flag as a follow-up once both relays enforce. Implementation constraint: decodeV2Request consumes r.Body, so a handler that decodes with the six-field set and then retries with the three-field set reads an empty body and refuses every legacy request; the decoder must accept a required set and an optional set in one pass.",
+      "evidence": "Measured against the real relay binary from c5fde09: V1 contracted three fields -> 404 PREKEY_BUNDLE_UNAVAILABLE (the route's own answer); V2 device_id omitted -> 400 INVALID_SCHEMA; V3 one extra field -> 400 INVALID_SCHEMA; V4 extra field on publish -> 400 INVALID_SCHEMA. cli.ts:57 reportedRelayCodes and relayClient.ts:29 remoteCodes both exclude INVALID_SCHEMA.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go:76 PublishSignalPreKeyBundleV2 - decodeV2Request with required [\"bundle\"]",
+          "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go:102 ClaimSignalPreKeyBundleV2 - decodeV2Request with required [\"claim_id\", \"identity_id\", \"device_id\"]; the route this design changes",
+          "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go:30 decodeV2Request itself - the shared decoder whose closed-set rule (unknown key refused, len(fields) != len(required) refused) produces the behaviour on both routes",
+          "apps/cli/src/transport/relayClient.ts:131 claimBundle - the client half, a .strict() Zod object that will refuse an unexpected field symmetrically"
+        ],
+        "enumeration_method": "`keryx ctx rg \"decodeV2Request\" apps/relay` returns the definition and both call sites, which are the whole v2 surface; measurements V2/V3 (missing key, extra key) and V4 (extra key on publish) confirm the rule holds on both routes against the real binary rather than only in the source. The client half was located from `keryx ctx rg \"claim_id\" apps/cli/src/transport packages/protocol/src`."
+      }
+    },
+    {
+      "id": "T18-F-005",
+      "global_id": "003-T18-design#T18-F-005",
+      "reviewer": "claim-authentication-design",
+      "severity": "minor",
+      "file": "apps/cli/src/runtime/outbound.ts",
+      "line": 76,
+      "symbol": "sendOwned publication guard",
+      "problem": "T20's SENDER_NOT_PUBLISHED guard is client-side only and is deliberately conservative: it refuses a send from a profile that never attempted publication, and by design allows a profile whose publication the relay REJECTED, which then spends the recipient's one-time prekey before failing at the deposit (T20 residual #4). It is also not a security control at all against a caller that is not this CLI.",
+      "impact": "The two cases the client cannot cover are exactly the cases a server-side check covers for free: the relay knows whether it stored the record, and it applies to every caller. Measurement M3 was a raw fetch, not the CLI, and consumed the victim's bundle with T20's guard fully in place.",
+      "suggested_fix": "Keep T20's guard as the fast local refusal it is, and treat the relay-side check as the control. When the relay check lands, T20 residual #4 can be marked closed: a profile whose publication was rejected is refused at the claim, one request before it would have spent the recipient's key.",
+      "evidence": "T20 implementation report section 6 residual 4. Measured M3: a raw POST to /v2/prekeys/claim consumed bob's bundle on a tree where T20's guard is present and green.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/outbound.ts:76 the SENDER_NOT_PUBLISHED guard - a local precondition any non-CLI caller simply omits",
+          "apps/cli/src/runtime/profile.ts:290 Profile.hasPublication() - presence-only by design, so a rejected publication answers true (T20 residual #4)",
+          "apps/cli/src/runtime/outbound.ts:174 the pin comparison in claimFirstContact - local, and correctly local: it protects this sender, not the recipient's key",
+          "apps/cli/src/runtime/outbound.ts:176 the validity-window check in claimFirstContact - local, same reasoning"
+        ],
+        "enumeration_method": "Read every guard in OutboundMessenger between entering sendOwned and issuing the claim (outbound.ts:54-96, plus claimFirstContact at :166-190) and classified each by whether it protects the caller or a third party. Only the publication guard protects a third party - the recipient's one-time prekey - and it is therefore the only one whose client-side-only placement is a gap rather than a design choice. T20's own report section 6 residual 4 states the presence-only limitation of the predicate."
+      }
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Should the claim-authentication rollout be gated behind ECHOLET_REQUIRE_CLAIM_AUTH (default off) as designed, or shipped as a flag day that upgrades geekom, depr and every client at once?",
+      "why": "The v2 decoder is exactly closed - measured, an extra field and an omitted field both answer 400 INVALID_SCHEMA - so there is no additive rollout in either direction. The flag keeps the two live relays deployable while clients are upgraded, at the price of a permissive branch that must be removed later; a flag day avoids the branch at the price of a coordinated outage on two relays that are running the current protocol.",
+      "options": [
+        { "id": "flag", "label": "Mode switch defaulting to off, removal filed as a follow-up", "recommended": true },
+        { "id": "flagday", "label": "Hard flag day: relays and clients upgraded together, no permissive branch" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q2",
+      "question": "Should a companion task give relay publish a pool of N claimable bundles, accepting that it changes what an existing command means and contradicts two current assertions?",
+      "why": "It is the only measure that raises the attacker's per-victim price linearly (120/N victims per minute against this design's 120) and the only one that lets a victim recover through a command that already exists. It needs no ninth command, but it contradicts publication-claimability.test.ts step 2 (bundleId stable across republish) and specification.md:118 (a published bundle serves exactly one first-contact sender), so it is a deliberate product decision, not an incidental one.",
+      "options": [
+        { "id": "pool", "label": "File it as the companion task; authentication decides who may spend, the pool decides how much there is", "recommended": true },
+        { "id": "defer", "label": "Leave the one-bundle limitation documented as a bound and ship authentication alone" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q3",
+      "question": "Should the tests-first agent add the end-to-end closure test as a new file, or as a step inside test/e2e/publication-claimability.test.ts?",
+      "why": "The design recommends a new file because that file's SHA-256 is load-bearing evidence in the T19 and T20 reports, and editing it invalidates a digest those reports rely on. The counter-argument is that the scenario is a natural continuation of the same fixture and would otherwise duplicate its relay-and-profile setup.",
+      "options": [
+        { "id": "newfile", "label": "New file apps/cli/test/e2e/claim-authentication.test.ts", "recommended": true },
+        { "id": "extend", "label": "Extend publication-claimability.test.ts and record the new digest" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "relay_binaries_built": 1,
+    "relays_started": 4,
+    "relays_stopped": 4,
+    "measurement_scripts_run": 4,
+    "http_requests_issued_against_local_relay": 269,
+    "cli_profiles_created": 2,
+    "source_files_read": 22,
+    "repo_files_modified": 0,
+    "connections_to_geekom_or_depr": 0
+  },
+  "timestamp_utc": "2026-09-08T07:05:00Z"
+}

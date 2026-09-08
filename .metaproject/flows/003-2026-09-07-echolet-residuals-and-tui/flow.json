@@ -9,7 +9,7 @@
   "title": "Echolet: close the recorded residuals and make the operator TUI usable",
   "status": "in-progress",
   "createdAt": "2026-09-07T19:26:13.895Z",
-  "updatedAt": "2026-09-07T23:23:38.263Z",
+  "updatedAt": "2026-09-08T16:29:12.000Z",
   "source": {
     "type": "description",
     "ref": null
@@ -344,7 +344,7 @@
       "id": "T17",
       "title": "Add a CLI entry point for bundle rotation so a consumed bundle is recoverable",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -352,21 +352,31 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by the T18 design's recommended companion. A pool of N published one-time bundles raises the attacker's price linearly - 120/N victims per minute against 120 - and gives the victim recovery through relay publish, a command that already exists. That needs a changed meaning for an existing command rather than a ninth one, which is strictly better for a deliberately frozen eight-command surface. Reopen only if replenishment turns out not to deliver recovery."
     },
     {
       "id": "T18",
       "title": "Design: authenticate /v2/prekeys/claim to close the denial-of-first-contact primitive",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T06:19:27.244Z",
+            "outcome": "started",
+            "detail": "003-T18-claim-auth-design"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Design delivered with the hole reproduced end to end against the real relay binary: a stranger's raw claim, no key material and no publication, only the victim's public identity id, answers 200 with a bundle in 5 ms; the victim's republish then reports claimable false and a genuine published sender is refused. The honest headline is that authentication does NOT raise the attacker's cost - it adds a step. Measured: setup goes from nothing to 2.9 ms and one unauthenticated POST, and victims per minute from one source go from 120 to 119 in the first minute and 120 thereafter, because identities mint at 349 per second. What it buys is stated as capability rather than cost: the keyless-attacker class disappears, consumption becomes attributable, and every non-CLI caller is covered - the reproduction was a raw fetch, so the client-side guard that landed earlier is a courtesy and not a control. Alternatives were rejected with measurements rather than preferences, and one was explicitly NOT rejected."
     },
     {
       "id": "T19",
@@ -453,6 +463,304 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T23",
+      "title": "The push-gate fix lives in untracked .git/hooks and keryx update will revert it; make it durable",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T14:43:16.850Z",
+            "outcome": "started",
+            "detail": "003-T23-gate-durability (bundled with T24 and T32)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Gate hardened and PROVED: pnpm run gate:selftest reports 27 ok, 0 wrong, 0 skipped, re-run by the orchestrator. The interrupted work's own claim that the gate was tracked and would survive a clone was FALSE - it was untracked, so a clone would have received no gate at all, exactly the failure being fixed. Moving to core.hooksPath also opened a cheaper silent revert, since one local config unset falls back to the stock hook that allows a push having run nothing; closed by a tripwire in the only file git can still reach, which announces the gate is missing AND execs the tracked gate anyway. Cost measured: +27 s, +12 percent, with the Go relay suite going from never running to 26 s race-enabled; no subset taken because -race costs 3 s and the relay's guarantees are concurrency guarantees. Freshness warns on drift and blocks on a broken pin - a check that fails every ordinary push gets disabled within a day, and deleting the pin line is otherwise the cheapest way to switch it off invisibly."
+    },
+    {
+      "id": "T24",
+      "title": "Bring the Go suite inside the push gate: no Go change can currently select a test",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T25",
+      "title": "Independent verification of everything flow 003 has landed",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-08T06:19:33.737Z",
+            "outcome": "started",
+            "detail": "003-T25-verify"
+          },
+          {
+            "at": "2026-09-08T06:50:05.388Z",
+            "outcome": "failed",
+            "detail": "V-001: the trust-modal guard is pinned by no test - deleting it leaves 108 TUI tests green. V-006: lowering the TS protocol constant leaves 83 tests green with the Go mirror untouched, reintroducing RI-09's exact failure mode. V-005: commit 5235a6d still mixes product code with two tests, so the orchestrator's own split was incomplete. Plus the cleanup knob still advertised, docs stale again after six later commits, and test:e2e still 1 of 6."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T26",
+      "title": "Design automatic bundle replenishment: the cost fix that authentication is not",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T06:41:11.422Z",
+            "outcome": "started",
+            "detail": "003-T26-replenishment-design"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T27",
+      "title": "RED tests for the three properties the verification found unpinned",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T14:14:02.887Z",
+            "outcome": "started",
+            "detail": "003-T27-tests (re-dispatch after pause)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T28",
+      "title": "Second documentation reconciliation, repoint test:e2e, remove the cleanup knob",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T14:14:02.979Z",
+            "outcome": "started",
+            "detail": "003-T28-docs (re-dispatch after pause)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Thirteen files corrected. test:e2e repointed from one file to the whole directory: 6 files / 29 tests where it ran 1 file / 3, measured at 4m52s real. The cleanup knob removed from both compose files, run-relay.sh and all three env examples, replaced by a comment saying retention is the store's own TTL. Limitations 3, 4, 10 and 11 corrected against the commits that fixed them, and the renewal-timer claim in the deployment runbook needed no change - verified rather than assumed, which is the discipline that matters here. Left for a task with tests: the Go config field still declares the interval with a default, and removing it touches internal/config and its call site. One transient e2e failure did not reproduce and was attributed to contention from two concurrent agents rather than reported as a regression."
+    },
+    {
+      "id": "T29",
+      "title": "RED tests for bundle replenishment: a pool of N, top-up through relay publish",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T14:15:00.561Z",
+            "outcome": "started",
+            "detail": "003-T29-replenishment-tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Thirteen tests across five groups, with the two Go tests honestly labelled as green regression pins rather than dressed up as red, because the tree already satisfies them and nothing had asserted them. The load-bearing negative is pinned: refilling never prunes or re-uses allocated key material. The authorised e2e rewrite kept steps 1-5 byte-identical, replaced a boolean that a pool makes false with exact counts, and MOVED the exhausted-prekey assertions intact behind a full drain performed by raw unauthenticated claims - the attack itself - rather than deleting them. Two findings the design missed: six existing assertions counting publish requests, and a relay error code that the transport discards so a test could not have passed without adding it."
+    },
+    {
+      "id": "T30",
+      "title": "Correct the six publish-count assertions that become false at N=20, without loosening them",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T14:41:42.273Z",
+            "outcome": "started",
+            "detail": "003-T30-publish-count-fixtures"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Six assertions corrected to the new exact truth, none loosened. The agent found that two of them needed more than an arithmetic change: at index 1 the array under a pool holds an unrelated slot from the FIRST call rather than the second call's resubmission, so fixing only the length would have silently broken what the assertion pins; and the rotation test's negative-index reads would have passed for the wrong reason or thrown a raw type error instead of a clean assertion. N is derived from the protocol constant rather than written as 20. Suite went from 13 red to 19 red, exactly six more, each a clean assertion failure with no type error and no timeout."
+    },
+    {
+      "id": "T31",
+      "title": "Implement bundle replenishment: a pool of N with top-up through relay publish",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T29",
+        "T30"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T14:55:22.673Z",
+            "outcome": "started",
+            "detail": "003-T31-replenishment-implement"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Pool implemented in product code only, four files, 18 of 19 target tests passing including the real-relay e2e: 20 senders delivered from one pool, 20 decrypted in one poll, the 21st refused at exit 3, one relay publish restored the pool and the refused sender's own retry then delivered. Slot 0 keeps its key, schema and bytes so the send precondition does not regress. Empty slots fill highest-index-down so slot 0 carries the youngest timestamp and stays the stable anchor while being the last member a claim reaches. The nineteenth failure is a defect in the test rather than the implementation - it contradicts step 6 of its own file - and the implementer correctly refused to edit a test to make its own work pass. It also found a second publish-counting site that both earlier passes missed, because that one counts through a filter rather than an assertion."
+    },
+    {
+      "id": "T32",
+      "title": "Wire a documentation-freshness check into the push gate so staleness is reported mechanically",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T33",
+      "title": "Remove the dead cleanup-interval field from Go config and its call site",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T34",
+      "title": "Simulate a second user on depr: a containerised CLI client the user can exchange messages with",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T15:26:57.621Z",
+            "outcome": "started",
+            "detail": "003-T34-depr-second-user"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T35",
+      "title": "TUI as a usable client: registration, conversations, address book (next wave)",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T36",
+      "title": "Correct two test defects the pool exposed: a self-contradicting drain count and a filtered publish count",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T15:47:02.152Z",
+            "outcome": "started",
+            "detail": "003-T36-test-defects"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Both corrections applied after the agent CONFIRMED the diagnosis rather than applying it: it traced the pool state by hand across the file and cross-checked against a second test that fixes what pool.claimable means, which is what rules out the rejected reading - that reading would have falsified the other test instead. Counts derive from the protocol constant, not literals. Its search for the missed class found the four filter-based counting sites in the two-process file and filter closures in five more files, and established that only one referenced the publish route. One failure remains and is a different class, correctly left alone and reported."
+    },
+    {
+      "id": "T37",
+      "title": "Fix the inbound store-snapshot test the pool's mint-before-offer design invalidated",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T16:06:01.155Z",
+            "outcome": "started",
+            "detail": "003-T37-inbound-snapshot"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "The assertion's property was established and preserved rather than rebased to a new number. It is an atomicity pin - a persistence failure inside send()'s own commit must roll back exactly what that transaction wrote - and NOT a claim that send() as a whole leaves the store untouched. The old form worked only because the pool had one member, which was an artefact of size rather than the invariant. The fix adds an optional hook to the shared test helper that captures the baseline after publish and before send; the other ten call sites pass nothing and are unchanged. The comparison is now before-and-after within the test, encoding no count anywhere, so it survives any future pool size. Non-vacuity checked: at the capture point the pool is full and the other store sections are empty, so a leaked partial rollback still fails it."
     }
   ],
   "history": [
@@ -723,6 +1031,196 @@
       "at": "2026-09-07T23:23:38.263Z",
       "event": "task-attempt",
       "detail": "T22: started (attempt 1) — 003-T22-zero-max-refusal"
+    },
+    {
+      "at": "2026-09-08T04:07:48.019Z",
+      "event": "task-added",
+      "detail": "T23: The push-gate fix lives in untracked .git/hooks and keryx update will revert it; make it durable"
+    },
+    {
+      "at": "2026-09-08T04:07:48.101Z",
+      "event": "task-added",
+      "detail": "T24: Bring the Go suite inside the push gate: no Go change can currently select a test"
+    },
+    {
+      "at": "2026-09-08T06:19:27.244Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 003-T18-claim-auth-design"
+    },
+    {
+      "at": "2026-09-08T06:19:27.329Z",
+      "event": "task-added",
+      "detail": "T25: Independent verification of everything flow 003 has landed"
+    },
+    {
+      "at": "2026-09-08T06:19:33.737Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 003-T25-verify"
+    },
+    {
+      "at": "2026-09-08T06:41:04.441Z",
+      "event": "task-done",
+      "detail": "T18: Design: authenticate /v2/prekeys/claim to close the denial-of-first-contact primitive"
+    },
+    {
+      "at": "2026-09-08T06:41:04.527Z",
+      "event": "task-done",
+      "detail": "T17: Add a CLI entry point for bundle rotation so a consumed bundle is recoverable"
+    },
+    {
+      "at": "2026-09-08T06:41:04.611Z",
+      "event": "task-added",
+      "detail": "T26: Design automatic bundle replenishment: the cost fix that authentication is not"
+    },
+    {
+      "at": "2026-09-08T06:41:11.423Z",
+      "event": "task-attempt",
+      "detail": "T26: started (attempt 1) — 003-T26-replenishment-design"
+    },
+    {
+      "at": "2026-09-08T06:50:05.388Z",
+      "event": "task-attempt",
+      "detail": "T25: failed (attempt 2) — V-001: the trust-modal guard is pinned by no test - deleting it leaves 108 TUI tests green. V-006: lowering the TS protocol constant leaves 83 tests green with the Go mirror untouched, reintroducing RI-09's exact failure mode. V-005: commit 5235a6d still mixes product code with two tests, so the orchestrator's own split was incomplete. Plus the cleanup knob still advertised, docs stale again after six later commits, and test:e2e still 1 of 6."
+    },
+    {
+      "at": "2026-09-08T06:50:05.477Z",
+      "event": "task-added",
+      "detail": "T27: RED tests for the three properties the verification found unpinned"
+    },
+    {
+      "at": "2026-09-08T06:50:05.567Z",
+      "event": "task-added",
+      "detail": "T28: Second documentation reconciliation, repoint test:e2e, remove the cleanup knob"
+    },
+    {
+      "at": "2026-09-08T14:14:02.887Z",
+      "event": "task-attempt",
+      "detail": "T27: started (attempt 1) — 003-T27-tests (re-dispatch after pause)"
+    },
+    {
+      "at": "2026-09-08T14:14:02.979Z",
+      "event": "task-attempt",
+      "detail": "T28: started (attempt 1) — 003-T28-docs (re-dispatch after pause)"
+    },
+    {
+      "at": "2026-09-08T14:14:03.071Z",
+      "event": "task-added",
+      "detail": "T29: RED tests for bundle replenishment: a pool of N, top-up through relay publish"
+    },
+    {
+      "at": "2026-09-08T14:15:00.561Z",
+      "event": "task-attempt",
+      "detail": "T29: started (attempt 1) — 003-T29-replenishment-tests"
+    },
+    {
+      "at": "2026-09-08T14:41:36.003Z",
+      "event": "task-added",
+      "detail": "T30: Correct the six publish-count assertions that become false at N=20, without loosening them"
+    },
+    {
+      "at": "2026-09-08T14:41:36.117Z",
+      "event": "task-added",
+      "detail": "T31: Implement bundle replenishment: a pool of N with top-up through relay publish"
+    },
+    {
+      "at": "2026-09-08T14:41:42.177Z",
+      "event": "task-depends-set",
+      "detail": "T31: dependsOn T29, T30 (was empty) — Implementation follows the RED tests and the corrected fixtures"
+    },
+    {
+      "at": "2026-09-08T14:41:42.274Z",
+      "event": "task-attempt",
+      "detail": "T30: started (attempt 1) — 003-T30-publish-count-fixtures"
+    },
+    {
+      "at": "2026-09-08T14:43:10.475Z",
+      "event": "task-done",
+      "detail": "T28: Second documentation reconciliation, repoint test:e2e, remove the cleanup knob"
+    },
+    {
+      "at": "2026-09-08T14:43:10.685Z",
+      "event": "task-added",
+      "detail": "T32: Wire a documentation-freshness check into the push gate so staleness is reported mechanically"
+    },
+    {
+      "at": "2026-09-08T14:43:10.801Z",
+      "event": "task-added",
+      "detail": "T33: Remove the dead cleanup-interval field from Go config and its call site"
+    },
+    {
+      "at": "2026-09-08T14:43:16.850Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 003-T23-gate-durability (bundled with T24 and T32)"
+    },
+    {
+      "at": "2026-09-08T14:55:22.512Z",
+      "event": "task-done",
+      "detail": "T30: Correct the six publish-count assertions that become false at N=20, without loosening them"
+    },
+    {
+      "at": "2026-09-08T14:55:22.594Z",
+      "event": "task-done",
+      "detail": "T29: RED tests for bundle replenishment: a pool of N, top-up through relay publish"
+    },
+    {
+      "at": "2026-09-08T14:55:22.674Z",
+      "event": "task-attempt",
+      "detail": "T31: started (attempt 1) — 003-T31-replenishment-implement"
+    },
+    {
+      "at": "2026-09-08T15:26:57.178Z",
+      "event": "task-added",
+      "detail": "T34: Simulate a second user on depr: a containerised CLI client the user can exchange messages with"
+    },
+    {
+      "at": "2026-09-08T15:26:57.342Z",
+      "event": "task-added",
+      "detail": "T35: TUI as a usable client: registration, conversations, address book (next wave)"
+    },
+    {
+      "at": "2026-09-08T15:26:57.621Z",
+      "event": "task-attempt",
+      "detail": "T34: started (attempt 1) — 003-T34-depr-second-user"
+    },
+    {
+      "at": "2026-09-08T15:46:55.460Z",
+      "event": "task-done",
+      "detail": "T23: The push-gate fix lives in untracked .git/hooks and keryx update will revert it; make it durable"
+    },
+    {
+      "at": "2026-09-08T15:46:55.563Z",
+      "event": "task-done",
+      "detail": "T31: Implement bundle replenishment: a pool of N with top-up through relay publish"
+    },
+    {
+      "at": "2026-09-08T15:46:55.667Z",
+      "event": "task-added",
+      "detail": "T36: Correct two test defects the pool exposed: a self-contradicting drain count and a filtered publish count"
+    },
+    {
+      "at": "2026-09-08T15:47:02.152Z",
+      "event": "task-attempt",
+      "detail": "T36: started (attempt 1) — 003-T36-test-defects"
+    },
+    {
+      "at": "2026-09-08T16:06:00.951Z",
+      "event": "task-done",
+      "detail": "T36: Correct two test defects the pool exposed: a self-contradicting drain count and a filtered publish count"
+    },
+    {
+      "at": "2026-09-08T16:06:01.048Z",
+      "event": "task-added",
+      "detail": "T37: Fix the inbound store-snapshot test the pool's mint-before-offer design invalidated"
+    },
+    {
+      "at": "2026-09-08T16:06:01.155Z",
+      "event": "task-attempt",
+      "detail": "T37: started (attempt 1) — 003-T37-inbound-snapshot"
+    },
+    {
+      "at": "2026-09-08T16:29:12.000Z",
+      "event": "task-done",
+      "detail": "T37: Fix the inbound store-snapshot test the pool's mint-before-offer design invalidated"
     }
   ]
 }
