@@ -39,7 +39,8 @@ elif ! grep -q '# echolet:push-gate:v1' .githooks/pre-push; then
   echo "  marker; it is not the repository's gate. Fix: git checkout -- .githooks" >&2
   fail=1
 else
-  for step in scripts/gate/go-tests.sh scripts/gate/docs-freshness.sh; do
+  for step in scripts/gate/go-tests.sh scripts/gate/suites.sh \
+              scripts/gate/pushed-range.sh scripts/gate/docs-freshness.sh; do
     if [ ! -f "$step" ]; then
       echo "echolet hooks: FAIL — gate step $step is missing." >&2
       fail=1
@@ -58,6 +59,7 @@ fi
 # nobody's terminal. An untracked .githooks/ looks identical to a tracked one
 # from inside this checkout and is invisible everywhere else, so say so.
 for tracked_path in .githooks/pre-push scripts/gate/go-tests.sh \
+                    scripts/gate/suites.sh scripts/gate/pushed-range.sh \
                     scripts/gate/docs-freshness.sh scripts/gate/selftest.sh \
                     scripts/hooks/install.sh scripts/hooks/verify.sh; do
   if ! git ls-files --error-unmatch "$tracked_path" >/dev/null 2>&1; then

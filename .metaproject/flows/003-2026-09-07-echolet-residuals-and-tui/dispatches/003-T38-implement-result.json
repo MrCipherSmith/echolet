@@ -1,0 +1,105 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003-T38-implement-2026-09-08",
+  "dispatch_id": "003-T38-implement",
+  "status": "DONE",
+  "summary": "Closed R2-001 (the push gate's two blocking steps ran the suites against the working tree, not the commits being pushed) and R2-012 (pnpm install in any linked worktree rewrote the main checkout's .git/hooks/pre-push and wrote repository-wide git config). Reproduced R2-001 first with the verifier's own probe at /tmp/echolet-r2-gate-probe.sh against the tracked gate at 23a17aa: gate exit 0 on a state whose committed suite is red and whose working tree is green. The fix: scripts/gate/suites.sh now holds the single definition of the suites (Go race-enabled, then the JS/TS suite, same routes and same blocking policy as before) parameterised by which tree to run against; scripts/gate/pushed-range.sh checks each pushed tip out into a throwaway git worktree under TMPDIR, installs its own lockfile with --frozen-lockfile --ignore-scripts, runs the suites there and removes the worktree on every exit path; and .githooks/pre-push decides which trees must be verified and proves the answer rather than assuming it. The working tree is treated as the push only when the push updates exactly one ref, HEAD is that ref's tip, and nothing a suite can read differs from HEAD (git status --porcelain -uall minus .metaproject/ and docs/, both checked by search to be unread by any suite). In that case one run answers both questions and the gate costs what it cost before. Otherwise the gate verifies every distinct pushed tip AND then the working tree, because dropping the working-tree run would allow a state the gate has always blocked (working tree red, commit green) and that would be a weakening. The approach was chosen over refusing to push with a dirty tree (a policy change, and this tree is never clean) and over testing only the range (weaker). Measured over six runs: the fast path adds one git status (0.084-0.147 s), so an ordinary push costs what it cost before; the two-tree path adds 32.6-51.9 s of fixed overhead (checkout 0.8-5.4 s, install 20.4-35.1 s, removing node_modules again 8.6-16.3 s) plus a second pass of the suites. The self-test grew from 27 to 44 rows, all ok; 17 rows are new or repaired, and the new ones were proved to fail when the property is absent rather than merely to agree with the new code: against the pre-T38 gate 11 rows go red (P1, P1b, P2b, P3, P4b, P5, P6, S2, S3, I1b, I3) while P2 stays green, and four mutants of the new gate are each killed by specific rows (drop the working-tree run -> P2/P2b; equivalence always true -> P1/P1b/P2b/P3/P5/P6; ignore untracked files -> P3; verify only the first tip -> P6). Two pre-existing rows were found passing for the wrong reason and repaired: S1 blocked for want of any runner rather than for the deleted step, and the 'no keryx' rows could still reach keryx through the hardcoded $HOME/.local/bin fallback that no PATH can hide. The installer now writes only inside the worktree it was invoked in; the repository-wide core.hooksPath setting and the shared .git/hooks/pre-push are written only from the main checkout, and from a linked worktree they are reported, naming the main checkout and the command to run there. No test and no product file under apps/ or packages/ was changed, nothing under deploy/ was touched, geekom and depr were not contacted, --no-verify was not used and nothing was pushed. Nothing required weakening the gate.",
+  "summary_markdown": "## T38 — the gate verifies what is being pushed\n\n**Reproduced first.** The verifier's probe against the tracked gate at `23a17aa`: `gate exit: 0` with `committed suite.sh` = `exit 1` and `working-tree suite.sh` = `exit 0`. After the fix the same construction blocks with `SUITE RAN: red` in the output — the *committed* suite is what ran and what refused.\n\n**Approach.** A throwaway worktree at each pushed tip (32.6-51.9 s of fixed overhead over six runs), plus an equivalence fast path: when the push is one ref, HEAD is its tip, and nothing a suite can read differs from HEAD, one run answers both questions and the cost is unchanged. Otherwise the gate runs the push **and** the working tree — dropping the second would allow a red working tree with a green commit, which the gate has always blocked.\n\n**Self-test.** 27 → **44 rows, 44 ok**. Every old row built its tree equal to HEAD, which is exactly why none could see the hole. The new rows disagree the two trees on purpose and assert which one the gate obeyed, with output sentinels so an unrelated failure cannot be mistaken for the property. Against the pre-T38 gate 11 go red; four mutants of the new gate are each killed by named rows.\n\n**Installer (R2-012).** `install.sh` writes only inside its own worktree; the shared hook file and the repository-wide config are written only from the main checkout, and reported otherwise.",
+  "acceptance": [
+    {
+      "criterion": "R2-001 reproduced before the fix and shown refused after it",
+      "status": "met",
+      "evidence": "Before: sh /tmp/echolet-r2-gate-probe.sh <repo> -> '---- gate exit: 0' with the committed suite red and the working-tree suite green (t38-gate-range-report.md §1). After: the same probe with all four gate step scripts vendored -> '---- gate exit: 1', 'push gate: verifying the commits being pushed (tip 4ceca94)', 'SUITE RAN: red', 'push gate: FAILED (exit 1) — the COMMITS BEING PUSHED are red'. The sentinel is asserted because an exit code alone would also be produced by a worktree that could not be created."
+    },
+    {
+      "criterion": "The gate verifies the commits being pushed, using the range git supplies on stdin",
+      "status": "met",
+      "evidence": ".githooks/pre-push now derives every distinct non-deleted pushed tip from the saved ref lines (ECHOLET_PUSH_TIPS) and, unless the working tree is provably that single tip, runs scripts/gate/pushed-range.sh for each of them: git -c core.hooksPath=/dev/null worktree add --detach into TMPDIR, pnpm install --frozen-lockfile --prefer-offline --ignore-scripts, then scripts/gate/suites.sh against that checkout, with cleanup on EXIT/INT/TERM. Self-test rows P1, P1b, P3, P5, P6 all exercise it; P7/P8 assert the throwaway worktree is removed and the repository's own working tree untouched."
+    },
+    {
+      "criterion": "Strictly no weaker in every state: no advisory failure, no narrowed scope, no bypass",
+      "status": "met",
+      "evidence": "The only exit-0 path still runs the working-tree suites at least once (fast path: once, against a tree proved identical to the push; two-tree path: the push first, then the working tree), so no state that blocked before can pass now. Row P2 pins the mirror state (commit green, working tree red -> still blocks) and stays green against the pre-T38 gate, so it is not satisfied by the new code's own frame; mutant MU-A (drop the working-tree run) is killed by it. No environment variable was added; the only one that exists (ECHOLET_DOCS_FRESHNESS_STRICT=1) still only strengthens. Two new blocking states were added (no worktree support; dependencies that cannot be installed), both following the existing rule that code which cannot be verified is not pushed."
+    },
+    {
+      "criterion": "Choose, justify and measure the cost; do not produce a gate people route around",
+      "status": "met",
+      "evidence": "Three approaches weighed in t38-gate-range-report.md section 2: refusing a dirty tree (rejected: policy change, and this tree is never clean), range-only (rejected: weaker), worktree (chosen). Cost measured in isolation rather than inferred from end-to-end totals, because the committed suite at 23a17aa is red (4 failed of 52 apps/cli files plus nine vitest worker-RPC timeouts) and a red run's wall clock measures where it happened to fail: 970 s for the pre-T38 gate, 829 s for the new gate's fast path and 451 s for the two-tree path, all exit 1, all in a disposable clone. What is stable: the fast path adds one git status --porcelain -uall, 0.084-0.147 s over five runs, and runs the suites exactly once (pinned by row P4b); the two-tree path adds 32.6-51.9 s over six runs (checkout 0.8-5.4 s, pnpm install --frozen-lockfile --prefer-offline --ignore-scripts 20.4-35.1 s, worktree and node_modules removal 8.6-16.3 s) plus a second pass of the suites. One pass costs 800-970 s on this machine today against T23's 246 s baseline on c5fde09, because apps/cli's test script picked up the seven test/e2e files (R2-003) - which is what makes the equivalence fast path load-bearing rather than a nicety."
+    },
+    {
+      "criterion": "Extend the self-test with rows that would catch this hole reopening rather than agreeing with the new code",
+      "status": "met",
+      "evidence": "44 rows, 44 ok, 0 wrong, 0 skipped. 17 new or repaired: P1/P1b (the hole), P2/P2b (the mirror state), P3 (forgotten git add), P4/P4b (fast path taken, and the suite ran exactly once), P5 (pushing a ref older than HEAD), P6 (a second pushed ref), P7/P8 (no leaked worktree, working tree untouched), S2/S3 (the two new steps are deletable-blocking), I1/I1b/I2/I3 (installer blast radius). Non-agreement proved four ways: against the pre-T38 gate 11 rows go red while P2 stays green; MU-A (range only) killed by P2/P2b; MU-B (equivalence always true) by P1/P1b/P2b/P3/P5/P6; MU-C (ignore untracked files) by P3; MU-D (first tip only) by P6."
+    },
+    {
+      "criterion": "R2-012: the installer acts only on the repository it was invoked in, or refuses and says why",
+      "status": "met",
+      "evidence": "scripts/hooks/install.sh detects a linked worktree by comparing --git-dir with --git-common-dir. From one, it neither rewrites the shared .git/hooks/pre-push tripwire nor writes the repository-wide core.hooksPath; it reports the state, names the main checkout from git worktree list --porcelain, and gives the one command to run there. verify.sh still has the last word, so a worktree in an ungated repository still fails loudly. Rows I1 (main hook byte-identical after a linked-worktree install), I1b (and it says so), I2 (the main checkout still installs the tripwire — the fix did not just switch it off) and I3 (the shared config is not written). All four are green on the new code; I1b and I3 are red against the old."
+    },
+    {
+      "criterion": "Constraints: no test or product file under apps/ or packages/; hooks, scripts/, package.json and docs only; no --no-verify; nothing pushed; relays untouched; no secret material recorded; searches through keryx ctx",
+      "status": "met",
+      "evidence": "Changed files are .githooks/pre-push, scripts/gate/{suites,pushed-range,selftest}.sh, scripts/hooks/{install,verify}.sh, package.json (one script line) and two flow artifacts. Every failing-suite state was staged in throwaway repositories under TMPDIR, so no file in this repository had to be broken. Nothing under apps/, packages/ or deploy/ was modified; the concurrent agent's edits to apps/cli tests and deploy/relay/README.md were left alone. No git push and no --no-verify anywhere; geekom and depr were not contacted. No store key, private key, plaintext or HTTP request body appears in any artifact. Every search over project code ran through keryx ctx rg and commands through keryx ctx run; raw grep/sed was used only on my own scratch logs and on gate output whose verbatim counts are the evidence, each with a # keryx:raw reason."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t38-gate-range-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "The reproduction before and after, the three approaches and why the worktree one was chosen, the measured cost, the no-weaker argument state by state, the new self-test rows with the four mutations that kill them, the installer fix, and the residuals."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t25-verification-report-r2.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Source of R2-001 and R2-012. Read only, not modified."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t23-gate-hardening-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "What the gate is and how it was built, including the 27-row state table this task extends. Read only."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".githooks/pre-push",
+      "change": "Reads every distinct pushed tip from git's stdin rather than only the first; proves whether the working tree is the commit being pushed (one ref, HEAD equals its tip, nothing a suite can read differs from HEAD); runs the pushed range first and the working tree second when they differ, and one run when they do not; the two new step scripts added to the missing-step check; header rewritten with the new order and cost."
+    },
+    {
+      "path": "scripts/gate/suites.sh",
+      "change": "New. The single definition of the suites (Go relay suite race-enabled, then the JS/TS suite via keryx when usable and the project's own script otherwise), parameterised by which tree to run against, so the two runs cannot drift apart."
+    },
+    {
+      "path": "scripts/gate/pushed-range.sh",
+      "change": "New. Checks a pushed tip out into a throwaway detached worktree under TMPDIR with hooks disabled for that one git invocation, installs dependencies from that commit's own lockfile with --frozen-lockfile --ignore-scripts, runs suites.sh there, and removes the worktree on every exit path including a signal."
+    },
+    {
+      "path": "scripts/gate/selftest.sh",
+      "change": "27 -> 44 rows. Added P1-P8 (the pushed range), S2/S3 (the new steps) and I1-I3 (the installer's blast radius); repaired S1 and the 'no keryx' rows, which were passing for reasons unrelated to what they claimed; moved the PATH-neutralised hook copy and the scratch bin directories outside the scratch repositories, because as untracked files they would have put every row on the two-tree path."
+    },
+    {
+      "path": "scripts/hooks/install.sh",
+      "change": "Acts only on the worktree it was invoked in. From a linked worktree it neither rewrites the main checkout's .git/hooks/pre-push tripwire nor writes the repository-wide core.hooksPath; it reports the state and names the main checkout and the command to run there. Closes R2-012."
+    },
+    {
+      "path": "scripts/hooks/verify.sh",
+      "change": "The two new gate steps added to the step-presence check and to the tracked-file check, so neither can go missing or untracked silently."
+    },
+    {
+      "path": "package.json",
+      "change": "Added the gate:range script, so a commit can be verified as the remote would receive it without pushing."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-08T19:34:42Z"
+}
