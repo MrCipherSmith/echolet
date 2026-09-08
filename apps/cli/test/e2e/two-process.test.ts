@@ -10,6 +10,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { EncryptedSqliteStore } from "@echolet/session-node";
 import { createIdentityProfile } from "@echolet/client-core";
 import { decodeBase64Url, signUtf8Message } from "@echolet/crypto-core";
+import { LIMITS } from "@echolet/protocol";
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const suite = mkdtempSync(join(tmpdir(), "echolet-real-e2e-"));
@@ -165,7 +166,9 @@ it.each([1, 2, 3])("clean real two-process run %i: offline, restart, exact retry
     const b = JSON.parse(readFileSync(bobCardPath, "utf8")).signal_bundle.device_record.identity_id as string;
     await run(alice, ["contact", "import", "--from", bobCardPath, "--yes"]); await run(bob, ["contact", "import", "--from", aliceCardPath, "--yes"]);
     await run(alice, ["relay", "publish"]); await run(bob, ["relay", "publish"]);
-    expect(traffic.filter((entry) => entry.path === "/v2/prekeys/publish" && entry.status === 200)).toHaveLength(2);
+    // Since T26, each `relay publish` submits a pool of N = LIMITS.PREKEY_MIN_COUNT independently
+    // signed bundles rather than one, so two fresh profiles each publishing once is 2N requests.
+    expect(traffic.filter((entry) => entry.path === "/v2/prekeys/publish" && entry.status === 200)).toHaveLength(2 * LIMITS.PREKEY_MIN_COUNT);
     const messageId = randomUUID();
     const sendArgs = ["send", "--to", b, "--text", firstText, "--message-id", messageId];
     dropSend = true;

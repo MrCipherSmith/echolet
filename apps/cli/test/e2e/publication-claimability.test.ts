@@ -7,6 +7,7 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
+import { LIMITS } from "@echolet/protocol";
 
 // T44-002 (and the end-to-end reproduction of T44-001) against the real relay binary.
 //
@@ -101,8 +102,10 @@ afterAll(() => rmSync(suite, { recursive: true, force: true }));
 
 it("reports whether a republished bundle is still claimable, and names an exhausted prekey for a later sender", async () => {
   const directory = mkdtempSync(join(suite, "run-"));
-  const bob = join(directory, "bob"), alice = join(directory, "alice"), carol = join(directory, "carol");
-  const keys = new Map([[bob, randomBytes(32).toString("base64url")], [alice, randomBytes(32).toString("base64url")], [carol, randomBytes(32).toString("base64url")]]);
+  // `dave` is added by T26: under a pool carol now DELIVERS (step 7), so the exhausted-prekey
+  // vocabulary needs a sender who arrives after every member is gone (step 8).
+  const bob = join(directory, "bob"), alice = join(directory, "alice"), carol = join(directory, "carol"), dave = join(directory, "dave");
+  const keys = new Map([bob, alice, carol, dave].map((profile) => [profile, randomBytes(32).toString("base64url")]));
   const firstText = `E2E_CLAIMABILITY_${randomUUID()}`;
   const markers = [firstText, ...keys.values()];
   const data = join(directory, "relay-data");
@@ -131,7 +134,7 @@ it("reports whether a republished bundle is still claimable, and names an exhaus
       return { code: result.code, errorCode, data: value.data ?? {} };
     }
 
-    for (const profile of [bob, alice, carol]) {
+    for (const profile of [bob, alice, carol, dave]) {
       await run(profile, ["init", "--relay-url", relayUrl, "--store-key-env", "ECHOLET_E2E_KEY"]);
     }
     const bobCardPath = join(directory, "bob-card.json");
@@ -189,22 +192,91 @@ it("reports whether a republished bundle is still claimable, and names an exhaus
     await run(alice, ["relay", "publish"]);
     await run(alice, ["send", "--to", bobIdentity, "--text", firstText]);
 
-    // 6. The recovery attempt: the same publish now restores nothing, and must say so instead of
-    //    reporting plain success.
+    // 6. The recovery attempt. REWRITTEN FOR T26, and the property it protects is unchanged and
+    //    sharper: a publish that restored nothing must say so instead of reporting plain success.
+    //
+    //    What changed and why. Since T26 `relay publish` submits a POOL of
+    //    N = LIMITS.PREKEY_MIN_COUNT independently signed bundles and means "bring my pool back up
+    //    to N". After exactly one claim, N-1 members are still claimable, so the old assertion
+    //    `claimable === false` is simply FALSE under a pool - and `claimable` now means "at least
+    //    one member can serve a first-contact sender", which is the only question the operator is
+    //    asking. The per-member truth did not disappear; it moved into `pool`, where it is more
+    //    precise than the boolean ever was: this invocation both QUERIES and tops up, so
+    //    `pool.minted === 1` is the direct, load-bearing statement that exactly one member had been
+    //    consumed and exactly one was allocated to replace it. A publish that restored nothing
+    //    would report `minted: 0` with `claimable` short of the target, and is still caught.
+    //
+    //    Nothing here is weakened: the boolean is replaced by a count, and the count is checked
+    //    against an exact expected value rather than against "not success".
     const afterClaim = await run(bob, ["relay", "publish"]);
-    expect(afterClaim.data.claimable).toBe(false);
+    const pool = afterClaim.data.pool as { target?: number; claimable?: number; minted?: number } | undefined;
+    expect(
+      pool,
+      "`relay publish` must report the pool it restored: without it the operator is told an operation that restored nothing worked",
+    ).toBeDefined();
+    expect(pool!.target).toBe(LIMITS.PREKEY_MIN_COUNT);
+    expect(
+      pool!.minted,
+      "alice's claim consumed exactly one pool member, so the top-up must allocate exactly one replacement",
+    ).toBe(1);
+    expect(pool!.claimable).toBe(LIMITS.PREKEY_MIN_COUNT);
+    expect(afterClaim.data.claimable).toBe(true);
+    //    UNCHANGED: `bundleId` is an anchor, not a cursor. Slot 0 is never re-minted while any
+    //    member is live, so the value the T19 and T20 reports rest on keeps its meaning.
     expect(afterClaim.data.bundleId).toBe(firstPublish.data.bundleId);
 
-    // 7. The originally reported symptom: a second distinct sender. The relay answers
-    //    404 PREKEY_BUNDLE_UNAVAILABLE, so the CLI must name that condition rather than reporting
-    //    the recipient's exhausted prekey as a trust/protocol rejection.
+    // 7. The originally reported symptom, and the reason this task exists: a second distinct
+    //    sender. REWRITTEN FOR T26. Under a pool of one she was refused permanently and bob had no
+    //    way to allocate a replacement; under a pool she DELIVERS. That inversion is the whole
+    //    point, so the assertion is inverted rather than removed.
+    //
     //    Carol publishes first - the precondition step 3 refused her for - so that her send reaches
-    //    the claim route and this stays a measurement of the EXHAUSTED-PREKEY vocabulary rather
-    //    than of the precondition. Her publication is her own and touches no assertion about bob's.
+    //    the claim route. Her publication is her own and touches no assertion about bob's.
     await run(carol, ["relay", "publish"]);
-    const secondSender = await run(carol, ["send", "--to", bobIdentity, "--text", firstText], 3);
-    expect(secondSender.errorCode).not.toBe("PROTOCOL_REJECTED");
-    expect(secondSender.errorCode).toMatch(/PREKEY/);
+    const secondSender = await run(carol, ["send", "--to", bobIdentity, "--text", firstText]);
+    expect(
+      secondSender.data.status,
+      "a pool must serve a SECOND distinct first-contact sender; that is the denial this task removes",
+    ).toBe("delivered");
+
+    // 8. The EXHAUSTED-PREKEY vocabulary, moved intact to a sender who arrives after all N members
+    //    are gone. It is asserted here exactly as it was asserted at step 7 before T26 - same
+    //    codes, same exit class, same negative on PROTOCOL_REJECTED - because T26 §4 deliberately
+    //    does NOT adopt Signal's shared last-resort key: at exhaustion the sender must still see
+    //    404 PREKEY_BUNDLE_UNAVAILABLE and nothing new.
+    //
+    //    The remaining members are drained with raw, unauthenticated claims, which is precisely the
+    //    attack the pool prices rather than closes: /v2/prekeys/claim carries no authentication, so
+    //    a stranger who knows an identity id destroys a member per request at a measured 2.0 ms
+    //    while the victim pays 61.6 ms to mint and publish each one. Counting them here states the
+    //    honest cost: the pool raises the price of silencing bob from ONE request to N, and no
+    //    further.
+    let drained = 0;
+    let exhausted: { status: number; code: string } | undefined;
+    for (let attempt = 0; attempt < LIMITS.PREKEY_MIN_COUNT + 2 && !exhausted; attempt += 1) {
+      const response = await fetch(`${relayUrl}/v2/prekeys/claim`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        // Never rendered in diagnostics; only the status and the relay's own code are asserted.
+        body: JSON.stringify({ claim_id: randomUUID(), identity_id: bobIdentity, device_id: null }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (response.ok) { drained += 1; await response.arrayBuffer(); continue; }
+      const failure = (await response.json()) as { error?: { code?: string } };
+      exhausted = { status: response.status, code: failure.error?.code ?? "none" };
+    }
+    //    Alice and carol consumed one member each, and the step-6 top-up replaced alice's before
+    //    carol's claim happened, so exactly N-1 remain for the raw claims: one claim consumes
+    //    exactly one member, never more and never fewer.
+    expect(drained).toBe(LIMITS.PREKEY_MIN_COUNT - 1);
+    expect(exhausted).toEqual({ status: 404, code: "PREKEY_BUNDLE_UNAVAILABLE" });
+
+    //    And what a real sender is told once that has happened - unchanged from before T26.
+    await run(dave, ["contact", "import", "--from", bobCardPath, "--yes"]);
+    await run(dave, ["relay", "publish"]);
+    const exhaustedSender = await run(dave, ["send", "--to", bobIdentity, "--text", firstText], 3);
+    expect(exhaustedSender.errorCode).not.toBe("PROTOCOL_REJECTED");
+    expect(exhaustedSender.errorCode).toMatch(/PREKEY/);
   } finally {
     await stop(relay);
   }

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createIdentityProfile, createSignedDeviceRecord } from "@echolet/client-core";
 import { decodeBase64Url } from "@echolet/crypto-core";
-import { MailboxEnvelopeSchema, signalAddressForDevice, type SignalPreKeyBundleV2 } from "@echolet/protocol";
+import { LIMITS, MailboxEnvelopeSchema, signalAddressForDevice, type SignalPreKeyBundleV2 } from "@echolet/protocol";
 import { EncryptedSqliteStore, SignalClient, exportSignedSignalBundleV2 } from "@echolet/session-node";
 import { openProfile } from "./profile";
 import { RelayClient } from "../transport/relayClient";
@@ -136,9 +136,10 @@ describe("CLI outbound messaging", () => {
       .resolves.toEqual({ messageId: messageID, envelopeId: envelopeID, status: "delivered" });
 
     // The exact request sequence, unchanged in what it pins about the send: the claim comes first,
-    // the deposit second, and nothing else is issued - now prefixed by the one publication the send
-    // presupposes.
-    expect(fake.requests.map(({ path }) => path)).toEqual(["/v2/prekeys/publish", "/v2/prekeys/claim", "/v1/messages/send"]);
+    // the deposit second, and nothing else is issued - now prefixed by the pool of
+    // LIMITS.PREKEY_MIN_COUNT publications the send presupposes (Flow 003 / T26: a fresh profile's
+    // first `publish()` mints and publishes every pool member, not one).
+    expect(fake.requests.map(({ path }) => path)).toEqual([...Array(LIMITS.PREKEY_MIN_COUNT).fill("/v2/prekeys/publish"), "/v2/prekeys/claim", "/v1/messages/send"]);
     const claimRequest = fake.requests.find(({ path }) => path === "/v2/prekeys/claim")!;
     const sendRequest = fake.requests.find(({ path }) => path === "/v1/messages/send")!;
     expect(claimRequest.body).toEqual({ claim_id: claimID, identity_id: remote.identity.identityId, device_id: remote.identity.deviceId });
@@ -179,7 +180,8 @@ describe("CLI outbound messaging", () => {
     await expect(messenger.send({ recipientIdentityId: remote.identity.identityId, messageId: messageID, plaintext: "must stay local" }))
       .rejects.toMatchObject({ code: "CONTACT_PIN_MISMATCH" });
     // Still exactly one claim and NO deposit: the pin is judged before anything is sent or stored.
-    expect(fake.requests.map(({ path }) => path)).toEqual(["/v2/prekeys/publish", "/v2/prekeys/claim"]);
+    // Prefixed by the same LIMITS.PREKEY_MIN_COUNT-member pool publish as above (Flow 003 / T26).
+    expect(fake.requests.map(({ path }) => path)).toEqual([...Array(LIMITS.PREKEY_MIN_COUNT).fill("/v2/prekeys/publish"), "/v2/prekeys/claim"]);
     await messenger.close();
     const store = new EncryptedSqliteStore(join(local.profileDir, "client.sqlite"), local.key);
     opened.push(store);

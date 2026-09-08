@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { SignalPreKeyBundleV2 } from "@echolet/protocol";
+import { LIMITS, type SignalPreKeyBundleV2 } from "@echolet/protocol";
 import { openProfile } from "./profile";
 import { RelayClient } from "../transport/relayClient";
 import { openOutboundMessenger } from "./outbound";
@@ -90,7 +90,11 @@ describe("CLI relay publication idempotence", () => {
     const reopened = await messengerFor(local, replayed.fetch);
     opened.push(reopened);
     await expect(reopened.publish()).resolves.toMatchObject({ stored: true });
-    expect(replayed.attempts).toHaveLength(1);
+    // Flow 003 / T26: the retry completes the pool. Slot 0 was already durable (stored before the
+    // lost request above) so it is resubmitted idempotently first; the remaining
+    // LIMITS.PREKEY_MIN_COUNT - 1 empty slots are freshly minted, stored, and published. The total
+    // is the full pool, not the single retried request.
+    expect(replayed.attempts).toHaveLength(LIMITS.PREKEY_MIN_COUNT);
 
     const original = lost.attempts[0]!;
     const retry = replayed.attempts[0]!;
@@ -113,10 +117,15 @@ describe("CLI relay publication idempotence", () => {
 
     await expect(messenger.publish()).resolves.toMatchObject({ stored: true });
     await expect(messenger.publish()).resolves.toMatchObject({ stored: true });
-    expect(relay.attempts).toHaveLength(2);
+    // Flow 003 / T26: each call resubmits/mints the full LIMITS.PREKEY_MIN_COUNT-member pool, so
+    // two calls issue two full pools of requests, not two requests.
+    expect(relay.attempts).toHaveLength(2 * LIMITS.PREKEY_MIN_COUNT);
 
     const original = relay.attempts[0]!;
-    const repeat = relay.attempts[1]!;
+    // The second call's FIRST attempt is slot 0 resubmitted idempotently - every stored member is
+    // read and resubmitted in slot order, slot 0 first - so it is the byte-identical repeat, not
+    // whatever request happens to be second in the combined array.
+    const repeat = relay.attempts[LIMITS.PREKEY_MIN_COUNT]!;
     expect(repeat.bundle.bundle_id).toBe(original.bundle.bundle_id);
     expect(repeat.bodyText === original.bodyText).toBe(true);
   }, 30000);
@@ -136,13 +145,23 @@ describe("CLI relay publication idempotence", () => {
     await (rotate as () => Promise<unknown>).call(messenger);
     await messenger.publish();
 
-    const rotated = relay.attempts.at(-1)!;
+    // Flow 003 / T26: `rotateBundle()` only ever replaces slot 0 (the anchor); slots 1..N-1 stay
+    // untouched. This second `publish()` resubmits every stored member in slot order, slot 0 first,
+    // so the rotated bundle is the FIRST attempt of this call - at index LIMITS.PREKEY_MIN_COUNT in
+    // the combined array - not the LAST attempt of the whole run. `.at(-1)` would silently read
+    // slot N-1, which was never rotated and would make this assertion pass for the wrong reason.
+    // The length check fails on its own assertion, rather than an out-of-bounds TypeError, until
+    // publish() actually resubmits the full pool on every call.
+    expect(relay.attempts.length).toBeGreaterThan(LIMITS.PREKEY_MIN_COUNT);
+    const rotated = relay.attempts[LIMITS.PREKEY_MIN_COUNT]!;
     expect(rotated.bundle.bundle_id).not.toBe(original.bundle.bundle_id);
     expect(rotated.bundle.one_time_prekey?.public_key === original.bundle.one_time_prekey?.public_key).toBe(false);
 
-    // The rotated bundle is then itself stable across retries.
+    // The rotated bundle is then itself stable across retries: it is again the first attempt of
+    // the next full-pool publish.
     await messenger.publish();
-    const afterRotation = relay.attempts.at(-1)!;
+    expect(relay.attempts.length).toBeGreaterThan(2 * LIMITS.PREKEY_MIN_COUNT);
+    const afterRotation = relay.attempts[2 * LIMITS.PREKEY_MIN_COUNT]!;
     expect(afterRotation.bundle.bundle_id).toBe(rotated.bundle.bundle_id);
     expect(afterRotation.bodyText === rotated.bodyText).toBe(true);
   }, 30000);
