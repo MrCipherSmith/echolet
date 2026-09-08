@@ -77,13 +77,20 @@ describe("buildArgv writes the documented invocation for every command", () => {
     ]);
   });
 
+  // Flow 004: the body left argv. This case used to assert `--text` and the body were HERE, which
+  // was true and is now the defect: argv is readable through `ps` by every process the same user
+  // owns, so the plaintext of an end-to-end encrypted message was on display for the life of the
+  // command. The body now rides the child's stdin (see main.ts) and the expectations below say so.
+  // The CLI still ACCEPTS `--text` for the operator's own scripts; this caller simply never uses it.
+  // Edited by the orchestrator, not by the implementer, who correctly refused to touch a test in
+  // order to make its own work pass and reported the contradiction instead.
   it("send, with and without an explicit message id", () => {
     expect(buildArgv({ command: "send", profileDir: PROFILE, to: PEER, text: "SYNTHETIC_TUI_BODY" })).toEqual([
-      "send", "--to", PEER, "--text", "SYNTHETIC_TUI_BODY", "--profile", PROFILE, "--json",
+      "send", "--to", PEER, "--profile", PROFILE, "--json",
     ]);
     // The runbook's ambiguous-send / exact-retry step: the same --message-id replays identical bytes.
     expect(buildArgv({ command: "send", profileDir: PROFILE, to: PEER, text: "SYNTHETIC_TUI_BODY", messageId: MESSAGE_ID })).toEqual([
-      "send", "--to", PEER, "--text", "SYNTHETIC_TUI_BODY", "--message-id", MESSAGE_ID, "--profile", PROFILE, "--json",
+      "send", "--to", PEER, "--message-id", MESSAGE_ID, "--profile", PROFILE, "--json",
     ]);
   });
 
