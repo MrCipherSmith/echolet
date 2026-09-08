@@ -9,13 +9,42 @@
   "title": "Echolet: close the recorded residuals and make the operator TUI usable",
   "status": "in-progress",
   "createdAt": "2026-09-07T19:26:13.895Z",
-  "updatedAt": "2026-09-08T22:54:35.066Z",
+  "updatedAt": "2026-09-08T23:00:28.974Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:e3ad5356dcb009b7fa69485cce34b9093da7e1fa7c66f1352af3230097a6af1a",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC3": {
+      "at": "2026-09-08T23:00:28.442Z",
+      "note": "Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json."
+    },
+    "AC4": {
+      "at": "2026-09-08T23:00:28.529Z",
+      "note": "Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json."
+    },
+    "AC5": {
+      "at": "2026-09-08T23:00:28.617Z",
+      "note": "Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json."
+    },
+    "AC6": {
+      "at": "2026-09-08T23:00:28.712Z",
+      "note": "Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json."
+    },
+    "AC7": {
+      "at": "2026-09-08T23:00:28.792Z",
+      "note": "Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json."
+    },
+    "AC8": {
+      "at": "2026-09-08T23:00:28.880Z",
+      "note": "Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json."
+    },
+    "AC9": {
+      "at": "2026-09-08T23:00:28.974Z",
+      "note": "Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -1504,6 +1533,41 @@
       "at": "2026-09-08T22:54:35.066Z",
       "event": "task-done",
       "detail": "T25: Independent verification of everything flow 003 has landed"
+    },
+    {
+      "at": "2026-09-08T23:00:28.442Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json."
+    },
+    {
+      "at": "2026-09-08T23:00:28.529Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json."
+    },
+    {
+      "at": "2026-09-08T23:00:28.617Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json."
+    },
+    {
+      "at": "2026-09-08T23:00:28.712Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json."
+    },
+    {
+      "at": "2026-09-08T23:00:28.792Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json."
+    },
+    {
+      "at": "2026-09-08T23:00:28.880Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json."
+    },
+    {
+      "at": "2026-09-08T23:00:28.974Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json."
     }
   ]
 }

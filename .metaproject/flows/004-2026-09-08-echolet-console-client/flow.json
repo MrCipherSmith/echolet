@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "004",
+  "slug": "echolet-console-client",
+  "title": "Echolet: the console becomes a client - registration, conversations, address book",
+  "status": "in-progress",
+  "createdAt": "2026-09-08T23:00:34.327Z",
+  "updatedAt": "2026-09-08T23:16:09.395Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:5b479b63deca2b5b1d8c844a1838f25e28a1feef56f661062ac6119d05d5120c",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "RED tests for the two CLI prerequisites: send takes its body on stdin, doctor enumerates correspondents",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T23:01:47.199Z",
+            "outcome": "started",
+            "detail": "Dispatching an independent tests-creator. RED is required before any implementation is written; the implementer will be a different agent and will not accept its own work."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Implement the two CLI prerequisites, keeping the command surface at eight commands",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-08T23:00:34.327Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-08T23:01:19.049Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-08T23:01:23.387Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-08T23:01:27.884Z",
+      "event": "task-added",
+      "detail": "T5: RED tests for the two CLI prerequisites: send takes its body on stdin, doctor enumerates correspondents"
+    },
+    {
+      "at": "2026-09-08T23:01:30.095Z",
+      "event": "task-added",
+      "detail": "T6: Implement the two CLI prerequisites, keeping the command surface at eight commands"
+    },
+    {
+      "at": "2026-09-08T23:01:45.348Z",
+      "event": "task-depends-set",
+      "detail": "T6: dependsOn T5 (was T1) — The implementation must follow the RED tests in T5, not the boilerplate context task T1 that flow init created."
+    },
+    {
+      "at": "2026-09-08T23:01:47.199Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — Dispatching an independent tests-creator. RED is required before any implementation is written; the implementer will be a different agent and will not accept its own work."
+    },
+    {
+      "at": "2026-09-08T23:16:09.395Z",
+      "event": "ac-updated",
+      "detail": "AC3 as I froze it required removing --text. That would break nine call sites in the operator's own live prototype scripts (echolet-try.sh and the depr peer wrapper), which is outside this wave's authority and contradicts the design it implements. AC3 now requires the stdin path and a clean console argv, keeps --text, and records its retirement as an open decision for the user. No confirmations existed to void."
+    }
+  ]
+}
