@@ -119,21 +119,22 @@ func TestMaximumSizeEnvelopeIsDeliverableAtEveryPermittedMaxMessageBytes(t *test
 		{name: "at a sixteenth of the protocol maximum", configured: protocol.MaxMessageBytes / 16},
 	}
 
-	// WHY ZERO IS NOT IN THAT TABLE. config.Validate() permits a zero
-	// MaxMessageBytes deliberately - it is the zero value of a partially
-	// constructed Config, which internal/server builds directly and which
-	// envelopeBodyLimit reads as "unconfigured, use the protocol maximum". But
-	// ValidateMailboxEnvelope is handed h.maxMessageBytes unchanged, so at zero it
-	// answers PAYLOAD_TOO_LARGE to every envelope: the relay comes up and accepts
-	// nothing. Measured here, not inferred - the case was written and produced
-	// 400/PAYLOAD_TOO_LARGE at a ciphertext of exactly the protocol maximum.
+	// WHY ZERO IS NOT IN THAT TABLE. The table's `configured` doubles as the
+	// ciphertext size, and a zero maximum is not a zero-byte envelope: zero means
+	// "unconfigured", which the handler resolves to the protocol maximum. It gets
+	// its own round trip next door, in unconfigured_max_message_bytes_test.go
+	// (TestAnUnconfiguredMaxMessageBytesCarriesAnEnvelopeOfTheProtocolMaximum),
+	// where the ciphertext is the protocol maximum rather than the configured
+	// value.
 	//
-	// That is residual R-3 (flow 003 T11 §5), pre-existing and unrelated to RI-09's
-	// closure: it is reachable only through a hand-built Config, never through
-	// Load(), whose envDefault cannot yield zero. Closing it is a product change
-	// (refuse <= 0, or have the handler fall back in one place instead of two) that
-	// also moves six internal/server tests, so it is reported rather than pinned
-	// red here. This test covers the configurations an operator can actually set.
+	// It used to be absent for a different reason, worth keeping: at the time this
+	// file was written a handler at zero accepted NOTHING - envelopeBodyLimit fell
+	// back to the protocol maximum but ValidateMailboxEnvelope was handed the zero
+	// unchanged, so the route answered 400/PAYLOAD_TOO_LARGE to a ciphertext of
+	// exactly the protocol maximum. That was measured here, reported as residual
+	// R-3 / finding T21-F-001, and closed in T22 by resolving the zero once in
+	// NewMailboxHandler. An operator's explicit ECHOLET_MAX_MESSAGE_BYTES=0 is
+	// refused at startup by config.Load() instead.
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {

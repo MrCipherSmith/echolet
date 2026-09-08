@@ -225,9 +225,12 @@ func assertRouterError(t *testing.T, response *httptest.ResponseRecorder, wantSt
 }
 
 func signalV2RouterConfig() config.Config {
+	// CleanupIntervalSec is gone from Config (flow 003, T33): it configured a
+	// service that sweeps nothing, and its only effect here was keeping
+	// NewRouter's ticker off a zero interval. Nothing this file asserts depended
+	// on the value.
 	return config.Config{
 		RateLimitPerMinute:  1_000,
-		CleanupIntervalSec:  3_600,
 		ChallengeTTLSeconds: 60,
 		MaxMailboxBatch:     100,
 		MaxMessageBytes:     262_144,
