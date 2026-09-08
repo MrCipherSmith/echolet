@@ -113,3 +113,7 @@
 - 2026-09-08T18:31:03.243Z - task-done: T15: Correct deploy/relay/README.md: the committed systemd units are root-and-host-path only
 - 2026-09-08T18:31:05.929Z - task-done: T16: Record that the process-spawning CLI tests fail under CPU contention and decide whether to harden or serialise them
 - 2026-09-08T18:31:08.533Z - task-attempt: T39: started (attempt 1) — 003-T39-docs-corrections
+- 2026-09-08T21:50:33.754Z - task-added: T40: Size the e2e and runtime-publish test ceilings from measurement (registered after the fact)
+- 2026-09-08T21:50:43.402Z - task-done: T38: Close the gate's working-tree hole: it must verify the pushed range
+- 2026-09-08T21:50:45.971Z - task-done: T39: Correct the pool's overstated cost claims and the eleven prose sites
+- 2026-09-08T21:51:09.147Z - task-done: T40: Size the e2e and runtime-publish test ceilings from measurement (registered after the fact)
