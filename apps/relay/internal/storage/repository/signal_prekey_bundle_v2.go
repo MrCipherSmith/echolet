@@ -26,6 +26,7 @@ func readV2(tx *badger.Txn, key string) ([]byte, error) {
 	}
 	return item.ValueCopy(nil)
 }
+
 // SaveSignalV2 reports whether the stored publication is available for a first-contact claim.
 //
 // A repeated publish is idempotent: it re-stores byte-identical bytes and deliberately never
