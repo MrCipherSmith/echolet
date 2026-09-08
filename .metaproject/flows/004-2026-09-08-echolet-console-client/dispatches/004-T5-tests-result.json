@@ -1,0 +1,102 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-004-t5-red",
+  "dispatch_id": "004-T5-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Wrote three new test files, no source changed. (1) apps/cli/src/tui/cli-bridge.sendStdin.test.ts pins that buildArgv's send case must emit no --text token and no token carrying the body, for an ordinary body, a body that looks like a flag (--json), and a multi-line body; all three fail today because buildArgv still emits --text and the body verbatim (captured in t5-bridge-out.log). (2) apps/cli/src/commands/cli.sendStdin.test.ts drives the real CLI binary and pins: a non-empty stdin body must reach CONTACT_NOT_TRUSTED (proving it was read) while today it is rejected as INVALID_ARGUMENTS (missing --text) instead; a body one byte over 65536 bytes must be INVALID_MESSAGE while today it is INVALID_ARGUMENTS; a body exactly at 65536 bytes must reach the trust check; --text itself must be refused (exit 2) while today it is still accepted and reaches CONTACT_NOT_TRUSTED; and a full publish->import->send->history round trip must deliver the exact untrimmed bytes (embedded + trailing newline) while today it fails at INVALID_ARGUMENTS before ever spawning a relay request. All four failed today for the stated reason (t5-sendstdin-out.log). (3) apps/cli/src/commands/cli.doctorContacts.test.ts pins that doctor's JSON must carry a contacts array (empty on a fresh profile; matching Profile.listContacts() exactly, in its order, with contact_count equal to the array length, once contacts are pinned; and complete+redacted while the relay stays unreachable) — all three failed today because doctor's data has no contacts field at all (t5-doctor-out.log). tsc --noEmit is clean over the whole package. git status shows only these three new files under apps/cli/src; nothing else in the tree was touched. Flagged as DONE_WITH_CONCERNS rather than DONE only because of one real contradiction found between this dispatch and the design document its context_refs cite (see findings), and one interpretive call on 'trust state' the design does not settle, both detailed below and in the summary text.",
+  "acceptance": [
+    {
+      "criterion": "Every new test fails on the current tree, and the failure message names the missing behaviour rather than a mechanical error. Record the exact failure output for each.",
+      "status": "met",
+      "evidence": "Three vitest runs, one per new file, captured whole (never piped through tail/head): /private/tmp/claude-502/-Users-Goodea-goodea-projects-echolet/0c21ebf8-6665-4623-bf8a-bcc512e73047/scratchpad/t5-bridge-out.log (3 failed, 1 passed baseline — the baseline pins the invocation shape is unchanged besides the body), t5-sendstdin-out.log (4 failed), t5-doctor-out.log (3 failed). Every failure message names the missing behaviour: e.g. 'expected 2 to be 3' for the non-empty-stdin case (proves the body was never read, not a typo), 'expected code INVALID_MESSAGE, got INVALID_ARGUMENTS' for the size bound, 'today it reports contact_count alone, never the contacts behind it' for doctor. None is ERR_MODULE_NOT_FOUND, a syntax error, or a mismatched import — tsc --noEmit over the whole package is clean (exit 0)."
+    },
+    {
+      "criterion": "A test asserts the COMPLETE argv of the spawned child and fails if the body appears anywhere in it - not a substring check on one element.",
+      "status": "met",
+      "evidence": "cli-bridge.sendStdin.test.ts scans every element of the returned argv array (argv.some((token) => token.includes(...)) over the WHOLE array, plus argv.filter(...) counting occurrences), not one indexed element, and asserts on the array as a whole (not toContain(BODY) is checked in addition to the substring scan). The '--json' collision test explicitly proves today's bug: a body equal to '--json' causes '--json' to appear TWICE in argv (once as the smuggled body, once as the real flag) — filter(...).toHaveLength(1) fails today with 2, which a plain toContain('--json') could never have caught."
+    },
+    {
+      "criterion": "The stdin path is specified for the cases that will otherwise be decided by accident: a body containing newlines, a body that is exactly the plaintext bound, a body one byte over it, an empty body, and stdin closed with no body at all. Say in a comment what each case must do and why.",
+      "status": "met",
+      "evidence": "cli.sendStdin.test.ts covers all five, each with an inline comment: newlines (embedded AND trailing, in the full round-trip test, asserted untrimmed against both the exact body and its trimmed variant), exactly-at-bound (65536 bytes, must reach CONTACT_NOT_TRUSTED not INVALID_MESSAGE), one-byte-over (65537 bytes, must be INVALID_MESSAGE), empty and stdin-closed-with-nothing (folded into one test with a comment explaining Node's stream contract makes an explicit zero-byte write and a bare close indistinguishable to the reader, so both are exercised through the same call rather than duplicated as an unreachable second code path — this is a judgment call, recorded below). One case from the design (P-1) is explicitly NOT written: '--text absent and stdin is a TTY -> exit 2 rather than a hang' — this spawn-based harness can never present a real TTY to the child's stdin without a pseudo-terminal dependency this test-only dispatch does not license adding; the gap is a comment in the file, not a silent omission."
+    },
+    {
+      "criterion": "--text is asserted to be rejected as invalid input with exit 2, so the old path cannot survive as a silent alternative.",
+      "status": "met",
+      "evidence": "cli.sendStdin.test.ts 'no longer accepts --text at all' asserts exit 2 / INVALID_ARGUMENTS for a --text invocation; today it returns exit 3 / CONTACT_NOT_TRUSTED (proving --text still works), which is exactly the RED this criterion asks for."
+    },
+    {
+      "criterion": "The doctor test asserts the correspondent list is complete and carries trust state, and that doctor stays offline - no relay request is issued - and leaks no key material into stdout or stderr.",
+      "status": "met",
+      "evidence": "cli.doctorContacts.test.ts asserts the contacts array equals Profile.listContacts()'s own output exactly (completeness, compared against the store's ground truth, not an assumed shape), contact_count equals the array length in every case, and every entry has exactly the four contactSchema fields. 'Trust state' is interpreted, with the reasoning recorded in a comment, as array MEMBERSHIP: the design's own P-2 specifies contacts: ContactIdentifiers[] verbatim with no added field, and ContactIdentifiers has no trust flag to assert on, so there is no other trust value the CLI can produce. Offline + no-leak is asserted via the existing convention (init() defaults to an unreachable relay; a clean exit 0 that also carries the correct contacts is itself the proof no network call was attempted) plus the redacted() helper against stdout+stderr."
+    },
+    {
+      "criterion": "No existing test is weakened, narrowed, skipped or deleted. If an existing test pins the --text path, say so and leave it alone: changing it is the implementer's job, under review.",
+      "status": "met",
+      "evidence": "git status --porcelain shows only the three new files under apps/cli/src; nothing else changed. apps/cli/src/tui/cli-bridge.test.ts DOES pin the --text argv path (three tests: 'send, with and without an explicit message id', 'passes an identity id beginning with a dash...', and 'always addresses a profile and always asks for JSON' whose fixture list includes a send request with a text field) and apps/cli/src/commands/cli.test.ts uses --text in two of its own tests ('routes publish/send/poll through HTTP...' and 'maps untrusted sends to exit 3...'). Both files are named in comments in the new files and left untouched; updating them is recorded as the implementer's job."
+    },
+    {
+      "criterion": "Every timeout you need comes from apps/cli/test/childProcessTimeouts.ts. Do not write a new millisecond literal; those constants are derived from measurement and a fresh literal is how this project got its last defect.",
+      "status": "met",
+      "evidence": "Both driven files import only CLI_CHILD_TIMEOUT_MS and CLI_TEST_TIMEOUT_MS from apps/cli/test/childProcessTimeouts.ts and introduce no new millisecond literal anywhere, including inside the child() helper's own SIGKILL watchdog, which reuses CLI_CHILD_TIMEOUT_MS exactly as cli.test.ts does."
+    }
+  ],
+  "artifacts": [
+    { "path": "apps/cli/src/tui/cli-bridge.sendStdin.test.ts", "kind": "custom", "exists": true, "summary": "Pure buildArgv test: send's body must leave argv entirely." },
+    { "path": "apps/cli/src/commands/cli.sendStdin.test.ts", "kind": "custom", "exists": true, "summary": "Driven CLI test: send reads its body from stdin; --text is rejected." },
+    { "path": "apps/cli/src/commands/cli.doctorContacts.test.ts", "kind": "custom", "exists": true, "summary": "Driven CLI test: doctor enumerates pinned contacts." },
+    { "path": "/private/tmp/claude-502/-Users-Goodea-goodea-projects-echolet/0c21ebf8-6665-4623-bf8a-bcc512e73047/scratchpad/t5-bridge-out.log", "kind": "report", "exists": true, "summary": "Full vitest output for cli-bridge.sendStdin.test.ts: 3 failed, 1 passed." },
+    { "path": "/private/tmp/claude-502/-Users-Goodea-goodea-projects-echolet/0c21ebf8-6665-4623-bf8a-bcc512e73047/scratchpad/t5-sendstdin-out.log", "kind": "report", "exists": true, "summary": "Full vitest output for cli.sendStdin.test.ts: 4 failed." },
+    { "path": "/private/tmp/claude-502/-Users-Goodea-goodea-projects-echolet/0c21ebf8-6665-4623-bf8a-bcc512e73047/scratchpad/t5-doctor-out.log", "kind": "report", "exists": true, "summary": "Full vitest output for cli.doctorContacts.test.ts: 3 failed." },
+    { "path": "/private/tmp/claude-502/-Users-Goodea-goodea-projects-echolet/0c21ebf8-6665-4623-bf8a-bcc512e73047/scratchpad/t5-typecheck-out.log", "kind": "report", "exists": true, "summary": "tsc -p tsconfig.json --noEmit over the whole apps/cli package: exit 0, no errors." },
+    { "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t35-console-client-design.md", "kind": "plan", "exists": true, "summary": "Design context_ref; §6 P-1 disagrees with this dispatch's AC3 on whether --text should keep working (see findings)." },
+    { "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/acceptance-criteria.md", "kind": "plan", "exists": true, "summary": "Flow 004 acceptance criteria; AC3 is the binding instruction this run followed." }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/tui/cli-bridge.sendStdin.test.ts", "change": "added" },
+    { "path": "apps/cli/src/commands/cli.sendStdin.test.ts", "change": "added" },
+    { "path": "apps/cli/src/commands/cli.doctorContacts.test.ts", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "004-T5-tests",
+      "severity": "info",
+      "problem": "The design document flow 004 cites as context (t35-console-client-design.md §6, P-1) explicitly recommends that `--text` KEEP working ('exactly as today, so every existing script and test is untouched'), listing this dispatch's own acceptance-criteria.md (AC3: 'The current --text path is gone, not merely unused') and the T5 dispatch's task description ('--text must stop being accepted, not merely stop being used') say the opposite.",
+      "impact": "An implementer reading only the design doc would keep --text working and leave apps/cli/src/tui/cli-bridge.test.ts and apps/cli/src/commands/cli.test.ts's existing --text-based tests passing untouched; an implementer reading only the dispatch/AC3 would remove --text support outright and be required to update those same tests. The two instructions cannot both be satisfied by one implementation. This run followed the dispatch (AC3) because it is stated as binding on this task, and wrote cli.sendStdin.test.ts's '--text must be refused' test and cli-bridge.sendStdin.test.ts accordingly.",
+      "suggested_fix": "The flow owner should resolve which instruction is authoritative before task-implementer picks this up, and if AC3 wins (as this run assumed), update or annotate t35-console-client-design.md §6 P-1 so a future reader is not misled by the superseded recommendation.",
+      "evidence": "t35-console-client-design.md §6 P-1: '--text keeps working exactly as today, so every existing script and test is untouched.' acceptance-criteria.md AC3: 'The current `--text` path is gone, not merely unused.' Dispatch 004-T5-tests task.description: '--text must stop being accepted, not merely stop being used.'",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "004-T5-tests",
+      "severity": "info",
+      "problem": "The dispatch's task description asks doctor to report contacts 'with their trust state', but the design's P-2 (§6) and the only type available (ContactIdentifiers / contactSchema, profile.ts:79-82) specify no trust field at all — just the four comparison identifiers, additive to contact_count.",
+      "impact": "cli.doctorContacts.test.ts had to choose an interpretation to be testable: 'trust state' is expressed by array MEMBERSHIP (an entry in doctor's contacts array is, by construction, a row this profile's encrypted store actually pinned) rather than by an explicit per-entry field. If the flow intends an explicit trust field (e.g. distinguishing degrees of pinning), this test does not pin that and would need a follow-up.",
+      "suggested_fix": "If task-implementer or a later task needs a richer trust vocabulary than 'present in this array', that should be a stated, separate design decision — not inferred from this dispatch's one adjective.",
+      "evidence": "Dispatch task.description: 'doctor enumerates the profile's pinned correspondents, with their trust state.' Design §6 P-2: 'diagnostics() gains contacts: ContactIdentifiers[]... carrying exactly the four fields contactSchema holds.' profile.ts:79-82 (contactSchema: identity_id, device_id, device_pubkey, signal_identity_key — no trust field).",
+      "confidence": "medium"
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-1",
+      "question": "Is flow 004's AC3 ('the current --text path is gone, not merely unused') authoritative over the T35 design's P-1 ('--text keeps working exactly as today')?",
+      "why": "The two documents instruct opposite implementations of the same CLI flag, and cli-bridge.test.ts / cli.test.ts currently pin the --text path in three tests that would need deliberate edits under one reading and none under the other. This run followed AC3 and wrote tests accordingly; task-implementer needs the same answer before touching cli.ts or cli-bridge.ts.",
+      "options": [
+        { "id": "a", "label": "AC3 wins: remove --text support; update the three cli-bridge.test.ts / cli.test.ts assertions that pin it, under review.", "recommended": true },
+        { "id": "b", "label": "P-1 wins: keep --text working alongside the new stdin path; this run's '--text must be refused' test and its exit-2 assertion would need to be dropped or rewritten." }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-08T23:13:51Z"
+}

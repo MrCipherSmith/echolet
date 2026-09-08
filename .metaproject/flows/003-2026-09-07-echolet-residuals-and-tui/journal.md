@@ -123,3 +123,10 @@
 - 2026-09-08T22:54:20.907Z - task-done: T41: Disposition every recorded residual by evidence (registered after the fact, as T40 was)
 - 2026-09-08T22:54:23.242Z - task-done: T35: TUI as a usable client: registration, conversations, address book (next wave)
 - 2026-09-08T22:54:35.066Z - task-done: T25: Independent verification of everything flow 003 has landed
+- 2026-09-08T23:00:28.442Z - ac-confirmed: AC3: Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json.
+- 2026-09-08T23:00:28.529Z - ac-confirmed: AC4: Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json.
+- 2026-09-08T23:00:28.617Z - ac-confirmed: AC5: Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json.
+- 2026-09-08T23:00:28.712Z - ac-confirmed: AC6: Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json.
+- 2026-09-08T23:00:28.792Z - ac-confirmed: AC7: Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json.
+- 2026-09-08T23:00:28.880Z - ac-confirmed: AC8: Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json.
+- 2026-09-08T23:00:28.974Z - ac-confirmed: AC9: Round-3 independent verification at ac51393 ruled this MET on named evidence (mutations killed, commands with their output); see dispatches/003-T25-verify-r3-result.json.
