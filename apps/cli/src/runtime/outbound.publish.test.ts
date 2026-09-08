@@ -7,6 +7,7 @@ import { LIMITS, type SignalPreKeyBundleV2 } from "@echolet/protocol";
 import { openProfile } from "./profile";
 import { RelayClient } from "../transport/relayClient";
 import { openOutboundMessenger } from "./outbound";
+import { CLI_TEST_TIMEOUT_MS } from "../../test/childProcessTimeouts";
 
 // Review finding F-001: repeated `relay publish` must resubmit the exact previously signed
 // bundle. Regenerating a bundle_id around the same reserved one-time prekey is permanently
@@ -107,7 +108,7 @@ describe("CLI relay publication idempotence", () => {
     expect(retry.bundle.expires_at_ms).toBe(original.bundle.expires_at_ms);
     // Boolean form: never render signed bundle bytes into failure output.
     expect(retry.bodyText === original.bodyText).toBe(true);
-  }, 30000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("repeats an already successful publication without allocating a new bundle", async () => {
     const local = await profileFixture();
@@ -128,7 +129,7 @@ describe("CLI relay publication idempotence", () => {
     const repeat = relay.attempts[LIMITS.PREKEY_MIN_COUNT]!;
     expect(repeat.bundle.bundle_id).toBe(original.bundle.bundle_id);
     expect(repeat.bodyText === original.bodyText).toBe(true);
-  }, 30000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("allocates a fresh bundle and one-time prekey only through an explicit rotation operation", async () => {
     const local = await profileFixture();
@@ -164,5 +165,5 @@ describe("CLI relay publication idempotence", () => {
     const afterRotation = relay.attempts[2 * LIMITS.PREKEY_MIN_COUNT]!;
     expect(afterRotation.bundle.bundle_id).toBe(rotated.bundle.bundle_id);
     expect(afterRotation.bodyText === rotated.bodyText).toBe(true);
-  }, 30000);
+  }, CLI_TEST_TIMEOUT_MS);
 });

@@ -8,6 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import type { ContactCard } from "../runtime/profile";
+import { CLI_CHILD_TIMEOUT_MS, CLI_TEST_TIMEOUT_MS } from "../../test/childProcessTimeouts";
 
 // RED test for T53 / finding T52-F-001, at the operator's own boundary: the exit code and the one
 // machine-readable error code the CLI prints.
@@ -67,7 +68,7 @@ function runCli(args: string[], environment: Record<string, string | undefined>)
       cwd: packageDir, env: { ...process.env, ...environment }, stdio: ["pipe", "pipe", "pipe"],
     });
     let stdout = "", stderr = "", timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, 15000);
+    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, CLI_CHILD_TIMEOUT_MS);
     child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
     child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
     child.stdin.on("error", () => { /* the entrypoint may reject before reading stdin */ });
@@ -199,5 +200,5 @@ describe("the CLI names a per-sender mailbox quota instead of flattening it (T52
     sendReply = rejected(429, "RATE_LIMITED");
     const retryable = outcome(await run(alice, ["send", "--to", peer.record.identity_id, "--text", marker]));
     expect(retryable).toMatchObject({ timedOut: false, code: 4, errorCode: "RELAY_UNAVAILABLE" });
-  }, 60000);
+  }, CLI_TEST_TIMEOUT_MS);
 });

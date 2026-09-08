@@ -10,6 +10,7 @@ import { EncryptedSqliteStore, SignalClient, exportSignedSignalBundleV2 } from "
 import { openProfile } from "./profile";
 import { RelayClient } from "../transport/relayClient";
 import { openOutboundMessenger } from "./outbound";
+import { CLI_TEST_TIMEOUT_MS } from "../../test/childProcessTimeouts";
 
 // RED tests for T50 / finding T49-F-001 (major), on the sender side.
 //
@@ -180,7 +181,7 @@ describe("CLI outbound sender authentication", () => {
     expect(envelope.sender_identity_id).toBe(record.identity_id);
     expect(envelope.sender_device_id).toBe(record.device_id);
     expect(verifyUtf8Message(senderTranscript(envelope), envelope.sender_signature!, record.device_pubkey)).toBe(true);
-  });
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("binds the signature to this envelope, so no field can be swapped after signing", async () => {
     const { local, remote } = await trustedPair();
@@ -214,7 +215,7 @@ describe("CLI outbound sender authentication", () => {
         `${field} must be bound by the signature, otherwise the binding is decorative`,
       ).toBe(false);
     }
-  });
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("replays the identical signature on an exact retry, so an idempotent replay stays idempotent", async () => {
     // F-004: a lost response is retried with the byte-identical envelope and the relay treats a
@@ -244,5 +245,5 @@ describe("CLI outbound sender authentication", () => {
     const replayed = sentEnvelope(retryFake.requests);
     expect(typeof original.sender_signature).toBe("string");
     expect(replayed.sender_signature).toBe(original.sender_signature);
-  });
+  }, CLI_TEST_TIMEOUT_MS);
 });

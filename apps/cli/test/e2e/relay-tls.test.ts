@@ -9,6 +9,7 @@ import { networkInterfaces, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
+import { CLI_CHILD_TIMEOUT_MS, E2E_TEST_TIMEOUT_MS } from "../childProcessTimeouts";
 
 /**
  * Flow 002 / T8 — the relay serves HTTPS, and it fails loudly rather than quietly
@@ -34,7 +35,7 @@ const certPath = join(tlsDir, "cert.pem"), keyPath = join(tlsDir, "key.pem");
 const renewedCert = join(renewalDir, "cert.pem"), renewedKey = join(renewalDir, "key.pem");
 
 interface Result { code: number | null; stdout: string; stderr: string }
-function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = 30000): Promise<Result> {
+function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = CLI_CHILD_TIMEOUT_MS): Promise<Result> {
   return new Promise((done, reject) => {
     const child = spawn(executable, args, { cwd: project, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "";
@@ -197,7 +198,7 @@ it("refuses to start on an incomplete TLS configuration instead of falling back 
     // Nothing is listening: the refusal is total, not a downgrade.
     await expect(fetch(`http://${host}:${port}/health`, { signal: AbortSignal.timeout(1000) })).rejects.toThrow();
   }
-}, 90000);
+}, E2E_TEST_TIMEOUT_MS);
 
 it("serves HTTPS and completes a full two-party exchange with the real CLI", async () => {
   const port = await reservePort(host);
@@ -284,7 +285,7 @@ it("serves HTTPS and completes a full two-party exchange with the real CLI", asy
   } finally {
     await stop(relay);
   }
-}, 120000);
+}, E2E_TEST_TIMEOUT_MS);
 
 /**
  * `tailscale cert` renews the pair on disk on its own schedule. A relay that has to
@@ -337,4 +338,4 @@ it("picks up a renewed certificate without a restart", async () => {
   } finally {
     await stop(relay);
   }
-}, 90000);
+}, E2E_TEST_TIMEOUT_MS);

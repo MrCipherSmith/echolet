@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ContactCard } from "../runtime/profile";
+import { CLI_CHILD_TIMEOUT_MS, CLI_TEST_TIMEOUT_MS } from "../../test/childProcessTimeouts";
 
 // Review finding F-013 (blocker).
 //
@@ -59,7 +60,7 @@ function child(args: string[], options: { environment?: Record<string, string | 
       stdio: ["pipe", "pipe", "pipe"],
     });
     let stdout = "", stderr = "", timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; processChild.kill("SIGKILL"); }, 15000);
+    const timer = setTimeout(() => { timedOut = true; processChild.kill("SIGKILL"); }, CLI_CHILD_TIMEOUT_MS);
     processChild.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
     processChild.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
     processChild.stdin.on("error", () => { /* the entrypoint may reject before reading stdin */ });
@@ -169,7 +170,7 @@ describe("string-valued CLI options accept a value beginning with '-' (F-013)", 
 
     expect(outcome(result)).toMatchObject({ code: 0, errorCode: "ok" });
     redacted(result, owner);
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("accepts a --relay-url value that begins with '-' and rejects it as configuration, not as arguments", async () => {
     const owner = fixture();
@@ -179,7 +180,7 @@ describe("string-valued CLI options accept a value beginning with '-' (F-013)", 
     const result = await run(owner, ["init", "--relay-url", dash.relayUrl, "--store-key-env", "ECHOLET_TEST_KEY"]);
 
     expect(outcome(result)).toMatchObject({ code: 2, errorCode: "INVALID_CONFIGURATION" });
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("accepts a --store-key-env value that begins with '-' and rejects it as configuration, not as arguments", async () => {
     const owner = fixture();
@@ -192,7 +193,7 @@ describe("string-valued CLI options accept a value beginning with '-' (F-013)", 
     });
 
     expect(outcome(result)).toMatchObject({ code: 2, errorCode: "INVALID_CONFIGURATION" });
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("accepts an --out value that begins with '-'", async () => {
     const owner = fixture();
@@ -203,7 +204,7 @@ describe("string-valued CLI options accept a value beginning with '-' (F-013)", 
     expect(outcome(result)).toMatchObject({ code: 0, errorCode: "ok" });
     expect(existsSync(join(owner.profileDir, dash.out))).toBe(true);
     redacted(result, owner);
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("accepts a --from value that begins with '-'", async () => {
     const alice = fixture(), bob = fixture();
@@ -215,7 +216,7 @@ describe("string-valued CLI options accept a value beginning with '-' (F-013)", 
 
     expect(outcome(result)).toMatchObject({ code: 0, errorCode: "ok" });
     redacted(result, alice);
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("accepts a --to value that begins with '-' and carries it verbatim into the trust layer", async () => {
     const owner = fixture();
@@ -229,7 +230,7 @@ describe("string-valued CLI options accept a value beginning with '-' (F-013)", 
     expect(outcome(dashed)).toMatchObject({ code: 3, errorCode: "CONTACT_NOT_TRUSTED" });
     expect(outcome(dashed)).toEqual(outcome(control));
     redacted(dashed, owner, "SYNTHETIC_DASH_PROBE");
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("accepts a --text value that begins with '-'", async () => {
     const owner = fixture(), peer = fixture();
@@ -242,7 +243,7 @@ describe("string-valued CLI options accept a value beginning with '-' (F-013)", 
 
     expect(outcome(result)).toMatchObject({ code: 3, errorCode: "CONTACT_NOT_TRUSTED" });
     redacted(result, owner, dash.text);
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("accepts a --message-id value that begins with '-' and rejects it as an invalid message id", async () => {
     const owner = fixture();
@@ -253,7 +254,7 @@ describe("string-valued CLI options accept a value beginning with '-' (F-013)", 
     const result = await run(owner, ["send", "--to", dash.to, "--text", "SYNTHETIC_DASH_PROBE", "--message-id", dash.messageId]);
 
     expect(outcome(result)).toMatchObject({ code: 2, errorCode: "INVALID_MESSAGE_ID" });
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("accepts a --with value that begins with '-'", async () => {
     const owner = fixture();
@@ -264,7 +265,7 @@ describe("string-valued CLI options accept a value beginning with '-' (F-013)", 
     expect(outcome(result)).toMatchObject({ code: 0, errorCode: "ok" });
     expect(JSON.parse(result.stdout)).toMatchObject({ ok: true, data: { entries: [] } });
     redacted(result, owner);
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 });
 
 describe("a --text value beginning with '-' is message content, never an option (F-013)", () => {
@@ -298,7 +299,7 @@ describe("a --text value beginning with '-' is message content, never an option 
     expect(history.stdout.includes(dash.text)).toBe(true);
     expect(history.stdout.includes(dash.textLookingLikeFlag)).toBe(true);
     expect(history.stderr.includes(dash.text)).toBe(false);
-  }, 60000);
+  }, CLI_TEST_TIMEOUT_MS);
 });
 
 describe("genuinely invalid input still fails closed with exit 2 (F-013 over-correction guard)", () => {
@@ -310,7 +311,7 @@ describe("genuinely invalid input still fails closed with exit 2 (F-013 over-cor
       const result = await run(owner, args);
       expect(outcome(result)).toMatchObject({ code: 2, errorCode: "INVALID_ARGUMENTS" });
     }
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("still rejects an option whose value is missing at the end of the argument list", async () => {
     const owner = fixture();
@@ -324,7 +325,7 @@ describe("genuinely invalid input still fails closed with exit 2 (F-013 over-cor
       const result = await child(args, { environment: owner.environment });
       expect(outcome(result)).toMatchObject({ code: 2, errorCode: "INVALID_ARGUMENTS" });
     }
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("still rejects a repeated option, including when the repeat carries a dash-leading value", async () => {
     const owner = fixture();
@@ -338,7 +339,7 @@ describe("genuinely invalid input still fails closed with exit 2 (F-013 over-cor
       const result = await run(owner, args);
       expect(outcome(result)).toMatchObject({ code: 2, errorCode: "INVALID_ARGUMENTS" });
     }
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("still rejects an option that the command does not accept and an unknown command", async () => {
     const owner = fixture();
@@ -348,7 +349,7 @@ describe("genuinely invalid input still fails closed with exit 2 (F-013 over-cor
       const result = await run(owner, args);
       expect(outcome(result)).toMatchObject({ code: 2, errorCode: "INVALID_ARGUMENTS" });
     }
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 });
 
 /**
@@ -388,7 +389,7 @@ describe("strict parsing is load-bearing, not incidental (F-013 over-correction 
       .toMatchObject({ code: 0, errorCode: "ok" });
     expect(existsSync(exported)).toBe(true);
     redacted(exportRun, owner);
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("rejects an inline value on --yes instead of falling through to the interactive prompt", async () => {
     const alice = fixture(), bob = fixture();
@@ -402,7 +403,7 @@ describe("strict parsing is load-bearing, not incidental (F-013 over-correction 
     // different contract, silently reached from input the CLI is supposed to refuse.
     expect(outcome(result)).toMatchObject({ code: 2, errorCode: "INVALID_ARGUMENTS" });
     redacted(result, alice);
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 });
 
 describe("end-of-options separator (F-013)", () => {
@@ -414,7 +415,7 @@ describe("end-of-options separator (F-013)", () => {
 
     expect(outcome(result)).toMatchObject({ code: 0, errorCode: "ok" });
     redacted(result, owner);
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("fails closed on any operand after '--', because no command takes positional operands", async () => {
     const owner = fixture();
@@ -428,5 +429,5 @@ describe("end-of-options separator (F-013)", () => {
       const result = await child(args, { environment: owner.environment });
       expect(outcome(result)).toMatchObject({ code: 2, errorCode: "INVALID_ARGUMENTS" });
     }
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 });

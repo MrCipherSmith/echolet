@@ -8,6 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import type { ContactCard } from "../runtime/profile";
+import { CLI_CHILD_TIMEOUT_MS, CLI_TEST_TIMEOUT_MS } from "../../test/childProcessTimeouts";
 
 // T44-001, second flattening. `classify()` collapses every non-retryable RelayError to one code
 // without consulting `remoteCode` or `httpStatus`, so an ordinary exhausted recipient prekey
@@ -59,7 +60,7 @@ function runCli(args: string[], environment: Record<string, string | undefined>)
       cwd: packageDir, env: { ...process.env, ...environment }, stdio: ["pipe", "pipe", "pipe"],
     });
     let stdout = "", stderr = "", timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, 15000);
+    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, CLI_CHILD_TIMEOUT_MS);
     child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
     child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
     child.stdin.on("error", () => { /* the entrypoint may reject before reading stdin */ });
@@ -179,7 +180,7 @@ describe("relay failure reporting distinguishes an exhausted prekey from a proto
 
     redacted(exhaustedRun, alice, marker);
     redacted(violationRun, alice, marker);
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 
   it("keeps trust rejections, other protocol rejections and retryable relay failures on their documented exit codes", async () => {
     const alice = fixture(), bob = fixture(), stranger = fixture();
@@ -213,5 +214,5 @@ describe("relay failure reporting distinguishes an exhausted prekey from a proto
     const mismatch = outcome(mismatchRun);
     expect(mismatch).toMatchObject({ timedOut: false, code: 3, errorCode: "CONTACT_PIN_MISMATCH" });
     redacted(mismatchRun, alice, marker);
-  }, 40000);
+  }, CLI_TEST_TIMEOUT_MS);
 });
