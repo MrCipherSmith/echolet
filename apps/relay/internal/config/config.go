@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"echolet/apps/relay/internal/protocol"
 
@@ -55,7 +56,17 @@ type Config struct {
 	// api/handler/mailbox_handler.go (defaultSenderUnackedQuota).
 	MaxUnackedEnvelopesPerSender int `env:"ECHOLET_MAX_UNACKED_ENVELOPES_PER_SENDER" envDefault:"16"`
 	RateLimitPerMinute           int `env:"ECHOLET_RATE_LIMIT_PER_MINUTE" envDefault:"120"`
-	CleanupIntervalSec           int `env:"ECHOLET_CLEANUP_INTERVAL_SECONDS" envDefault:"60"`
+	// There is deliberately no cleanup interval here. ECHOLET_CLEANUP_INTERVAL_SECONDS
+	// was removed from every operator-facing file (flow 003, T28) because the
+	// service it configured sweeps nothing - retention is Badger's own TTL, and
+	// CleanupService.runCleanup() is two debug log lines. A field that outlived the
+	// documented knob could only mislead: it logged an interval at startup that no
+	// document mentions, and it accepted a value from an operator that changed
+	// nothing they could observe. The ticker's period now belongs to the service
+	// that owns it (service.DefaultCleanupIntervalSeconds). The SERVICE and its
+	// Stop() stay: Stop is what puts the ticker inside the relay's shutdown
+	// sequence so nothing is still writing when Badger closes.
+	// Pinned by config/cleanup_interval_removed_test.go.
 }
 
 // TLSEnabled reports whether the relay should serve HTTPS. It is true only when
@@ -101,24 +112,68 @@ func (c Config) Validate() error {
 		// validates against, so a negative one makes the relay come up healthy and
 		// refuse every legitimate envelope as PAYLOAD_TOO_LARGE. Zero is left
 		// alone deliberately - it is the zero value of a partially constructed
-		// Config, which the server package builds directly and which the handler
-		// reads as "unconfigured, use the protocol maximum"; Load() can never
-		// produce it, because the field carries an envDefault.
-		return fmt.Errorf("ECHOLET_MAX_MESSAGE_BYTES must not be negative, got %d", c.MaxMessageBytes)
+		// Config, which the server package builds directly and which the mailbox
+		// handler RESOLVES to the protocol maximum (NewMailboxHandler), so a
+		// zero-value Config describes a relay that works. An operator who sets the
+		// variable to 0 is a different case entirely and is refused by Load()
+		// below, which is the only place that can tell that apart from an unset
+		// variable.
+		return fmt.Errorf("%s must not be negative, got %d", maxMessageBytesVar, c.MaxMessageBytes)
 	}
 	if c.MaxMessageBytes > protocol.MaxMessageBytes {
-		return fmt.Errorf("ECHOLET_MAX_MESSAGE_BYTES is %d, above the protocol maximum of %d: a client sizes its "+
+		return fmt.Errorf("%s is %d, above the protocol maximum of %d: a client sizes its "+
 			"poll-response bound from the same protocol maximum, so an envelope larger than it would be accepted, "+
 			"stored and then refused in full by every recipient, leaving the mailbox undeliverable. Configure %d or "+
 			"less. Refusing to start rather than silently accepting messages that can never be delivered",
-			c.MaxMessageBytes, protocol.MaxMessageBytes, protocol.MaxMessageBytes)
+			maxMessageBytesVar, c.MaxMessageBytes, protocol.MaxMessageBytes, protocol.MaxMessageBytes)
 	}
 	return nil
+}
+
+// maxMessageBytesVar is the one spelling of the variable name, so every refusal
+// below names the string an operator actually has to edit.
+const maxMessageBytesVar = "ECHOLET_MAX_MESSAGE_BYTES"
+
+// refuseAnExplicitlyDisabledMaxMessageBytes is the operator-facing half of the
+// zero, and it is the reason Validate() can keep permitting one.
+//
+// A Config VALUE of zero means "unconfigured": it is the zero value of a
+// partially constructed struct, and the mailbox handler resolves it to the
+// protocol maximum, so a relay assembled that way carries exactly what an
+// unconfigured relay should. An operator who writes ECHOLET_MAX_MESSAGE_BYTES=0
+// is not unconfigured - they set the variable, and they meant something by it,
+// most likely "no limit", which is the convention plenty of other software uses.
+// Neither available answer to that is safe to give silently: obeying it literally
+// is what the relay used to do (come up healthy and answer PAYLOAD_TOO_LARGE to
+// every legitimate envelope, because the ciphertext bound was zero), and quietly
+// substituting 256 KB would be a second reinterpretation of an intent they stated
+// plainly. So it is refused at the one moment somebody is watching, the way the
+// half-configured TLS pair and the above-the-ceiling maximum already are.
+//
+// This can only live in Load(). By the time Validate() has a Config, "unset" and
+// "set to 0" are the same int64; os.LookupEnv is what distinguishes them.
+func refuseAnExplicitlyDisabledMaxMessageBytes(c Config) error {
+	if _, set := os.LookupEnv(maxMessageBytesVar); !set {
+		return nil
+	}
+	if c.MaxMessageBytes > 0 {
+		return nil
+	}
+	return fmt.Errorf("%s is set to %d, which disables the relay: the send route validates every ciphertext "+
+		"against this bound, so the relay would come up healthy, answer /health, and refuse every legitimate "+
+		"envelope as PAYLOAD_TOO_LARGE with nothing anywhere saying why. It is not a way to switch the limit "+
+		"off - there is no such setting, because the maximum is a protocol constant both sides derive their "+
+		"bounds from. Configure a positive value up to the protocol maximum of %d, or unset the variable to "+
+		"get exactly that maximum. Refusing to start rather than serving a relay that accepts nothing",
+		maxMessageBytesVar, c.MaxMessageBytes, protocol.MaxMessageBytes)
 }
 
 func Load() (Config, error) {
 	cfg := Config{}
 	if err := env.Parse(&cfg); err != nil {
+		return cfg, err
+	}
+	if err := refuseAnExplicitlyDisabledMaxMessageBytes(cfg); err != nil {
 		return cfg, err
 	}
 	if err := cfg.Validate(); err != nil {

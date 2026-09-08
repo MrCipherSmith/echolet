@@ -65,7 +65,12 @@ func NewRouter(cfg config.Config, st *storage.Storage) *Router {
 	challengeSvc := service.NewChallengeService(challengeRepo, cfg.ChallengeTTLSeconds)
 
 	// Start cleanup service. The handle is kept and returned: see Router.Stop.
-	cleanupSvc := service.NewCleanupService(mailboxRepo, challengeRepo, cfg.CleanupIntervalSec, cfg.MailboxTTLHours)
+	//
+	// The ticker's period comes from the service, not from cfg: the cleanup
+	// interval is no longer an operator setting (flow 003, T28/T33), and reading
+	// it from a Config field meant a Config nobody filled in reached
+	// time.NewTicker with a zero and panicked here.
+	cleanupSvc := service.NewCleanupService(mailboxRepo, challengeRepo, service.DefaultCleanupIntervalSeconds, cfg.MailboxTTLHours)
 	cleanupSvc.Start()
 
 	// Initialize handlers

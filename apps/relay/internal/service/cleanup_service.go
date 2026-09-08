@@ -8,6 +8,18 @@ import (
 	"echolet/apps/relay/internal/storage/repository"
 )
 
+// DefaultCleanupIntervalSeconds is how often the relay's cleanup ticker fires.
+//
+// It is a constant rather than a setting on purpose. ECHOLET_CLEANUP_INTERVAL_SECONDS
+// was removed from the operator surface (flow 003, T28) and then from
+// config.Config itself (T33), because runCleanup() sweeps nothing - retention is
+// Badger's own TTL - so an operator tuning this number would be tuning nothing.
+// The value is the 60 seconds that variable defaulted to, so the relay's
+// behaviour is unchanged; it simply lives with the service that owns the ticker.
+// It is positive by construction, which is also what stops a Config nobody filled
+// in from panicking time.NewTicker.
+const DefaultCleanupIntervalSeconds = 60
+
 type CleanupService struct {
 	mailboxRepo   *repository.MailboxRepository
 	challengeRepo *repository.ChallengeRepository

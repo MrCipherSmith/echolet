@@ -9,7 +9,7 @@
   "title": "Echolet: close the recorded residuals and make the operator TUI usable",
   "status": "in-progress",
   "createdAt": "2026-09-07T19:26:13.895Z",
-  "updatedAt": "2026-09-08T16:29:12.000Z",
+  "updatedAt": "2026-09-08T17:33:22.473Z",
   "source": {
     "type": "description",
     "ref": null
@@ -25,7 +25,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -33,14 +33,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold placeholder created by flow init; the wave's real work is T5 onward."
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -48,14 +50,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold placeholder created by flow init; the wave's real work is T5 onward."
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -69,14 +73,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold placeholder created by flow init; the wave's real work is T5 onward."
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,7 +90,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Scaffold placeholder created by flow init; the wave's real work is T5 onward."
     },
     {
       "id": "T5",
@@ -319,8 +327,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T17:02:15.025Z",
+            "outcome": "started",
+            "detail": "003-T15-readme (bundled with T16)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -404,7 +418,7 @@
       "id": "T20",
       "title": "Implement: send presupposes relay publish",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T19"
       ],
@@ -420,7 +434,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Landed in commit e949aae; the send precondition is implemented and its tests are green."
     },
     {
       "id": "T21",
@@ -448,21 +464,28 @@
       "id": "T22",
       "title": "Refuse a zero maximum message size, and correct the fixtures that build a zero-value config",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 1,
+        "count": 2,
         "log": [
           {
             "at": "2026-09-07T23:23:38.263Z",
             "outcome": "started",
             "detail": "003-T22-zero-max-refusal"
+          },
+          {
+            "at": "2026-09-08T17:02:14.937Z",
+            "outcome": "started",
+            "detail": "003-T22-zero-max (bundled with T33)"
           }
         ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Verified by the orchestrator: go test -race -count=1 -tags relayv2 exit 0, ten packages ok, 0 data races. The agent found the distinction I had not made in the brief: a zero-value struct is an idiomatic Go default and Validate() cannot tell it apart from an explicitly set 0, so refusing there would outlaw the struct default in order to reach the operator - the wrong end. It resolved the zero once in the handler so the two consumers that disagreed are handed the same number by construction, and put the loud refusal in Load(), the only place that can distinguish set-to-zero from unset. It also measured the six fixtures rather than repeating the claim, and noted that six understates it because two more callers stay green only by requiring any error. Two router fixtures were corrected, and that is a strengthening: they were working around a panic this task removed and pinned closed."
     },
     {
       "id": "T23",
@@ -490,7 +513,7 @@
       "id": "T24",
       "title": "Bring the Go suite inside the push gate: no Go change can currently select a test",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -498,7 +521,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Landed with the gate hardening in 0b6ce4e: the Go relay suite now runs race-enabled on every push, measured at 26 s."
     },
     {
       "id": "T25",
@@ -507,7 +532,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 2,
+        "count": 3,
         "log": [
           {
             "at": "2026-09-08T06:19:33.737Z",
@@ -518,6 +543,11 @@
             "at": "2026-09-08T06:50:05.388Z",
             "outcome": "failed",
             "detail": "V-001: the trust-modal guard is pinned by no test - deleting it leaves 108 TUI tests green. V-006: lowering the TS protocol constant leaves 83 tests green with the Go mirror untouched, reintroducing RI-09's exact failure mode. V-005: commit 5235a6d still mixes product code with two tests, so the orchestrator's own split was incomplete. Plus the cleanup knob still advertised, docs stale again after six later commits, and test:e2e still 1 of 6."
+          },
+          {
+            "at": "2026-09-08T17:02:14.842Z",
+            "outcome": "started",
+            "detail": "003-T25-verify-r2 on commit 1ed5b2a in an isolated worktree"
           }
         ]
       },
@@ -529,7 +559,7 @@
       "id": "T26",
       "title": "Design automatic bundle replenishment: the cost fix that authentication is not",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -543,13 +573,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Design delivered and acted on; the pool it specifies is implemented in 1ed5b2a."
     },
     {
       "id": "T27",
       "title": "RED tests for the three properties the verification found unpinned",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -563,7 +595,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Three mutation-killed tests landed in d49ec6c, each verified by running the verifier's own mutation and watching the new test fail."
     },
     {
       "id": "T28",
@@ -660,7 +694,7 @@
       "id": "T32",
       "title": "Wire a documentation-freshness check into the push gate so staleness is reported mechanically",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -668,13 +702,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "The documentation-freshness check is live and fired on the push of 1ed5b2a, naming the stale pin and printing the replacement line."
     },
     {
       "id": "T33",
       "title": "Remove the dead cleanup-interval field from Go config and its call site",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -682,13 +718,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "The dead cleanup-interval field and its call site are gone; the default now belongs to the service that uses it. The service, its Start and Stop, the channels and the shutdown sequence are untouched, both stop tests byte-identical to HEAD and green. A second panic of the same family was found and closed in passing: a zero-value config panicked the ticker inside NewRouter."
     },
     {
       "id": "T34",
       "title": "Simulate a second user on depr: a containerised CLI client the user can exchange messages with",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -702,7 +740,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "A second user runs in a container on depr; the orchestrator exchanged messages with it in both directions."
     },
     {
       "id": "T35",
@@ -1221,6 +1261,81 @@
       "at": "2026-09-08T16:29:12.000Z",
       "event": "task-done",
       "detail": "T37: Fix the inbound store-snapshot test the pool's mint-before-offer design invalidated"
+    },
+    {
+      "at": "2026-09-08T17:01:28.982Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-08T17:01:29.071Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-08T17:01:29.152Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-08T17:01:29.235Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-08T17:01:29.316Z",
+      "event": "task-done",
+      "detail": "T20: Implement: send presupposes relay publish"
+    },
+    {
+      "at": "2026-09-08T17:01:29.399Z",
+      "event": "task-done",
+      "detail": "T24: Bring the Go suite inside the push gate: no Go change can currently select a test"
+    },
+    {
+      "at": "2026-09-08T17:01:29.480Z",
+      "event": "task-done",
+      "detail": "T26: Design automatic bundle replenishment: the cost fix that authentication is not"
+    },
+    {
+      "at": "2026-09-08T17:01:29.563Z",
+      "event": "task-done",
+      "detail": "T27: RED tests for the three properties the verification found unpinned"
+    },
+    {
+      "at": "2026-09-08T17:01:29.652Z",
+      "event": "task-done",
+      "detail": "T32: Wire a documentation-freshness check into the push gate so staleness is reported mechanically"
+    },
+    {
+      "at": "2026-09-08T17:01:29.735Z",
+      "event": "task-done",
+      "detail": "T34: Simulate a second user on depr: a containerised CLI client the user can exchange messages with"
+    },
+    {
+      "at": "2026-09-08T17:02:14.842Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 3) — 003-T25-verify-r2 on commit 1ed5b2a in an isolated worktree"
+    },
+    {
+      "at": "2026-09-08T17:02:14.937Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 2) — 003-T22-zero-max (bundled with T33)"
+    },
+    {
+      "at": "2026-09-08T17:02:15.025Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 003-T15-readme (bundled with T16)"
+    },
+    {
+      "at": "2026-09-08T17:33:22.385Z",
+      "event": "task-done",
+      "detail": "T22: Refuse a zero maximum message size, and correct the fixtures that build a zero-value config"
+    },
+    {
+      "at": "2026-09-08T17:33:22.473Z",
+      "event": "task-done",
+      "detail": "T33: Remove the dead cleanup-interval field from Go config and its call site"
     }
   ]
 }
