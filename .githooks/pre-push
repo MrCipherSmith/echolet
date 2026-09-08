@@ -40,13 +40,35 @@
 # What it runs, in order
 # ----------------------
 #   1. keryx security scan over the pushed range      (advisory per security.config.json)   ~5 s
-#   2. Go relay suite, race-enabled                   (blocks)                             ~26 s
-#   3. keryx project-scope test run -> pnpm -r test   (blocks)                            ~215 s
+#   2. the suites against THE COMMITS BEING PUSHED    (blocks)                       ~41 s + suites
+#   3. the suites against the working tree            (blocks)                              suites
 #   4. documentation freshness                        (warns; blocks on a broken pin)       ~1 s
 #
-# Measured end to end at 246 s on c5fde09, 343 s under concurrent load
-# (t23-gate-hardening-report.md §3.1). The variable part is step 3, which is why
-# step 2 runs first.
+# Steps 2 and 3 are the same suites (scripts/gate/suites.sh: the Go relay suite
+# race-enabled, then the JavaScript/TypeScript suite) against two different
+# trees. When the working tree IS the commit being pushed — no tracked file
+# modified, no untracked file a suite could read, HEAD equal to the single
+# pushed tip — one run answers both questions and only one run happens. That is
+# the ordinary case and it costs exactly what the gate cost before.
+#
+# When they differ, both run, because they are two different questions:
+#   * "is what I am sending the remote green?" — step 2, and until T38 the gate
+#     never asked it (R2-001: a red committed suite passed whenever the working
+#     tree happened to be green);
+#   * "is what is on my disk green?" — step 3, which is what the gate has always
+#     asked and is not being dropped.
+# The banner names which paths made them differ, so the ordinary case is easy to
+# get back to.
+#
+# Measured (t38-gate-range-report.md §4): on the ordinary push the whole fix
+# costs one `git status`, 0.084-0.147 s over five runs — the suites run once,
+# exactly as before T38. When the two trees differ, the fixed extra is 32.6-51.9 s
+# over six runs (checkout, install, and deleting node_modules again), plus a
+# second pass of the suites. One pass of the suites is 800-970 s on this machine
+# today, so that path is the difference between a quarter of an hour and half an
+# hour; the equivalence proof above is what keeps it off an ordinary push. The
+# variable part is the JavaScript suite, which is why Go runs first inside each
+# pass.
 # `pnpm run gate:selftest` exercises every state this file can be in.
 #
 # There is no bypass in this file, no advisory downgrade of a test failure, and
@@ -88,7 +110,8 @@ cd "$ECHOLET_REPO_ROOT" 2>/dev/null || true
 # directory" and nothing to act on. Deleting a step is also the cheapest way to
 # quietly remove half the gate, so name it rather than let it surface as a shell
 # error. A missing step is a blocked push, never a skipped one.
-for _echolet_step in scripts/gate/go-tests.sh scripts/gate/docs-freshness.sh; do
+for _echolet_step in scripts/gate/go-tests.sh scripts/gate/suites.sh \
+                     scripts/gate/pushed-range.sh scripts/gate/docs-freshness.sh; do
   if [ ! -f "$ECHOLET_REPO_ROOT/$_echolet_step" ]; then
     echo "push gate: FAILED — $_echolet_step is missing from the work tree." >&2
     echo "  A gate step cannot be absent and the push still be verified, so the" >&2
@@ -116,6 +139,17 @@ ECHOLET_PUSH_TIP="$(printf '%s\n' "$ECHOLET_PUSH_REFS" | awk '
   NF >= 2 && $2 !~ /^0+$/ { print $2; exit }
 ')"
 [ -n "$ECHOLET_PUSH_TIP" ] || ECHOLET_PUSH_TIP="HEAD"
+
+# Every distinct non-deleted tip in this push. One line each. `git push` can
+# update several refs at once, and each of them is a separate thing the remote
+# is about to hold, so each is verified. Deleted refs (all-zero local sha) carry
+# no content and are skipped.
+ECHOLET_PUSH_TIPS="$(printf '%s\n' "$ECHOLET_PUSH_REFS" | awk '
+  NF >= 2 && $2 !~ /^0+$/ && !seen[$2]++ { print $2 }
+')"
+# Manual invocation with no ref lines: fall back to HEAD, so the hook run by a
+# human is still a real gate rather than a no-op.
+[ -n "$ECHOLET_PUSH_TIPS" ] || ECHOLET_PUSH_TIPS="$(git rev-parse HEAD 2>/dev/null || echo HEAD)"
 
 # keryx:security-pre-push:begin
 keryx_security_pre_push() {
@@ -261,108 +295,104 @@ $range_files"
 printf '%s\n' "$ECHOLET_PUSH_REFS" | keryx_security_pre_push || exit $?
 
 # --- 2. + 3. tests ----------------------------------------------------------
-echolet_testing_gate() {
-  # Run the project test suites before push. Blocking on test failure.
-  #
-  # This is the repository's gate, not keryx's. keryx's stock line —
-  #
-  #     keryx test run --changed --strict
-  #
-  # cannot gate this repository, for two independent reasons:
-  #
-  #   1. `--changed` means "files that differ from HEAD in the working tree plus
-  #      untracked files". It has nothing to do with the commits being pushed. On
-  #      a clean tree it selects nothing, reports SKIPPED and exits 0 without
-  #      running a single test — a vacuous pass that lets any commit through. On
-  #      a dirty tree it fails for the reason below.
-  #
-  #   2. Changed-scope selection maps changed files to test files and then runs
-  #      `<pm> run test <selected paths...>`. This repo's root `test` script is
-  #      `pnpm -r test`, so those repo-relative paths fan out to every workspace
-  #      package as vitest filters; each package resolves them against its own
-  #      directory, finds nothing, and exits 1. Selection is also JS/TS-only
-  #      (keryx SOURCE_FILE_RE / TEST_FILE_RE), so Go, docs and .metaproject
-  #      changes can never select a test — which under --strict is reported as the
-  #      P0 failure `no-related-tests-selected` with `runner: n/a`, `command: n/a`.
-  #      That is a selection failure reported as a test failure, and it blocked
-  #      every push.
-  #
-  # Project scope needs no selection: it always resolves the runner and runs the
-  # whole suite, so it is strictly stronger than either stock outcome.
+# The suites themselves live in scripts/gate/suites.sh — one definition, run
+# against one or two trees depending on what this push actually is. This block
+# only decides WHICH trees have to be verified, and proves the answer rather
+# than assuming it.
+#
+# This is the repository's gate, not keryx's. keryx's stock line —
+#
+#     keryx test run --changed --strict
+#
+# cannot gate this repository, for two independent reasons:
+#
+#   1. `--changed` means "files that differ from HEAD in the working tree plus
+#      untracked files". It has nothing to do with the commits being pushed. On
+#      a clean tree it selects nothing, reports SKIPPED and exits 0 without
+#      running a single test — a vacuous pass that lets any commit through. On a
+#      dirty tree it fails for the reason below.
+#
+#   2. Changed-scope selection maps changed files to test files and then runs
+#      `<pm> run test <selected paths...>`. This repo's root `test` script is
+#      `pnpm -r test`, so those repo-relative paths fan out to every workspace
+#      package as vitest filters; each package resolves them against its own
+#      directory, finds nothing, and exits 1. Selection is also JS/TS-only
+#      (keryx SOURCE_FILE_RE / TEST_FILE_RE), so Go, docs and .metaproject
+#      changes can never select a test — which under --strict is reported as the
+#      P0 failure `no-related-tests-selected` with `runner: n/a`, `command: n/a`.
+#      That is a selection failure reported as a test failure, and it blocked
+#      every push.
+#
+# Project scope needs no selection: it always resolves the runner and runs the
+# whole suite, so it is strictly stronger than either stock outcome.
 
-  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    return 0
-  fi
-
-  # Fall back to the project's own test script when keryx is missing or too old
-  # to run the gate. This is a different route to the same suite, not a bypass:
-  # it still runs every test and still blocks on failure. Only a machine with no
-  # JavaScript package manager at all cannot be gated, and that blocks the push.
-  echolet_testing_fallback_run() {
-    cd "$ECHOLET_REPO_ROOT" 2>/dev/null || true
-    if [ -f "$ECHOLET_REPO_ROOT/package.json" ]; then
-      if [ -f "bun.lockb" ] && command -v bun >/dev/null 2>&1; then
-        echo "push gate (js): running fallback test gate: bun run test" >&2
-        bun run test
-        return $?
-      fi
-      if [ -f "pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
-        echo "push gate (js): running fallback test gate: pnpm run test" >&2
-        pnpm run test
-        return $?
-      fi
-      if [ -f "yarn.lock" ] && command -v yarn >/dev/null 2>&1; then
-        echo "push gate (js): running fallback test gate: yarn test" >&2
-        yarn test
-        return $?
-      fi
-      if command -v npm >/dev/null 2>&1; then
-        echo "push gate (js): running fallback test gate: npm run test" >&2
-        npm run test
-        return $?
-      fi
-    fi
-    echo "push gate (js): no usable test runner found (no keryx, no package manager);" >&2
-    echo "  push blocked rather than left ungated." >&2
-    return 1
-  }
-
-  # 2. Go first: it is the cheap half (~25 s warm against ~160 s for the JS
-  #    suite), so a relay regression is reported in seconds instead of minutes.
-  #    Until this step existed no Go test ran in the gate at all — `pnpm -r test`
-  #    walks the pnpm workspace and apps/relay is not in it.
-  sh "$ECHOLET_REPO_ROOT/scripts/gate/go-tests.sh" || return $?
-
-  # 3. The JavaScript/TypeScript suite, via keryx when usable and via the
-  #    project's own script otherwise.
-  gdm=""
-  if command -v keryx >/dev/null 2>&1; then
-    gdm="keryx"
-  elif [ -x "$HOME/.local/bin/keryx" ]; then
-    gdm="$HOME/.local/bin/keryx"
-  fi
-
-  if [ -z "$gdm" ]; then
-    echo "push gate (js): keryx command not found; falling back to the project test script" >&2
-    echolet_testing_fallback_run
-    return $?
-  fi
-
-  # Probe once, so a keryx that cannot run the testing module is distinguished
-  # from a failing test suite instead of blocking the push with a confusing
-  # error. An unusable keryx routes to the fallback gate, never to a skip.
-  if ! "$gdm" test status >/dev/null 2>&1; then
-    echo "push gate (js): installed keryx cannot run 'test status' (update it);" >&2
-    echo "  falling back to the project test script" >&2
-    echolet_testing_fallback_run
-    return $?
-  fi
-
-  "$gdm" test run --strict
-  return $?
+# Paths whose state on disk cannot change what a suite does. `.metaproject/` is
+# agent bookkeeping and `docs/` is prose; no test under apps/ or packages/ reads
+# either (checked, T38 §2 — and if one ever does, this list is where it is
+# wrong). Everything else counts, including a path that does not exist yet: the
+# safe default is "this differs, run both trees", never "assume it is harmless".
+#
+# Untracked files count, which is what catches the commit that needs a file
+# nobody ran `git add` on. Ignored files do not appear here at all — listing them
+# means walking node_modules, which would put every push on the two-tree path
+# forever. That residual is stated in t38-gate-range-report.md §8.
+echolet_suite_relevant_diff() {
+  git -c core.quotepath=false status --porcelain -uall 2>/dev/null | awk '
+    {
+      p = substr($0, 4)
+      i = index(p, " -> ")
+      if (i > 0) { p = substr(p, i + 4) }
+      if (p ~ /^\.metaproject\//) next
+      if (p ~ /^docs\//) next
+      print p
+    }
+  '
 }
 
-echolet_testing_gate || exit $?
+# Is the working tree provably the same thing as the push? Three conditions, all
+# necessary: one tip (two branches at once are two different trees), HEAD is that
+# tip (otherwise the disk holds other commits' code), and nothing a suite could
+# read differs from HEAD (otherwise the disk holds code that is not being sent,
+# or is missing code that is — the forgotten `git add`).
+ECHOLET_TIP_COUNT="$(printf '%s\n' "$ECHOLET_PUSH_TIPS" | grep -c '[0-9a-fA-F]')"
+ECHOLET_HEAD_SHA="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+ECHOLET_TIP_SHA="$(git rev-parse -q --verify "$ECHOLET_PUSH_TIP^{commit}" 2>/dev/null || echo unknown)"
+ECHOLET_TREE_DIFF="$(echolet_suite_relevant_diff)"
+
+if [ "$ECHOLET_TIP_COUNT" -eq 1 ] &&
+   [ "$ECHOLET_HEAD_SHA" != "unknown" ] &&
+   [ "$ECHOLET_HEAD_SHA" = "$ECHOLET_TIP_SHA" ] &&
+   [ -z "$ECHOLET_TREE_DIFF" ]; then
+  echo "push gate: the working tree IS the commit being pushed ($(git rev-parse --short HEAD 2>/dev/null))." >&2
+  echo "  Nothing a suite can read differs from it, so one run verifies both." >&2
+  sh "$ECHOLET_REPO_ROOT/scripts/gate/suites.sh" "$ECHOLET_REPO_ROOT" \
+     "the working tree, which is the commit being pushed" || exit $?
+else
+  echo "" >&2
+  echo "push gate: the working tree is NOT the commit being pushed, so both are" >&2
+  echo "  verified — the push first, because that is what the remote receives." >&2
+  if [ "$ECHOLET_TIP_COUNT" -ne 1 ]; then
+    echo "  reason: this push updates $ECHOLET_TIP_COUNT refs; each is verified." >&2
+  elif [ "$ECHOLET_HEAD_SHA" != "$ECHOLET_TIP_SHA" ]; then
+    echo "  reason: HEAD is $ECHOLET_HEAD_SHA but the pushed tip is $ECHOLET_TIP_SHA." >&2
+  else
+    echo "  reason: these paths differ from HEAD on disk:" >&2
+    printf '%s\n' "$ECHOLET_TREE_DIFF" | sed 's/^/    /' >&2
+  fi
+  echo "" >&2
+
+  # 2. Every distinct pushed tip, checked out and tested on its own.
+  for _echolet_tip in $ECHOLET_PUSH_TIPS; do
+    sh "$ECHOLET_REPO_ROOT/scripts/gate/pushed-range.sh" "$_echolet_tip" || exit $?
+  done
+  unset _echolet_tip
+
+  # 3. And the working tree, exactly as before T38. Dropping this would make the
+  #    gate weaker in the state where the disk is red and the commit is green,
+  #    which it has always blocked.
+  sh "$ECHOLET_REPO_ROOT/scripts/gate/suites.sh" "$ECHOLET_REPO_ROOT" \
+     "the working tree on disk" || exit $?
+fi
 
 # --- 4. documentation freshness --------------------------------------------
 # Last, deliberately: this step's normal outcome is a warning, and a warning
