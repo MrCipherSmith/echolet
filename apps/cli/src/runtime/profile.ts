@@ -456,8 +456,26 @@ export class Profile {
     });
   }
 
+  /**
+   * The profile's own report on itself, including the correspondents it has pinned.
+   *
+   * `contacts` is additive: `contact_count` stays exactly where it was, so a consumer reading only
+   * the older fields is unaffected. It exists because the operator console holds no store key and
+   * must never hold one, so it cannot read `cli:contact:*` itself; `doctor` is its only route to an
+   * address book, and reporting the count while withholding the identities behind it left the
+   * console able to say how many correspondents there were and not who they were.
+   *
+   * `contact_count` is derived from the array rather than counted separately, so the two can never
+   * disagree — the count IS the array's length, by construction rather than by coincidence.
+   *
+   * Every field here is public identifier material: the four fields `contactSchema` holds are the
+   * ones `contact import` already prints on stderr for the operator to compare. No secret, no seed
+   * and no ciphertext reaches this object, and this stays offline — it reads the local encrypted
+   * store and issues no relay request.
+   */
   async diagnostics() {
-    return { ...await this.summary(), storage: "encrypted", runtime: "node-reference" };
+    const contacts = await this.listContacts();
+    return { ...await this.summary(), contact_count: contacts.length, contacts, storage: "encrypted", runtime: "node-reference" };
   }
 
   close(): Promise<void> { return this.store.close(); }

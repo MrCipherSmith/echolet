@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-08T23:16:09.395Z",
+  "updatedAt": "2026-09-08T23:18:19.861Z",
   "source": {
     "type": "description",
     "ref": null
@@ -84,7 +84,7 @@
       "id": "T5",
       "title": "RED tests for the two CLI prerequisites: send takes its body on stdin, doctor enumerates correspondents",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -98,7 +98,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
@@ -109,8 +110,14 @@
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T23:18:19.861Z",
+            "outcome": "started",
+            "detail": "Dispatching a different agent from the one that wrote the tests. It may not modify the tests to suit the implementation, and it does not accept its own work: an independent check follows."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -155,6 +162,16 @@
       "at": "2026-09-08T23:16:09.395Z",
       "event": "ac-updated",
       "detail": "AC3 as I froze it required removing --text. That would break nine call sites in the operator's own live prototype scripts (echolet-try.sh and the depr peer wrapper), which is outside this wave's authority and contradicts the design it implements. AC3 now requires the stdin path and a clean console argv, keeps --text, and records its retirement as an open decision for the user. No confirmations existed to void."
+    },
+    {
+      "at": "2026-09-08T23:18:17.747Z",
+      "event": "task-done",
+      "detail": "T5: RED tests for the two CLI prerequisites: send takes its body on stdin, doctor enumerates correspondents"
+    },
+    {
+      "at": "2026-09-08T23:18:19.861Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — Dispatching a different agent from the one that wrote the tests. It may not modify the tests to suit the implementation, and it does not accept its own work: an independent check follows."
     }
   ]
 }

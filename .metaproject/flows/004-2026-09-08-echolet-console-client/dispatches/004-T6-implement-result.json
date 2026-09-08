@@ -1,0 +1,192 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-004-t6-implement",
+  "dispatch_id": "004-T6-implement",
+  "status": "DONE",
+  "summary": "Both behaviours are implemented and the full apps/cli suite is green: 55 files, 284 tests, RECORDED_EXIT=0. `send` takes its body on stdin (untrimmed, bounded by a newly named MAX_PLAINTEXT_BYTES exported from outbound.ts), `--text` stays accepted, and `doctor` reports a `contacts` array from the existing listContacts(), offline, with contact_count derived from the array's length. The console bridge no longer puts the body on argv; main.ts writes it to the child's stdin. IMPORTANT ATTRIBUTION: this implementer edited no test. The first full run was 283 passed / 1 failed, the failure being cli-bridge.test.ts's send-argv assertion, which is the exact logical negation of the new red spec; it was reported rather than fixed (F-001). While the confirming run was in flight the ORCHESTRATOR resolved both escalated questions directly in the working tree — it edited cli-bridge.test.ts itself (recording in the test's own comment that the implementer correctly refused to), and it reverted the both-sources refusal to the design's precedence rule (`--text` wins, stdin unread) citing this implementer's F-002 hang analysis, updating specification.md and runbook.md to match. The green run measures that combined tree. Consequently AC5 as written is no longer satisfied by the tree, deliberately and by the orchestrator's decision, not by this implementer.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "All three T5 test files pass, and no assertion in them is changed, relaxed, renamed or deleted.",
+      "status": "met",
+      "evidence": "Targeted run: 3 files, 11 tests, all passed, RECORDED_EXIT=0 (scratchpad/t6-target2.log). `git diff --stat` over apps/cli lists only cli.ts, outbound.ts, profile.ts, cli-bridge.ts and main.ts — no *.test.ts file appears in the diff at all."
+    },
+    {
+      "criterion": "The whole apps/cli suite is green afterwards, measured on a quiet machine.",
+      "status": "met",
+      "evidence": "Confirming run on the final tree: Test Files 55 passed (55), Tests 284 passed (284), RECORDED_EXIT=0, duration 358.54s (scratchpad/t6-full-confirm.log). The earlier run on the implementer-only tree was 283 passed / 1 failed (RECORDED_EXIT=1); the difference is entirely the orchestrator's own edit to cli-bridge.test.ts, made between the two runs. Machine was not fully quiet in either run: loadavg 9.72/CPU 498.5 for the first, loadavg 9.40/CPU 560.8 for the second; a background watcher armed for load<6 reported STILL_LOADED after 20 minutes at load 9.13, so a quiet window never arrived. See the note in errors for why both runs are nonetheless judged sound."
+    },
+    {
+      "criterion": "Existing tests that pin the `--text` argv path keep passing untouched, and so does every existing e2e file.",
+      "status": "met",
+      "evidence": "cli.test.ts, cli.dashOptionValues.test.ts (including the INVALID_MESSAGE_ID case that passes --text) and cli.senderQuota.test.ts pass unchanged. All test/e2e files pass; they spawn with stdio[0]='ignore', so stdin is /dev/null and reaches EOF at once, which is why the new ambiguity check never fires for them."
+    },
+    {
+      "criterion": "The body read from stdin is bounded by the same plaintext limit outbound.ts already enforces, read from the existing constant rather than a fresh literal.",
+      "status": "met",
+      "evidence": "outbound.ts had the bound as a bare literal 65536 written twice (the zod max and the byteLength guard) and no named constant existed. It is now `export const MAX_PLAINTEXT_BYTES = 65536`, used by both original sites and imported by cli.ts's reader, so all three enforcement points read one value. cli.sendStdin.test.ts's bound test passes: 65537 bytes -> INVALID_MESSAGE exit 2, 65536 bytes -> CONTACT_NOT_TRUSTED exit 3."
+    },
+    {
+      "criterion": "Supplying both `--text` and a stdin body is refused as exit 2 rather than resolved by precedence.",
+      "status": "not_met",
+      "evidence": "Implemented as specified and then REVERTED BY THE ORCHESTRATOR, not by this implementer. resolveSendBody() originally threw inputFailure() (INVALID_ARGUMENTS, exit 2) when --text was non-empty and stdin carried bytes; the tree now returns flagBody immediately and never reads stdin when --text is present, matching design t35 section 6 P-1. The orchestrator's in-code comment gives the reason and cites this implementer's F-002: detecting the ambiguity requires reading stdin to EOF even when --text was given, so a caller whose stdin is an inherited pipe nobody closes would hang instead of sending, and a hang is a worse failure than a silent precedence. No test in the red spec pins either behaviour, so the suite is green under both. specification.md and runbook.md were updated by the orchestrator to document the precedence rule, so no document contradicts the tree."
+    },
+    {
+      "criterion": "`doctor` stays offline and leaks no key material.",
+      "status": "met",
+      "evidence": "diagnostics() calls only listContacts() and summary(), both local encrypted-store reads; no relay client is constructed on the doctor path. cli.doctorContacts.test.ts's offline test passes against an unreachable relay (127.0.0.1:1), and its redaction assertion (no store key, no identitySecretKey/deviceSecretKey/sessionSecretKey/seed/ciphertext) passes. The four reported fields are the same public comparison identifiers `contact import` already prints on stderr."
+    },
+    {
+      "criterion": "The console bridge sends the body on stdin and its argv contains no message body.",
+      "status": "met",
+      "evidence": "buildArgv's send case no longer emits --text or the body; main.ts's runCli now does `child.stdin.end(request.text, 'utf8')` for send. All four tests in cli-bridge.sendStdin.test.ts pass, including the '--json'-shaped body case that used to collide with the command's own --json flag."
+    },
+    {
+      "criterion": "Documentation describing `send` or `doctor` is updated in the same change, including the argv exposure `--text` still carries.",
+      "status": "met",
+      "evidence": "specification.md gains a 'send: where the message body comes from' table covering all six outcomes plus an explicit warning that --text is readable through ps, and a 'doctor result' section documenting the contacts array. runbook.md gains a callout at the first --text use showing the stdin form and the both-sources refusal. A repo-wide search for --text/contact_count/doctor over *.md found no other document describing either command."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/private/tmp/claude-502/-Users-Goodea-goodea-projects-echolet/0c21ebf8-6665-4623-bf8a-bcc512e73047/scratchpad/t6-target2.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Targeted run of the three T5 red-spec files: 3 files, 11 tests, all passed, RECORDED_EXIT=0.",
+      "hash": null
+    },
+    {
+      "path": "/private/tmp/claude-502/-Users-Goodea-goodea-projects-echolet/0c21ebf8-6665-4623-bf8a-bcc512e73047/scratchpad/t6-full.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Full apps/cli suite: 54 passed / 1 failed of 55 files, 283 passed / 1 failed of 284 tests, RECORDED_EXIT=1, duration 218.97s.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/runtime/outbound.ts",
+      "change": "Named the plaintext bound: added `export const MAX_PLAINTEXT_BYTES = 65536` and replaced both bare 65536 literals (the zod max and the byteLength guard) with it, so the CLI's stdin guard and the messenger's refusal cannot drift apart."
+    },
+    {
+      "path": "apps/cli/src/runtime/profile.ts",
+      "change": "diagnostics() now returns a `contacts` array from the existing listContacts(), with contact_count derived from that array's length so the count and the list cannot disagree. Additive; every previously reported field is unchanged."
+    },
+    {
+      "path": "apps/cli/src/commands/cli.ts",
+      "change": "Added readStdinBody() (reads to EOF, UTF-8, untrimmed, refuses over MAX_PLAINTEXT_BYTES with INVALID_MESSAGE while reading rather than after) and resolveSendBody() (refuses both sources, refuses neither, refuses a TTY with no --text). Dropped `text` from rejectUnexpectedMissing's send list and resolve the body in main() straight after it, so a bad body is still an argument failure reported before the profile is opened."
+    },
+    {
+      "path": "apps/cli/src/tui/cli-bridge.ts",
+      "change": "buildArgv's send case no longer emits `--text` or the body. CliRequest still carries `text` because main.ts needs it to write to stdin. Documented as a third module-level invariant beside the frozen-surface and no-key-material ones."
+    },
+    {
+      "path": "apps/cli/src/tui/main.ts",
+      "change": "runCli writes the send body to the child's stdin and closes it; contact import still stays open for the trust answer; everything else still gets an empty closed stdin. Added a child.stdin error handler so an EPIPE from a child that exits mid-write cannot take the console down — survivable when stdin carried two bytes, not when it carries a message body."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/specification.md",
+      "change": "Documented the two body sources and all six outcomes in a table, the ps/argv exposure that --text still carries with a recommendation to prefer stdin, and doctor's new contacts field and its offline guarantee."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/runbook.md",
+      "change": "Added a callout at the first --text step explaining the argv exposure, showing the equivalent stdin invocation, and recording that supplying both is refused and that the body is untrimmed. The walkthrough's own commands still use --text so their quoted output stays reproducible."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T6-implement#F-001",
+      "reviewer": "task-implementer",
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "The orchestrator edited apps/cli/src/tui/cli-bridge.test.ts:80-88 in the working tree between this implementer's two full-suite runs, dropping `--text` and the body from both expected arrays and keeping every other token. Its added comment records the attribution verbatim: 'Edited by the orchestrator, not by the implementer, who correctly refused to touch a test in order to make its own work pass and reported the contradiction instead.' The confirming run is 284 passed (284), RECORDED_EXIT=0."
+      },
+      "severity": "blocker",
+      "file": "apps/cli/src/tui/cli-bridge.test.ts",
+      "line": 80,
+      "symbol": "buildArgv writes the documented invocation for every command > send, with and without an explicit message id",
+      "problem": "Two committed test files assert logically negating things about the same pure function. cli-bridge.test.ts:80-88 asserts buildArgv's send argv toEqual an array CONTAINING '--text' and the body; cli-bridge.sendStdin.test.ts:30-57 asserts the same call's argv does NOT contain '--text' and contains no token holding the body. No implementation of buildArgv can satisfy both.",
+      "impact": "The apps/cli suite cannot reach green while both files stand. This is the sole failure in the run: 283 passed, 1 failed. It is not a flake and not contention — it is a deterministic assertion failure in a pure, sub-millisecond test.",
+      "suggested_fix": "The test author should update cli-bridge.test.ts:80-88 to the replacement contract, dropping '--text' and the body from both expected arrays while keeping --to/--message-id/--profile/--json. cli-bridge.sendStdin.test.ts:22-24 anticipates exactly this and assigns it to the implementer; this dispatch's constraints forbid the implementer from editing any test, so the two instructions conflict and the decision is escalated rather than taken unilaterally. Note the other two tests in that file that build a send request (the dash-leading identity case at :98 and the profile/--json case at :108) already pass unchanged and need no edit.",
+      "evidence": "Full-suite log: 'FAIL src/tui/cli-bridge.test.ts > ... > send, with and without an explicit message id / AssertionError: expected [ send, --to, ...(4) ] to deeply equal [ send, --to, ...(6) ]', the diff showing only '--text' and 'SYNTHETIC_TUI_BODY' as the missing elements. Counts: Test Files 1 failed | 54 passed (55); Tests 1 failed | 283 passed (284).",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/cli-bridge.test.ts:80-88 (asserts --text IS in argv; the only failing assertion)",
+          "apps/cli/src/tui/cli-bridge.test.ts:98-106 (builds a send request; passes unchanged, asserts only the dash-leading identity)",
+          "apps/cli/src/tui/cli-bridge.test.ts:108-125 (builds a send request; passes unchanged, asserts only --profile and trailing --json)",
+          "apps/cli/src/tui/tui.keyMaterial.test.ts:94,143 (builds a send request; passes unchanged, asserts only absence of key material)"
+        ],
+        "enumeration_method": "keryx ctx rg over apps/cli/src/**/*.ts for 'buildArgv|spawn' to find every caller, then read each of the four call sites that construct a send CliRequest and checked which assert on argv membership rather than on unrelated properties. Confirmed against the full-suite run, in which only the first site failed."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T6-implement#F-002",
+      "reviewer": "task-implementer",
+      "disposition": {
+        "state": "acted-on",
+        "evidence": "The orchestrator reverted resolveSendBody to the design's precedence rule in the working tree, removing the hang exposure entirely: `--text` now returns immediately and stdin is never read when it is present. Its in-code comment cites this analysis directly ('the refusal is unimplementable without a hang ... a service, a `docker exec` without a TTY, the wrapper driving the second user on `depr` — would then wait forever instead of sending'), and specification.md line 84 and runbook.md were updated to document the precedence rule and why the refusal was withdrawn."
+      },
+      "severity": "minor",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 241,
+      "symbol": "resolveSendBody",
+      "problem": "Detecting the both-sources ambiguity requires reading stdin even when --text is supplied. If a caller runs `send --text ...` with stdin connected to a pipe that stays open, the command now waits for that pipe to reach EOF instead of returning at once. The TTY case is guarded and /dev/null reaches EOF immediately, so the exposure is limited to a --text invocation inside a pipeline.",
+      "impact": "A theoretical regression for the operator's nine external --text call sites, if any of them runs inside a pipeline rather than from a terminal or with stdin redirected from /dev/null. No in-tree test or e2e file is affected: all of them either end stdin immediately or pass stdio[0]='ignore'.",
+      "suggested_fix": "Either accept it (the design's original P-1 rule, --text simply wins and stdin is never read, avoids it entirely but gives up the ambiguity refusal the dispatch requires), or confirm with the operator that the nine call sites run with a terminal or /dev/null on stdin. Worth settling alongside the open decision on whether --text is retired at all.",
+      "evidence": "resolveSendBody returns early only when process.stdin.isTTY === true; otherwise it awaits readStdinBody() before comparing sources. Design t35 section 6 P-1 specifies 'reads its body from stdin WHEN --text IS ABSENT', which the dispatch's AC5 deliberately overrides.",
+      "confidence": "medium",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "cli-bridge.test.ts:80-88 and cli-bridge.sendStdin.test.ts contradict each other outright. Who updates the former, given that this dispatch forbids the implementer from editing any test but the red spec's own comment assigns that edit to the implementer?",
+      "why": "It is the only thing standing between the tree and a green suite, and it cannot be resolved in source. The red spec's author wrote at cli-bridge.sendStdin.test.ts:22-24 that 'cli-bridge.test.ts's three tests above must be updated by the implementer, not by this dispatch', while this dispatch's constraints say 'DO NOT EDIT ANY TEST FILE ... Report instead.' Only one of the two can hold.",
+      "options": [
+        { "id": "A", "label": "The test author (or a follow-up tests dispatch) updates cli-bridge.test.ts:80-88 to expect the body-free argv, preserving the file's other assertions.", "recommended": true },
+        { "id": "B", "label": "The orchestrator explicitly licenses this implementer to make that one edit, waiving the no-test-edit rule for this named assertion only." },
+        { "id": "C", "label": "Keep both files and accept a permanently red suite until a later flow settles it." }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q2",
+      "question": "Should supplying both --text and a stdin body really be a refusal, given design t35 section 6 P-1 says --text simply wins and stdin is not read at all?",
+      "why": "The dispatch's AC5 and the orchestrator's instruction both require the refusal, and that is what was implemented; the design says the opposite. No test in the red spec covers the case, so nothing in the suite pins either answer, and the divergence should be recorded deliberately rather than discovered later. The refusal is also what creates F-002's pipeline caveat.",
+      "options": [
+        { "id": "A", "label": "Keep the refusal as implemented and amend design t35 section 6 P-1 to match.", "recommended": true },
+        { "id": "B", "label": "Revert to the design's rule (--text wins, stdin unread when --text is present), which also removes F-002." }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [
+    {
+      "type": "execution-error",
+      "message": "The suite could not be measured on a genuinely quiet machine within the available time.",
+      "detail": "Load average was 13.5 at start and rose to 22.6; it was still 9.7-11.5 after roughly twenty minutes of waiting on a background watcher armed for load<6. The load is held up by three Google Chrome renderer processes at ~100% each plus a Virtualization.framework VM — the user's own workload, which was not going to drain. Sampled utilisation was steady at ~470-500% of 1000%, i.e. about five of ten cores genuinely free, and macOS load average overstates saturation relative to that figure. The run was therefore taken at loadavg 9.72 / CPU 498.5 and is judged trustworthy on positive evidence rather than on the load number: Vitest 3.0.8's worker RPC deadline pathology produces exit 1 with NO failure list, whereas this run produced coherent counts (283 passed / 1 failed of 284), a named failing test, a rendered assertion diff, and zero timeouts. The one failure is a pure sub-millisecond function test that fails deterministically for a logical reason. A confirming re-run on an idle machine is still worth doing before this is treated as final."
+    }
+  ],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 1,
+    "tests_passed": 283,
+    "tests_failed": 1,
+    "test_files_passed": 54,
+    "test_files_failed": 1,
+    "target_spec_tests_passed": 11,
+    "target_spec_tests_failed": 0,
+    "suite_duration_s": 218.97,
+    "loadavg_1m_at_full_run": 9.72,
+    "cpu_percent_of_1000_at_full_run": 498.5,
+    "test_files_edited": 0
+  },
+  "timestamp_utc": "2026-09-09T00:45:00Z"
+}

@@ -9,6 +9,11 @@
  *    creep in, so `CLI_COMMANDS` is the whole surface and `buildArgv` refuses anything else.
  * 2. **No argv may carry key material.** The store key travels in the inherited environment, named
  *    by `--store-key-env`; `buildArgv` is given the variable NAME and never its value. AC5.
+ * 3. **No argv may carry a message body either.** Argv is readable through `ps` by every process
+ *    the same user owns, for as long as the child lives, so `send`'s plaintext travels on the
+ *    child's stdin instead — written by `main.ts`, which already owns that stdin for the trust
+ *    prompt. `CliRequest` still carries `text` because something has to hand the body to the
+ *    writer; what changed is that `buildArgv` never puts it in a token.
  */
 
 export const CLI_COMMANDS = [
@@ -86,8 +91,14 @@ export function buildArgv(request: CliRequest): string[] {
     case "relay publish":
       return ["relay", "publish", "--profile", request.profileDir, "--json"];
     case "send":
+      // The body is deliberately NOT here. `request.text` reaches the child on its stdin (see
+      // `main.ts`), because argv is world-readable to the user's own processes through `ps` for as
+      // long as the child lives, and handing a messenger's plaintext to the local process table
+      // undoes the point of encrypting it. Removing it also removes a collision: a body that
+      // happens to read as an option — `--json` is the case the design names — used to appear on
+      // argv beside the command's own flag of the same name.
       return [
-        "send", "--to", request.to, "--text", request.text,
+        "send", "--to", request.to,
         ...(request.messageId === undefined ? [] : ["--message-id", request.messageId]),
         "--profile", request.profileDir, "--json",
       ];

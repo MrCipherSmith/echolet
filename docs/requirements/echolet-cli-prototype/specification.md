@@ -65,13 +65,32 @@ echolet init --profile <dir>
 echolet contact export --profile <dir> --out <file>
 echolet contact import --profile <dir> --from <file>
 echolet relay publish --profile <dir>
-echolet send --profile <dir> --to <identity-id> --text <text>
+echolet send --profile <dir> --to <identity-id> [--text <text>]   # body on stdin when --text is absent
 echolet poll --profile <dir>
 echolet history --profile <dir> --with <identity-id> [--json]
 echolet doctor --profile <dir>
 ```
 
 Commands return exit code `0` on success, `2` for input/configuration errors, `3` for trust/protocol rejection, `4` for temporary relay/network failures, and `5` for local persistence failures. Machine-readable mode writes one JSON result to stdout; diagnostics go to stderr and redact secrets and plaintext.
+
+### `send`: where the message body comes from
+
+The body may be given with `--text` or on stdin. When `--text` is present it wins and **stdin is never read**.
+
+| Body source | Behaviour |
+|---|---|
+| stdin, `--text` absent | The bytes read to EOF, decoded UTF-8 and **untrimmed** — a trailing newline is part of the message, so the same text supplied two ways does not produce two different ciphertexts. |
+| `--text <text>` | Unchanged from earlier releases and still supported. stdin is not read, not even to check. |
+| Both | `--text` wins, silently. Refusing the ambiguity was specified first and reverted: detecting it requires reading stdin to EOF even when `--text` was given, so a caller whose stdin is an inherited pipe nobody closes — a service, a `docker exec` without a TTY — would hang instead of sending. A silent precedence beats a loud refusal only because the loud one cannot be implemented without that hang. |
+| Neither (empty stdin) | `INVALID_ARGUMENTS`, exit 2. |
+| Over the 65536-byte plaintext bound | `INVALID_MESSAGE`, exit 2 — the same bound and the same code the messenger already enforces. |
+| `--text` absent and stdin is a terminal | `INVALID_ARGUMENTS`, exit 2, rather than a process that hangs waiting for a human. |
+
+**`--text` puts the message in argv, and argv is not private.** On Unix a process's arguments are readable through `ps` by every process the same user owns, for as long as the command runs, so a body passed with `--text` is exposed locally even though it is encrypted on the wire. The flag is kept because existing scripts depend on it; **prefer stdin for anything sensitive.** The operator console uses stdin exclusively and never puts a body on argv.
+
+### `doctor` result
+
+`doctor` reports `{ profile_id, identity_id, device_id, contact_count, contacts, storage, runtime }`. `contacts` lists the profile's pinned correspondents in sorted order, each carrying exactly the four public identifiers `contact import` displays for comparison — `identity_id`, `device_id`, `device_pubkey`, `signal_identity_key` — and `contact_count` is that array's length. It exists so a client that holds no store key can still show an address book. `doctor` stays offline: it reads the local encrypted store and issues no relay request.
 
 Three relay refusals are reported under the relay's own code rather than as a generic `PROTOCOL_REJECTED`, because none of them is a trust violation and flattening them names nothing the operator can act on. All three stay at **exit 3**:
 
