@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { ConfigurationError, parseClientConfig, type ClientConfig } from "../runtime/config";
 import { InboundError, openInboundMessenger } from "../runtime/inbound";
-import { OutboundError, openOutboundMessenger } from "../runtime/outbound";
+import { MAX_PLAINTEXT_BYTES, OutboundError, openOutboundMessenger } from "../runtime/outbound";
 import { openProfile, PersistenceError, ProfileError, type ContactIdentifiers, type Profile } from "../runtime/profile";
 import { RelayClient, RelayError } from "../transport/relayClient";
 
@@ -178,12 +178,83 @@ function rejectUnexpectedMissing(command: string, values: CliValues): void {
     "contact export": ["out"],
     "contact import": ["from"],
     "relay publish": [],
-    send: ["to", "text"],
+    // `text` is deliberately absent: `send`'s body may arrive on stdin instead of in argv, and this
+    // check runs before stdin has been read. The emptiness rule that used to live here now lives in
+    // `resolveSendBody`, which is the only place that knows about both sources.
+    send: ["to"],
     poll: [],
     history: ["with"],
     doctor: [],
   };
   for (const key of requiredByCommand[command] ?? []) required(values, key);
+}
+
+/**
+ * Reads a message body from stdin to EOF, bounded, and returns it UTF-8 decoded and UNTRIMMED.
+ *
+ * Untrimmed is a decision, not an oversight. A trailing newline is what a heredoc, a `printf` and an
+ * editor all add, and stripping it would make the same message typed two ways produce two different
+ * ciphertexts under two different content hashes — so the bytes the operator supplied are the bytes
+ * that get encrypted.
+ *
+ * The bound is enforced while reading rather than after it, so an oversized body is refused without
+ * ever being fully held in memory, and it is `MAX_PLAINTEXT_BYTES` — the same value the messenger
+ * refuses on — rather than a second opinion about how large a message may be. Over the bound is
+ * `INVALID_MESSAGE`, which is the code `outbound.ts` already produces for exactly this condition;
+ * reporting the parser's `INVALID_ARGUMENTS` instead would tell the operator their command was
+ * malformed when in fact their message was too big.
+ */
+async function readStdinBody(): Promise<string> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of process.stdin) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
+    total += buffer.byteLength;
+    if (total > MAX_PLAINTEXT_BYTES) throw inputFailure("INVALID_MESSAGE");
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+/**
+ * Decides what `send` will encrypt, from the two places a body may come from.
+ *
+ * stdin exists as a source because argv does not stay private: on Unix a process's arguments are
+ * readable by anything running as the same user for as long as the child lives, so `--text` hands
+ * the plaintext of an end-to-end encrypted message to the local process table. The operator console
+ * therefore writes the body to the child's stdin and puts nothing on argv.
+ *
+ * `--text` nevertheless STAYS ACCEPTED. The operator's live prototype scripts outside this
+ * repository call it in nine places, and removing it would break the running prototype in order to
+ * close an exposure that reaches only callers who choose it. Whether those nine call sites can move
+ * to stdin is an open question for the operator; until it is answered, both doors are open and only
+ * the console is required to use the safer one.
+ *
+ * Supplying BOTH is resolved by precedence: `--text` wins and stdin is never read. Refusing the
+ * ambiguity was specified first and reverted — see the comment in the body, which explains why the
+ * refusal cannot be implemented without making some callers hang.
+ *
+ * A TTY on stdin with no `--text` is refused rather than waited on, so a mistyped command reports a
+ * missing body instead of hanging with no prompt while it looks like it is working.
+ */
+async function resolveSendBody(values: CliValues): Promise<string> {
+  const flagBody = values.text;
+  const hasFlagBody = typeof flagBody === "string" && flagBody.length > 0;
+  // `--text` wins outright, and stdin is NOT read when it is present. This looks like a weaker rule
+  // than refusing the ambiguity, and it was: the orchestrator asked for the refusal, and the
+  // refusal is unimplementable without a hang. Detecting "both sources supplied" means reading
+  // stdin to EOF even when `--text` was given, and a caller whose stdin is an inherited pipe that
+  // nobody closes — a service, a `docker exec` without a TTY, the wrapper driving the second user
+  // on `depr` — would then wait forever instead of sending. A silent precedence is a worse failure
+  // than a loud one only while both are survivable; a hang is not. The design (t35 §6 P-1) said
+  // `--text` wins, and it was right.
+  if (hasFlagBody) return flagBody;
+  // With no `--text`, a terminal has nothing to give: refuse rather than wait for a human who was
+  // never told to type.
+  if (process.stdin.isTTY === true) throw inputFailure();
+  const stdinBody = await readStdinBody();
+  if (stdinBody.length === 0) throw inputFailure();
+  return stdinBody;
 }
 
 async function loadConfig(profileDir: string): Promise<ClientConfig> {
@@ -396,6 +467,10 @@ async function main(): Promise<number> {
   try {
     const parsed = parseCommand(process.argv.slice(2));
     rejectUnexpectedMissing(parsed.command, parsed.values);
+    // Resolved HERE rather than inside `execute` so that a missing or oversized body is still an
+    // argument failure reported before the profile is opened — the ordering
+    // `rejectUnexpectedMissing` used to give `--text` when it was the only source.
+    if (parsed.command === "send") parsed.values.text = await resolveSendBody(parsed.values);
     writeResult({ ok: true, data: await execute(parsed.command, parsed.values) });
     return 0;
   } catch (error) {

@@ -176,6 +176,13 @@ async function main(): Promise<number> {
         stdio: ["pipe", "pipe", "pipe"],
       });
 
+      // A child that exits before its stdin is drained makes the write fail with EPIPE, and an
+      // unhandled 'error' on the stream would take the whole console down with it. That was
+      // survivable while stdin only ever carried a two-byte trust answer; a message body is large
+      // enough to still be in flight when a child refuses early, so the failure is absorbed here
+      // and the child's own exit code is what gets reported.
+      child.stdin.on("error", () => { /* The outcome is settled by 'close'/'error' on the child. */ });
+
       let stdout = "";
       let stderr = "";
       let announced = false;
@@ -198,8 +205,21 @@ async function main(): Promise<number> {
       child.on("error", () => { done(5); });
       child.on("close", (code) => { done(code ?? 1); });
 
-      // Nothing but the trust answer is ever written to a child's stdin.
-      if (request.command !== "contact import") child.stdin.end();
+      // Exactly two things are ever written to a child's stdin, and this is both of them.
+      //
+      // `contact import` is left open so the operator's answer to the child's own
+      // `Trust these contact identifiers? [y/N]` prompt can be written when it arrives.
+      //
+      // `send` is handed the message body and then closed immediately, because the CLI reads the
+      // body to EOF: this is why the body is not on argv, where `ps` would show the plaintext of an
+      // end-to-end encrypted message to every process this user owns. It is written and never
+      // logged. `--text` is not passed alongside it, and that matters: the CLI resolves `--text`
+      // first and does not read stdin at all when it is present, so a body sent both ways would be
+      // silently ignored here rather than refused.
+      //
+      // Every other command still gets an empty, immediately closed stdin.
+      if (request.command === "send") child.stdin.end(request.text, "utf8");
+      else if (request.command !== "contact import") child.stdin.end();
     });
 
   const io: TuiIo = {

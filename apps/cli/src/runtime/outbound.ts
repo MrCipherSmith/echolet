@@ -19,7 +19,17 @@ export class OutboundError extends Error {
 }
 const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
 const decode = <T>(bytes: Uint8Array): T => JSON.parse(new TextDecoder().decode(bytes)) as T;
-const inputSchema = z.object({ recipientIdentityId: z.string().min(1), messageId: z.string().uuid(), plaintext: z.string().max(65536) }).strict();
+/**
+ * The largest message body this client will encrypt, in bytes.
+ *
+ * It was a bare `65536` written twice below — once as the schema's character bound and once as the
+ * byte bound — and now that `cli.ts` enforces the same limit while reading a body from stdin there
+ * would have been a third. One name, one value: a reader that has to bound a plaintext imports this
+ * rather than restating the number, so the CLI's stdin guard and the messenger's own refusal can
+ * never drift apart the way the message-size constants on the two sides of the wire once did.
+ */
+export const MAX_PLAINTEXT_BYTES = 65536;
+const inputSchema = z.object({ recipientIdentityId: z.string().min(1), messageId: z.string().uuid(), plaintext: z.string().max(MAX_PLAINTEXT_BYTES) }).strict();
 type SendInput = z.infer<typeof inputSchema>;
 interface Outbox { contentHash: string; envelope: MailboxEnvelope; status: "pending" | "delivered" }
 const keyFor = (id: string) => `cli:outbox:${id}`;
@@ -115,7 +125,7 @@ class OutboundMessenger {
   rotateBundle() { return this.serial(async () => { await this.profile.rotatePublicationBundle(); }); }
   send(input: SendInput) {
     const parsed = inputSchema.safeParse(input);
-    if (!parsed.success || Buffer.byteLength(parsed.data.plaintext) > 65536) return Promise.reject(new OutboundError("INVALID_MESSAGE"));
+    if (!parsed.success || Buffer.byteLength(parsed.data.plaintext) > MAX_PLAINTEXT_BYTES) return Promise.reject(new OutboundError("INVALID_MESSAGE"));
     return this.serial(() => this.sendOwned(parsed.data));
   }
   private async sendOwned(input: SendInput) {
