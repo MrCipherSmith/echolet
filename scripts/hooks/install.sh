@@ -15,6 +15,22 @@
 #
 # It runs automatically from the root `prepare` script, i.e. on every
 # `pnpm install`, so a fresh clone is gated as soon as anyone installs deps.
+#
+# Linked worktrees (flow 003 / T38, closing R2-012)
+# -------------------------------------------------
+# `git rev-parse --git-common-dir` resolves, from ANY linked worktree, to the
+# MAIN repository's .git. Until T38 this script used that to write the tripwire —
+# so a `pnpm install` inside a throwaway worktree silently rewrote
+# <main checkout>/.git/hooks/pre-push, with whatever version of this script that
+# worktree happened to be checked out at. An independent verifier hit exactly
+# that while merely installing dependencies to run the test suite, and reported
+# it (t25-verification-report-r2.md, R2-012).
+#
+# A helper that reaches out of its own worktree to rewrite a sibling's hooks is
+# a surprise waiting to happen, so it no longer does. From a linked worktree
+# this script now touches nothing outside that worktree: it reports the shared
+# state, names the main checkout and the one command to run there, and lets
+# verify.sh have the last word on whether the gate is actually in force.
 set -eu
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
@@ -41,8 +57,36 @@ for hook in .githooks/*; do
   [ -x "$hook" ] || chmod +x "$hook"
 done
 
+# --- whose repository is this? ----------------------------------------------
+# In the main worktree, --git-dir and --git-common-dir are the same directory.
+# In a linked worktree they are not: --git-dir is .git/worktrees/<name> and
+# --git-common-dir is the MAIN checkout's .git. Everything shared — the config
+# file and the hooks directory — lives in the latter, which is precisely why
+# writing to it from a linked worktree is a cross-checkout side effect.
+GIT_DIR_ABS="$(cd "$(git rev-parse --git-dir)" && pwd)"
+GIT_COMMON_ABS="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null |
+                 awk '/^worktree /{ sub(/^worktree /, ""); print; exit }')"
+IS_LINKED_WORKTREE=no
+if [ "$GIT_DIR_ABS" != "$GIT_COMMON_ABS" ]; then
+  IS_LINKED_WORKTREE=yes
+fi
+
 current="$(git config --get core.hooksPath || true)"
-if [ "$current" != ".githooks" ]; then
+if [ "$current" != ".githooks" ] && [ "$IS_LINKED_WORKTREE" = "yes" ]; then
+  # core.hooksPath is repository-wide: writing it here would change how git
+  # behaves in the main checkout and in every other worktree, from a checkout
+  # that may not even be at the same commit. Refuse, and say exactly why and
+  # what to do. verify.sh, below, then reports the gate as NOT in force — which
+  # it is not, in any worktree, until this is run in the main checkout.
+  echo "echolet hooks: this is a linked worktree, and core.hooksPath is" >&2
+  echo "  '${current:-unset}', not '.githooks'. That setting is repository-wide:" >&2
+  echo "  changing it from here would silently change the main checkout too, so" >&2
+  echo "  it is left alone." >&2
+  echo "  Install the gate once, in the main checkout:" >&2
+  echo "     (cd ${MAIN_WORKTREE:-<main checkout>} && pnpm run hooks:install)" >&2
+  echo "  It covers every worktree, including this one." >&2
+elif [ "$current" != ".githooks" ]; then
   git config core.hooksPath .githooks
   echo "echolet hooks: core.hooksPath -> .githooks (was: ${current:-unset})" >&2
 fi
@@ -63,6 +107,11 @@ fi
 # rewrites only what is between its markers and leaves everything else in the
 # file alone — verified against `keryx init`, `keryx update --hooks` and
 # `keryx sync install-hooks`, all three of which left a planted preamble intact.
+#
+# It is written only from the MAIN checkout. .git/hooks is shared by every
+# worktree, so writing it from a linked worktree rewrites the main checkout's
+# hook — with whatever version of this script the worktree is checked out at —
+# which is R2-012. From a linked worktree the block is reported, never written.
 GIT_COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null || true)"
 GIT_HOOKS_DIR=""
 if [ -n "$GIT_COMMON_DIR" ]; then
@@ -119,7 +168,18 @@ install_tripwire() {
   echo "echolet hooks: core.hooksPath tripwire refreshed in $GIT_PRE_PUSH" >&2
 }
 
-if [ -n "$GIT_HOOKS_DIR" ]; then
+if [ "$IS_LINKED_WORKTREE" = "yes" ]; then
+  if [ -f "$GIT_PRE_PUSH" ] && grep -qF "$TRIPWIRE_BEGIN" "$GIT_PRE_PUSH" 2>/dev/null; then
+    echo "echolet hooks: linked worktree — the core.hooksPath tripwire in" >&2
+    echo "  $GIT_PRE_PUSH belongs to the main checkout and is already installed;" >&2
+    echo "  left untouched." >&2
+  else
+    echo "echolet hooks: linked worktree — the core.hooksPath tripwire is NOT" >&2
+    echo "  installed in $GIT_PRE_PUSH. That file is shared with the main" >&2
+    echo "  checkout, so this worktree will not write it. Install it there:" >&2
+    echo "     (cd ${MAIN_WORKTREE:-<main checkout>} && pnpm run hooks:install)" >&2
+  fi
+elif [ -n "$GIT_HOOKS_DIR" ]; then
   install_tripwire
 fi
 
