@@ -107,3 +107,9 @@
 - 2026-09-08T17:02:15.025Z - task-attempt: T15: started (attempt 1) — 003-T15-readme (bundled with T16)
 - 2026-09-08T17:33:22.385Z - task-done: T22: Refuse a zero maximum message size, and correct the fixtures that build a zero-value config
 - 2026-09-08T17:33:22.473Z - task-done: T33: Remove the dead cleanup-interval field from Go config and its call site
+- 2026-09-08T17:55:14.261Z - task-attempt: T25: failed (attempt 4) — R2-001 major: the gate's two blocking steps test the WORKING TREE, not the pushed range - a red committed suite with a green uncommitted tree passes with exit 0, and no self-test row can see it because the self-test exercises the working tree too. R2-002/R2-003: nine of eleven prose sites and two documents still describe the pre-pool world. R2-004: test:e2e exits 143 with 11 child timeouts because seven process-spawning files start at once with no pool limit. R2-005/R2-006: the design understates a full-drain publish as 20 requests when it is 40, and says two source addresses out-drain a refilling victim when one suffices at 2:1.
+- 2026-09-08T17:55:14.345Z - task-added: T38: Close the gate's working-tree hole: it must verify the pushed range
+- 2026-09-08T17:55:14.468Z - task-added: T39: Correct the pool's overstated cost claims and the eleven prose sites
+- 2026-09-08T18:31:03.243Z - task-done: T15: Correct deploy/relay/README.md: the committed systemd units are root-and-host-path only
+- 2026-09-08T18:31:05.929Z - task-done: T16: Record that the process-spawning CLI tests fail under CPU contention and decide whether to harden or serialise them
+- 2026-09-08T18:31:08.533Z - task-attempt: T39: started (attempt 1) — 003-T39-docs-corrections
