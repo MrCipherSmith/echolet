@@ -9,7 +9,7 @@
   "title": "Echolet: close the recorded residuals and make the operator TUI usable",
   "status": "in-progress",
   "createdAt": "2026-09-07T19:26:13.895Z",
-  "updatedAt": "2026-09-08T18:31:08.533Z",
+  "updatedAt": "2026-09-08T21:51:09.147Z",
   "source": {
     "type": "description",
     "ref": null
@@ -815,7 +815,7 @@
       "id": "T38",
       "title": "Close the gate's working-tree hole: it must verify the pushed range",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -823,13 +823,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T39",
       "title": "Correct the pool's overstated cost claims and the eleven prose sites",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -843,7 +844,23 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T40",
+      "title": "Size the e2e and runtime-publish test ceilings from measurement (registered after the fact)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -1409,6 +1426,26 @@
       "at": "2026-09-08T18:31:08.533Z",
       "event": "task-attempt",
       "detail": "T39: started (attempt 1) — 003-T39-docs-corrections"
+    },
+    {
+      "at": "2026-09-08T21:50:33.754Z",
+      "event": "task-added",
+      "detail": "T40: Size the e2e and runtime-publish test ceilings from measurement (registered after the fact)"
+    },
+    {
+      "at": "2026-09-08T21:50:43.402Z",
+      "event": "task-done",
+      "detail": "T38: Close the gate's working-tree hole: it must verify the pushed range"
+    },
+    {
+      "at": "2026-09-08T21:50:45.971Z",
+      "event": "task-done",
+      "detail": "T39: Correct the pool's overstated cost claims and the eleven prose sites"
+    },
+    {
+      "at": "2026-09-08T21:51:09.147Z",
+      "event": "task-done",
+      "detail": "T40: Size the e2e and runtime-publish test ceilings from measurement (registered after the fact)"
     }
   ]
 }
