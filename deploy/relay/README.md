@@ -12,7 +12,7 @@ this file only says what each artifact is.
 | `env/geekom.env.example`, `env/depr.env.example` | Per-host TLS configuration. Copy to `*.env` and fill in the image tag and the host's tailnet address. |
 | `docker-compose.insecure-loopback.yml` | **Plain HTTP, 127.0.0.1 only.** The stopgap shape that is actually running on both hosts today, because the tailnet's HTTPS Certificates toggle is off. Never a fallback — see below. |
 | `env/insecure-loopback.env.example` | Configuration for that stopgap. Host-agnostic apart from the callsign. |
-| `systemd/echolet-cert-renew.{service,timer}` | Daily `tailscale cert` refresh. Contains no restart: the running relay reloads a renewed pair on its own. |
+| `systemd/echolet-cert-renew.{service,timer}` | Daily `tailscale cert` refresh — **but only as committed.** These units assume a **root install and host paths** (`/etc/systemd/system`, `/etc/echolet`); they work as-is only on a host with usable root. On a host without it, renewal runs by a different, user-scope mechanism with the same operator-visible contract (same schedule, no restart) but a different status command — checking with the wrong scope reports nothing rather than erroring. Contains no restart either way: the running relay reloads a renewed pair on its own. See the runbook's [§4.1](../../docs/requirements/echolet-cli-prototype/deployment-runbook.md#41-renewal-is-installed-on-both-hosts-by-two-different-mechanisms) for both mechanisms, which host runs which, and the exact status/history commands per host. |
 
 Four rules that the files enforce and this table cannot:
 

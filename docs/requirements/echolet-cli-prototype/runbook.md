@@ -243,11 +243,17 @@ pinned `@signalapp/libsignal-client@0.102.0`.
 Two limitations are visible from this runbook and are documented rather than
 fixed:
 
-- **One published bundle serves exactly one first-contact sender.** After a
-  first sender claims a recipient's bundle, a second distinct sender receives
-  `PREKEY_BUNDLE_UNAVAILABLE`, and a republish reports `claimable: false`.
-  Explicit rotation exists in the runtime but has no CLI entry point, which is a
-  deliberate frozen-surface decision.
+- **A published bundle now serves up to twenty first-contact senders, not
+  one.** `relay publish` maintains a pool of `LIMITS.PREKEY_MIN_COUNT = 20`
+  independently signed bundles (shipped `1ed5b2a`, no relay/wire/schema
+  change), and a republish restores availability by minting a replacement for
+  each consumed or expired slot rather than reporting `claimable: false`. This
+  is still not unbounded: one attacking source destroys members faster than
+  the owner can restore them (120/min destroyed vs at most 60/min restored,
+  the request-cost asymmetry between a raw claim and a top-up), and with no
+  pool garbage collection a sustained single-source attack exhausts the
+  one-time-prekey id space in roughly 194 days. See
+  `t25-verification-report-r2.md` (R2-006, R2-010).
 - **The mailbox flooding class is closed for delivery as a bound, not
   eliminated as an attack.** Re-measured on the real relay at commit `c302485`
   by the flow 002 verification: 4 self-published identities and 49

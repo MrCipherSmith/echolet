@@ -1,0 +1,189 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T39-docs",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Corrected the two overstated/understated cost claims (R2-005: full-drain relay publish is 40 requests / 33% of budget, not 20/17%; R2-006: one attacking source already out-drains a refilling victim at two to one, not two sources), finished the eleven-site prose migration from t26-replenishment-design.md:525-540 (nine of eleven sites were unedited; corrected the six documentation files plus one unenumerated twelfth site in prd.md, left three locations in one test file for a test task), re-measured (not computed) the e2e suite's file/test counts and wall-clock across four documents that all carried the same stale 6-files/29-tests/4m52.6s figure, and recorded the ~194-day one-time-prekey exhaustion bound from R2-010 as a new open limitation. Documentation only: no source, test, or script file changed, package.json untouched. Concern carried forward: three test files still carry stale prose or wrong figures and must be fixed by a test task, since editing them was out of this task's scope; and my own re-run of the e2e suite failed under host contention from two other concurrently-running flow-003 agents, so the corrected wall-clock cites T25 round 2's idle figure (885.14s) rather than a fresh idle measurement of my own.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "R2-005 - the full-drain request cost is corrected wherever the design and non-test documentation state it, with the measured four-state breakdown recorded",
+      "status": "met",
+      "evidence": "t26-replenishment-design.md corrected at two sites (S2.2 'Cost of N = 20' and S3 'What N would have to be to matter'): both now read 40 requests / 33% with the breakdown 20/20/21/40 for empty-pool/steady-state/one-dead-slot/full-drain, sourced to t25-verification-report-r2.md S3.2 finding R2-005. The one remaining wrong-figure site, apps/cli/test/e2e/prekey-pool-replenishment.test.ts:121-123, is a test-file comment and is listed for a test task rather than edited."
+    },
+    {
+      "criterion": "R2-006 - the two-source claim is corrected to the sharper one-source figure without softening the wording",
+      "status": "met",
+      "evidence": "t26-replenishment-design.md S8 and PAUSED.md both corrected to state: one attacking source already out-drains a refilling victim at two to one - 120 members/minute destroyed against a recovery ceiling of at most 60/minute (as low as ~5.7/minute one-at-a-time). Neither correction weakens the sentence; both keep the sharper, worse-for-the-defender number the task required. apps/cli/test/e2e/prekey-pool-replenishment.test.ts:34-35 still carries the wrong figure and is listed for a test task."
+    },
+    {
+      "criterion": "R2-002 - all nine unedited prose sites are re-derived on the current tree and corrected, with test-file sites listed rather than edited",
+      "status": "met",
+      "evidence": "Re-ran the enumeration query on 23a17aa. Corrected: specification.md:118, README.md:33, runbook.md:246-248, deployment-runbook.md:1120-1121, STATUS_CURRENT.md:98 (limitation 2, struck through and closed in the same style as limitations 3/4), PROTOCOL-07_MVP_MESSAGE_FLOW.md:919 - six documentation files, all now describing the N=20 pool and its replenishment plus the honest residual (asymmetric attack/recovery cost, ~194-day id exhaustion). A twelfth, unenumerated site found while re-deriving locations - prd.md:58, added in the same wave that shipped the pool - was also corrected. The three remaining locations, all inside apps/cli/src/runtime/outbound.publicationPrecondition.test.ts (lines 24-25, 85, 216), are listed in the corrections report for a test task rather than edited, per the documentation-only constraint. A full repo re-scan after all edits confirms the trigger phrase remains only in that test file, in the two other deferred test files, in one file already correctly historical-framed (outbound.ts:137), and one unrelated false positive (config.go:16, about TLS schemes)."
+    },
+    {
+      "criterion": "R2-003 - the e2e file/test counts and wall-clock are re-measured, not computed, and the measurement's condition is stated",
+      "status": "met",
+      "evidence": "ls apps/cli/test/e2e confirms 7 files. I ran pnpm --filter @echolet/cli test:e2e myself on 23a17aa: vitest reported 'Test Files 3 failed | 4 passed (7)' and 'Tests 4 failed | 26 passed (30)', confirming 30 tests structurally; real wall-clock 774.46s, exit 1, all four failures E2E-child-timeout or a 90s per-test timeout, run while two other flow-003 agents were concurrently editing apps/cli (confirmed via git status) - the same load-sensitive failure mode t25-verification-report-r2.md documents (its own two runs: exit 143/11 failed under contention, exit 0/30 passed/885.14s idle). Corrected metrics-and-validation.md, STATUS_CURRENT.md, README.md and specification.md (a fourth site carrying the identical stale figure, found during verification and not named by the dispatch) to state 7 files/30 tests and the 885.14s idle figure, each explicitly labelled with which condition (idle-green vs contended-red) it describes, rather than silently averaging or recomputing from the old count."
+    },
+    {
+      "criterion": "R2-010 - the real one-time-prekey exhaustion bound under sustained attack is recorded as an open limitation without altering the design's benign-case figure",
+      "status": "met",
+      "evidence": "Added the ~194-day bound (60 ids/minute sustained single-source recovery rate against a 16,777,215-id space, no pool GC, relay publish then fails permanently) to docs/STATUS_CURRENT.md open limitation 2 (primary location) and to the same corrected paragraph in specification.md, README.md, runbook.md, deployment-runbook.md and prd.md. t26-replenishment-design.md S2.2's '~16000 centuries' benign-case figure for a different quantity (weekly refresh burn rate) was left untouched, per instruction."
+    },
+    {
+      "criterion": "Documentation only - no source, test, or script file changed; package.json untouched",
+      "status": "met",
+      "evidence": "git diff --stat after all edits lists only: .metaproject/flows/.../PAUSED.md, .../t26-replenishment-design.md, and the six docs/ files listed above, plus this task's own new report and dispatch-result files. flow.json and journal.md show as modified in git status but were not touched by this task - the flow-orchestrator/other agents own those files. All other modified/untracked files in git status (apps/cli/src/commands/cli.*.test.ts, scripts/gate/*, .githooks/pre-push, package.json, deploy/relay/README.md, apps/cli/test/childProcessTimeouts.ts) belong to the two concurrently-running push-gate/apps-cli agents and were left untouched, per instruction."
+    },
+    {
+      "criterion": "No store key, private key, plaintext or HTTP request body printed or recorded; geekom and depr not touched",
+      "status": "met",
+      "evidence": "No relay was contacted during this task (the one relay binary invocation was the local, loopback e2e test run against a throwaway local relay process the test harness itself spawns and tears down, not geekom or depr). No key material appears in any edited file or in this result; every number quoted is a request count, a percentage, a test count, or a wall-clock duration."
+    },
+    {
+      "criterion": "keryx wiki check-links run at the end and anything broken fixed",
+      "status": "met",
+      "evidence": "keryx wiki check-links: 19 pages checked, 38 internal links checked, 0 broken. Nothing to fix."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t39-corrections-report.md",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "Full account of the four corrections, the nine re-derived R2-002 sites plus one unenumerated twelfth, the re-measured e2e figures with their conditions, the three-file/six-location deferred-to-test-task list, the R2-010 open-limitation note, and what the verification report itself got right/wrong.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T39-docs-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This document."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t26-replenishment-design.md",
+      "change": "Corrected R2-005 (full-drain request cost, two sites) and R2-006 (one-source-suffices, one site)."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/PAUSED.md",
+      "change": "Corrected the same R2-006 two-source claim in the resume-state summary, with a dated correction note."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/specification.md",
+      "change": "Corrected the R2-002 pool-limitation prose (line 118) and the R2-003 e2e figure (line 21); added the R2-010 open-limitation note."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/README.md",
+      "change": "Corrected the R2-002 pool-limitation prose (line 33) and the R2-003 e2e figure (line 10); added the R2-010 note."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/runbook.md",
+      "change": "Corrected the R2-002 pool-limitation prose (lines 246-248); added the R2-010 note."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/deployment-runbook.md",
+      "change": "Corrected the R2-002 pointer sentence (lines 1120-1121) to match the corrected runbook.md S11."
+    },
+    {
+      "path": "docs/STATUS_CURRENT.md",
+      "change": "Struck through and closed open limitation 2 (R2-002, line 98) in the same style as limitations 3/4, with the R2-010 residual; corrected the R2-003 e2e figures (lines 51, 53)."
+    },
+    {
+      "path": "docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md",
+      "change": "Corrected the R2-002 PREKEY_BUNDLE_UNAVAILABLE table row (line 919) to describe the pool."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/prd.md",
+      "change": "Corrected the unenumerated twelfth R2-002 site (line 58, 'prekey pool replenishment is a later capability'), found while re-deriving locations."
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/metrics-and-validation.md",
+      "change": "Corrected the R2-003 e2e file/test/wall-clock figures (lines 17-33) and one adjacent, directly-verified count (five to seven files also reached by pnpm test)."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "003-T39-docs#F-001",
+      "reviewer": "003-T39-docs",
+      "severity": "minor",
+      "repo": "echolet",
+      "file": "apps/cli/src/runtime/outbound.publicationPrecondition.test.ts",
+      "problem": "Three locations in this test file still assert or comment that a published bundle serves exactly one first-contact sender, false since the T26 pool shipped in 1ed5b2a: lines 24-25 ('there is no command to replenish it'), line 85 (doc comment on a fixture), and line 216 ('the one first-contact bundle they have no CLI command to replace').",
+      "impact": "A reader of this test file is told a limitation that no longer exists; the test's own assertions were already updated for the pool per R2's AC10 analysis, so only the rationale prose has drifted.",
+      "suggested_fix": "Rewrite the three comments to describe the pool (as apps/cli/src/commands/cli.ts and apps/cli/src/runtime/outbound.ts already do) in a dedicated test task, since editing test files was out of this task's documentation-only scope.",
+      "evidence": "keryx ctx rg \"exactly one first-contact sender\" apps/cli/src/runtime/outbound.publicationPrecondition.test.ts on 23a17aa returns exactly these three locations, matching t25-verification-report-r2.md's R2-002 citation with no line drift.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-002",
+      "global_id": "003-T39-docs#F-002",
+      "reviewer": "003-T39-docs",
+      "severity": "minor",
+      "repo": "echolet",
+      "file": "apps/cli/test/e2e/prekey-pool-replenishment.test.ts",
+      "line": 34,
+      "problem": "Comment at lines 34-35 still says 'Two source addresses drain a pool faster than its owner can refill it' - the R2-006 claim, corrected everywhere else in this task but not editable here.",
+      "impact": "Understates the adversary in the one file whose whole job is to document the pool's honest cost.",
+      "suggested_fix": "Rewrite to state one source suffices at two to one (120 destroyed/minute vs a 60/minute recovery ceiling), matching the correction already made in t26-replenishment-design.md and PAUSED.md.",
+      "evidence": "keryx ctx rg \"Two source\" over the repository after all documentation edits returns only this one remaining site.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-003",
+      "global_id": "003-T39-docs#F-003",
+      "reviewer": "003-T39-docs",
+      "severity": "minor",
+      "repo": "echolet",
+      "file": "apps/cli/test/e2e/prekey-pool-replenishment.test.ts",
+      "line": 121,
+      "problem": "Comment at lines 121-123 still says 'at N = 20 one relay publish is 20 requests' - the R2-005 claim, corrected everywhere else in this task but not editable here.",
+      "impact": "Understates the full-drain request cost (actually 40) in the file that measures the pool's traffic shape.",
+      "suggested_fix": "Rewrite to cite the four-state breakdown (20/20/21/40) and note this specific test's own traffic (22 requests) stays within the shipped 120/min limiter regardless.",
+      "evidence": "Read directly; unchanged since t25-verification-report-r2.md's citation.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-004",
+      "global_id": "003-T39-docs#F-004",
+      "reviewer": "003-T39-docs",
+      "severity": "info",
+      "repo": "echolet",
+      "file": "apps/cli/test/e2e/publication-claimability.test.ts",
+      "line": 14,
+      "problem": "Top-of-file rationale comment (lines 14-18) still asserts in present tense 'A published bundle serves exactly one first-contact sender...and a re-publish...reports plain success' with no acknowledgement that T26 turned this into a pool. Not one of the eleven sites t26-replenishment-design.md originally enumerated; found while re-deriving locations for this task.",
+      "impact": "Low: the file's own step 6/7 assertions were already rewritten for the pool per R2's AC10 analysis, so this is drifted rationale prose rather than a wrong assertion, but it is the same defect class as R2-002's other nine sites.",
+      "suggested_fix": "Fold into the same test task recommended for F-001/F-002/F-003, since it is the same file family and the same kind of fix.",
+      "evidence": "keryx ctx rg \"serves exactly one first-contact sender\" apps/cli/test/e2e/publication-claimability.test.ts finds it at line 14, present-tense, no T26 qualifier, unlike outbound.ts:137 and profile.publicationPool.test.ts:13 which both use explicit historical framing.",
+      "confidence": "medium",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "docs_files_corrected": 10,
+    "r2002_sites_corrected": 7,
+    "r2002_sites_deferred_to_test_task": 6,
+    "r2002_sites_already_correct_reverified": 2,
+    "e2e_files_measured": 7,
+    "e2e_tests_measured": 30,
+    "e2e_run_exit_code_this_task": 1,
+    "e2e_run_wallclock_seconds_this_task_contended": 774.46,
+    "e2e_run_wallclock_seconds_idle_from_t25r2": 885.14,
+    "wiki_check_links_pages": 19,
+    "wiki_check_links_internal_links": 38,
+    "wiki_check_links_broken": 0
+  },
+  "timestamp_utc": "2026-09-08T18:56:40Z"
+}

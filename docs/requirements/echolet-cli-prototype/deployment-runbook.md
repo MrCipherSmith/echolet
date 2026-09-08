@@ -1117,8 +1117,10 @@ deployed relay is where it stops being academic:
   unauthenticated. Minting identities no longer *wedges* a mailbox — that is what
   the closure fixed, and it is measured — but nothing bounds the number of
   distinct senders in one mailbox, and nothing bounds the disk they consume.
-- **One published bundle serves exactly one first-contact sender.** Unchanged
-  from the local prototype; see §11 of [runbook.md](runbook.md).
+- **A published bundle now serves up to twenty first-contact senders, not
+  one, and `relay publish` replenishes a drained pool.** Same as the local
+  prototype, unchanged by deployment; see §11 of [runbook.md](runbook.md) for
+  the still-open asymmetry between attack cost and recovery cost.
 
 See [STATUS_CURRENT.md](../../STATUS_CURRENT.md) and the flow's change report
 for the complete list.

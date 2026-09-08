@@ -17,15 +17,30 @@ pnpm --filter @echolet/cli test:e2e
 **As of flow 003 T28, the fourth command is the whole end-to-end suite.**
 `pnpm --filter @echolet/cli test:e2e` is `vitest run test/e2e` — the directory,
 repointed rather than renamed because the script's name already said what it
-should run. `apps/cli/test/e2e/` holds **six files and 29 tests** (`two-process`
-3, `flood-closure` 9, `init-relay-url` 9, `rewalk-crash-safety` 4, `relay-tls`
-3, `publication-claimability` 1); all six now run under the fourth command
-itself. Measured twice on `c5fde09` (macOS arm64, Node v26.5.0): a clean run of
-**6 files, 29 tests, all passed**, real wall-clock **4m52.6s** (vitest-internal
-291.5s); an earlier run measured 3m30.0s with one transient failure in
-`flood-closure.test.ts` that did not reproduce on retry with identical code, so
-it is recorded as observed flakiness rather than a gate regression. The same
-five files are *also* reached by the second command, `pnpm test` — its default
+should run. **Re-measured on `23a17aa`:** `apps/cli/test/e2e/` now holds
+**seven files and 30 tests** (`two-process` 3, `flood-closure` 9,
+`init-relay-url` 9, `rewalk-crash-safety` 4, `relay-tls` 3,
+`publication-claimability` 1, `prekey-pool-replenishment` 1, added by flow 003
+T26 after this figure was first written); all seven now run under the fourth
+command itself. This script is **not reliably green**, and the figure depends
+on host load: an independent verification (`t25-verification-report-r2.md`
+§1, §3.1, finding R2-004) measured a clean idle run at **exit 0, 7 files, 30
+tests, 30 passed, real wall-clock 885.14s**, and a contended run on the same
+host at **exit 143, 11 of 30 tests failed**, every failure an `E2E child
+timeout` (the suites' own 30s-per-child bound, not vitest's) — `vitest.config.ts`
+sets no pool limit, so all seven process-spawning files start at once. A
+further re-run here, made while two other flow-003 agents were actively
+editing `apps/cli` concurrently, reproduced the same load-sensitivity rather
+than the idle figure: **exit 1, 4 of 30 tests failed** (two `flood-closure`,
+one `two-process`, one `publication-claimability`), all `E2E child timeout` or
+a 90s test timeout, real wall-clock 774.46s. **The wall-clock figure that
+describes a clean, idle run is 885.14s (14m45s), not 4m52.6s** — the earlier
+figure was correct when it was written, for six files, but the suite has
+since grown by one file that alone costs on the order of 500s. An earlier run
+at 3m30.0s with one transient failure in `flood-closure.test.ts` that did not
+reproduce on retry remains recorded as historical, pre-T26, observed
+flakiness rather than a gate regression. These same seven files are
+*also* reached by the second command, `pnpm test` — its default
 `include` was never narrowed — so the gate now exercises them twice under two
 different scripts; that redundancy is accepted rather than removed, because
 narrowing `pnpm test`'s scope was not this task's decision to make. There is

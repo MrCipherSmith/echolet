@@ -55,7 +55,7 @@ Produce a local technical prototype that proves or disproves the integration pat
 
 - `@signalapp/libsignal-client@0.102.0` is AGPL-3.0-only, outside-Signal use is unsupported upstream, and its API may change. It is a pinned prototype dependency and requires a separate product decision before broader development.
 - The existing Node encrypted SQLite snapshot does not prevent rollback to an older valid file and is not a production-scale storage design.
-- One published v2 bundle currently provides only one one-time prekey. The prototype can support the Alice/Bob proof, but prekey pool replenishment is a later capability.
+- ~~One published v2 bundle currently provides only one one-time prekey.~~ Closed in flow 003 T26 (`1ed5b2a`): `relay publish` now maintains a pool of twenty independently signed bundles per identity and tops it back up on request, client-only, with no relay/wire/schema change. Not fully closed as a risk: recovery cost is asymmetric (one attacking source can destroy pool members faster than the owner can restore them), and with no pool garbage collection a sustained attack exhausts the one-time-prekey id space in roughly 194 days — see `docs/STATUS_CURRENT.md` open limitation 2.
 - A successful computer prototype does not prove mobile background delivery, public deployment safety, independent security review, or user demand.
 
 ## Recommendation
