@@ -144,8 +144,18 @@
   ],
   "questions": [
     {
+      "id": "Q0",
+      "question": "Both questions below were answered by the orchestrator editing the working tree directly while this implementer's confirming run was in flight. Should this result stand as the record of that, or should a fresh implementer dispatch re-verify the combined tree?",
+      "why": "The green 284/284 measurement covers a tree this implementer did not solely author: the orchestrator changed a test file, reverted resolveSendBody, and rewrote two documents plus one of this implementer's own code comments. Nothing about that is wrong, but the separation this flow depends on — test author, implementer and orchestrator being different actors — means the final tree has had no single reviewer who did not also write part of it.",
+      "options": [
+        { "id": "A", "label": "Accept this result as the record; the changes are small, attributed in-code, and the suite is green.", "recommended": true },
+        { "id": "B", "label": "Send a verification dispatch to re-read the combined tree, since AC9 asks the ordering to be provable from git history and all of this is currently uncommitted working-tree state." }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
       "id": "Q1",
-      "question": "cli-bridge.test.ts:80-88 and cli-bridge.sendStdin.test.ts contradict each other outright. Who updates the former, given that this dispatch forbids the implementer from editing any test but the red spec's own comment assigns that edit to the implementer?",
+      "question": "RESOLVED as option A by the orchestrator during this dispatch — recorded here for the flow's history, no answer needed. cli-bridge.test.ts:80-88 and cli-bridge.sendStdin.test.ts contradicted each other outright. Who updates the former, given that this dispatch forbids the implementer from editing any test but the red spec's own comment assigns that edit to the implementer?",
       "why": "It is the only thing standing between the tree and a green suite, and it cannot be resolved in source. The red spec's author wrote at cli-bridge.sendStdin.test.ts:22-24 that 'cli-bridge.test.ts's three tests above must be updated by the implementer, not by this dispatch', while this dispatch's constraints say 'DO NOT EDIT ANY TEST FILE ... Report instead.' Only one of the two can hold.",
       "options": [
         { "id": "A", "label": "The test author (or a follow-up tests dispatch) updates cli-bridge.test.ts:80-88 to expect the body-free argv, preserving the file's other assertions.", "recommended": true },
@@ -156,7 +166,7 @@
     },
     {
       "id": "Q2",
-      "question": "Should supplying both --text and a stdin body really be a refusal, given design t35 section 6 P-1 says --text simply wins and stdin is not read at all?",
+      "question": "RESOLVED as option B by the orchestrator during this dispatch — recorded here for the flow's history, no answer needed. Should supplying both --text and a stdin body really be a refusal, given design t35 section 6 P-1 says --text simply wins and stdin is not read at all?",
       "why": "The dispatch's AC5 and the orchestrator's instruction both require the refusal, and that is what was implemented; the design says the opposite. No test in the red spec covers the case, so nothing in the suite pins either answer, and the divergence should be recorded deliberately rather than discovered later. The refusal is also what creates F-002's pipeline caveat.",
       "options": [
         { "id": "A", "label": "Keep the refusal as implemented and amend design t35 section 6 P-1 to match.", "recommended": true },

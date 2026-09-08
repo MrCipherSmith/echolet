@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-08T23:18:19.861Z",
+  "updatedAt": "2026-09-08T23:54:37.689Z",
   "source": {
     "type": "description",
     "ref": null
@@ -105,7 +105,7 @@
       "id": "T6",
       "title": "Implement the two CLI prerequisites, keeping the command surface at eight commands",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -121,7 +121,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -172,6 +173,11 @@
       "at": "2026-09-08T23:18:19.861Z",
       "event": "task-attempt",
       "detail": "T6: started (attempt 1) — Dispatching a different agent from the one that wrote the tests. It may not modify the tests to suit the implementation, and it does not accept its own work: an independent check follows."
+    },
+    {
+      "at": "2026-09-08T23:54:37.689Z",
+      "event": "task-done",
+      "detail": "T6: Implement the two CLI prerequisites, keeping the command surface at eight commands"
     }
   ]
 }
