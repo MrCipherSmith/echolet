@@ -18,15 +18,36 @@ import (
 )
 
 type MailboxHandler struct {
-	mailboxService     *service.MailboxService
-	challengeService   *service.ChallengeService
-	deviceService      *service.DeviceRecordService
-	maxMailboxBatch    int
+	mailboxService   *service.MailboxService
+	challengeService *service.ChallengeService
+	deviceService    *service.DeviceRecordService
+	maxMailboxBatch  int
+	// maxMessageBytes is always POSITIVE: NewMailboxHandler resolves an
+	// unconfigured (non-positive) maximum to the protocol maximum before it is
+	// stored, so no reader of this field has to know about a fallback and no two
+	// readers can disagree about one.
 	maxMessageBytes    int64
 	senderUnackedQuota int
 	nowMS              func() int64
 }
 
+// NewMailboxHandler builds the handler.
+//
+// A non-positive maxMsgBytes means "unconfigured" and is resolved HERE, once, to
+// the protocol maximum - so h.maxMessageBytes is always positive and every
+// consumer of it agrees. That resolution used to live in envelopeBodyLimit()
+// alone, while validation.ValidateMailboxEnvelope was handed the raw field, so a
+// handler built at zero applied a 256 KB body limit and then refused every
+// ciphertext inside it as PAYLOAD_TOO_LARGE: the relay came up healthy and
+// accepted nothing (residual R-3, flow 003; measured as finding T21-F-001).
+//
+// The zero is resolved rather than refused because a zero-value config.Config is
+// a supported way to build this relay - internal/server constructs one directly -
+// and "unconfigured" has a correct answer: the protocol maximum both sides
+// already derive every other bound from. An OPERATOR who sets
+// ECHOLET_MAX_MESSAGE_BYTES=0 is a different case and is refused at startup by
+// config.Load(), which is the only place that can tell an explicit zero from an
+// unset variable.
 func NewMailboxHandler(
 	mailboxSvc *service.MailboxService,
 	challengeSvc *service.ChallengeService,
@@ -34,6 +55,9 @@ func NewMailboxHandler(
 	maxBatch int,
 	maxMsgBytes int64,
 ) *MailboxHandler {
+	if maxMsgBytes <= 0 {
+		maxMsgBytes = defaultMaxMessageBytes
+	}
 	return &MailboxHandler{
 		mailboxService:     mailboxSvc,
 		challengeService:   challengeSvc,
@@ -94,12 +118,13 @@ const pollResponseWrapperBytes int64 = 4 << 10
 // envelopeBodyLimit derives the /v1/messages/send request-body bound from the
 // configured maximum ciphertext size, so raising ECHOLET_MAX_MESSAGE_BYTES can
 // never leave the route silently rejecting legitimate maximum-size envelopes.
+//
+// It reads h.maxMessageBytes directly: NewMailboxHandler has already resolved an
+// unconfigured maximum, so the "unconfigured, use the protocol maximum" fallback
+// that used to sit here is now applied once, at construction, where the size
+// validation below sees it too. One field, one meaning, both consumers.
 func (h *MailboxHandler) envelopeBodyLimit() int64 {
-	maxMessageBytes := h.maxMessageBytes
-	if maxMessageBytes <= 0 {
-		maxMessageBytes = defaultMaxMessageBytes
-	}
-	return maxMessageBytes + envelopeJSONOverheadBytes
+	return h.maxMessageBytes + envelopeJSONOverheadBytes
 }
 
 func (h *MailboxHandler) SendEnvelope(w http.ResponseWriter, r *http.Request) {

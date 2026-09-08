@@ -92,3 +92,18 @@
 - 2026-09-08T16:06:01.048Z - task-added: T37: Fix the inbound store-snapshot test the pool's mint-before-offer design invalidated
 - 2026-09-08T16:06:01.155Z - task-attempt: T37: started (attempt 1) — 003-T37-inbound-snapshot
 - 2026-09-08T16:29:12.000Z - task-done: T37: Fix the inbound store-snapshot test the pool's mint-before-offer design invalidated
+- 2026-09-08T17:01:28.982Z - task-done: T1: Collect remaining context
+- 2026-09-08T17:01:29.071Z - task-done: T2: Implement per plan
+- 2026-09-08T17:01:29.152Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-08T17:01:29.235Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-08T17:01:29.316Z - task-done: T20: Implement: send presupposes relay publish
+- 2026-09-08T17:01:29.399Z - task-done: T24: Bring the Go suite inside the push gate: no Go change can currently select a test
+- 2026-09-08T17:01:29.480Z - task-done: T26: Design automatic bundle replenishment: the cost fix that authentication is not
+- 2026-09-08T17:01:29.563Z - task-done: T27: RED tests for the three properties the verification found unpinned
+- 2026-09-08T17:01:29.652Z - task-done: T32: Wire a documentation-freshness check into the push gate so staleness is reported mechanically
+- 2026-09-08T17:01:29.735Z - task-done: T34: Simulate a second user on depr: a containerised CLI client the user can exchange messages with
+- 2026-09-08T17:02:14.842Z - task-attempt: T25: started (attempt 3) — 003-T25-verify-r2 on commit 1ed5b2a in an isolated worktree
+- 2026-09-08T17:02:14.937Z - task-attempt: T22: started (attempt 2) — 003-T22-zero-max (bundled with T33)
+- 2026-09-08T17:02:15.025Z - task-attempt: T15: started (attempt 1) — 003-T15-readme (bundled with T16)
+- 2026-09-08T17:33:22.385Z - task-done: T22: Refuse a zero maximum message size, and correct the fixtures that build a zero-value config
+- 2026-09-08T17:33:22.473Z - task-done: T33: Remove the dead cleanup-interval field from Go config and its call site

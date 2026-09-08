@@ -1081,13 +1081,15 @@ Everything in this section is true **after** a successful deployment.
   examples no longer set it, because `CleanupService.runCleanup()` is still two
   `slog.Debug` calls and does no work, and a dial that turns nothing is worse
   than no dial. Retention is enforced entirely by Badger's own TTL from
-  `ECHOLET_MAILBOX_TTL_HOURS` and needs no interval. The relay still logs
-  `Cleanup service started interval_sec=60` at boot — `internal/config/config.go`
-  still declares the field with `envDefault:"60"`, so an operator who sets the
-  variable anyway will still have it read; retiring the Go field is a product
-  change outside this document's scope. The ticker itself is stoppable and part
-  of the shutdown sequence (`18afa36`); only the empty body and the
-  now-unpresented interval are open.
+  `ECHOLET_MAILBOX_TTL_HOURS` and needs no interval. The field is gone from the
+  binary too (flow 003 T33): `internal/config/config.go` no longer declares it
+  and `internal/api/router/router.go` no longer reads it, so the variable left in
+  a host's `.env` is now completely inert — it changes nothing and does not stop
+  the relay from starting. The relay still logs
+  `Cleanup service started interval_sec=60` at boot, but the 60 now comes from
+  the service that owns the ticker (`service.DefaultCleanupIntervalSeconds`),
+  not from a setting. The service, its `Stop()` and its place in the shutdown
+  sequence (`18afa36`) are unchanged; only the empty `runCleanup()` body is open.
 - **The pinned `@signalapp/libsignal-client@0.102.0` is not a permanent
   decision.** It was taken for this prototype.
 

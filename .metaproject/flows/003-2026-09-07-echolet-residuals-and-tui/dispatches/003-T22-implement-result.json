@@ -1,0 +1,260 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T22-implement",
+  "status": "DONE",
+  "summary": "T22 and T33 taken as one task, because they share apps/relay/internal/config/config.go. TESTS FIRST, checkable: four tests were written and run before any product edit and failed for the right reasons (raw log 2026-09-08T17-08-55-348Z) - the handler at a zero maximum answered 400 PAYLOAD_TOO_LARGE to a ciphertext of exactly the protocol maximum; Load() returned nil for ECHOLET_MAX_MESSAGE_BYTES=0; Config still declared CleanupIntervalSec; and NewRouter PANICKED with 'non-positive interval for NewTicker' on a config with no cleanup period. T22 DECISION: consistency, plus a refusal where the operator actually is. The zero is resolved ONCE in NewMailboxHandler, so h.maxMessageBytes is always positive and the two consumers that disagreed (envelopeBodyLimit applied the fallback, ValidateMailboxEnvelope did not) are handed the same number by construction; envelopeBodyLimit's duplicate branch was removed. Validate() still permits a zero VALUE, so the idiomatic zero-value Config keeps working and the six internal/server tests were NOT touched (server_test.go byte-identical to HEAD). The operator-facing case is refused in Load(), the only place that can tell an unset variable from an explicit 0, via os.LookupEnv: an operator who sets 0 now gets a named startup refusal saying the value would disable the relay, that 'off' is not a setting this has because the maximum is a protocol constant, the ceiling 262144, and the two ways out. Unset, empty (VAR= - measured, not assumed, because the deployed hosts are live) and every positive value up to the ceiling still start unchanged. T33: Config.CleanupIntervalSec and its call site removed; router.go now passes the new service.DefaultCleanupIntervalSeconds (60, same number, owned by the service that owns the ticker). NewCleanupService's SIGNATURE was deliberately not changed so both committed stop tests keep compiling unchanged. The cleanup SERVICE, its Start/Stop, its stop/stopped channels and its place in cmd/relay's shutdown sequence are untouched and verified byte-identical by hash. Removing the field also closed an unreported defect it had been hiding: a zero-value Config panicked time.NewTicker inside NewRouter, which is why two router fixtures carried a magic CleanupIntervalSec: 3600 - those two lines were removed (forced by compilation, asserting nothing) and the hazard is now pinned closed by a new test instead. Four documents that asserted 'the field remains' were corrected sentence for sentence. Matrix with -count=1: go test ./..., -race ./... and -race -tags relayv2 ./... all pass, 0 data races in both race runs; go vet clean in both tag sets; gofmt clean over every touched file; pnpm typecheck exit 0.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Decide which is right for the zero and justify it: refuse at validation, or make the fallback consistent",
+      "status": "met",
+      "evidence": "CHOSEN: consistency, plus a startup refusal for the explicit operator case - the two answer different questions and the previous code could not tell them apart. Refusing <= 0 in Validate() was rejected on three merits, not on test churn: (1) a zero-value Config is a supported construction path - internal/server builds one directly and server.New calls Validate on it - so outlawing the struct default makes every partial Config anywhere carry one unrelated field; (2) 'unconfigured' has a correct answer, the protocol maximum both sides already derive every other bound from, so answering with it is not a guess; (3) a refusal in Validate() cannot distinguish an unset variable from an explicit 0, so it would have outlawed the struct default in order to reach the operator - the wrong end. Instead the fallback moved from one of the two consumers into NewMailboxHandler, where it feeds both (if maxMsgBytes <= 0 { maxMsgBytes = defaultMaxMessageBytes }, and envelopeBodyLimit's own copy of the branch was deleted); defaultMaxMessageBytes is protocol.MaxMessageBytes, so no new literal and no fourth statement of the number was introduced."
+    },
+    {
+      "criterion": "The operator-facing case must not silently accept a value that disables the relay; say what an operator setting zero now sees",
+      "status": "met",
+      "evidence": "config.Load() now refuses an explicitly-set non-positive value before Validate() runs, using os.LookupEnv to tell 'set to 0' from 'unset' - a distinction only Load() can make. The operator sees: 'ECHOLET_MAX_MESSAGE_BYTES is set to 0, which disables the relay: the send route validates every ciphertext against this bound, so the relay would come up healthy, answer /health, and refuse every legitimate envelope as PAYLOAD_TOO_LARGE with nothing anywhere saying why. It is not a way to switch the limit off - there is no such setting, because the maximum is a protocol constant both sides derive their bounds from. Configure a positive value up to the protocol maximum of 262144, or unset the variable to get exactly that maximum. Refusing to start rather than serving a relay that accepts nothing.' Pinned by TestLoadRefusesAnExplicitlyZeroMaxMessageBytes, which requires both the variable name and the protocol maximum to appear. Not refused, deliberately, so that removing a footgun does not become one: unset, VAR= (empty), and every positive value up to the ceiling - TestLoadAcceptsAnExplicitlySetMaxMessageBytesBelowTheProtocolMaximum and TestLoadTreatsAnEmptyMaxMessageBytesAsUnset."
+    },
+    {
+      "criterion": "Tests come first: write the failing tests, watch them fail for the right reason, then implement; keep the test edits and the product edits distinguishable",
+      "status": "met",
+      "evidence": "Four driver tests were written and run before a single product line changed; raw log .metaproject/data/gdctx/raw/2026-09-08T17-08-55-348Z_run.log records the failures verbatim: 'SendEnvelope(ciphertext = the protocol maximum, 262144) ... status = 400, want 200 (error code \"PAYLOAD_TOO_LARGE\")'; 'Load() returned nil for an explicit ECHOLET_MAX_MESSAGE_BYTES=0'; 'Config.CleanupIntervalSec still declares ECHOLET_CLEANUP_INTERVAL_SECONDS'; and 'panic: non-positive interval for NewTicker' at cleanup_service.go:60 from router.go:69. Two further tests were green before and after and are labelled in-code as direction guards rather than drivers (TestAnUnconfiguredMaxMessageBytesIsTheProtocolMaximumAndNotUnbounded, which stops the fix from being implemented as 'ignore the field when it is zero'; TestLoadIgnoresACleanupIntervalAnOperatorSetsAnyway, a deployment guard). One test was written AFTER its measurement on purpose and says so (finding T22-F-003). The report separates product files (§6 first table, 4 files) from test files (§6 second table, 7 files) with SHA-256 for each, and no file appears in both."
+    },
+    {
+      "criterion": "T33: remove the cleanup interval field and its call site; the cleanup service, its Stop and its place in the shutdown sequence must stay",
+      "status": "met",
+      "evidence": "Removed: Config.CleanupIntervalSec with its env/envDefault tag, and the cfg.CleanupIntervalSec read at router.go:68. Kept and verified byte-identical to HEAD by SHA-256: cleanup_service_stop_test.go (c2105ce47c51ec42cbd89659e4e004533bfd82f7c5996d9f20ae93391161f511) and cleanup_service_stop_join_test.go (5431caf1932d7b93def17fe3b100e0109e283964c61c3bfa5401eb0f17d725ee); cmd/relay/main.go was never opened for writing; CleanupService's struct, Start, Stop, its stop/stopped channels and runCleanup are unchanged - the only edit to cleanup_service.go is the ADDED constant DefaultCleanupIntervalSeconds = 60. NewCleanupService's signature was deliberately left alone so both stop tests keep compiling and keep their own fast tick intervals. The relay still logs 'Cleanup service started interval_sec=60'; only the source of the 60 moved, from an operator setting to the service that owns the ticker. TestNewRouterStartsACleanupTickerWithoutAConfiguredInterval exercises Start through NewRouter and then Stop twice, so the shutdown handle is asserted rather than assumed."
+    },
+    {
+      "criterion": "Weaken, skip, narrow or delete nothing; where a fixture is corrected, say why it is not a weakening",
+      "status": "met",
+      "evidence": "No test is skipped, t.Skip-ed, narrowed or deleted anywhere. The six internal/server fixtures needed NO correction at all - that is a consequence of the approach chosen, and server_test.go is byte-identical to HEAD (99f83d7ac5a5eb75337ebec44a88be56079ca5c7d9e7bce1edcaf203c8035b87). Two fixtures were corrected, both for T33: signal_prekey_bundle_v2_test.go and signal_prekey_bundle_v2_mailbox_test.go each lost 'CleanupIntervalSec: 3600' from a config literal. Not a weakening, for two reasons: (1) neither test ever asserted anything about the value - it was inert scenery in a struct literal, and removing a key from a literal removes no assertion; (2) the line existed only to step around a panic (NewRouter passed the field straight into time.NewTicker, which panics on a non-positive duration), and that hazard is now closed in product code and pinned by a new test - the fixtures got smaller while coverage of what they worked around got larger. One further test file changed by COMMENT ONLY: mailbox_poll_byte_budget_derivation_test.go's 'WHY ZERO IS NOT IN THAT TABLE' block said the zero was an open residual; it now says why zero has its own file and keeps T21's measurement as history. No assertion, case or helper in it changed."
+    },
+    {
+      "criterion": "Name the six internal/server fixtures and establish the count by measurement rather than repetition",
+      "status": "met",
+      "evidence": "Measured, not quoted. 'c.MaxMessageBytes <= 0' was applied to Validate() out of tree and internal/server was run (raw log 2026-09-08T17-21-33-544Z). Exactly six failed, each with 'ECHOLET_MAX_MESSAGE_BYTES must not be negative, got 0' arriving through server.New(): TestNewAppliesTimeoutsToThePlainHTTPServer, TestNewRefusesAMissingCertificateFileRatherThanFallingBackToPlainHTTP, TestNewSetsAModernMinimumTLSVersion, TestServerServesHTTPSAndNotPlainHTTP, TestServerRefusesATLS11Client, TestPlainServerStillServesLoopbackHTTP. Worth noting: the other two New() callers in that file stay green under the mutation because they only require *an* error, so 'six red' understates the damage - two more would have been passing for the wrong reason. The mutation was reverted and config.go re-hashed to its pre-mutation value 1d2655d4c207476fb12d5540d7cb8e1dba1436e2050bafe5309fd6b37a7b8da0, and the package is green."
+    },
+    {
+      "criterion": "If the change alters what a deployed relay accepts at startup, say so plainly",
+      "status": "met",
+      "evidence": "No deployed relay's startup behaviour changes; neither geekom nor depr was contacted, inspected or restarted. ECHOLET_MAX_MESSAGE_BYTES: the only new refusal is an explicitly-set non-positive value, and both hosts are recorded as setting exactly 262144, which is permitted and unchanged. The empty-string case (VAR= with nothing after it, a real shape in .env files, which os.LookupEnv reports as SET) was MEASURED rather than assumed precisely because these hosts are live: the decoder falls back to the envDefault, giving 262144 and no error, and that is now pinned by TestLoadTreatsAnEmptyMaxMessageBytesAsUnset. ECHOLET_CLEANUP_INTERVAL_SECONDS: neither host sets it, and env.Parse ignores a variable no field claims, so a stale line is inert and cannot stop a restart - pinned by TestLoadIgnoresACleanupIntervalAnOperatorSetsAnyway, which exists for this reason and no other. Nothing on the wire changed: no route, schema, status code, byte budget or numeric bound moved. The one deliberate difference: a host that DID export ECHOLET_MAX_MESSAGE_BYTES=0 would now fail to start with the named error instead of coming up and refusing every envelope."
+    },
+    {
+      "criterion": "Report the Go matrix with data-race counts, with -count=1",
+      "status": "met",
+      "evidence": "go test -count=1 ./... : all packages ok, 0 failures. go test -count=1 -race ./... : all ok, 'DATA RACE' occurrences in the raw log = 0. go test -count=1 -race -tags relayv2 ./... : all ok, 'DATA RACE' occurrences in the raw log = 0. go vet ./... and go vet -tags relayv2 ./... : clean. gofmt -l over every file this task touched: clean (three other files remain unformatted in apps/relay - mailbox_read_mark_test.go, handler/signal_prekey_bundle_v2.go, repository/signal_prekey_bundle_v2.go - all unmodified at HEAD and pre-existing). pnpm typecheck: exit 0. pnpm test was deliberately not run: this task changed no TypeScript and apps/cli is being edited by a concurrent agent, so its result would not be attributable."
+    },
+    {
+      "criterion": "Do not print or record any store key, private key, plaintext or HTTP request body",
+      "status": "met",
+      "evidence": "None appears in any file written or in any command output recorded. The new tests' failure messages carry byte counts, status codes, error codes and envelope identifiers only; ciphertext is inert padding produced by the pre-existing envelopeWithCiphertextSize helper and is never echoed; poll responses are measured with Body.Len() rather than read out. No key material is generated or logged. Neither relay host was contacted."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t22-config-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "The task report: the decision and its justification, what an operator setting zero sees, the six fixtures measured rather than quoted, the two corrected fixtures and why that is not a weakening, deployed-relay impact, the Go matrix, per-file SHA-256 split into product and test tables, and the routing audit.",
+      "hash": null
+    },
+    {
+      "path": "apps/relay/internal/config/config.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "CleanupIntervalSec removed (T33), with a comment in its place recording why and that the service stays. refuseAnExplicitlyDisabledMaxMessageBytes added and called from Load() before Validate(); the variable name hoisted into one constant so every refusal names the string an operator edits. Validate()'s permissive zero kept, with its comment corrected to say the handler now RESOLVES it.",
+      "hash": "sha256:1d2655d4c207476fb12d5540d7cb8e1dba1436e2050bafe5309fd6b37a7b8da0"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "NewMailboxHandler resolves a non-positive maximum to defaultMaxMessageBytes once, before it is stored, so both consumers of the field see one positive number; envelopeBodyLimit()'s duplicate fallback branch removed; the struct field documented as always positive.",
+      "hash": "sha256:86ed8daf6cda190a05c79803ff6f42bbd13532774f78f3edb8f2944e8a4e4e8d"
+    },
+    {
+      "path": "apps/relay/internal/api/router/router.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The cleanup call site now passes service.DefaultCleanupIntervalSeconds instead of cfg.CleanupIntervalSec, with a comment naming the panic that reading it from a zero-value Config used to cause.",
+      "hash": "sha256:a10f6ab27a344d76bb1c4d3d307b714001976fbdd539118cb2771d928bbf167f"
+    },
+    {
+      "path": "apps/relay/internal/service/cleanup_service.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "ONE addition: DefaultCleanupIntervalSeconds = 60, the value the removed envDefault carried, documented as belonging to the service that owns the ticker. The struct, Start, Stop, the stop/stopped channels and runCleanup are unchanged - the service is kept, only its configuration was removed.",
+      "hash": "sha256:eabeb17d8f1771d23111e345ff1ae16cf0c6384b2402c5fbc3a552e91103dc22"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/unconfigured_max_message_bytes_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New. The R-3 driver: the real send + poll round trip through a handler built with an unconfigured maximum, at a ciphertext of exactly protocol.MaxMessageBytes (was 400 PAYLOAD_TOO_LARGE before the fix), plus the other direction - one byte above the protocol maximum must still be refused, so 'unconfigured' cannot come to mean 'unbounded'.",
+      "hash": "sha256:9978899f896853fa6b36c8f01ae1b811d223120a976cf9f187b732965dd55ec4"
+    },
+    {
+      "path": "apps/relay/internal/config/cleanup_interval_removed_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New. TestTheConfigurationSurfaceOffersNoCleanupInterval reflects over Config and fails if any field declares ECHOLET_CLEANUP_INTERVAL_SECONDS or is named for cleanup; TestLoadIgnoresACleanupIntervalAnOperatorSetsAnyway pins that a stale variable on a live host is inert rather than a startup failure.",
+      "hash": "sha256:2f0977be542070e01ca08cb6cba2aa1a9103568074be3b5cc92d3190da49e1d4"
+    },
+    {
+      "path": "apps/relay/internal/api/router/cleanup_ticker_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New. NewRouter with a config carrying no cleanup period must start a working ticker (it panicked before) and Router.Stop() must return, twice, so cmd/relay's startup-failure paths can call it without knowing how far the start got.",
+      "hash": "sha256:c347c377704cf6e46bd7f6be139786a883ddc96a443255590620229354610015"
+    },
+    {
+      "path": "apps/relay/internal/config/max_message_bytes_config_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Three tests added - the explicit zero refused at Load(), a lower explicit value still accepted, and an empty value treated as unset - plus one existing case's comment corrected to say Load refuses an explicit zero. No case removed, loosened or renamed.",
+      "hash": "sha256:e34056200cf30597f9f562abbc791059e136805f9543ab5a2ab2c95d7114ac3d"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_poll_byte_budget_derivation_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "COMMENT ONLY. The 'WHY ZERO IS NOT IN THAT TABLE' block described the zero as an open residual; it now records that T21's measurement was real, that T22 closed it, and where the zero's own round trip lives. No assertion, table case or helper changed.",
+      "hash": "sha256:40c082ae22a64284936a7051f9a5218ea75afe43411af15521e7cda93a72ea49"
+    },
+    {
+      "path": "apps/relay/internal/server/server_test.go",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Deliberately UNCHANGED, byte-identical to HEAD - the six fixtures the chosen approach makes it unnecessary to touch. Named and measured in the report rather than edited.",
+      "hash": "sha256:99f83d7ac5a5eb75337ebec44a88be56079ca5c7d9e7bce1edcaf203c8035b87"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/relay/internal/config/config.go",
+      "change": "product: CleanupIntervalSec field removed (T33); Load() gains refuseAnExplicitlyDisabledMaxMessageBytes, which uses os.LookupEnv to refuse an explicitly-set non-positive ECHOLET_MAX_MESSAGE_BYTES; variable name hoisted to a constant; Validate()'s zero comment corrected"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_handler.go",
+      "change": "product: NewMailboxHandler resolves a non-positive maximum once; envelopeBodyLimit()'s duplicate fallback removed; field documented as always positive"
+    },
+    {
+      "path": "apps/relay/internal/api/router/router.go",
+      "change": "product: cleanup call site passes service.DefaultCleanupIntervalSeconds instead of cfg.CleanupIntervalSec"
+    },
+    {
+      "path": "apps/relay/internal/service/cleanup_service.go",
+      "change": "product: added the constant DefaultCleanupIntervalSeconds = 60. Service, Start, Stop and runCleanup untouched"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/unconfigured_max_message_bytes_test.go",
+      "change": "test: added, the R-3 driver (round trip at an unconfigured maximum, both directions)"
+    },
+    {
+      "path": "apps/relay/internal/config/cleanup_interval_removed_test.go",
+      "change": "test: added, the T33 driver plus a stale-variable deployment guard"
+    },
+    {
+      "path": "apps/relay/internal/api/router/cleanup_ticker_test.go",
+      "change": "test: added, NewRouter starts a working ticker with no configured interval and Stop is idempotent"
+    },
+    {
+      "path": "apps/relay/internal/config/max_message_bytes_config_test.go",
+      "change": "test: three tests added (explicit zero refused, lower value accepted, empty value treated as unset); one comment corrected"
+    },
+    {
+      "path": "apps/relay/internal/api/handler/mailbox_poll_byte_budget_derivation_test.go",
+      "change": "test: comment only - the residual-R-3 note updated to record its closure and where the zero is now driven"
+    },
+    {
+      "path": "apps/relay/internal/api/router/signal_prekey_bundle_v2_test.go",
+      "change": "test fixture: 'CleanupIntervalSec: 3600' removed from a config literal (forced by the field's removal; asserted nothing, and the panic it worked around is now fixed and pinned)"
+    },
+    {
+      "path": "apps/relay/internal/api/router/signal_prekey_bundle_v2_mailbox_test.go",
+      "change": "test fixture: same removal in signalV2RouterConfig()"
+    },
+    {
+      "path": "docs/OPS-23_LOCAL_ENV_VARS.md",
+      "change": "docs: new bullet on the explicit zero (and that unset/empty still mean the protocol maximum); the cleanup section's closing paragraph rewritten from 'the field remains' to 'the field is gone, the service and its Stop stay'"
+    },
+    {
+      "path": "docs/STATUS_CURRENT.md",
+      "change": "docs: limitation 10's closing sentences corrected - the field is removed, the period belongs to the service, the variable is inert; the open item (empty runCleanup body) kept"
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/README.md",
+      "change": "docs: same correction to the CleanupService bullet"
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/deployment-runbook.md",
+      "change": "docs: same correction to the open-limitations bullet, keeping the true observation that the relay still logs interval_sec=60 and correcting where the 60 comes from"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T22-F-001",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/relay/internal/config/config.go",
+      "line": 155,
+      "symbol": "refuseAnExplicitlyDisabledMaxMessageBytes",
+      "problem": "This is the only rule in internal/config that is about the ENVIRONMENT rather than about a Config value: it reads os.LookupEnv directly, so it is reachable through Load() and not through Validate(). A caller that builds a Config by hand and calls Validate() - as internal/server does - does not get it.",
+      "impact": "That asymmetry is deliberate and is the whole point of the task's decision (a hand-built zero means 'unconfigured' and must keep working; an operator's explicit zero must not). But it means the package now has two tiers of rule, and a future rule that belongs in the environment tier could be written into Validate() by habit, where it would outlaw a struct default in order to reach an operator. Recorded so the shape is visible rather than discovered later.",
+      "suggested_fix": "None needed today. If a second environment-shaped rule appears, group them behind one named function called from Load() and say so in Validate()'s doc comment, rather than letting the two tiers blur.",
+      "evidence": "Validate() is called from server.New(cfg, handler) (internal/server/server.go), which the six server tests reach with a zero-value MaxMessageBytes; Load() is the only path that calls refuseAnExplicitlyDisabledMaxMessageBytes. Both facts are exercised: the six server tests pass unchanged, and TestLoadRefusesAnExplicitlyZeroMaxMessageBytes passes.",
+      "confidence": "high"
+    },
+    {
+      "id": "T22-F-002",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "file": "apps/relay/internal/api/router/router.go",
+      "line": 73,
+      "symbol": "NewRouter",
+      "problem": "CLOSED HERE, and not named by either source report: NewRouter passed cfg.CleanupIntervalSec straight into time.NewTicker, which panics on a non-positive duration, so a zero-value config.Config took the router down at construction with 'panic: non-positive interval for NewTicker'. This is the same family as residual R-3 - a zero-value struct field consumed as if it had been configured - in a second place.",
+      "impact": "Unreachable through Load(), whose envDefault was 60, so it only ever bit tests; but it is why two router test fixtures carried a magic 'CleanupIntervalSec: 3600' with no assertion attached, and it would have bitten any future caller constructing a partial Config. Removing the field closes it by construction: the period is now a positive constant owned by the service.",
+      "suggested_fix": "Done: router.go passes service.DefaultCleanupIntervalSeconds, and TestNewRouterStartsACleanupTickerWithoutAConfiguredInterval pins it by constructing a router from a config with no cleanup period and then stopping it twice.",
+      "evidence": "Measured before the product change: 'panic: non-positive interval for NewTicker' at time.NewTicker -> service.(*CleanupService).Start (cleanup_service.go:60) -> router.NewRouter (router.go:69), raw log .metaproject/data/gdctx/raw/2026-09-08T17-08-55-348Z_run.log. Green after, with 'Cleanup service started interval_sec=60' and 'Cleanup service stopped' in the test's own output.",
+      "confidence": "high"
+    },
+    {
+      "id": "T22-F-003",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/relay/internal/config/max_message_bytes_config_test.go",
+      "line": 199,
+      "symbol": "TestLoadTreatsAnEmptyMaxMessageBytesAsUnset",
+      "problem": "One test in this task was written AFTER its measurement rather than before, breaking the otherwise strict tests-first ordering. Recorded so the ordering claim is not overstated.",
+      "impact": "None to the product; it matters only for how the tests-first claim should be read. The reason is deliberate: the new refusal's safety on a live host depends on how caarlos0/env decodes 'VAR=' when an envDefault is present, which is a property of a third-party library rather than of this repository, so asserting it first would have been guessing rather than specifying.",
+      "suggested_fix": "None. The probe file (internal/config/zz_empty_probe_test.go) was deleted after measuring and the behaviour pinned as a real test with the reason in its doc comment; git status shows no such path.",
+      "evidence": "Probe output: 'PROBE empty-string: MaxMessageBytes=262144 err=<nil>' (raw log .metaproject/data/gdctx/raw/2026-09-08T17-18-19-519Z_run.log). The empty value falls back to the envDefault, so os.LookupEnv reporting it as set does not cause a refusal, and a .env line reading 'ECHOLET_MAX_MESSAGE_BYTES=' cannot stop a deployed relay from restarting.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "go_tests_untagged": "pass",
+    "go_tests_race": "pass, 0 data races",
+    "go_tests_race_relayv2": "pass, 0 data races",
+    "go_vet": "clean, both tag sets",
+    "gofmt_touched_files": "clean",
+    "pnpm_typecheck_exit": 0,
+    "go_tests_added": 7,
+    "product_files_changed": 4,
+    "test_files_changed": 5,
+    "test_files_added": 3,
+    "doc_files_changed": 4,
+    "tests_weakened_or_deleted": 0,
+    "server_fixtures_touched": 0,
+    "mutations_run_and_reverted": 1
+  },
+  "timestamp_utc": "2026-09-08T17:30:00Z"
+}

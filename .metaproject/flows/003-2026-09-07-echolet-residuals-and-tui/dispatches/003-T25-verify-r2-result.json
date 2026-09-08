@@ -1,0 +1,401 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003-T25-verify-r2",
+  "dispatch_id": "003-T25-verify-r2",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Second independent verification of flow 003 at 1ed5b2a, run entirely in a detached worktree at /tmp/echolet-verify-r2 (created because two other agents were changing the main tree; removed afterwards). Node v26.5.0 measured, every Go leg with -count=1 and none cached. THE MATRIX: typecheck exit 0; pnpm -r test exit 0 with 66 files / 338 tests / 0 failed / 0 skipped; Go untagged, -race and -race -tags relayv2 all exit 0 with 175 RUN / 175 PASS / 0 FAIL / 0 SKIP and ZERO data races in all three; test:e2e exit 0 on an idle host with 7 files / 30 tests in 885 s - but exit 143 with ELEVEN E2E-child-timeout failures on its first run, which is R2-004. WHAT I RE-ESTABLISHED RATHER THAN READ: all three new mutation-killed tests kill their mutations when I run them (the trust-modal viewport guard, 3 of 5 tests, one per axis of the disjunction; the TypeScript/Go size mirror, in both directions; the cleanup-service Stop join, with internal/server still ok). The reservation property survives a DIRECT attack I wrote myself: 80 concurrent claims against a 20-member pool serve exactly 20, with 20 distinct bundle ids and 20 distinct one-time prekeys, over 5/5 runs under -race with 0 races - and the wave's own green regression pin is NOT vacuous, since re-adding the availability index on an idempotent re-publish makes it fail. Seven mutations, all killed, all reverted; the whole-tree SHA-256 manifest is identical before and after (883e5323..., 1010 files). No test is weakened, skipped, narrowed or deleted: every corrected count is an exact toEqual/toHaveLength derived from LIMITS.PREKEY_MIN_COUNT, the off-by-one is diagnosed on the correct side (N-1 = 19, cross-checked against step 6's own pool.claimable assertion), and all fifteen recorded digests match the committed tree byte-for-byte. THE POOL'S COST, MEASURED: the headline 120 -> 6 victims per minute is HONEST (120/min per-host limit applied as global middleware, one claim per member). Two subsidiary claims are not. A full-drain publish costs 40 requests, not the 20 and 17 % the design states (measured 20 / 20 / 21 / 40 for empty / steady / one-dead-slot / full-drain), and 'two source addresses drain a pool faster than its owner can refill it' is optimistic by 2x: one source destroys 120 members/min against a recovery ceiling of 60. T31's report already corrects the first; the design and an e2e comment were never updated. VERDICTS: AC4, AC5, AC6, AC7, AC8 and AC9 MET (AC9 now genuinely pinned, V-001 closed); AC3 and AC10 PARTIAL; AC1 and AC2 NOT MET. AC2 fails on the design's OWN enumerated list: 9 of the 11 sites t26 said must be edited in the same change are unedited, and 1ed5b2a touched no file under docs/. And the push gate has a state it passes that it should stop: its two blocking steps test the WORKING TREE, so a scratch repo with a red committed suite and a green uncommitted tree pushes clean at gate exit 0 - not weaker than what it replaced, but not what its own header claims, and unreachable by all 27 self-test rows because each builds the tree equal to HEAD.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC1: every residual inventory item dispositioned by evidence, with a table naming the evidence for each",
+      "status": "not_met",
+      "evidence": "No post-wave disposition table exists over T1's 62 items: keryx ctx rg -i disposition across the flow package and docs/ returns only T1's pre-wave verdicts, flow.json's per-task dispositionReason fields, and round 1's V-008. flow.json is in-progress with 16 of 37 tasks todo, six of them - T20, T24, T26, T27, T32, T34 - with committed artifacts or code. Two FIX NOW residuals re-verified still open with no wave-level record: gofmt -l apps/relay lists three files, and apps/relay/relay is still an 18,094,306-byte untracked binary."
+    },
+    {
+      "criterion": "AC2: no document states something the tree contradicts",
+      "status": "not_met",
+      "evidence": "Round-1 items are genuinely closed and I checked each: STATUS_CURRENT limitations 3 and 4 struck and attributed to 5235a6d / 18afa36, the ticker clause corrected in two documents, the certificate-renewal timer stated as installed in all three, the cleanup interval gone from all six operator-facing files. Then the pool reopened the criterion on the design's own enumerated list: re-running t26-replenishment-design.md:526's query at 1ed5b2a, 9 of 11 sites are unedited (specification.md:118, README.md:33, runbook.md:246, deployment-runbook.md:1118, STATUS_CURRENT.md:98, PROTOCOL-07:919, outbound.publicationPrecondition.test.ts:24, :85, :216), prd.md:58 is a twelfth, and the new relay publish result shape pool:{target,claimable,minted} is documented nowhere. git show --stat 1ed5b2a lists no docs/ path."
+    },
+    {
+      "criterion": "AC3: test:e2e runs every e2e file, and every document quoting an e2e figure quotes the corrected name and count",
+      "status": "partial",
+      "evidence": "First clause MET: apps/cli/package.json declares 'vitest run test/e2e' and a clean isolated run is exit 0 with 7 files, 30 tests, 885.14 s. Second clause NOT MET: metrics-and-validation.md:20,24 and STATUS_CURRENT.md:53 all say 'six files and 29 tests' and 4m52.6s, while d49ec6c added a seventh file two commits later. Separately the script failed 11 tests with exit 143 on its first run in this worktree (R2-004)."
+    },
+    {
+      "criterion": "AC4: configuration that binds nothing is made to bind or removed; the relay's background timer stoppable and covered by tests",
+      "status": "met",
+      "evidence": "ECHOLET_CLEANUP_INTERVAL_SECONDS is absent from both compose files, run-relay.sh and all three env examples; keryx ctx rg over the tree finds it only at config.go:58 - recorded in OPS-23_LOCAL_ENV_VARS.md with the reason its removal needs its own task with tests - and in documentation of the removal. The stop path is now pinned by the JOIN rather than the signal alone: mutation MU-3 (<-stopped becomes _ = stopped) fails TestCleanupServiceStopWaitsForItsGoroutineInsteadOfOnlySignallingIt while internal/server stays ok."
+    },
+    {
+      "criterion": "AC5: one malformed record does not deny service to unrelated identities, and one configuration value cannot silently make a mailbox undeliverable",
+      "status": "met",
+      "evidence": "Unchanged in c5fde09..1ed5b2a and re-confirmed green: internal/storage/repository, internal/api/handler and internal/config all ok under -count=1 -race -tags relayv2 with 0 data races."
+    },
+    {
+      "criterion": "AC6: the console runs one command at a time and reports the exit class the CLI actually returned, against a real driven process",
+      "status": "met",
+      "evidence": "tui-shell.singleFlight 4/4 and main.processDriven 3/3 green in the full suite; neither those files nor the code behind them changed in c5fde09..1ed5b2a."
+    },
+    {
+      "criterion": "AC7: a truncated pane says it is truncated and how many rows are hidden, and keeps the rows an operator needs",
+      "status": "met",
+      "evidence": "shell-chrome.overflow 3/3 and shell-chrome.recency 3/3 green; unchanged in this range."
+    },
+    {
+      "criterion": "AC8: every advertised key visible at the minimum viewport, a discoverable key list, and no emitted line wider than the viewport",
+      "status": "met",
+      "evidence": "shell-chrome.legend 3/3 and tui-shell.smallViewport 1/1 green. Round 1's V-009 edge is unchanged - no test covers a viewport below 40x10 - though tui-shell.trustViewport.test.ts now drives 40x10, 71x16 and 72x15."
+    },
+    {
+      "criterion": "AC9: flow 002's properties re-verified unchanged on the final tree, with the full matrix green and zero data races",
+      "status": "met",
+      "evidence": "shell-chrome 12/12, tui.keyMaterial 9/9, and the last unguarded property is now enforced: mutation MU-1, deleting '&& !isBelowMinViewport(painted)' from tui-shell.ts:343, fails 3 of the 5 trustViewport tests where round 1 measured 108 tests still green. Matrix: 338 JS tests, 175 Go tests, 0 failures, 0 data races across untagged, -race and -race -tags relayv2."
+    },
+    {
+      "criterion": "AC10: no test weakened, skipped, narrowed or deleted, and every fix lands after a red test with the ordering provable from git history",
+      "status": "partial",
+      "evidence": "Nothing weakened, verified directly: no .skip/.only/it.todo/xit/t.Skip anywhere under apps/ or packages/; all 14 touched test files read; every corrected count is an exact toEqual/toHaveLength derived from LIMITS.PREKEY_MIN_COUNT; the two index corrections address slot 0 explicitly where .at(-1) would have passed for the wrong reason; the inbound.test.ts re-baselining preserves the atomicity property that test exists for. Ordering for the pool IS provable: d49ec6c (tests) precedes 1ed5b2a (fix), and 1ed5b2a touches no test file at all. All fifteen digests recorded by T27/T30/T36/T37 match the committed tree byte-for-byte, including the untouched reservation guard prekey_bundle_v2_test.go at 44e4c27d. Still PARTIAL because round 1's V-005 is unchanged: 5235a6d still carries product code plus two test files importing a package the same commit creates, so red-first for those two remains unprovable from history."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t25-verification-report-r2.md",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "Round-2 independent verification: worktree and integrity, the full matrix, per-AC verdicts, the reservation attack, the measured pool cost, the gate probe, a ten-row mutation table and thirteen findings.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T25-verify-r2-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t25-verification-report-r2.md",
+      "change": "added - the round-2 verification report; the only report file written."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T25-verify-r2-result.json",
+      "change": "added - this result."
+    }
+  ],
+  "findings": [
+    {
+      "id": "R2-001",
+      "global_id": "003-T25-verify-r2#R2-001",
+      "reviewer": "T25-independent-verifier-r2",
+      "severity": "major",
+      "file": ".githooks/pre-push",
+      "line": 264,
+      "symbol": "echolet_testing_gate",
+      "problem": "The two BLOCKING gate steps - the Go suite and `keryx test run --strict` - run against the WORKING TREE, not against the commits being pushed. Only step 1 (security scan) and step 4 (documentation pin) consume the ref lines git puts on stdin. The hook's own header (lines 105-107) claims the opposite: that reading stdin 'lets the gate ask about the commits actually being pushed rather than about the working tree - which is the mistake that made the old gate pass vacuously'.",
+      "impact": "A commit whose suite is red can be pushed, verified green, whenever the working tree differs from it: commit, notice the break, fix locally without committing, push. Also hit by pushing an older branch tip while the tree carries newer code. The 27-row self-test cannot see this state, because every row is built with the working tree equal to HEAD. The gate is still not WEAKER than the stock keryx hook (`--changed` was working-tree-scoped too), so the 'strictly no weaker' claim survives - the range-awareness claim and the completeness of the state table do not.",
+      "suggested_fix": "Either run the test steps against a checkout of the pushed tip (git worktree add at ECHOLET_PUSH_TIP, install, run there, remove) or, at minimum, block when `git status --porcelain` is non-empty during a push, and correct the header comment so it stops claiming range-awareness the test steps do not have. Add the dirty-tree row to scripts/gate/selftest.sh.",
+      "evidence": "sh /tmp/echolet-r2-gate-probe.sh /tmp/echolet-verify-r2 - a scratch repo built the way selftest.sh builds them, with the committed suite.sh 'exit 1' and the uncommitted working-tree suite.sh 'exit 0', hook fed ref lines naming the committed sha. Output: 'push gate (js): running fallback test gate: npm run test' / 'SUITE RAN: green' / '---- gate exit: 0'. git show <sha>:suite.sh prints the red version.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          ".githooks/pre-push:334 (go step, working-tree scoped)",
+          ".githooks/pre-push:361 (keryx test run --strict, working-tree scoped)",
+          ".githooks/pre-push:105-118 (the range-awareness comment and ECHOLET_PUSH_TIP, used only by step 4)",
+          "scripts/gate/go-tests.sh:57 (go -C RELAY_DIR test, working-tree scoped)",
+          "scripts/gate/selftest.sh (all 27 rows build the tree equal to HEAD, so none exercises the divergence)"
+        ],
+        "enumeration_method": "Read .githooks/pre-push end to end and traced every consumer of ECHOLET_PUSH_REFS / ECHOLET_PUSH_TIP: exactly two (keryx_security_pre_push via the pipe at :261, and docs-freshness.sh at :373). Every other step operates on the checkout at ECHOLET_REPO_ROOT. Then reproduced the divergent state directly."
+      }
+    },
+    {
+      "id": "R2-002",
+      "global_id": "003-T25-verify-r2#R2-002",
+      "reviewer": "T25-independent-verifier-r2",
+      "severity": "major",
+      "file": "docs/requirements/echolet-cli-prototype/specification.md",
+      "line": 118,
+      "symbol": "Limitation, structural for this prototype",
+      "problem": "The pool landed in 1ed5b2a and 9 of the 11 sites that state 'a published bundle serves exactly one first-contact sender' were not edited. t26-replenishment-design.md:525-540 enumerates all eleven ('enumerated, not sampled') and states that each 'becomes false and must be edited in the same change, or the tree carries a statement the code contradicts'; PAUSED.md:26 repeats the warning to the implementer. 1ed5b2a touched no file under docs/ at all. specification.md:118 additionally asserts 'the CLI has no command to allocate a fresh one-time prekey' and 'A re-run of relay publish reports claimable: false rather than restoring availability' - both now false, and relay publish IS that command. prd.md:58 adds a twelfth site ('prekey pool replenishment is a later capability'). The operator-visible result shape also changed (relay publish --json now returns pool:{target,claimable,minted}) and no document describes it.",
+      "impact": "AC2 fails for the third time in one wave, on the exact class the design predicted and named in advance. A reader of the requirements package is told first contact is structurally limited to one sender and that no recovery command exists, while the tree serves twenty and recovers through relay publish. The documentation-freshness gate only WARNS, so nothing stops this recurring.",
+      "suggested_fix": "Edit the nine remaining sites in the change that closes the wave, using the design's own list as the checklist; add the pool result shape to specification.md and to API-11_JSON_SCHEMAS.md's relay publish result description; move STATUS_CURRENT.md's pin to the tip. The three outbound.publicationPrecondition.test.ts sites are rationale prose for guards that stay correct - reword, do not delete the guards.",
+      "evidence": "keryx ctx rg 'exactly one first-contact sender|serves exactly one|one first-contact|ровно одного первого отправителя' . at 1ed5b2a. Edited: apps/cli/src/commands/cli.ts:35, apps/cli/src/runtime/outbound.ts:65. Unedited: docs/requirements/echolet-cli-prototype/specification.md:118, README.md:33, runbook.md:246, deployment-runbook.md:1118, docs/STATUS_CURRENT.md:98, docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md:919, apps/cli/src/runtime/outbound.publicationPrecondition.test.ts:24, :85 and :216. git show --stat 1ed5b2a lists no docs/ path.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "docs/requirements/echolet-cli-prototype/specification.md:118",
+          "docs/requirements/echolet-cli-prototype/README.md:33",
+          "docs/requirements/echolet-cli-prototype/runbook.md:246",
+          "docs/requirements/echolet-cli-prototype/deployment-runbook.md:1118",
+          "docs/STATUS_CURRENT.md:98",
+          "docs/PROTOCOL-07_MVP_MESSAGE_FLOW.md:919",
+          "apps/cli/src/runtime/outbound.publicationPrecondition.test.ts:24",
+          "apps/cli/src/runtime/outbound.publicationPrecondition.test.ts:85",
+          "apps/cli/src/runtime/outbound.publicationPrecondition.test.ts:216",
+          "docs/requirements/echolet-cli-prototype/prd.md:58 (twelfth site, same class)",
+          "apps/cli/src/commands/cli.ts:35 (already corrected by 1ed5b2a)",
+          "apps/cli/src/runtime/outbound.ts:65 (already corrected by 1ed5b2a)"
+        ],
+        "enumeration_method": "Re-ran the design's own enumeration query (t26-replenishment-design.md:526) over the whole tree at 1ed5b2a with keryx ctx rg, then read and classified every hit; added prd.md:58 from a second query for pool/replenishment over docs/. apps/relay/internal/config/config.go:15 is 'serves exactly one scheme at a time' and is excluded, as the design also excludes it."
+      }
+    },
+    {
+      "id": "R2-003",
+      "global_id": "003-T25-verify-r2#R2-003",
+      "reviewer": "T25-independent-verifier-r2",
+      "severity": "major",
+      "file": "docs/requirements/echolet-cli-prototype/metrics-and-validation.md",
+      "line": 20,
+      "symbol": "What test:e2e actually runs",
+      "problem": "AC3's second clause is broken again by this wave's own commits. Both documents quoting the corrected e2e figure say 'six files and 29 tests' and '4m52.6s'; the tree at 1ed5b2a holds SEVEN files and THIRTY tests, because d49ec6c added test/e2e/prekey-pool-replenishment.test.ts two commits after the reconciliation that wrote those sentences. The measured wall clock on an idle host is 885.14 s, three times the quoted figure, largely because the new file costs 538 s under the script's own parallelism.",
+      "impact": "AC3 requires every document quoting an e2e figure to quote the corrected name AND the corrected count. The count is wrong again, inside the same wave that corrected it - the documentation-drift failure this flow has now reproduced three times.",
+      "suggested_fix": "Update metrics-and-validation.md:20,24 and STATUS_CURRENT.md:53 to 7 files / 30 tests with a re-measured wall clock, and name prekey-pool-replenishment in the per-file breakdown. Better: quote the figure the script itself prints rather than a transcribed one.",
+      "evidence": "ls apps/cli/test/e2e -> flood-closure, init-relay-url, prekey-pool-replenishment, publication-claimability, relay-tls, rewalk-crash-safety, two-process (7). pnpm --filter @echolet/cli test:e2e on an idle host -> 'Test Files 7 passed (7) / Tests 30 passed (30) / Duration 885.14s', exit 0. keryx ctx rg 'six files|29 tests' docs -> metrics-and-validation.md:20,24 and STATUS_CURRENT.md:53.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "docs/requirements/echolet-cli-prototype/metrics-and-validation.md:20",
+          "docs/requirements/echolet-cli-prototype/metrics-and-validation.md:24",
+          "docs/STATUS_CURRENT.md:53",
+          "docs/STATUS_CURRENT.md:37 (points forward to the section holding the stale count)",
+          "docs/requirements/echolet-cli-prototype/README.md:10 (names the script; carries no count, so already correct)"
+        ],
+        "enumeration_method": "keryx ctx rg 'six files|29 tests|двадцать девять|шести файл|test:e2e' over docs/, then read every hit and classified it by whether it carries a count."
+      }
+    },
+    {
+      "id": "R2-004",
+      "global_id": "003-T25-verify-r2#R2-004",
+      "reviewer": "T25-independent-verifier-r2",
+      "severity": "major",
+      "file": "apps/cli/vitest.config.ts",
+      "line": 4,
+      "symbol": "defineConfig.test",
+      "problem": "pnpm --filter @echolet/cli test:e2e - the AC3 remedy - is not reliably green. Its first run in a clean isolated worktree exited 143 with ELEVEN failed tests across two-process (2), publication-claimability (1) and flood-closure (8), every one the suites' own 30 s 'E2E child timeout'. The same seven files had all passed minutes earlier inside pnpm -r test. The config sets no pool limit, so vitest run test/e2e starts all seven process-spawning e2e files simultaneously, each spawning relay binaries and CLI children; the full test script interleaves them with 45 cheap files instead. T31 4.3 already recorded that the pool moved this margin (a fresh relay publish now mints 20 bundles, ~1.3 s, inside children with a 15 s budget).",
+      "impact": "The script AC3 required to run the whole directory fails for reasons that are not the code, so anyone wiring it into a gate or a release check gets red builds that teach people to ignore it - the dynamic the docs-freshness step is explicitly designed around. It also makes 'the e2e suite is green' unfalsifiable without saying which run.",
+      "suggested_fix": "Bound the concurrency of the e2e-only run: vitest run test/e2e --poolOptions.forks.maxForks=2, or a test/e2e/vitest.config.ts with fileParallelism false, then re-measure. Raise the suites' own per-child timeout only if bounding parallelism is not enough. Record the figure the bounded run actually produces rather than a lucky one.",
+      "evidence": "Run 1 (isolated worktree, sequential matrix): exit 143, /tmp/echolet-r2-logs/e2e.log shows ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL and 11 occurrences of 'E2E child timeout'. Run 2 (idle host): exit 0, 7 files / 30 tests / 885.14 s. Same commit, same worktree, no code change between them.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/vitest.config.ts (no pool or fileParallelism limit)",
+          "apps/cli/package.json test:e2e (vitest run test/e2e)",
+          "apps/cli/test/e2e/two-process.test.ts (30 s command() timeout)",
+          "apps/cli/test/e2e/publication-claimability.test.ts (30 s command() timeout)",
+          "apps/cli/test/e2e/flood-closure.test.ts (per-child budget)",
+          "apps/cli/test/e2e/prekey-pool-replenishment.test.ts (30 s command() timeout; 538 s alone under the script)"
+        ],
+        "enumeration_method": "Read apps/cli/vitest.config.ts for pool settings, then attributed every failure in run 1 to its file from the vitest output and matched each message to that suite's own command() timeout constant."
+      }
+    },
+    {
+      "id": "R2-005",
+      "global_id": "003-T25-verify-r2#R2-005",
+      "reviewer": "T25-independent-verifier-r2",
+      "severity": "minor",
+      "file": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t26-replenishment-design.md",
+      "line": 157,
+      "symbol": "Cost of N = 20, measured rather than guessed",
+      "problem": "The design states 'A full-drain relay publish: 20 x 61.6 ms ~ 1.23 s, and 20 requests - 17 % of the shipped 120/min budget', and 2.3 says six publishes a minute hit the limiter. The implemented loop - the loop the design itself specifies - re-submits every stored member AND publishes one replacement per dead slot, so the cost is N + k and a full drain is 2N. Measured: 40 requests, 33 % of the budget, three publishes to hit the limiter. t31-implementation-report.md 4.5 catches this and states it correctly; the design was never corrected, and test/e2e/prekey-pool-replenishment.test.ts:121-123 still tells the next reader that at N = 20 one relay publish is 20 requests.",
+      "impact": "The cost model a reader will quote is the design's, and it understates the defender's per-recovery request budget by 2x - exactly the half of the analysis that decides whether the recovery path can keep up with the attack.",
+      "suggested_fix": "Correct t26-replenishment-design.md:157 and 2.3 to N + k / 2N / 33 % / three, and correct the comment at prekey-pool-replenishment.test.ts:121-123, which is also the stated justification for raising ECHOLET_RATE_LIMIT_PER_MINUTE to 100000 in that test.",
+      "evidence": "Instrumented the real publish() loop against the suite's own fake relay (probe appended to outbound.publicationPool.test.ts, run, reverted; sha256 d7a8db80... before and after): first publish 20, steady state 20, one dead slot 21, FULL-DRAIN top-up 40 with minted = 20. Matches outbound.publicationPool.test.ts's own B-7 shape (20 resubmissions plus 3 mints for 3 consumed).",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "R2-006",
+      "global_id": "003-T25-verify-r2#R2-006",
+      "reviewer": "T25-independent-verifier-r2",
+      "severity": "minor",
+      "file": "apps/cli/test/e2e/prekey-pool-replenishment.test.ts",
+      "line": 35,
+      "symbol": "WHAT THIS IS NOT",
+      "problem": "'Two source addresses drain a pool faster than its owner can refill it' (also PAUSED.md:20 and the T26 design). With the measured 2 requests per restored member at full drain against 1 request per destroyed member, and the shipped 120 requests/minute keyed on the peer host, ONE attacking source destroys 120 members/minute while one recovering victim restores at most 60/minute - and as few as ~5.7/minute if the pool is drained a member at a time, since a single dead slot still costs 21 requests. One source already out-drains the owner by at least 2:1.",
+      "impact": "The sentence sits in the file whose stated purpose is the honest cost, and it overstates the defence by a factor of two in the defender's favour. The headline it accompanies (120 -> 6 victims/minute) is correct; this one is not, and it is the claim that decides whether the recovery path is sustainable under a targeted attack.",
+      "suggested_fix": "Replace with the measured statement: one source at the shipped rate limit destroys members twice as fast as the owner can restore them, so the pool buys a 20x breadth reduction and a one-shot recovery, not a sustainable defence against a targeted attacker.",
+      "evidence": "middleware/rate_limit.go (per-host quota; global r.Use at router.go:47; default 120 at config.go:57 and geekom.env.example:62) with the measured 40-request full-drain and 21-request single-slot top-ups from R2-005's probe.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "R2-007",
+      "global_id": "003-T25-verify-r2#R2-007",
+      "reviewer": "T25-independent-verifier-r2",
+      "severity": "minor",
+      "file": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/flow.json",
+      "line": 1,
+      "symbol": "tasks[].status",
+      "problem": "AC1 is still unmet and the bookkeeping has drifted further. There is no post-wave disposition table over T1's 62 residual items, and 16 of 37 flow tasks are todo - T1, T2, T3, T4, T15, T16, T20, T22, T24, T25, T26, T27, T32, T33, T34, T35 - including six whose artifacts or code are committed: T20 (e949aae), T24 (scripts/gate/go-tests.sh), T26 (t26-replenishment-design.md), T27 (four test files), T32 (scripts/gate/docs-freshness.sh) and T34 (t34-second-user-report.md).",
+      "impact": "An item quietly not reached is indistinguishable from one deliberately deferred with a reason, and a task marked todo whose work is committed makes the flow state useless as a completion oracle - the failure mode AC1 exists to prevent.",
+      "suggested_fix": "Move the six landed tasks to done through the keryx flow CLI, then write the 62-row disposition table (id / bucket / what the wave did / evidence, or the reason it is deferred) and reference it from the flow package.",
+      "evidence": "Parsed flow.json: status in-progress, 37 tasks, {todo: 16, done: 21}. keryx ctx rg -i disposition over the flow directory and docs/ finds only T1's pre-wave verdicts, flow.json's per-task dispositionReason fields, and round 1's V-008.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "R2-008",
+      "global_id": "003-T25-verify-r2#R2-008",
+      "reviewer": "T25-independent-verifier-r2",
+      "severity": "minor",
+      "file": "docs/STATUS_CURRENT.md",
+      "line": 9,
+      "symbol": "pinned revision",
+      "problem": "The status document still pins itself to 4346e2b, now 13 commits behind HEAD, and its T28 note pins its corrections to c5fde09, four commits behind. The new documentation-freshness gate step therefore prints STALE DOCUMENTATION on every push and, by design, blocks nothing.",
+      "impact": "The mechanism installed to stop the drift reports the drift and cannot stop it, and the pin has not been moved by either reconciliation pass. The warning becomes background noise - the exact dynamic scripts/gate/docs-freshness.sh's own comment says kills a check.",
+      "suggested_fix": "Move the pin as part of the change that closes the wave, and consider blocking when the pin is more than N behind rather than warning at 1.",
+      "evidence": "keryx ctx rg 'Ревизия|status-pin' docs/STATUS_CURRENT.md -> line 9 names 4346e2b. git log 4346e2b..1ed5b2a counts 13 commits. scripts/gate/docs-freshness.sh:134-169 warns on drift and exits 0 unless ECHOLET_DOCS_FRESHNESS_STRICT=1.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "R2-009",
+      "global_id": "003-T25-verify-r2#R2-009",
+      "reviewer": "T25-independent-verifier-r2",
+      "severity": "info",
+      "file": "apps/cli/src/transport/relayClient.pollCapacity.test.ts",
+      "line": 20,
+      "symbol": "responseByteBound",
+      "problem": "Correction to round 1, against my predecessor. V-006 reported that lowering LIMITS.MAX_MESSAGE_BYTES to 131072 left '21 files / 83 tests green' in apps/cli, i.e. that the TypeScript direction was guarded by nothing. It is not: relayClient.pollCapacity.test.ts hard-codes responseByteBound = 1024*1024 (line 20) and maxMessageBytes = 262144 (line 22) and fails TWO tests under that mutation. The genuinely unguarded direction was the Go one, which limits_mirror_test.go now closes.",
+      "impact": "None on the tree - the closure is correct and stronger than it needed to be. Recorded so the finding history is accurate, and to credit T27 for reporting the discrepancy itself rather than quietly benefiting from it.",
+      "suggested_fix": "No code change. If the record is kept, note that pollCapacity.test.ts's two literals are the third and fourth hand-written copies of the protocol size the 5235a6d closure set out to remove; folding them into LIMITS would leave the mirror test as the sole guard, which is what it was written to be.",
+      "evidence": "Mutation MU-2 on 1ed5b2a: npx vitest run src/transport src/runtime -> 'Test Files 2 failed | 22 passed (24) / Tests 3 failed | 91 passed (94)', the failures being pollCapacity x2 and protocolMirror x1. Round 1 reported 21 files / 83 tests all green for the same mutation.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "R2-010",
+      "global_id": "003-T25-verify-r2#R2-010",
+      "reviewer": "T25-independent-verifier-r2",
+      "severity": "info",
+      "file": "packages/session-node/src/SignalClient.ts",
+      "line": 60,
+      "symbol": "maxOneTimePreKeyId",
+      "problem": "The recovery path has a finite total budget the design costs only in the benign case. maxOneTimePreKeyId = 0xffffff (16 777 215), rotateOneTimePreKey() is strictly increasing, and the design explicitly forbids any pool GC, so consumed pre: records accumulate for the life of the profile. t26 2.2 computes '~16 000 centuries' from 20 ids per week. Under the attack the pool exists to price, the burn rate is the recovery rate: ~60 ids/minute sustained from one source exhausts the space in ~194 days, after which rotateOneTimePreKey() throws 'One-time prekey identifiers are exhausted' and relay publish fails permanently.",
+      "impact": "Slow, bounded, and far outside a prototype's horizon - but it is the one place the recovery path can be destroyed outright rather than merely outpaced, and the design's adversarial section does not carry the adversarial figure.",
+      "suggested_fix": "Record the adversarial figure beside the benign one, and note that bounded retention for consumed pre: records - which must never prune a record a claim may still be outstanding against - is a follow-on rather than a non-issue.",
+      "evidence": "packages/session-node/src/SignalClient.ts:59-60 and :266-282 (strictly increasing allocation, previous records retained); t26-replenishment-design.md:157-163 (the 16 000-centuries figure) and :268 ('This design forbids any pool GC'); the 60-members-per-minute ceiling measured for R2-005.",
+      "confidence": "medium",
+      "blocking_merge": false
+    },
+    {
+      "id": "R2-011",
+      "global_id": "003-T25-verify-r2#R2-011",
+      "reviewer": "T25-independent-verifier-r2",
+      "severity": "info",
+      "file": "apps/relay/internal/api/handler/signal_prekey_bundle_v2.go",
+      "line": 1,
+      "symbol": "gofmt",
+      "problem": "Round 1's carried residuals are unchanged: gofmt -l apps/relay still lists internal/api/handler/mailbox_read_mark_test.go, internal/api/handler/signal_prekey_bundle_v2.go and internal/storage/repository/signal_prekey_bundle_v2.go, and apps/relay/relay is still an 18,094,306-byte untracked binary in the main tree. Round 1's V-005, V-009, V-010 and V-011 are likewise unchanged.",
+      "impact": "Small, but these are FIX NOW inventory items with no wave-level record of why they are not being fixed - the AC1 gap in miniature. The three new Go test files this wave added are gofmt-clean.",
+      "suggested_fix": "Run gofmt on the three files as part of the closing change, or record them in the disposition table with the reason they are deferred.",
+      "evidence": "gofmt -l apps/relay in the worktree at 1ed5b2a lists exactly those three files; ls -la on the main tree's apps/relay/relay reports 18094306 bytes.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "R2-012",
+      "global_id": "003-T25-verify-r2#R2-012",
+      "reviewer": "T25-independent-verifier-r2",
+      "severity": "info",
+      "file": "scripts/hooks/install.sh",
+      "line": 66,
+      "symbol": "install_tripwire",
+      "problem": "pnpm install inside ANY git worktree runs the root prepare script, which resolves its hook target as git rev-parse --git-common-dir - from a worktree that is the MAIN repository's .git - and writes git config core.hooksPath, which is also shared across worktrees. Installing dependencies in a throwaway worktree therefore rewrites the parent repository's .git/hooks/pre-push and can change the parent's hook configuration.",
+      "impact": "Nothing tracked changes and the rewrite is idempotent by design, so the blast radius is small. But an agent or a developer creating a worktree specifically to avoid touching the main checkout will silently touch it anyway. Observed in this verification run: the install reported 'core.hooksPath tripwire refreshed in .../echolet/.git/hooks/pre-push' and 'core.hooksPath = .githooks' with no '(was: ...)' clause, so the config value was already correct and I did not change it.",
+      "suggested_fix": "Either say so in the script's header, or skip the tripwire refresh when git rev-parse --git-dir differs from --git-common-dir, i.e. when running inside a linked worktree.",
+      "evidence": "/tmp/echolet-verify-r2-install.log: '. prepare: echolet hooks: core.hooksPath tripwire refreshed in /Users/Goodea/goodea/projects/echolet/.git/hooks/pre-push'. scripts/hooks/install.sh:66-71 uses git rev-parse --git-common-dir; :44-48 writes git config core.hooksPath.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "R2-013",
+      "global_id": "003-T25-verify-r2#R2-013",
+      "reviewer": "T25-independent-verifier-r2",
+      "severity": "info",
+      "file": "apps/relay/internal/config/config.go",
+      "line": 58,
+      "symbol": "Config.CleanupIntervalSec",
+      "problem": "ECHOLET_CLEANUP_INTERVAL_SECONDS is gone from all six operator-facing files, but the Go field still reads it with envDefault 60 and still names a service whose runCleanup() is two slog.Debug calls. Setting the variable by hand still changes the frequency of two debug lines.",
+      "impact": "None on AC4, which asks that the interval not be PRESENTED to an operator while the service does nothing - that is now true, and OPS-23_LOCAL_ENV_VARS.md records the surviving field and states that removing it is a product change needing its own task with tests. Recorded so the residual is not lost when the wave closes.",
+      "suggested_fix": "Carry it into the disposition table as an open, reasoned deferral, and retire the field in the task that gives CleanupService a body or deletes it.",
+      "evidence": "keryx ctx rg 'ECHOLET_CLEANUP_INTERVAL_SECONDS|CleanupIntervalSec' . -> config.go:58, router.go:68, two router test fixtures, one service test comment, and three documentation sites that document the removal. No compose file, no run script, no env example.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "commit_verified": "1ed5b2a",
+    "worktree_path": "/tmp/echolet-verify-r2",
+    "tracked_files_hashed": 1010,
+    "tracked_files_unchanged": 1010,
+    "manifest_sha256": "883e53234c95c1bfe7ef869d06c7c28269724d49976934c258b7ab45dfab76ec",
+    "typecheck_exit_code": 0,
+    "js_test_files": 66,
+    "js_tests_passed": 338,
+    "js_tests_failed": 0,
+    "js_tests_skipped": 0,
+    "js_suite_exit_code": 0,
+    "js_suite_wall_seconds": 305,
+    "cli_test_files": 52,
+    "cli_tests": 273,
+    "tui_test_files": 16,
+    "tui_tests": 113,
+    "e2e_files_in_package": 7,
+    "e2e_tests_in_package": 30,
+    "e2e_script_run1_exit_code": 143,
+    "e2e_script_run1_tests_failed": 11,
+    "e2e_script_run1_wall_seconds": 403,
+    "e2e_script_run2_exit_code": 0,
+    "e2e_script_run2_tests_passed": 30,
+    "e2e_script_run2_wall_seconds": 885.14,
+    "go_tests_run": 175,
+    "go_tests_passed": 175,
+    "go_tests_failed": 0,
+    "go_tests_skipped": 0,
+    "go_packages_ok": 11,
+    "go_packages_no_test_files": 7,
+    "go_untagged_exit_code": 0,
+    "go_race_exit_code": 0,
+    "go_race_relayv2_exit_code": 0,
+    "go_data_races_untagged": 0,
+    "go_data_races_race": 0,
+    "go_data_races_race_relayv2": 0,
+    "go_untagged_wall_seconds": 65,
+    "go_race_wall_seconds": 28,
+    "go_race_relayv2_wall_seconds": 29,
+    "go_cached_legs": 0,
+    "mutations_run": 7,
+    "mutations_killed": 7,
+    "mutations_survived": 0,
+    "concurrency_attack_claimants": 80,
+    "concurrency_attack_served": 20,
+    "concurrency_attack_distinct_prekeys": 20,
+    "concurrency_attack_repeats_passed": 5,
+    "publish_requests_first": 20,
+    "publish_requests_steady_state": 20,
+    "publish_requests_one_dead_slot": 21,
+    "publish_requests_full_drain": 40,
+    "design_stated_full_drain_requests": 20,
+    "rate_limit_per_minute": 120,
+    "pool_target": 20,
+    "acceptance_met": 6,
+    "acceptance_partial": 2,
+    "acceptance_not_met": 2,
+    "node_version": "v26.5.0",
+    "go_version": "go1.26.1 darwin/arm64",
+    "pnpm_version": "10.0.0",
+    "loaded_machine_figures": "e2e run 1 only - it started immediately after the 305 s JS suite and a poll loop of mine burned one core for part of it; every other figure was taken on an otherwise idle host"
+  },
+  "timestamp_utc": "2026-09-08T17:53:44Z"
+}
