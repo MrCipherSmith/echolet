@@ -53,8 +53,11 @@ func TestValidateRefusesAMaxMessageBytesTheRelayCannotDeliver(t *testing.T) {
 			configured: protocol.MaxMessageBytes / 8,
 		},
 		{
+			// Permitted as a VALUE only. An operator who sets the variable to 0 is
+			// refused by Load(), which can tell an explicit zero from an unset
+			// variable - see TestLoadRefusesAnExplicitlyZeroMaxMessageBytes.
 			name: "zero is permitted: it is the zero value of a partially constructed Config, " +
-				"which internal/server builds directly and the handler reads as the protocol maximum",
+				"which internal/server builds directly and the handler resolves to the protocol maximum",
 			configured: 0,
 		},
 		{
@@ -124,6 +127,87 @@ func TestLoadRefusesAMaxMessageBytesAboveTheProtocolMaximum(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("startup refusal does not tell the operator %q: %q", want, err.Error())
 		}
+	}
+}
+
+// TestLoadRefusesAnExplicitlyZeroMaxMessageBytes closes residual R-3's
+// operator-facing half (flow 003, T22).
+//
+// Validate() permits a zero VALUE, because a zero-value Config means
+// "unconfigured" and the handler resolves it to the protocol maximum (see
+// api/handler/unconfigured_max_message_bytes_test.go). An operator who writes
+// ECHOLET_MAX_MESSAGE_BYTES=0 is not unconfigured, though: they set the variable,
+// and they meant something by it - most likely "no limit", the convention plenty
+// of other software uses. Answering that with a silent 256 KB would be a second
+// silent reinterpretation of their intent, and answering it the way the relay
+// used to - come up healthy and refuse every envelope as PAYLOAD_TOO_LARGE - is
+// the defect itself. So it is refused at the one moment somebody is watching, the
+// same way the half-configured TLS pair and the above-ceiling maximum are.
+//
+// This distinction lives in Load() and not in Validate() because Load() is the
+// only place that can make it: "the variable is unset" and "the variable is set
+// to 0" are the same int64 by the time Validate() sees a Config.
+func TestLoadRefusesAnExplicitlyZeroMaxMessageBytes(t *testing.T) {
+	clearTLSEnv(t)
+	t.Setenv("ECHOLET_MAX_MESSAGE_BYTES", "0")
+
+	cfg, err := Load()
+	if err == nil {
+		t.Fatalf("Load() returned nil for an explicit ECHOLET_MAX_MESSAGE_BYTES=0 (MaxMessageBytes = %d); a relay "+
+			"started that way answers PAYLOAD_TOO_LARGE to every legitimate envelope, so it must refuse to start "+
+			"rather than come up healthy and accept nothing (residual R-3)", cfg.MaxMessageBytes)
+	}
+	if !strings.Contains(err.Error(), "ECHOLET_MAX_MESSAGE_BYTES") {
+		t.Fatalf("startup refusal does not name the variable an operator has to change: %q", err.Error())
+	}
+	// The operator has to learn what to do instead, not merely that they were
+	// wrong: the ceiling they may configure up to is the actionable half.
+	if !strings.Contains(err.Error(), fmt.Sprintf("%d", protocol.MaxMessageBytes)) {
+		t.Fatalf("startup refusal does not tell the operator the protocol maximum %d they may configure up to: %q",
+			protocol.MaxMessageBytes, err.Error())
+	}
+}
+
+// TestLoadAcceptsAnExplicitlySetMaxMessageBytesBelowTheProtocolMaximum keeps the
+// refusal above from being over-broad. Configuring LESS is a deployment's
+// business and must keep working: a relay stricter than its clients is merely
+// stricter, and every bound scales down with it.
+func TestLoadAcceptsAnExplicitlySetMaxMessageBytesBelowTheProtocolMaximum(t *testing.T) {
+	clearTLSEnv(t)
+	lower := protocol.MaxMessageBytes / 8
+	t.Setenv("ECHOLET_MAX_MESSAGE_BYTES", strconv.FormatInt(lower, 10))
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() with ECHOLET_MAX_MESSAGE_BYTES = %d returned %v, want nil; a deployment may configure any "+
+			"positive value up to the protocol maximum of %d", lower, err, protocol.MaxMessageBytes)
+	}
+	if cfg.MaxMessageBytes != lower {
+		t.Fatalf("MaxMessageBytes = %d, want the configured %d", cfg.MaxMessageBytes, lower)
+	}
+}
+
+// TestLoadTreatsAnEmptyMaxMessageBytesAsUnset pins the one place the refusal
+// above depends on the env decoder's behaviour rather than on our own code.
+//
+// `ECHOLET_MAX_MESSAGE_BYTES=` with nothing after it is a shape that appears in
+// real .env files, and os.LookupEnv reports it as SET. If the decoder produced a
+// zero from it, the refusal above would turn a harmless empty line into a relay
+// that will not start - on hosts that are live. It does not: an empty value falls
+// back to the envDefault. Measured, then pinned here, because the refusal's
+// safety rests on it.
+func TestLoadTreatsAnEmptyMaxMessageBytesAsUnset(t *testing.T) {
+	clearTLSEnv(t)
+	t.Setenv("ECHOLET_MAX_MESSAGE_BYTES", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned %v for an empty ECHOLET_MAX_MESSAGE_BYTES, want nil; an empty line in a .env "+
+			"file means \"I did not configure this\", and must not stop a running deployment from restarting", err)
+	}
+	if cfg.MaxMessageBytes != protocol.MaxMessageBytes {
+		t.Fatalf("MaxMessageBytes = %d for an empty value, want the protocol maximum %d",
+			cfg.MaxMessageBytes, protocol.MaxMessageBytes)
 	}
 }
 
