@@ -1,0 +1,203 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003-T40-implement-2026-09-09",
+  "dispatch_id": "003-T40-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "The apps/cli suite was not red; the machine was saturated. Captured before changing anything: load averages 188.36 / 304.96 / 394.06 on a 10-core Mac, 0.1% idle, 55.8% sys, 943 processes / 6941 threads, 15G physical memory used with 117M unused and a 6.9G compressor. Running concurrently, none of it from this session: PID 20413, a second full `npm exec vitest run test/e2e` from the worktree .claude/worktrees/compassionate-nash-a31cb6, started 23:51:17 and still going at 00:19 (28 minutes against the 4 min 52 s commit 2d15634 measured for that directory); PID 11504, an orphaned vitest worker (ppid 1) since 23:29 still burning 16-33% CPU and holding a flood-closure relay child; PID 20028, an orphaned prekey-pool relay. The reported 803 s run spans roughly 23:50-00:04, entirely inside that window, and the 15-minute load average of 394 covers exactly it. Proof rather than inference: the same tree, the same command, seven runs captured to files. Quiet machine, before any change: 52 files, 273 tests, all passing, exit 0, 243.76 s - matching the 223.69 s green baseline. Under one competing suite: 540.77 s, exit 1, and still ZERO failing tests - the exit code came only from six [vitest-worker]: Timeout calling \"onTaskUpdate\" unhandled errors that cost two files their results (50 passed of 52, 252 of 273). Per-test contention factor measured between those two runs: 2.38-3.30x, so the reported run's 3.30x wall-clock is fully accounted for by CPU and memory saturation. Hypothesis 2 is refuted: no test in the five src/commands suites tolerates a fired watchdog (every assertion reads timedOut: false; timedOut: true is asserted nowhere), so a watchdog that fired would have produced a failure, and the green 223.69 s baseline had none - the raise was inert on wall clock. Hypothesis 1 is half right: it is a real defect, fixed here, but it does not explain the slowdown, because the pool landed in 1ed5b2a, before both green baselines. The relay's Go configuration is ruled out: refuseAnExplicitlyDisabledMaxMessageBytes returns nil unless os.LookupEnv reports ECHOLET_MAX_MESSAGE_BYTES actually set, and no e2e harness sets it; the removed CleanupIntervalSec carried envDefault 60 and service.DefaultCleanupIntervalSeconds is 60; and all seven e2e files, each building and running the real binary at 23a17aa, passed. The defect that is real: every end-to-end suite guards the real `relay publish` child - which since T26 mints and signs twenty bundles - behind a per-child SIGKILL watchdog of 20000ms (30000ms in three files), while T16 measured that same child at 19655-20352ms under 7x oversubscription; and outbound.publish.test.ts's three 30000ms ceilings are unchanged since d5540a6, written when publish() minted one bundle, while outbound.senderAuthentication.test.ts has no explicit ceiling at all. Reproduced with T16's own method (70 CPU busy loops, ~7x oversubscription): with the original ceilings, 4 tests of 10 failed, every one `E2E child timeout`. With the ceilings temporarily raised out of the way, the real durations are publication-claimability 120798ms and two-process 96643ms against a declared 90000ms - over the wall - and outbound.senderAuthentication 21310ms / outbound.publish 19151ms against 30000ms, confirmed by a second loaded run at 124217 / 101442 / 21510 / 19125ms. The fix reuses the two constants T16 already derived (CLI_CHILD_TIMEOUT_MS 45000 for every e2e per-child watchdog, CLI_TEST_TIMEOUT_MS 90000 for the two in-process pool suites - no new numbers) and adds one derived constant, E2E_TEST_TIMEOUT_MS = 300000, bounded below by 2x the worst measured end-to-end whole-test duration (124217ms, so 248434ms) and above by the requirement that a stuck end-to-end test still fail within five minutes; 300000ms is the smallest value at or above that which this directory already uses, and it stays 6.7x above the per-child watchdog so the specific `E2E child timeout` still fires first. It is a floor: the tests declaring 300000-900000ms keep their own measured numbers. Same load, same files, after: 4 files, 10 tests, all passing. Full suite after, quiet machine: 52 files, 273 tests, all passing, exit 0, 228.20 s, zero errors. Typecheck exits 0. No product file under apps/*/src or packages/ was changed, nothing was weakened, narrowed, skipped or deleted, and the file and test counts are identical before and after. One residual is flagged rather than fixed and is the reason this is DONE_WITH_CONCERNS: [vitest-worker]: Timeout calling \"onTaskUpdate\" is vitest 3.0.8's own worker RPC ceiling, not reachable from testTimeout/hookTimeout, and it alone turns a contended run with zero failing tests into exit 1. It appears identically before (run A: 6 errors) and after (run F: 6 errors) this change, in the same two files, neither of which this change touches.",
+  "summary_markdown": "## T40 — the suite was green; the machine was not\n\n**The 3.6x is machine saturation, not a code regression.** Load averages **188 / 305 / 394** on 10 cores, **0.1 % idle**, 117 MB free physical memory — with a **second full `vitest run test/e2e` from another worktree** in flight, plus an orphaned vitest worker and two orphaned relays. The 803 s run sits entirely inside that window.\n\n**Same tree, same command:** 803 s red saturated → **243.76 s, 52 files, 273 tests, exit 0** quiet. Under one competing suite the run took 540.77 s and still had **zero failing tests** — exit 1 came only from vitest's own worker-RPC timeouts.\n\n**Hypothesis 2 refuted:** no test in those five suites tolerates a fired watchdog, so one that fired would have failed the green baseline. The raise was inert.\n\n**Hypothesis 1 half right, and fixed:** every e2e per-child watchdog is 20000/30000 ms against a `relay publish` child T16 measured at **19655-20352 ms**; `outbound.publish`'s 30000 ms ceilings date from when publish minted *one* bundle. Reproduced under T16's own 70-busy-loop load: **4 of 10 tests failed, every one `E2E child timeout`**.\n\n**Derived, not picked.** With the walls removed, the real durations are `publication-claimability` **120798 / 124217 ms** and `two-process` **96643 / 101442 ms** against a declared 90000 ms. `E2E_TEST_TIMEOUT_MS = 300000` is the smallest value already used in this directory at or above 2x the worst (248434 ms), and stays 6.7x above the per-child watchdog. The other two constants are T16's, reused unchanged.\n\n**After:** same load, 10 of 10 pass. Full suite quiet: **52 files, 273 tests, exit 0, 228.20 s**.\n\n**Residual:** `[vitest-worker]: Timeout calling \"onTaskUpdate\"` — identical before and after (6 errors, same two files), not a test ceiling, and the remaining reason a contended run cannot be trusted.",
+  "acceptance": [
+    {
+      "criterion": "Diagnose before changing anything, and say what was measured",
+      "status": "met",
+      "evidence": "Nothing was edited until the machine state was captured and two full suite runs had completed. scratchpad/machine-state-1.txt records, at 00:07:08 +0400: load averages 188.36 / 304.96 / 394.06 on 10 cores, 943 processes / 6941 threads, 44.18% user + 55.80% sys + 0.1% idle, PhysMem 15G used / 117M unused / 6924M compressor, and the four foreign processes with their start times (PID 20413 the competing e2e run from .claude/worktrees/compassionate-nash-a31cb6, PID 11504 an orphaned vitest worker, PIDs 16800 and 20028 orphaned relays). Run A (00:10-00:19, tree untouched) and run B (00:36-00:40, tree untouched) were both complete before the first edit at 00:52."
+    },
+    {
+      "criterion": "The 224 s -> 803 s slowdown is explained by whatever is concluded",
+      "status": "met",
+      "evidence": "Same tree, same command: 243.76 s green on a quiet machine (run B), 540.77 s under one competing suite (run A), 803 s reported under that competing suite plus an orphaned worker, two orphaned relays, a VM at 107% CPU and Chrome at ~460%, on a host with 117MB free memory. 803/243.76 = 3.30x. Per-test contention factors measured directly between B and A are 2.38-3.30x (publication-claimability 24283->80061, rewalk 27105->80512, two-process 20223->56716, prekey-pool 101146->276400, flood-closure 104587->249075) and reach 3.30x at half the reported contention. Corroborated independently: commit 2d15634 measured `vitest run test/e2e` at 4 min 52 s; the competing session's run of that same directory was still going after 28 minutes, 5.7x."
+    },
+    {
+      "criterion": "Establish which hypothesis holds, or find a third",
+      "status": "met",
+      "evidence": "A third: machine saturation. Hypothesis 2 is refuted on two independent grounds - no assertion in the five src/commands suites tolerates a fired watchdog (every one reads timedOut: false; cli.dashOptionValues line 88 asserts it outright; timedOut: true appears in no assertion), so a firing watchdog would have produced a failure rather than a longer green run; and the 223.69 s green baseline had zero failures, so none fired, so raising the wall cost no wall clock - confirmed in run B where the slowest test in the whole src/commands group is 8448 ms. Hypothesis 1 is half right: the ceilings really were never re-sized (outbound.publish.test.ts's three 30000ms literals are unchanged since d5540a6 and predate T26's twenty-bundle pool; outbound.senderAuthentication.test.ts has none at all; the e2e per-child watchdogs are 20000/30000ms against a child T16 measured at 19655-20352ms), but the pool landed in 1ed5b2a, before both green baselines, so it cannot be the cause of the change in behaviour."
+    },
+    {
+      "criterion": "Check whether the relay's Go configuration change affects how the harness starts it",
+      "status": "met",
+      "evidence": "It does not. refuseAnExplicitlyDisabledMaxMessageBytes (config.go, added by 23a17aa) returns nil unless os.LookupEnv(\"ECHOLET_MAX_MESSAGE_BYTES\") reports the variable set, and no harness under apps/cli/test/e2e sets it - each spawns the binary with ECHOLET_HTTP_ADDR, ECHOLET_DATA_DIR and at most ECHOLET_RATE_LIMIT_PER_MINUTE / ECHOLET_TLS_*, so the envDefault of 262144 applies exactly as before. The removed Config.CleanupIntervalSec carried envDefault 60 and its replacement service.DefaultCleanupIntervalSeconds is 60, so the ticker's period is unchanged; a stale ECHOLET_CLEANUP_INTERVAL_SECONDS is inert because no field claims it. Empirically: all seven e2e files, each building and running the real relay binary at 23a17aa, passed in run B, and relayReady()'s 10 s startup budget was never exhausted in any of the seven runs."
+    },
+    {
+      "criterion": "If the answer is a timeout ceiling, derive it from a measured duration and say what bounds it; do not pick a number because it passed",
+      "status": "met",
+      "evidence": "Two of the three constants are T16's, reused unchanged, so no new number enters the tree for them: CLI_CHILD_TIMEOUT_MS = 45000 (already derived as ~2.2x T16's measured worst single child, relay publish at 20352ms, which is exactly the child these e2e helpers spawn) and CLI_TEST_TIMEOUT_MS = 90000 (4.2x the worst measured 21510ms for the two in-process pool suites). The one new constant, E2E_TEST_TIMEOUT_MS = 300000, is bounded BELOW by 2x the worst measured end-to-end whole-test duration across two independent loaded runs - 124217ms, so 248434ms - following T16's own stated convention, and BOUNDED ABOVE by the requirement that a genuinely stuck end-to-end test still fail within five minutes and by staying 6.7x above CLI_CHILD_TIMEOUT_MS so the specific `E2E child timeout` fires first instead of vitest's generic message. 300000ms is the smallest value at or above 248434ms that this directory already uses (flood-closure's 4x49 volume). The durations were measured with every ceiling temporarily raised to 1800000ms so the number recorded is the real duration and not the wall it hit, then confirmed by a second run against the chosen constants."
+    },
+    {
+      "criterion": "Weaken, skip, narrow or delete nothing",
+      "status": "met",
+      "evidence": "Every edit either raises a ceiling to a measured value or replaces a duplicated literal with a shared constant. No assertion, test, describe, volume or case was touched; no test was skipped, narrowed or deleted. File and test counts are identical before and after: 52 files, 273 tests, in run B (before) and run G (after). E2E_TEST_TIMEOUT_MS is applied as a FLOOR, so no existing ceiling was lowered - flood-closure (300000-900000), rewalk-crash-safety (240000/900000) and prekey-pool-replenishment (600000) keep the numbers their own recorded measurements justify, and rewalk's live 60000-180000ms wrappers are unchanged."
+    },
+    {
+      "criterion": "Change no product file under apps/*/src or packages/",
+      "status": "met",
+      "evidence": "git status --porcelain shows only test files and one test helper changed: apps/cli/test/childProcessTimeouts.ts, the seven apps/cli/test/e2e/*.test.ts, and apps/cli/src/runtime/outbound.publish.test.ts and outbound.senderAuthentication.test.ts (both *.test.ts, not product code). The five apps/cli/src/commands/*.test.ts entries are the pre-existing uncommitted T16 work, untouched by this task. No file under apps/relay/internal, apps/cli/src non-test code, or packages/ was modified; the relay configuration was read only to rule it out."
+    },
+    {
+      "criterion": "No store key, private key, plaintext or HTTP request body printed or recorded",
+      "status": "met",
+      "evidence": "Nothing of the kind appears in the report, this result, or any command output that was read. The suite logs contain only vitest's own per-test names and durations; the tests themselves already assert that markers never reach stdout/stderr. The relay was never contacted by hand and no request body was dumped. The two deployed relays, geekom and depr, were not touched or contacted."
+    },
+    {
+      "criterion": "Capture long runs to a file and read the file; route searches and commands through keryx ctx",
+      "status": "met",
+      "evidence": "Every one of the seven runs went through scratchpad/run-suite.sh, run-loaded.sh or run-loaded2.sh, each of which writes stdout+stderr to run-<label>.log, the exit code and wall clock to meta-<label>.txt, and a load-average sample series to load-<label>.log. Nothing was piped through tail. .metaproject/index.md was read before any other repository action; every search over project code went through keryx ctx rg and every git/pnpm command through keryx ctx run; raw grep/sed/awk was used only on my own captured logs and scratchpad files, each with a recorded # keryx:raw reason. bash -lc was never used; every command ran under the default interpreter, node v26.5.0. No Go test was run, so the -count=1 caveat did not arise."
+    },
+    {
+      "criterion": "Check whether files are being written under me by the other sessions, and say so",
+      "status": "met",
+      "evidence": "Checked repeatedly. Two other sessions are active, as the task warned: one was running a full vitest run test/e2e from .claude/worktrees/compassionate-nash-a31cb6 during the reported red run and during my run A, and two commits (9318130, e083761) landed on main mid-task - neither touches apps/cli or packages/, confirmed with git show --stat -- apps/cli packages returning no output. Their most recent writes to apps/cli/test/e2e/* and apps/cli/src/runtime/inbound.test.ts predate this task (mtimes 18:29-20:08). No file was written under me: every file edited was verified unmodified against HEAD first (git status --porcelain empty for all four instrumented files), and the temporary instrumentation was proved reverted with shasum -a 256 -c against a pre-measurement snapshot, all four OK with an empty porcelain afterwards."
+    },
+    {
+      "criterion": "The suite is green afterwards, with counts and duration reported",
+      "status": "partial",
+      "evidence": "On a quiet machine, yes: run G, 01:31:06-01:34:55, Test Files 52 passed (52), Tests 273 passed (273), exit 0, 228.20 s, zero errors - faster than the 243.76 s pre-change baseline, because the ceilings are never approached when nothing competes for CPU. Under the reproduced 7x contention the four measured files go from 4 failed of 10 (all `E2E child timeout`) to 10 passed of 10. It is partial rather than met because two runs taken while the machine was busy again (runs E and F, competing Chrome renderers, a virtual machine and a Time Machine backup) exited 1 with ZERO failing tests, purely from [vitest-worker]: Timeout calling \"onTaskUpdate\" - a vitest worker-RPC ceiling this change does not and cannot address. It is present identically before this change (run A: 6 errors, inbound.test.ts and inbound.batchIsolation.test.ts) and after (run F: 6 errors, the same two files), neither of which this change touches."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t40-suite-regression-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "The captured machine state and the four foreign processes; the seven runs with their counts, exit codes, wall clocks and load samples; the accounting for 224 s -> 803 s; the refutation of hypothesis 2 and the partial confirmation of hypothesis 1; the elimination of the relay configuration change; the measured durations behind each ceiling and what bounds each number; the before/after under identical load; five residuals found and not fixed, with reasons; the method notes and the routing audit."
+    },
+    {
+      "path": "apps/cli/test/childProcessTimeouts.ts",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "The three shared ceilings with the T16 and T40 measurements and derivations recorded in place, so a future incident does not have to re-derive them."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/test/childProcessTimeouts.ts",
+      "change": "Adds E2E_TEST_TIMEOUT_MS (300000, derived from a measured 124217ms worst case) and records the T40 measurements beside T16's. The file itself is still uncommitted T16 work."
+    },
+    {
+      "path": "apps/cli/test/e2e/two-process.test.ts",
+      "change": "Per-child watchdog default 20000 -> CLI_CHILD_TIMEOUT_MS; it.each ceiling 90000 -> E2E_TEST_TIMEOUT_MS (measured 96643/101442ms)."
+    },
+    {
+      "path": "apps/cli/test/e2e/publication-claimability.test.ts",
+      "change": "Per-child watchdog default 20000 -> CLI_CHILD_TIMEOUT_MS; it ceiling 90000 -> E2E_TEST_TIMEOUT_MS (measured 120798/124217ms)."
+    },
+    {
+      "path": "apps/cli/test/e2e/relay-tls.test.ts",
+      "change": "Per-child watchdog default 30000 -> CLI_CHILD_TIMEOUT_MS; three it ceilings (90000, 120000, 90000) -> E2E_TEST_TIMEOUT_MS."
+    },
+    {
+      "path": "apps/cli/test/e2e/init-relay-url.test.ts",
+      "change": "Per-child watchdog default 30000 -> CLI_CHILD_TIMEOUT_MS; three it ceilings of 60000 -> E2E_TEST_TIMEOUT_MS."
+    },
+    {
+      "path": "apps/cli/test/e2e/flood-closure.test.ts",
+      "change": "Per-child watchdog default and both wrapper defaults (20000, three places) -> CLI_CHILD_TIMEOUT_MS. Its per-test ceilings of 240000-900000 are already at or above the floor and are unchanged."
+    },
+    {
+      "path": "apps/cli/test/e2e/prekey-pool-replenishment.test.ts",
+      "change": "Per-child watchdog default 30000 -> CLI_CHILD_TIMEOUT_MS. Its 600000 it ceiling is unchanged."
+    },
+    {
+      "path": "apps/cli/test/e2e/rewalk-crash-safety.test.ts",
+      "change": "Per-child watchdog default 20000 -> CLI_CHILD_TIMEOUT_MS so no future call site can inherit it. Its live wrappers already pass 60000-180000 explicitly and are unchanged, as are its 240000/900000 it ceilings."
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.publish.test.ts",
+      "change": "Three it ceilings of 30000 -> CLI_TEST_TIMEOUT_MS. The 30000 literals predate T26 and were written when publish() minted one bundle; measured 19151/19125ms under 7x contention."
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.senderAuthentication.test.ts",
+      "change": "Three tests given an explicit CLI_TEST_TIMEOUT_MS instead of vitest's 30000ms config default; each calls publish(), which is now a twenty-bundle pool. Measured 21310/21510ms under 7x contention."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t40-suite-regression-report.md",
+      "change": "New: the diagnosis, the seven runs and their evidence, the derivations, and the residuals."
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T40-implement-result.json",
+      "change": "New: this result."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T40-F-001",
+      "reviewer": "T40 (flow 003) - suite regression diagnosis",
+      "severity": "major",
+      "file": "apps/cli/vitest.config.ts",
+      "problem": "A contended run reports exit 1 with zero failing tests: vitest 3.0.8s worker-to-main RPC deadline expires on onTaskUpdate, the run raises unhandled errors, and whole test files never have their results recorded at all.",
+      "impact": "A fully green run is reported as a failure with no failure list to read, and whole files silently contribute no verdict at all. That is how a real regression gets missed, and how a phantom one gets chased - it is what cost this task its starting premise.",
+      "suggested_fix": "This is not a test ceiling and cannot be fixed from testTimeout/hookTimeout - the RPC deadline lives inside vitest 3.0.8's worker transport. It is now the failure mode that makes a contended run untrustworthy, because it converts a fully green run into exit 1 with no failure list to read, which is exactly how a real regression would be missed or a phantom one chased. Worth its own task: measure it, then decide between worker-pool configuration (fewer workers, or isolate/pool options), a vitest upgrade whose transport deadline is configurable, and a reporter that persists per-file results so a lost RPC does not lose the verdict.",
+      "evidence": "Reproduced three times on this tree. Run A (before this change, one competing suite): 6 unhandled `[vitest-worker]: Timeout calling \"onTaskUpdate\"` errors, `Test Files 50 passed (52)`, `Tests 252 passed (273)`, exit 1, and NOT ONE failing test anywhere in the log - the missing 21 tests simply have no result, because src/runtime/inbound.test.ts and src/runtime/inbound.batchIsolation.test.ts never got their updates through. Run E (after): 2 errors, 51 of 52, 263 of 273. Run F (after): 6 errors, the same two files, 50 of 52, 252 of 273. Absent on a quiet machine (runs B and G, both 52/52 and 273/273, exit 0). The count and the files are identical before and after this change, and neither file is touched by it. T16 flagged the same symptom and left it.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/inbound.test.ts",
+          "apps/cli/src/runtime/inbound.batchIsolation.test.ts",
+          "apps/cli/vitest.config.ts"
+        ],
+        "enumeration_method": "Every `This error originated in` line in the three captured run logs that produced the error (runs A, E, F), read from scratchpad/run-{contended-A,final-E,final-F}.log; those two test files are the complete set observed. vitest.config.ts is listed because it is the only place in this package where a worker-pool or transport setting could be declared, and it currently declares none - which is itself part of the finding."
+      }
+    },
+    {
+      "id": "T40-F-002",
+      "reviewer": "T40 (flow 003) - suite regression diagnosis",
+      "severity": "minor",
+      "file": "apps/cli/test/e2e/two-process.test.ts",
+      "problem": "Three end-to-end suites declare a beforeAll ceiling of 150000 ms enclosing a `go build` whose own child timeout is 120000 ms, and neither was measured for a cold build under contention; separately, any end-to-end hook that declares no ceiling still runs on vitest.config.tss 30000 ms hookTimeout default.",
+      "impact": "A cold Go build under contention could exhaust a hook ceiling nobody measured, producing a hook timeout that looks like a test failure; and any end-to-end hook without its own ceiling still runs on 30000 ms, which is the only remaining place in those files the reported `timed out in 30000ms` message can come from.",
+      "suggested_fix": "Measure a cold `go build` under the 70-busy-loop reproduction and size the three 150000 ms hook ceilings and the 120000/180000 ms build child timeouts from it; and decide whether the end-to-end hooks that declare no ceiling should carry E2E_TEST_TIMEOUT_MS rather than the package default.",
+      "evidence": "two-process, publication-claimability and prekey-pool-replenishment each declare a beforeAll ceiling of 150000 ms enclosing a `go build` whose own child timeout is 120000 ms. A warm-GOCACHE build is seconds; a cold build under contention was not measured in this task, so nothing was changed. Separately, the literal message the task reports for every failure it inspected, `Test timed out in 30000ms`, could not be reproduced at the contention reproduced here - the same files fail as `E2E child timeout` because the child watchdog fires first. A 30000 ms message can only come from a ceiling that is literally 30000: the six tests in outbound.publish / outbound.senderAuthentication, both fixed here, or a hook running on vitest.config.ts's hookTimeout default.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T40-F-003",
+      "reviewer": "T40 (flow 003) - suite regression diagnosis",
+      "severity": "info",
+      "file": "apps/cli/test/e2e/two-process.test.ts",
+      "problem": "two-process.test.tss in-test proxy applies a fixed AbortSignal.timeout(5000) to every upstream hop, and relayReady() gives the real relay binary a fixed 10 s to answer /health. Both are fixed ceilings of the family this task fixed elsewhere, and neither was measured.",
+      "impact": "If a proxy hop or the relay readiness budget is ever exceeded under load, it surfaces as a 502 and an assertion failure rather than as a timeout, which is materially harder to trace back to contention than the `E2E child timeout` this task fixed.",
+      "suggested_fix": "Leave until observed failing or until measured; changing a ceiling that has never been exceeded would be picking a number rather than deriving one.",
+      "evidence": "The in-test proxy fetches upstream with AbortSignal.timeout(5000) on every request, and relayReady() gives the real relay binary 10 s to answer /health. Both are fixed ceilings of the same family as the ones this task fixed, and a tripped proxy abort surfaces as a 502 and an assertion failure rather than as a timeout, which would be harder to trace. Neither was observed failing in any of the seven runs, including the two under 7x oversubscription, so neither was changed.",
+      "confidence": "medium"
+    },
+    {
+      "id": "T40-F-004",
+      "reviewer": "T40 (flow 003) - suite regression diagnosis",
+      "severity": "minor",
+      "file": "apps/cli/test/e2e/two-process.test.ts",
+      "problem": "A vitest worker killed rather than unwound leaves its spawned relay binary running: both the worker and the relay are reparented to init and keep consuming CPU indefinitely, because nothing outside the normal stop() path recovers them.",
+      "impact": "A cancelled or crashed run leaves a CPU-burning relay and vitest worker behind for whoever runs next; two such orphans were part of the saturation that produced the red run this task was asked to explain.",
+      "suggested_fix": "Worth a separate look: a relay spawned with a detached: false child that dies with its parent, or a process-group kill in a globalTeardown, would stop a cancelled run from leaving a CPU-burning relay behind for the next agent to trip over.",
+      "evidence": "At 00:07 the machine carried PID 11504, a vitest worker reparented to init (ppid 1) since 23:29 and still burning 16-33% CPU 38 minutes later, holding a live child relay (PID 16800, /var/folders/.../echolet-flood-closure-e2e-AQafFj/relay); and PID 20028, an echolet-prekey-pool-e2e relay also reparented to init since 23:49. Both outlived whatever run started them and both contributed to the saturation that produced the reported red run. The e2e suites do stop their relays on the normal path (stop() sends SIGTERM then SIGKILLs after 1500 ms), but nothing recovers a relay whose vitest worker is killed rather than unwound.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "suite_runs": 7,
+    "suite_after_files_passed": 52,
+    "suite_after_files_total": 52,
+    "suite_after_tests_passed": 273,
+    "suite_after_tests_total": 273,
+    "suite_after_duration_s": 228.2,
+    "suite_after_exit_code": 0,
+    "suite_before_quiet_duration_s": 243.76,
+    "suite_reported_red_duration_s": 803,
+    "contended_before_fix_tests_failed": 4,
+    "contended_after_fix_tests_failed": 0
+  },
+  "timestamp_utc": "2026-09-08T21:40:00Z"
+}

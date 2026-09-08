@@ -154,8 +154,13 @@ The three options, and what each costs when the pool is exhausted anyway:
 
 **Cost of N = 20, measured rather than guessed.**
 
-- A full-drain `relay publish`: 20 × 61.6 ms ≈ **1.23 s**, and 20 requests — **17 % of the shipped
-  120/min budget**.
+- A full-drain `relay publish`: 20 × 61.6 ms ≈ **1.23 s** of mint-and-sign time, and **40 requests —
+  33 % of the shipped 120/min budget**. *(Corrected: this design originally stated 20 requests / 17 %,
+  counting only the mint-and-publish round and not the initial resubmit-all round that precedes it.
+  T25 round 2 measured the real `publish()` loop against the four pool states and found the cost is
+  `N + k`, `k` the number of dead slots: **20 requests** for a first publish on an empty profile,
+  **20** for a steady-state publish on a full live pool, **21** with one dead slot, and **40** for a
+  full drain — see `t25-verification-report-r2.md` §3.2, finding R2-005.)*
 - A steady-state `relay publish` on a full pool: 20 publish POSTs and zero mints ≈ **78 ms**.
 - Relay storage: 20 × 3350 B ≈ **67 KB per device generation**.
 - Client storage: the same 67 KB inside the encrypted profile store.
@@ -327,9 +332,10 @@ sides. That is not practical for an interactive command in this prototype, and i
 *one* source: the limiter is keyed on the transport peer host (`middleware/rate_limit.go`, `quotaKey`),
 so `S = 10` restores today's 60 victims/min against N = 20 and 12/min against N = 120. **A linear price
 increase against a linear attacker is not a bound.** N = 20 is chosen because it is the project's own
-declared number, it is a 20× improvement, and its cost to the victim (1.23 s worst case, 17 % of the
-minute budget) is one an operator will actually pay. It is not chosen because it makes the attack
-uneconomic. It does not.
+declared number, it is a 20× improvement, and its cost to the victim at full drain (1.23 s of
+mint-and-sign time, **40 requests, 33 % of the minute budget** — corrected from this design's original
+20 requests / 17 %, see §2.2 and R2-005) is one an operator will actually pay. It is not chosen because
+it makes the attack uneconomic. It does not.
 
 **The 30× asymmetry, stated plainly.** Per bundle the attacker pays 2.0 ms and the victim 61.6 ms
 (C1/C2/C3). A victim who wanted to out-produce one attacking source sustaining 120 claims/min would
@@ -595,8 +601,14 @@ would be needed to matter (`N ≥ 120`) and the exact reason it is impractical (
 whole minute budget per publish). At N = 20 the attack costs twenty requests instead of one. Twenty
 requests is not expensive.
 
-**The defender pays 30× per unit.** C3, measured. An attacker with two source addresses drains faster
-than a victim can refill, and the limiter cannot help because it is keyed on the peer host.
+**The defender pays 30× per unit.** C3, measured. **One** attacking source already out-drains a
+refilling victim, at two to one — not two sources, as this design originally claimed. One request
+destroys a pool member; restoring one costs two (a resubmit plus a fresh mint-and-publish). At the
+shipped 120 requests/minute per-host budget, one source destroys **120 members a minute** against a
+victim's own recovery ceiling of at most **60 members a minute** (and as little as ~5.7/minute if the
+attacker drains one member at a time, since a single dead slot still costs 21 requests to top up). The
+limiter cannot help either side, because it is keyed on the peer host. *(Corrected; see
+`t25-verification-report-r2.md` §3.2, finding R2-006.)*
 
 **And specifically not closed:**
 

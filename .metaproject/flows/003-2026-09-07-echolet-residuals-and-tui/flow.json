@@ -9,7 +9,7 @@
   "title": "Echolet: close the recorded residuals and make the operator TUI usable",
   "status": "in-progress",
   "createdAt": "2026-09-07T19:26:13.895Z",
-  "updatedAt": "2026-09-08T17:33:22.473Z",
+  "updatedAt": "2026-09-08T18:31:08.533Z",
   "source": {
     "type": "description",
     "ref": null
@@ -324,7 +324,7 @@
       "id": "T15",
       "title": "Correct deploy/relay/README.md: the committed systemd units are root-and-host-path only",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -338,13 +338,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "The README row now states that the committed units assume a root install and host paths, that a host without usable root renews by a different user-scope mechanism with the same schedule and no-restart contract, and that the status command differs - which is the silent trap, since checking with the wrong scope reports nothing rather than erroring. It cross-references the runbook rather than duplicating its comparison."
     },
     {
       "id": "T16",
       "title": "Record that the process-spawning CLI tests fail under CPU contention and decide whether to harden or serialise them",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -352,7 +354,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Cause found and measured rather than guessed: five suites each hard-coded their own per-child kill watchdog sized for an idle machine, a second timeout layer that was never updated when the enclosing one was raised once before on the same evidence. Port collisions, shared temp directories and worker-pool misconfiguration were ruled out. Reproduced twice, then measured under 70-way core oversubscription: the heaviest command needs 19.7 to 20.4 s against a 15 s wall. Before the fix 9 of 36 failed at that load, after it 36 of 36 passed. The five drifting literals became one shared documented module; idle wall-clock is unchanged because these are ceilings rather than delays."
     },
     {
       "id": "T17",
@@ -532,7 +536,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 3,
+        "count": 4,
         "log": [
           {
             "at": "2026-09-08T06:19:33.737Z",
@@ -548,6 +552,11 @@
             "at": "2026-09-08T17:02:14.842Z",
             "outcome": "started",
             "detail": "003-T25-verify-r2 on commit 1ed5b2a in an isolated worktree"
+          },
+          {
+            "at": "2026-09-08T17:55:14.261Z",
+            "outcome": "failed",
+            "detail": "R2-001 major: the gate's two blocking steps test the WORKING TREE, not the pushed range - a red committed suite with a green uncommitted tree passes with exit 0, and no self-test row can see it because the self-test exercises the working tree too. R2-002/R2-003: nine of eleven prose sites and two documents still describe the pre-pool world. R2-004: test:e2e exits 143 with 11 child timeouts because seven process-spawning files start at once with no pool limit. R2-005/R2-006: the design understates a full-drain publish as 20 requests when it is 40, and says two source addresses out-drain a refilling victim when one suffices at 2:1."
           }
         ]
       },
@@ -801,6 +810,40 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "The assertion's property was established and preserved rather than rebased to a new number. It is an atomicity pin - a persistence failure inside send()'s own commit must roll back exactly what that transaction wrote - and NOT a claim that send() as a whole leaves the store untouched. The old form worked only because the pool had one member, which was an artefact of size rather than the invariant. The fix adds an optional hook to the shared test helper that captures the baseline after publish and before send; the other ten call sites pass nothing and are unchanged. The comparison is now before-and-after within the test, encoding no count anywhere, so it survives any future pool size. Non-vacuity checked: at the capture point the pool is full and the other store sections are empty, so a leaked partial rollback still fails it."
+    },
+    {
+      "id": "T38",
+      "title": "Close the gate's working-tree hole: it must verify the pushed range",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T39",
+      "title": "Correct the pool's overstated cost claims and the eleven prose sites",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T18:31:08.533Z",
+            "outcome": "started",
+            "detail": "003-T39-docs-corrections"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -1336,6 +1379,36 @@
       "at": "2026-09-08T17:33:22.473Z",
       "event": "task-done",
       "detail": "T33: Remove the dead cleanup-interval field from Go config and its call site"
+    },
+    {
+      "at": "2026-09-08T17:55:14.261Z",
+      "event": "task-attempt",
+      "detail": "T25: failed (attempt 4) — R2-001 major: the gate's two blocking steps test the WORKING TREE, not the pushed range - a red committed suite with a green uncommitted tree passes with exit 0, and no self-test row can see it because the self-test exercises the working tree too. R2-002/R2-003: nine of eleven prose sites and two documents still describe the pre-pool world. R2-004: test:e2e exits 143 with 11 child timeouts because seven process-spawning files start at once with no pool limit. R2-005/R2-006: the design understates a full-drain publish as 20 requests when it is 40, and says two source addresses out-drain a refilling victim when one suffices at 2:1."
+    },
+    {
+      "at": "2026-09-08T17:55:14.345Z",
+      "event": "task-added",
+      "detail": "T38: Close the gate's working-tree hole: it must verify the pushed range"
+    },
+    {
+      "at": "2026-09-08T17:55:14.468Z",
+      "event": "task-added",
+      "detail": "T39: Correct the pool's overstated cost claims and the eleven prose sites"
+    },
+    {
+      "at": "2026-09-08T18:31:03.243Z",
+      "event": "task-done",
+      "detail": "T15: Correct deploy/relay/README.md: the committed systemd units are root-and-host-path only"
+    },
+    {
+      "at": "2026-09-08T18:31:05.929Z",
+      "event": "task-done",
+      "detail": "T16: Record that the process-spawning CLI tests fail under CPU contention and decide whether to harden or serialise them"
+    },
+    {
+      "at": "2026-09-08T18:31:08.533Z",
+      "event": "task-attempt",
+      "detail": "T39: started (attempt 1) — 003-T39-docs-corrections"
     }
   ]
 }

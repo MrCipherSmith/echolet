@@ -68,6 +68,7 @@
     "apps/cli/src/tui/tui-shell.trustViewport.test.ts",
     "apps/cli/src/tui/tui-shell.ts",
     "apps/cli/src/tui/tui.keyMaterial.test.ts",
+    "apps/cli/test/childProcessTimeouts.ts",
     "apps/cli/test/e2e/flood-closure.test.ts",
     "apps/cli/test/e2e/init-relay-url.test.ts",
     "apps/cli/test/e2e/prekey-pool-replenishment.test.ts",
