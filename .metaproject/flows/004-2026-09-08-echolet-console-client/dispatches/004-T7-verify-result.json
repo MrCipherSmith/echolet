@@ -1,0 +1,325 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-004-t7-verify",
+  "dispatch_id": "004-T7-verify",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent verification of flow 004's first slice (5835a7a, b1107d6, bb17f23, 51135f3) by mutation rather than by reading. The orchestrator's two contested claims both hold: the --text-wins revert is not rationalisation (measured: with --text and an unclosed inherited stdin pipe the CLI exits 3 in under a second; without --text the identical invocation hangs past 20s), and the rewritten cli-bridge.test.ts expectation is an exact-array pin that four tests kill when the body is put back on argv. The full apps/cli suite is genuinely green on this tree: 55 files, 284 tests, recorded exit 0. Three mutations SURVIVED, and two of them defeat the letter of AC3 and the stated proof of doctor's offline property: the message body can be added to a real spawned child's argv (bypassing buildArgv) with zero test failures, the console can be made to never write the body at all with zero test failures, and doctor can issue a real relay request with zero test failures. Two of the orchestrator's written claims are false: the runbook says 'every step below still uses it' when the only --text step in the file is above the note, and the specification's 'stdin is not read, not even to check' is contradicted by --text \"\" which does read stdin. Every mutation was reverted and git status matches the pre-verification baseline exactly.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC1: registration completed from inside the console alone, against a real driven CLI process",
+      "status": "not_applicable",
+      "evidence": "This slice builds no console screen. It changes cli.ts, profile.ts, outbound.ts, cli-bridge.ts and main.ts only; no registration flow, pane or key handler was added. Nothing in the slice advances or contradicts AC1."
+    },
+    {
+      "criterion": "AC2: a message composed and sent from the console shows what the store holds, against a real driven process",
+      "status": "not_applicable",
+      "evidence": "No compose screen and no store-truth refresh is built in this slice. Recorded as a risk rather than progress: the delivery mechanism AC2 will rest on (main.ts writing request.text to the child's stdin) is currently covered by NO test at all — mutation M5 removed the write entirely (child.stdin.end() for send) and all 17 tui files / 117 tests still passed."
+    },
+    {
+      "criterion": "AC3: the plaintext body never appears in the argv or environment of any child the console spawns; send accepts the body on stdin; the console uses that path and only that path; a test asserts the complete argv of every spawned child and fails if a body appears anywhere in it; --text stays accepted; its argv exposure is documented; retirement recorded as an open decision",
+      "status": "not_met",
+      "evidence": "Four of the six clauses hold and two do not. HOLD: send accepts the body on stdin (cli.sendStdin.test.ts, 4 tests, including a real publish->import->send->history round trip proving byte-exact untrimmed delivery); buildArgv emits no body (mutation M1 restoring '--text', request.text was killed by 4 tests, 3 in cli-bridge.sendStdin.test.ts and the orchestrator's own rewritten case in cli-bridge.test.ts); --text stays accepted (regression-guard test passes, and the nine call sites are real - rg over ~/echolet-try.sh and ~/.echolet/peer reports 9 matches across 2 files); the exposure is documented in specification.md and runbook.md and the retirement is recorded as an open decision in the journal, the cli.ts docblock and both documents. FAIL: 'a test asserts the complete argv of EVERY SPAWNED CHILD' is not satisfied - every argv assertion in the repository runs over the pure buildArgv, and main.processDriven.test.ts (the only test that spawns the console binary) never issues a send and its fake CLI announces only {command}, never argv. Mutation M6 appended [\"--text\", request.text] to the real spawn() call in main.ts, outside buildArgv: 17 files / 117 tests passed, exit 0. The hazard AC3 exists to close can be fully reinstated with no test failure, and under the orchestrator's own --text-wins precedence such a regression also sends correctly, so nothing at runtime would signal it either."
+    },
+    {
+      "criterion": "AC4: the address book lists every pinned correspondent with trust state and shows the four comparison values in full at any viewport",
+      "status": "not_applicable",
+      "evidence": "No address-book pane is built. doctor now supplies the data the pane will need (contacts: ContactIdentifiers[], four fields, sorted by store key) but nothing renders it and no viewport property is asserted."
+    },
+    {
+      "criterion": "AC5: every exit class is presented with a message accurate for its command, proven over the command x exit-class matrix",
+      "status": "not_applicable",
+      "evidence": "No console presentation of exit classes is built or changed in this slice, and no matrix totality proof is attempted."
+    },
+    {
+      "criterion": "AC6: flow 002/003 properties re-verified unchanged on the FINAL tree",
+      "status": "not_applicable",
+      "evidence": "The final tree does not exist yet; this is the first slice. As an interim signal the 117 tui tests pass unchanged on this tree. One AC6 clause is worth carrying forward as already weak: 'no key material appears in any frame or child argv' is asserted only over buildArgv's output (tui.keyMaterial.test.ts:141-146), never over a real spawned child's argv - the same gap M6 exploited for the body."
+    },
+    {
+      "criterion": "AC7: operator input cannot put a control character or escape sequence into a frame, proven at the reducer boundary",
+      "status": "not_applicable",
+      "evidence": "No reducer or renderer change in this slice. Note for the next slice: the body now travels on stdin untrimmed and unescaped, so arbitrary bytes (including ESC) will reach the console's own compose state - AC7's obligation grows because of this slice even though this slice does not discharge it."
+    },
+    {
+      "criterion": "AC8: the operator is never denied a way out at any viewport or state",
+      "status": "not_applicable",
+      "evidence": "No key handling, modal or viewport change in this slice."
+    },
+    {
+      "criterion": "AC9: no test weakened, skipped, narrowed or deleted; every fix lands after a test that failed for the right reason first, with the ordering provable from git history",
+      "status": "met",
+      "evidence": "Ordering: 5835a7a (three new test files, no source) -> b1107d6 (one test expectation, no source) -> bb17f23 (source + docs, touching no test file - confirmed from git show --stat). No test is skipped or deleted anywhere in the four commits. The rewritten expectation in cli-bridge.test.ts:87-95 is not a weakening: it is still an exact toEqual over the whole argv, and mutation M1 (body back on argv) makes it fail. Red-before-green is provable by construction plus mutation: M1 restored exactly the pre-bb17f23 buildArgv and the new argv tests went red; M3 restored a diagnostics that disagrees with its array and the new doctor tests went red. One narrowing that is real but not a test change, and should be recorded rather than left implicit: rejectUnexpectedMissing lost 'text' for send, so `--text \"\"` no longer fails as an empty argument - it now falls through to reading stdin. Nothing in the suite covers it (rg for an empty --text case in cli.test.ts returns 0 matches)."
+    },
+    {
+      "criterion": "AC10: a live run against the real relay on the tailnet with the second user on depr is recorded, in both directions",
+      "status": "not_applicable",
+      "evidence": "No live run is claimed or recorded in this slice, and the flow journal does not assert one. The prototype scripts that would perform it (~/echolet-try.sh, ~/.echolet/peer) still use --text in all nine places, so a live run performed with them today would exercise the argv path this slice exists to replace."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T7-verify-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This verification record.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/acceptance-criteria.md",
+      "kind": "context",
+      "exists": true,
+      "summary": "The frozen criteria, with AC3 as amended mid-flight.",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T7-verify#F-001",
+      "reviewer": "004-T7-verify",
+      "severity": "blocker",
+      "file": "apps/cli/src/tui/main.ts",
+      "line": 174,
+      "symbol": "runCli",
+      "problem": "AC3's central clause - 'a test asserts the complete argv of every spawned child and fails if a body appears anywhere in it' - is not implemented. Every argv assertion in the repository runs over the pure buildArgv. The only test that spawns the real console binary, main.processDriven.test.ts, never issues a send, and its fake CLI reports only the derived {command}, never the argv it was given. Nothing checks what main.ts actually hands to spawn().",
+      "impact": "The exact hazard this slice exists to close can be reinstated with no test failure. Worse, it would be silent at runtime as well: because the CLI now resolves --text first and never reads stdin when it is present, a spawned argv carrying --text still SENDS CORRECTLY while publishing the plaintext of an end-to-end encrypted message to `ps` for the life of the child. The implementer's original 'refuse when both' rule would have turned this into a visible exit 2; the orchestrator's revert removed that runtime signal, so the test is now the only possible detector and it does not exist.",
+      "suggested_fix": "Extend main.processDriven.test.ts's fake CLI to announce process.argv.slice(2) verbatim on the control socket, drive one send through the real console binary with a synthetic body, and assert both that the announced argv contains no token holding any substring of the body and that the body arrived on the child's stdin. The causal barrier that file already uses (the console cannot exit while a child runs) makes the announcement list complete and the assertion exact.",
+      "evidence": "Mutation M6: appended `...(request.command === \"send\" ? [\"--text\", request.text] : [])` to the spawn() argument list in main.ts:174, outside buildArgv; rebuilt; `npx vitest run src/tui` -> 'Test Files 17 passed (17) / Tests 117 passed (117)', RECORDED_EXIT=0. Enumeration: `keryx ctx rg -n \"dist/tui|tui.js|tui.red-\" src test` returns main.processDriven.test.ts as the only test that spawns the console, and `keryx ctx rg -n \"send\" src/tui/main.processDriven.test.ts` returns 0 matches. Mutation reverted; git status matches baseline.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/main.ts:174 (spawn argument list - no test asserts it)",
+          "apps/cli/src/tui/main.ts:221 (child.stdin.end(request.text) - no test asserts it; see F-002)",
+          "apps/cli/src/tui/tui.keyMaterial.test.ts:141-146 (asserts key material over buildArgv only, never over a spawned child)",
+          "apps/cli/src/tui/cli-bridge.test.ts:87-95 and cli-bridge.sendStdin.test.ts (all argv assertions, pure)"
+        ],
+        "enumeration_method": "`keryx ctx rg -n \"dist/tui|tui.js|tui.red-\" apps/cli/src apps/cli/test` to enumerate every test that spawns the console binary (one file), then `keryx ctx rg -n \"send\" apps/cli/src/tui/main.processDriven.test.ts` (0 matches) to establish that file exercises no send; then rg over all argv assertions to confirm each runs on buildArgv's return value rather than on a spawned process."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "M6 applied, rebuilt with `npm run build`, `npx vitest run src/tui` recorded exit 0 with 117/117 passing; M6 reverted and `git status --porcelain` returned to the 5-line baseline.",
+        "verifier": "004-T7-verify"
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T7-verify#F-002",
+      "reviewer": "004-T7-verify",
+      "severity": "blocker",
+      "file": "apps/cli/src/tui/main.ts",
+      "line": 221,
+      "symbol": "runCli",
+      "problem": "The console's send path - main.ts writing request.text to the child's stdin - is covered by no test whatsoever. This is the whole functional point of the slice.",
+      "impact": "Deleting the body write breaks every send the console can make (the CLI receives empty stdin and answers INVALID_ARGUMENTS exit 2) and the suite stays green. AC2 requires the send to be demonstrated against a real driven process; nothing today demonstrates it even works.",
+      "suggested_fix": "The same process-driven test F-001 asks for closes both: assert the fake CLI received the exact body bytes on stdin as well as asserting its argv. Assert the bytes untrimmed, so the untrimmed contract main.ts inherits from readStdinBody is pinned at the console boundary too.",
+      "evidence": "Mutation M5: replaced `child.stdin.end(request.text, \"utf8\")` with `child.stdin.end()` in main.ts:221; rebuilt; `npx vitest run src/tui` -> 'Test Files 17 passed (17) / Tests 117 passed (117)', RECORDED_EXIT=0. Mutation reverted.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/main.ts:221 (the send body write)",
+          "apps/cli/src/tui/main.ts:184 (the EPIPE absorber added by this slice - also untested; nothing exercises a child that exits before draining a body)"
+        ],
+        "enumeration_method": "Read the whole stdin-writing block main.ts:179-222 and enumerated its two new behaviours; then established via `keryx ctx rg -n \"dist/tui|tui.js\" apps/cli/src apps/cli/test` that only main.processDriven.test.ts spawns the console and via `rg -n \"send\"` on that file (0 matches) that neither behaviour is reached."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "M5 applied and rebuilt; `npx vitest run src/tui` recorded exit 0, 117/117 passing. Reverted; git status returned to baseline.",
+        "verifier": "004-T7-verify"
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T7-verify#F-003",
+      "reviewer": "004-T7-verify",
+      "severity": "major",
+      "file": "apps/cli/src/commands/cli.doctorContacts.test.ts",
+      "line": 138,
+      "symbol": "stays offline and leaks no key material while enumerating pinned contacts",
+      "problem": "The test's stated proof of the offline property is invalid. It argues that because init points at an unreachable relay (http://127.0.0.1:1), 'a clean exit 0 that ALSO carries the contacts array is itself the proof of no network access'. That only follows if any relay request would be FATAL. A best-effort or fire-and-forget request is invisible to it.",
+      "impact": "doctor's offline guarantee - which the specification states as fact and on which the console's no-store-key design depends - rests on an argument that does not hold. A future change that adds a swallowed or fire-and-forget relay call to doctor passes every test while breaking the documented property.",
+      "suggested_fix": "Prove the negative directly rather than by inference: run doctor with a relay URL pointing at a listening test server that records every request, and assert the recorder saw nothing. That is the same causal-barrier discipline main.processDriven.test.ts already uses for 'no second child was spawned', applied to 'no request was made'.",
+      "evidence": "Mutation M7: inserted `await fetch(new URL(\"/v2/prekeys/claim\", config.relay_url).toString()).catch(() => undefined);` into cli.ts's doctor case; rebuilt; `npx vitest run src/commands/cli.doctorContacts.test.ts` -> 3 passed, RECORDED_EXIT=0; `npx vitest run src/commands` -> 'Test Files 7 passed (7)'. The shipped code IS offline (Profile.diagnostics reads only the store); it is the proof that is unsound. Control: mutation M8 (doctor returning process.env[config.store_key_env]) was killed by all 3 tests, so the key-material half of the same test is sound. Both reverted.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/commands/cli.doctorContacts.test.ts:138-158 (new, this slice)",
+          "apps/cli/src/commands/cli.test.ts 'keeps doctor/history offline' (pre-existing, same inference - it did not catch M7 either)"
+        ],
+        "enumeration_method": "Ran M7 against the whole apps/cli/src/commands directory rather than the one file, so every test in the repository claiming an offline property for doctor or history had its chance to fail; all 7 files passed."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "M7 applied and rebuilt; targeted run 3/3 passed exit 0; whole-directory run 7/7 files passed. M8 (the control) applied and rebuilt; 3/3 failed, proving the harness can fail. Both reverted; git status at baseline.",
+        "verifier": "004-T7-verify"
+      }
+    },
+    {
+      "id": "F-004",
+      "global_id": "004-T7-verify#F-004",
+      "reviewer": "004-T7-verify",
+      "severity": "major",
+      "file": "docs/requirements/echolet-cli-prototype/specification.md",
+      "line": 78,
+      "symbol": "send: where the message body comes from",
+      "problem": "The specification and the orchestrator's own code comments state that when --text is present stdin is 'not read, not even to check' and 'never read'. That is false for `--text \"\"`. resolveSendBody gates on `flagBody.length > 0`, so an empty --text is treated as absent and stdin IS read. The specification's table row for --text also says 'Unchanged from earlier releases', and that is false too: before this slice `required(values, \"text\")` rejected an empty --text with INVALID_ARGUMENTS.",
+      "impact": "`--text \"$MSG\"` with an unset or empty variable is the ordinary shell shape, and it appears in the operator's own prototype (~/.echolet/peer uses `--text \"$*\"`). An empty `$*` now silently re-routes the body source to stdin instead of failing, and the documented rule gives no warning. Nothing in the suite covers it.",
+      "suggested_fix": "Either make an explicitly supplied but empty --text an INVALID_ARGUMENTS refusal (restoring the old behaviour, and detectable from parsed.tokens without reading stdin), or state the actual rule in both the specification table and the resolveSendBody docblock: 'a NON-EMPTY --text wins; an empty one is treated as absent'. Add the missing test case either way.",
+      "evidence": "Measured against the built CLI: `send --to <untrusted> --text \"\"` with 70000 bytes piped on stdin exits 2 INVALID_MESSAGE, which can only happen if stdin was read and bounded; the identical invocation with `--text FLAG_BODY` exits 3 CONTACT_NOT_TRUSTED, proving stdin was not read. `keryx ctx rg` for an empty --text case in apps/cli/src/commands/cli.test.ts returns 0 matches. Pre-slice behaviour read from the bb17f23 diff: rejectUnexpectedMissing listed 'text' for send and `required` throws on length 0.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "docs/requirements/echolet-cli-prototype/specification.md:78 (table row '--text <text> | ... stdin is not read, not even to check')",
+          "docs/requirements/echolet-cli-prototype/runbook.md:122 ('When --text is given, stdin is not read at all')",
+          "apps/cli/src/commands/cli.ts:233-235 (docblock 'stdin is never read')",
+          "apps/cli/src/commands/cli.ts:243 (inline comment 'stdin is NOT read when it is present')",
+          "apps/cli/src/tui/main.ts:214-216 (comment repeating the same rule)"
+        ],
+        "enumeration_method": "`keryx ctx rg -n \"--text\"` over docs/requirements/echolet-cli-prototype and apps/cli/src, then read every hit and kept the ones stating the precedence rule as unconditional."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "Probe script run against apps/cli/dist/cli.js on a real initialised profile: P1a (--text FLAG_BODY + 70000-byte stdin) exit=3 CONTACT_NOT_TRUSTED; P2b (--text \"\" + 70000-byte stdin) exit=2 INVALID_MESSAGE.",
+        "verifier": "004-T7-verify"
+      }
+    },
+    {
+      "id": "F-005",
+      "global_id": "004-T7-verify#F-005",
+      "reviewer": "004-T7-verify",
+      "severity": "major",
+      "file": "docs/requirements/echolet-cli-prototype/runbook.md",
+      "line": 114,
+      "symbol": "--text exposure note",
+      "problem": "The note the orchestrator wrote says '--text keeps working and every step below still uses it'. There is exactly one --text invocation in the entire runbook and it is at line 106, ABOVE the note. No step below uses it. The note is also inserted between the command block at 105-108 and its own JSON output block at 130-133, so the recorded output now reads as the output of the stdin example the note introduces rather than of the command it belongs to.",
+      "impact": "The passage describing the hazard describes a runbook that does not exist, in a document whose value is that its transcript can be followed literally. The reader who follows it will run the stdin form and then compare against output produced by the --text form.",
+      "suggested_fix": "Move the note above the §6 command block and change 'every step below still uses it' to name the one step that does; or leave the note where it is and reword it to 'the step above still uses it'. Either way keep the JSON output block adjacent to the command that produced it.",
+      "evidence": "`keryx ctx rg -n -- \"--text\" docs/requirements/echolet-cli-prototype/runbook.md` returns 4 matches: line 106 (the only invocation) and lines 110, 113, 122 (all inside the note itself). Read of runbook.md:101-133 confirms the note sits between the command block and its output block.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "docs/requirements/echolet-cli-prototype/runbook.md:110-128 (the note)",
+          "docs/requirements/echolet-cli-prototype/runbook.md:105-108 (the only --text step, above the note)",
+          "docs/requirements/echolet-cli-prototype/runbook.md:130-133 (the output block the note now separates from its command)"
+        ],
+        "enumeration_method": "rg for every --text occurrence in the file (4, all accounted for) plus a read of the surrounding §6 block to establish the structural break."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "site-check",
+        "evidence": "rg enumeration of all 4 --text hits in runbook.md plus a line-numbered read of 92-136 showing the note at 110-128 between the command at 106 and the output at 130-133.",
+        "verifier": "004-T7-verify"
+      }
+    },
+    {
+      "id": "F-006",
+      "global_id": "004-T7-verify#F-006",
+      "reviewer": "004-T7-verify",
+      "severity": "minor",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 251,
+      "symbol": "resolveSendBody",
+      "problem": "The reverted precedence rule permits a body to be discarded with no signal a user could see. A caller who supplies both --text and a piped body gets the --text body sent and the piped body dropped, and send's success payload ({messageId, envelopeId, status}) carries nothing derived from the plaintext, so there is no way to tell which body went. No test covers the both-supplied case at all.",
+      "impact": "Real, but bounded: it requires the caller to supply two bodies, and the alternative (refusing) is measured below to be unimplementable without a hang. The unbounded part is that it is undocumented as a hazard and untested, and that it is what makes F-001 silent at runtime.",
+      "suggested_fix": "Add the missing test case pinning the precedence, so the rule is a decision rather than an accident. Consider one cheap warning that costs no read of stdin: when --text is present and process.stdin.isTTY is false, write a one-line note on stderr that stdin was not read. It cannot distinguish an idle inherited pipe from a real body, but it puts the discard in front of the operator without ever blocking.",
+      "evidence": "Measured: `send --to <untrusted> --text FLAG_BODY` with 70000 bytes on stdin, and the same command with empty stdin, produce byte-identical output (exit=3, {\"ok\":false,\"error\":{\"code\":\"CONTACT_NOT_TRUSTED\"}}, empty stderr). A 70000-byte body would have been INVALID_MESSAGE had stdin been read, so it was discarded in total silence. `keryx ctx rg` finds no test in apps/cli exercising both sources together.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "Probe P1a vs P1b against the built CLI, outputs compared byte for byte.",
+        "verifier": "004-T7-verify"
+      }
+    },
+    {
+      "id": "F-007",
+      "global_id": "004-T7-verify#F-007",
+      "reviewer": "004-T7-verify",
+      "severity": "info",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 254,
+      "symbol": "resolveSendBody",
+      "problem": "The hang the revert avoids is avoided only on the --text path. A caller who omits --text and whose stdin is an inherited pipe nobody closes hangs forever, with no timeout and no diagnostic - the TTY guard cannot see a pipe. The documents present the hang as a property of the rejected alternative rather than as a residual property of the shipped design.",
+      "impact": "Low for the console (main.ts always ends the child's stdin) and low for the nine prototype call sites (all use --text). It matters for the stdin form the runbook now recommends 'for a real message': `a send --to $BID` with no pipe and no TTY hangs silently.",
+      "suggested_fix": "Say so where the rule is documented: the stdin path reads to EOF and will wait indefinitely for a writer that never closes. If a guard is wanted later, it belongs on the reading side, not on the precedence rule.",
+      "evidence": "Measured control in the same probe that confirms the orchestrator's claim: `send --to <untrusted> --message-id <uuid>` with stdin an open pipe never closed did not exit within 20000ms and had to be SIGKILLed; the identical command with --text exited in well under a second with exit 3.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "hangprobe: 'WITH --text, stdin pipe never closed: EXITED code=3'; 'WITHOUT --text, stdin pipe never closed (control): HUNG (no exit within 20000ms)'.",
+        "verifier": "004-T7-verify"
+      }
+    },
+    {
+      "id": "F-008",
+      "global_id": "004-T7-verify#F-008",
+      "reviewer": "004-T7-verify",
+      "severity": "info",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 181,
+      "symbol": "rejectUnexpectedMissing",
+      "problem": "The orchestrator's replacement comment says 'The emptiness rule that used to live here now lives in resolveSendBody, which is the only place that knows about both sources.' The emptiness rule for --text did not move; it was dropped. resolveSendBody applies an emptiness rule to the stdin body only - an empty --text is silently reclassified as 'absent' rather than refused.",
+      "impact": "A comment that describes a relocation where there was a deletion. It is the same class the orchestrator says it already corrected three times in this change, and it is the comment that documents F-004's actual behaviour.",
+      "suggested_fix": "Say what happened: the stdin body's emptiness rule lives in resolveSendBody; an empty --text is treated as absent, which is a behaviour change from the previous release.",
+      "evidence": "cli.ts:181-183 (the comment) read against cli.ts:240-257 (resolveSendBody, which applies `stdinBody.length === 0` only to the stdin branch and `flagBody.length > 0` as a presence test, never as a refusal).",
+      "confidence": "high",
+      "blocking_merge": false,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "site-check",
+        "evidence": "Line-numbered read of cli.ts:175-258; the only emptiness refusal is on the stdin branch.",
+        "verifier": "004-T7-verify"
+      }
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Should the process-driven argv assertion AC3 requires be built now, as part of this slice, or booked as the first task of the next one?",
+      "why": "AC3 is written as a property of this slice and it is the only clause of it that fails. The fix is a contained extension of main.processDriven.test.ts's existing fake CLI (announce argv, drive one send), and until it exists nothing detects the reinstatement of the exposure the slice was written to close - silently, because the --text precedence keeps such a regression working.",
+      "options": [
+        { "id": "now", "label": "Build it in this slice before T7 closes", "recommended": true },
+        { "id": "next", "label": "Book it as the first task of the next slice, with AC3 recorded as not met" }
+      ]
+    },
+    {
+      "id": "Q2",
+      "question": "Should an explicitly supplied but empty --text be refused as INVALID_ARGUMENTS, restoring the previous release's behaviour, or documented as 'treated as absent'?",
+      "why": "It is a behaviour change the commit describes as 'Unchanged from earlier releases', it is untested, and the operator's own peer wrapper passes `--text \"$*\"` where an empty argument list produces exactly this shape. Refusing it needs no read of stdin, so it does not reopen the hang argument.",
+      "options": [
+        { "id": "refuse", "label": "Refuse an explicitly supplied empty --text (restores prior behaviour)", "recommended": true },
+        { "id": "document", "label": "Keep the fall-through and correct the specification, runbook and both code comments" }
+      ]
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "mutations_applied": 8,
+    "mutations_killed": 5,
+    "mutations_survived": 3,
+    "full_suite_files": 55,
+    "full_suite_tests": 284,
+    "full_suite_recorded_exit": 0,
+    "load_average_1min_at_full_run_start": 10.84,
+    "load_average_1min_at_full_run_end": 38.33,
+    "machine_idle": false
+  },
+  "timestamp_utc": "2026-09-09T00:15:00Z"
+}

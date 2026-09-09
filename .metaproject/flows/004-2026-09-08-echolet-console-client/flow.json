@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-08T23:54:37.689Z",
+  "updatedAt": "2026-09-09T00:14:22.101Z",
   "source": {
     "type": "description",
     "ref": null
@@ -123,6 +123,51 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Independent verification of the first slice, including the parts the orchestrator authored",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-08T23:56:05.563Z",
+            "outcome": "started",
+            "detail": "Raised by the implementer as Q0: the orchestrator authored part of the code, the test expectation and the documentation, and cannot be the one to accept them. A fresh agent verifies, with the orchestrator's own edits named as the first targets."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "RED tests for the three gaps verification found: the real spawn argv, the console's stdin write, and an empty --text",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T00:14:22.100Z",
+            "outcome": "started",
+            "detail": "Three mutations survived verification (M5, M6, M7) and one behavioural claim by the orchestrator was false. Tests first, by a fresh agent; the orchestrator writes none of them this time."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -178,6 +223,31 @@
       "at": "2026-09-08T23:54:37.689Z",
       "event": "task-done",
       "detail": "T6: Implement the two CLI prerequisites, keeping the command surface at eight commands"
+    },
+    {
+      "at": "2026-09-08T23:55:59.595Z",
+      "event": "task-added",
+      "detail": "T7: Independent verification of the first slice, including the parts the orchestrator authored"
+    },
+    {
+      "at": "2026-09-08T23:56:05.564Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — Raised by the implementer as Q0: the orchestrator authored part of the code, the test expectation and the documentation, and cannot be the one to accept them. A fresh agent verifies, with the orchestrator's own edits named as the first targets."
+    },
+    {
+      "at": "2026-09-09T00:14:14.682Z",
+      "event": "task-done",
+      "detail": "T7: Independent verification of the first slice, including the parts the orchestrator authored"
+    },
+    {
+      "at": "2026-09-09T00:14:16.570Z",
+      "event": "task-added",
+      "detail": "T8: RED tests for the three gaps verification found: the real spawn argv, the console's stdin write, and an empty --text"
+    },
+    {
+      "at": "2026-09-09T00:14:22.101Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — Three mutations survived verification (M5, M6, M7) and one behavioural claim by the orchestrator was false. Tests first, by a fresh agent; the orchestrator writes none of them this time."
     }
   ]
 }

@@ -1,0 +1,197 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-004-t8-tests",
+  "dispatch_id": "004-T8-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Three new test files, no source change. They close the three mutations 004-T7 left surviving and specify the one live defect it measured. (1) apps/cli/src/tui/main.sendChild.test.ts drives the REAL main.ts send path over a REAL spawned child and asserts that child's complete argv, its stdin bytes and its environment: it kills M6 (body appended to the spawn() call outside buildArgv -> argv mismatch, 8 tokens vs 6) and M5 (child.stdin.end() in place of child.stdin.end(request.text) -> stdin '' vs the body). Both mutations were applied, measured red, and reverted; git status returned to baseline each time. (2) apps/cli/src/commands/cli.sendEmptyText.test.ts specifies `--text \"\"` as INVALID_ARGUMENTS exit 2 with stdin NOT READ AT ALL, and proves the second half causally rather than by inspection: the child is given a stdin pipe this process never closes, so a read to EOF cannot terminate. It is RED today in exactly that way - both cases hang until the CLI_CHILD_TIMEOUT_MS watchdog SIGKILLs them - and its third case (a non-empty --text against the same never-closed pipe, exit 3 in 316ms) is the green control proving the instrument reports real exits. (3) apps/cli/src/commands/cli.doctorOffline.test.ts replaces the unsound offline proof with a recording relay the profile is actually configured against; it kills M7 ('GET /v2/prekeys/claim' recorded) while all three tests of cli.doctorContacts.test.ts pass under the same mutation, which is the defect in miniature. One honest limitation is recorded rather than papered over: the console still has NO keystroke that issues a send (mapKey/paneKeyIntent bind p/d/r/h/i/c/t and no compose surface exists), so a fully keystroke-driven send is impossible without a source change; file (1) substitutes ONLY ./tui-shell, through an esbuild onResolve plugin, and leaves main(), parseOptions, buildArgv, the real spawn() and the real stdin write untouched.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "M6 closed: a test fails when a message body reaches the argv of an actually spawned child",
+      "status": "met",
+      "evidence": "apps/cli/src/tui/main.sendChild.test.ts asserts the complete argv reported by the child main.ts really spawned, as an exact toEqual, plus a second assertion naming the hazard (no token may contain the plaintext marker) and a third over the child's environment. Mutation M6 (the verifier's exact edit: `...(request.command === \"send\" ? [\"--text\", request.text] : [])` appended to the spawn() argument list at main.ts:174) applied -> `npx vitest run src/tui/main.sendChild.test.ts` -> 1 failed, RECORDED_EXIT=1, 'AssertionError: expected [ send, --to, ...(8) ] to deeply equal [ send, --to, ...(6) ]' with the received array showing '--text' and the body. Reverted; git status -- apps/cli/src listed only the three new untracked test files."
+    },
+    {
+      "criterion": "M5 closed: a test fails when the body does not reach the child's stdin",
+      "status": "met",
+      "evidence": "Same file, same child: `expect(record.stdin).toBe(BODY)` over the bytes the spawned child actually received, with BODY carrying an embedded and a trailing newline and a second assertion against BODY.trimEnd() so the untrimmed contract is pinned at the console boundary too. Mutation M5 (`child.stdin.end()` for `child.stdin.end(request.text, \"utf8\")` at main.ts:221) applied -> 1 failed, RECORDED_EXIT=1, \"AssertionError: expected '' to be '--json SYNTHETIC_CONSOLE_PLAINTEXT_MA...'\". Reverted; baseline restored."
+    },
+    {
+      "criterion": "The empty --text defect specified: INVALID_ARGUMENTS, exit 2, and stdin is not read at all",
+      "status": "met",
+      "evidence": "apps/cli/src/commands/cli.sendEmptyText.test.ts, RED today: 'Tests 2 failed | 1 passed (3)', RECORDED_EXIT=1, both failures 'the CLI was still running when the watchdog fired ... expected true to be false' at 45312ms and 45335ms. The 'not read at all' half is proven causally - the child's stdin pipe is never closed by the test process, so any read to EOF blocks forever and only a refusal that never touches stdin can exit 2. Case 2 additionally writes bytes to that unclosed pipe, so a 'drain stdin, then refuse' implementation is red as well. A test asserting exit 2 alone would pass such an implementation; this one cannot."
+    },
+    {
+      "criterion": "M7 closed, or honestly reported as untestable",
+      "status": "met",
+      "evidence": "Closed, with no new dependency: apps/cli/src/commands/cli.doctorOffline.test.ts points the profile's relay_url at a real listening node:http server (the same builtin cli.sendStdin.test.ts already uses for its mock relay) that records every request it receives. Mutation M7 (the verifier's swallowed `await fetch(new URL(\"/v2/prekeys/claim\", config.relay_url)).catch(() => undefined)` in doctor) applied -> the new file failed with 'doctor reached the relay: expected [ GET /v2/prekeys/claim ] to deeply equal []' while cli.doctorContacts.test.ts passed 3/3 in the same run. Reverted, dist rebuilt, both green. The unsound test at cli.doctorContacts.test.ts:138 was left alone as instructed."
+    },
+    {
+      "criterion": "AC3 clause 'a test asserts the complete argv of EVERY spawned child'",
+      "status": "partial",
+      "evidence": "Complete for `send`, which is the command AC3 is about and the only one that carries a body. It is NOT complete for the other seven: main.processDriven.test.ts's fake CLI still announces only the derived {command}, never the argv, so poll / doctor / relay publish / contact import still have no spawned-child argv assertion - which is also the gap AC6's 'no key material appears in any child argv' still rests on (asserted over buildArgv only, tui.keyMaterial.test.ts:141-146). Extending that file's fake CLI to announce process.argv.slice(2) is a test-only change and remains available; it was not made here because this dispatch asked for the body, and rewriting a passing suite's control protocol is a larger blast radius than the four tests it would strengthen. Recorded as F-002 below."
+    },
+    {
+      "criterion": "No source file changed",
+      "status": "met",
+      "evidence": "`git status --porcelain -- apps/cli/src` after every run lists exactly three untracked files, all tests: apps/cli/src/commands/cli.doctorOffline.test.ts, apps/cli/src/commands/cli.sendEmptyText.test.ts, apps/cli/src/tui/main.sendChild.test.ts. The four mutations used to demonstrate the kills were applied, measured and reverted with `git checkout --` within the same command; the working tree matched baseline after each, and `apps/cli/dist` was rebuilt from restored source afterwards."
+    },
+    {
+      "criterion": "No new millisecond literal; every timeout from apps/cli/test/childProcessTimeouts.ts",
+      "status": "met",
+      "evidence": "All three files import CLI_CHILD_TIMEOUT_MS and CLI_TEST_TIMEOUT_MS from ../../test/childProcessTimeouts and use nothing else. The two hanging cases in cli.sendEmptyText.test.ts are in SEPARATE it() blocks precisely so each stays inside one CLI_TEST_TIMEOUT_MS while spending one CLI_CHILD_TIMEOUT_MS at the watchdog; a single test holding both would exceed the ceiling and surface as vitest's generic timeout instead of this file's specific message."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T8-tests-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This record.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/main.sendChild.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Kills M6 and M5: the real main.ts send path over a real spawned child, asserting its complete argv, its stdin bytes and its environment.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/commands/cli.sendEmptyText.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RED. `send --text \"\"` must be INVALID_ARGUMENTS exit 2 with stdin never read, proven by a stdin pipe the test never closes.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/commands/cli.doctorOffline.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Kills M7: doctor and history make no request to a relay that records what it receives, with poll as the positive control.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/tui/main.sendChild.test.ts", "change": "added" },
+    { "path": "apps/cli/src/commands/cli.sendEmptyText.test.ts", "change": "added" },
+    { "path": "apps/cli/src/commands/cli.doctorOffline.test.ts", "change": "added" },
+    { "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T8-tests-result.json", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T8-tests#F-001",
+      "reviewer": "004-T8-tests",
+      "severity": "major",
+      "file": "apps/cli/src/tui/main.sendChild.test.ts",
+      "line": 33,
+      "symbol": "one-send-shell esbuild plugin",
+      "problem": "The send is driven by a stubbed `./tui-shell`, not by a keystroke, because the console has no way to issue a send. `mapKey`/`paneKeyIntent` (tui-shell.ts:110-138) bind p/d/r/h/i/c/t and nothing composes a message, so `main.ts`'s send path is unreachable from the operator's keyboard today. A keystroke-driven test would have required adding that binding, which is a source change this dispatch forbids.",
+      "impact": "Bounded, and worth stating precisely. Everything M6 and M5 mutate is the shipped code and is exercised for real: main(), parseOptions, buildArgv, the spawn() at main.ts:174 with the inherited environment, and the stdin write at :221. What is NOT proven is that the console's eventual compose surface will route through this same runCli - a future send that spawns its own child elsewhere would not be caught here.",
+      "suggested_fix": "When the compose surface lands (AC2), replace the stub with the real shell and drive the send by keystroke through main.processDriven.test.ts's harness, keeping these three assertions verbatim. Until then the substitution is the only honest option that does not edit source.",
+      "evidence": "`keryx ctx rg -n \"send\" apps/cli/src/tui` returns no `{ kind: \"run\", request: { command: \"send\" ... } }` anywhere; tui-shell.ts:298's `case \"send\"` is in applyOutcome (folding a result), not in key mapping. main.processDriven.test.ts contains no send for the same reason.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:110-138 (paneKeyIntent - the seven bound keys, no send)",
+          "apps/cli/src/tui/main.ts:170-223 (runCli - reachable in production only through TuiIo)",
+          "apps/cli/src/tui/main.sendChild.test.ts (the one place the stub is used)"
+        ],
+        "enumeration_method": "`keryx ctx rg -n \"send\" apps/cli/src/tui` over all 15 matching files, then a read of mapKey/paneKeyIntent to confirm no binding produces a send intent."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "M6 and M5 were each applied to main.ts and each turned this test red (argv mismatch; stdin ''), which is only possible if the shipped spawn() and stdin write are the code under test. Both reverted; `git status --porcelain -- apps/cli/src` returned to the three untracked test files.",
+        "verifier": "004-T8-tests"
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T8-tests#F-002",
+      "reviewer": "004-T8-tests",
+      "severity": "major",
+      "file": "apps/cli/src/tui/main.processDriven.test.ts",
+      "line": 58,
+      "symbol": "FAKE_CLI",
+      "problem": "AC3's 'every spawned child' is now satisfied for `send` and still not for the other seven commands: that file's fake CLI announces only the derived `{command}` and discards the argv it was invoked with, so nothing asserts what poll, doctor, relay publish, history or contact import are actually handed. AC6's 'no key material appears in any child argv' rests on the same missing assertion (tui.keyMaterial.test.ts:141-146 asserts over buildArgv only).",
+      "impact": "A mutation that appends a token - a store key value, a path, a flag - to the spawn() call for any command other than send would still pass the whole suite. The body is closed; the class it belonged to is not.",
+      "suggested_fix": "Extend FAKE_CLI to announce `process.argv.slice(2)` verbatim alongside `command`, and assert the complete argv of every announcement in both existing D-1 tests. That is a test-only change and the causal barrier already in the file (the console cannot exit while a child runs) makes the announcement list complete.",
+      "evidence": "main.processDriven.test.ts:58-78: the fake CLI computes `command` from argv and writes `JSON.stringify({ command })` only; the Announcement interface (:80-86) has no argv field. Not changed here because this dispatch asked for the body path and rewriting a green suite's control protocol has a wider blast radius than the four assertions it would strengthen.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/main.processDriven.test.ts:58-78 (the fake CLI, argv discarded)",
+          "apps/cli/src/tui/main.processDriven.test.ts:285-286, 324-325 (both announcement assertions, over command names only)",
+          "apps/cli/src/tui/tui.keyMaterial.test.ts:141-146 (key material asserted over buildArgv, never over a spawned child)"
+        ],
+        "enumeration_method": "Read of the whole control protocol in main.processDriven.test.ts plus the T7 enumeration it cites (`keryx ctx rg -n \"dist/tui|tui.js|tui.red-\" src test`, which returns that file as the only suite spawning the console binary), now joined by main.sendChild.test.ts."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "site-check",
+        "evidence": "Line-numbered read of main.processDriven.test.ts:58-105 and :280-330: `command` is the only field announced and the only field asserted.",
+        "verifier": "004-T8-tests"
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T8-tests#F-003",
+      "reviewer": "004-T8-tests",
+      "severity": "info",
+      "file": "apps/cli/src/commands/cli.doctorOffline.test.ts",
+      "line": 30,
+      "symbol": "doctor issues no relay request",
+      "problem": "The new offline proof is sound for the property as written ('doctor makes no relay request') and no wider. It proves nothing reached the CONFIGURED relay; it cannot prove the process opened no socket to some other host.",
+      "impact": "None today - the shipped diagnostics reads only the store - but a reader should not take the test for a network sandbox. Stated in the file's own header rather than left for the next verifier to discover.",
+      "suggested_fix": "Leave as is. A stronger claim needs an outbound-network sandbox this package does not have; if one is ever wanted, it belongs at the runner level, not in this test.",
+      "evidence": "The recorder observes only its own listening socket; the assertion is over requests it received.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Should FAKE_CLI in main.processDriven.test.ts be extended to announce its full argv, closing AC3 and AC6 for the other seven commands?",
+      "why": "F-002. It is a test-only change with a well-understood barrier already in place, but it rewrites the control protocol of a suite that is currently green, so it is a decision rather than a detail.",
+      "options": [
+        { "id": "now", "label": "Extend it in this slice, as a fourth test change", "recommended": true },
+        { "id": "next", "label": "Book it against AC6's re-verification on the final tree" }
+      ]
+    },
+    {
+      "id": "Q2",
+      "question": "The empty-`--text` specification here implements option 'refuse' from 004-T7's Q2. Confirm before the fix lands?",
+      "why": "The alternative ('document the fall-through') would make cli.sendEmptyText.test.ts wrong rather than red. The refusal restores the pre-slice behaviour, needs no read of stdin, and removes the hang from `~/.echolet/peer` called with no message - which is why it is written this way - but it is the operator's decision and the docs (specification.md:78, runbook.md:122) must move with it.",
+      "options": [
+        { "id": "refuse", "label": "Refuse an explicitly supplied empty --text (what this test specifies)", "recommended": true },
+        { "id": "document", "label": "Keep the fall-through, correct four documents and comments, and delete this test", "recommended": false }
+      ]
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "files_added": 3,
+    "source_files_changed": 0,
+    "mutations_applied": 4,
+    "mutations_killed": 3,
+    "mutations_survived": 0,
+    "tests_added": 5,
+    "tests_red_on_this_tree": 2,
+    "machine_idle": false,
+    "load_average_1min_at_emptytext_run_start": 10.93,
+    "load_average_1min_at_emptytext_run_end": 8.27,
+    "load_average_1min_at_final_run_start": 11.07,
+    "load_average_1min_at_final_run_end": 12.19,
+    "load_note": "10-core machine, never idle during this dispatch: 1-minute load stayed between 8.3 and 12.2 and the 15-minute average between 25 and 29, so roughly half the machine belonged to the operator's own VM and browser throughout. No run was interpreted as green or red on timing alone; the two red cases fail on a 45s watchdog that is CLI_CHILD_TIMEOUT_MS and not a contention artefact, and every kill was confirmed by an assertion message naming the mutated value."
+  },
+  "timestamp_utc": "2026-09-09T00:30:00Z"
+}
