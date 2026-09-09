@@ -25,3 +25,4 @@
 - 2026-09-09T01:01:19.413Z - task-done: T10: RED tests for the compose surface: an input mode, control-character filtering, frame exactness while typing
 - 2026-09-09T01:01:21.877Z - task-added: T11: Implement the input mode and the send key: make the console able to write a message
 - 2026-09-09T01:01:26.994Z - task-attempt: T11: started (attempt 1) — A different agent from the one that wrote the tests, and not the orchestrator. It may not edit a test; the 28 currently-vacuous cases must become non-vacuous by the implementation, not by adjusting them.
+- 2026-09-09T01:23:30.949Z - task-done: T11: Implement the input mode and the send key: make the console able to write a message
