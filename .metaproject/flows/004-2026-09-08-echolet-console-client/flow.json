@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T00:28:36.727Z",
+  "updatedAt": "2026-09-09T00:39:53.934Z",
   "source": {
     "type": "description",
     "ref": null
@@ -174,7 +174,7 @@
       "id": "T9",
       "title": "Fix the empty --text defect and the orchestrator's three false claims",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
@@ -190,7 +190,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -286,6 +287,11 @@
       "at": "2026-09-09T00:28:36.727Z",
       "event": "task-attempt",
       "detail": "T9: started (attempt 1) — Dispatched to a fresh agent rather than fixed by the orchestrator, who wrote both the defect and the false claims and must not be the one to sign them off. It also reconciles the now-superseded unsound doctor offline test."
+    },
+    {
+      "at": "2026-09-09T00:39:53.934Z",
+      "event": "task-done",
+      "detail": "T9: Fix the empty --text defect and the orchestrator's three false claims"
     }
   ]
 }
