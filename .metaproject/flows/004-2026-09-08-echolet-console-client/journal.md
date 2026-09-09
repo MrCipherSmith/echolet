@@ -20,3 +20,5 @@
 - 2026-09-09T00:28:31.528Z - task-added: T9: Fix the empty --text defect and the orchestrator's three false claims
 - 2026-09-09T00:28:36.727Z - task-attempt: T9: started (attempt 1) — Dispatched to a fresh agent rather than fixed by the orchestrator, who wrote both the defect and the false claims and must not be the one to sign them off. It also reconciles the now-superseded unsound doctor offline test.
 - 2026-09-09T00:39:53.934Z - task-done: T9: Fix the empty --text defect and the orchestrator's three false claims
+- 2026-09-09T00:44:52.786Z - task-added: T10: RED tests for the compose surface: an input mode, control-character filtering, frame exactness while typing
+- 2026-09-09T00:45:06.759Z - task-attempt: T10: started (attempt 1) — Third wall: decodeKey collapses every chunk to one lower-cased character, so no operand can be typed. Tests first, pure layer, by a fresh agent. The orchestrator writes none of them.
