@@ -248,26 +248,35 @@ it("drives the shipped console over the shipped CLI against a real relay: regist
   const alice = join(directory, "alice"), bob = join(directory, "bob"), data = join(directory, "relay-data");
   const aliceKey = randomBytes(32).toString("base64url"), bobKey = randomBytes(32).toString("base64url");
   /*
-   * SHORT ON PURPOSE, and the reason is a MEASURED defect this test found rather than a convenience.
+   * LONG ON PURPOSE, and the length is the whole point: these markers are the regression pin for
+   * the defect this file found and the history pane has since been rebuilt to fix.
    *
-   * `formatHistoryLines` (history-pane.ts:41) paints one entry as
-   * `  <sequence>  <direction>  <messageId>  <plaintext>`, and `messageId` is a 36-character UUID.
-   * At `MIN_VIEWPORT` — which is what a console driven over a pipe gets, and what an 80-column
-   * terminal is barely above — the prefix costs 53 columns for an `outbound` row and 52 for an
-   * `inbound` one, leaving 19 and 20 columns for the BODY. Measured on this very run at 72 columns:
+   * As this test was first written, `formatHistoryLines` painted one entry as
+   * `  <sequence>  <direction>  <messageId>  <plaintext>` on ONE line, and `messageId` is a
+   * 36-character UUID. At `MIN_VIEWPORT` — which is what a console driven over a pipe gets, and what
+   * an 80-column terminal is barely above — the prefix cost 53 columns for an `outbound` row and 52
+   * for an `inbound` one, leaving 19 and 20 for the BODY:
    *
    *   "  1  outbound  37ffccdc-5428-4ae6-87da-bcdd8fb42ec5  CONSOLE_E2E_OUT_ea2"
    *   "  2  inbound  cb926153-a958-4419-96af-346282953f1d  CONSOLE_E2E_IN_b9cf4"
    *
-   * — both bodies cut mid-token, with no way to widen the column from inside the console. So a
-   * 51-character marker would make this test fail for a reason that is not the round trip, and a
-   * test that asserted the truncated prefix would enshrine the defect. The markers are therefore
-   * sized to FIT, the round trip is asserted on them, and the full-fidelity assertion is made
-   * against the STORE (`aliceHistory`, below) where no pane can elide it. The elision itself is
-   * recorded as a finding in `004-T25-verify-result.json`, not pinned here.
+   * The markers were shortened to fit that, so the round trip could be asserted at all, and the
+   * elision was recorded as 004-T25-verify F-001 rather than enshrined here.
+   *
+   * THAT CONSTRAINT IS GONE. The metadata line keeps sequence, direction and the whole id, and the
+   * body now gets rows of its own beneath it, indented, up to `MAX_BODY_ROWS` (`history-pane.ts`):
+   * 68 columns per row at `MIN_VIEWPORT` instead of 20, and 272 in total. So the markers are sized
+   * deliberately ABOVE the old ceiling — 52 characters each, one more than the 51-character body
+   * that could not be read — which makes `awaitFrame(reply, …)` below an assertion that the WHOLE
+   * body was painted INSIDE the console, and not merely that something arrived. Shorten them and
+   * this file stops covering the pane it exists to cover.
+   *
+   * The store assertion (`aliceHistory`, below) stays exactly where it was: it is the full-fidelity
+   * check no pane can elide, and it is what proves the frame and the store agree rather than the
+   * frame agreeing with itself.
    */
-  const fromConsole = `EOUT_${randomBytes(6).toString("hex")}`;
-  const reply = `EIN_${randomBytes(6).toString("hex")}`;
+  const fromConsole = `CONSOLE_E2E_OUT_${randomBytes(18).toString("hex")}`;
+  const reply = `CONSOLE_E2E_IN__${randomBytes(18).toString("hex")}`;
   const markers = [fromConsole, reply, aliceKey, bobKey];
 
   const reserved = createServer(); const relayPort = await listen(reserved); await close(reserved);
