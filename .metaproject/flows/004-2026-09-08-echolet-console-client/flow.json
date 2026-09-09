@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T09:43:02.713Z",
+  "updatedAt": "2026-09-09T10:29:51.558Z",
   "source": {
     "type": "description",
     "ref": null
@@ -651,15 +651,22 @@
       "id": "T30",
       "title": "Stop naming a key that does nothing, and stop leaving a child alive after the operator quits",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T09:48:13.209Z",
+            "outcome": "started",
+            "detail": "Opened after the way-out sweep and left unstarted while the gate was repaired. Two defects: eighteen of 220 viewport-state combinations name a key that does nothing, and in thirteen it is the only key named; and Ctrl-C returns the terminal in 0ms while the process lives on for six seconds because no signal handler kills the child."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T31",
@@ -681,6 +688,43 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T32",
+      "title": "Stop naming a dead key, and tell the operator a command is still running",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T30"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T10:12:41.346Z",
+            "outcome": "started",
+            "detail": "A fresh agent, not the test author. The comment in tui-shell asserting the modal footer cannot name a way out is false on this tree and must go with the fix."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T33",
+      "title": "Widen the scanner from the word quit to every key the console advertises",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -1126,6 +1170,36 @@
       "at": "2026-09-09T09:43:02.713Z",
       "event": "task-done",
       "detail": "T31: The gate must finish its verdict when vitest loses a report, not refuse it"
+    },
+    {
+      "at": "2026-09-09T09:48:13.209Z",
+      "event": "task-attempt",
+      "detail": "T30: started (attempt 1) — Opened after the way-out sweep and left unstarted while the gate was repaired. Two defects: eighteen of 220 viewport-state combinations name a key that does nothing, and in thirteen it is the only key named; and Ctrl-C returns the terminal in 0ms while the process lives on for six seconds because no signal handler kills the child."
+    },
+    {
+      "at": "2026-09-09T10:12:41.175Z",
+      "event": "task-done",
+      "detail": "T30: Stop naming a key that does nothing, and stop leaving a child alive after the operator quits"
+    },
+    {
+      "at": "2026-09-09T10:12:41.261Z",
+      "event": "task-added",
+      "detail": "T32: Stop naming a dead key, and tell the operator a command is still running"
+    },
+    {
+      "at": "2026-09-09T10:12:41.346Z",
+      "event": "task-attempt",
+      "detail": "T32: started (attempt 1) — A fresh agent, not the test author. The comment in tui-shell asserting the modal footer cannot name a way out is false on this tree and must go with the fix."
+    },
+    {
+      "at": "2026-09-09T10:29:51.466Z",
+      "event": "task-done",
+      "detail": "T32: Stop naming a dead key, and tell the operator a command is still running"
+    },
+    {
+      "at": "2026-09-09T10:29:51.558Z",
+      "event": "task-added",
+      "detail": "T33: Widen the scanner from the word quit to every key the console advertises"
     }
   ]
 }
