@@ -65,10 +65,13 @@ export function labelled(label: string, value: string, gutter = 16): string {
  * possible by other means:
  *
  * - THE BIDI CONTROLS (U+200E, U+200F, U+202A..U+202E, U+2066..U+2069) reorder the rest of the line.
- *   `formatHistoryLines` (history-pane.ts:41) paints `sequence  direction  messageId  plaintext` on
- *   ONE line, so an override inside a correspondent's plaintext reorders the fields painted before
- *   it, and a stranger can make their own inbound message render with `outbound` where the operator
- *   reads the direction. In the trust modal the damage is more direct: an identifier that renders in
+ *   `formatHistoryLines` now paints a message across two regions — `sequence  direction  messageId`
+ *   on one line and the body, indented, on its own rows beneath it (history-pane.ts) — so a
+ *   correspondent's plaintext no longer shares a line with the direction the operator reads. That
+ *   layout narrows the blast radius and does not remove the hazard, and it is deliberately NOT what
+ *   this filter rests on: a body that reorders itself still misrepresents what a message says, and a
+ *   later layout change must not be able to reopen the field-swapping variant. In the trust modal
+ *   the damage is more direct still: an identifier that renders in
  *   an order it was not written in cannot be compared out of band, which is the one thing the modal
  *   exists to let a human do. On the compose row it defeats the painted-at gate itself.
  * - THE SEPARATORS (U+2028, U+2029) are line terminators some terminals honour, so a frame's

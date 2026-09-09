@@ -16,6 +16,15 @@ import { clipLine } from "./text";
  * - `rows` — the variable-length list, the only region that may be truncated;
  * - `tail` — fixed lines that belong after the list.
  *
+ * A LIST ITEM IS NOT ALWAYS ONE LINE. Flow 004 T28 gave the conversation pane a second row per
+ * message — the metadata on one line, the body on its own beneath it — because a message id and a
+ * body cannot both fit in 72 columns and the body is what the pane exists for. An item is therefore
+ * a `string` or an array of the lines it occupies, and truncation drops WHOLE ITEMS: a half-painted
+ * message with its own metadata missing is not a shorter list, it is a wrong one.
+ *
+ * The count in `truncationMarker` is a count of ITEMS for the same reason it always was — "how much
+ * of this list am I not looking at" is a question about messages, not about rows of text.
+ *
  * `keep` says which end of `rows` survives. It is a per-pane decision and not a global rule:
  * history and rejections are feeds, where the newest rows are the ones the operator came for; the
  * contact roster is a SELECTION surface whose display order has to be decided together with the `c`
@@ -27,11 +36,24 @@ import { clipLine } from "./text";
 
 export type KeepEnd = "head" | "tail";
 
+/**
+ * One item of a pane's list: a single line, or every line that one item occupies.
+ *
+ * A bare `string` is the one-line case spelled the way it always was, so a pane whose items are one
+ * line each passes exactly what it passed before and gets exactly what it got before.
+ */
+export type PaneRow = string | readonly string[];
+
+/** The lines one item occupies. */
+function rowLines(row: PaneRow): readonly string[] {
+  return typeof row === "string" ? [row] : row;
+}
+
 export interface PaneRegions {
   /** Fixed lines above the list — the pane's own headings and disclosures. */
   readonly head: readonly string[];
-  /** The list. The only region truncation is allowed to take rows from. */
-  readonly rows: readonly string[];
+  /** The list. The only region truncation is allowed to take items from. */
+  readonly rows: readonly PaneRow[];
   /** Fixed lines below the list. */
   readonly tail?: readonly string[];
   /** Which end of `rows` survives when they do not all fit. */
@@ -50,13 +72,36 @@ export function truncationMarker(hidden: number): string {
 }
 
 /**
+ * How many list ITEMS survive, taken from the `keep` end, and how many lines they cost.
+ *
+ * The floor is one item whenever there is any room at all: a pane reduced to headings and a marker
+ * has not been truncated, it has been emptied (rule 2 below). Past that floor an item is taken only
+ * if all of its lines fit, because half a message is worse than an honest count of whole ones.
+ */
+function keepItems(rows: readonly PaneRow[], keep: KeepEnd, room: number, budget: number): { kept: PaneRow[]; used: number } {
+  const kept: PaneRow[] = [];
+  let used = 0;
+  if (room <= 0) return { kept, used };
+  const ordered = keep === "tail" ? [...rows].reverse() : rows;
+  for (const row of ordered) {
+    const height = rowLines(row).length;
+    if (kept.length > 0 && used + height > budget) break;
+    kept.push(row);
+    used += height;
+    if (used >= budget) break;
+  }
+  if (keep === "tail") kept.reverse();
+  return { kept, used };
+}
+
+/**
  * Lays out one pane's regions into at most `limit` lines, each clipped to `width`.
  *
  * When everything fits, this is the concatenation and nothing else happens. When it does not:
  *
  * 1. one line is spent on `truncationMarker`, so the pane always says that it is short and by how
  *    much before it drops anything;
- * 2. the list keeps at least one row whenever it has one and there is room for it — a pane reduced
+ * 2. the list keeps at least one item whenever it has one and there is room for it — a pane reduced
  *    to headings and a marker has not been truncated, it has been emptied;
  * 3. whatever is left goes to the fixed regions, `head` before `tail`, so the lines nearest the top
  *    of the pane — which is where every pane puts what it is and what it is not showing — are the
@@ -68,31 +113,28 @@ export function truncationMarker(hidden: number): string {
 export function fitPane(regions: PaneRegions, limit: number, width: number): string[] {
   const tail = regions.tail ?? [];
   const clip = (line: string): string => clipLine(line, width);
-  const all = [...regions.head, ...regions.rows, ...tail];
+  const listLines = regions.rows.flatMap((row) => [...rowLines(row)]);
+  const all = [...regions.head, ...listLines, ...tail];
 
   if (!Number.isFinite(limit)) return all.map(clip);
   const cap = Math.max(0, Math.floor(limit));
   if (all.length <= cap) return all.map(clip);
-  // Nothing to truncate honestly: with no list rows there is no count to report, so the pane is
+  // Nothing to truncate honestly: with no list items there is no count to report, so the pane is
   // simply cut. This is the pre-existing behaviour for panes that have no list at all.
   if (regions.rows.length === 0) return all.slice(0, cap).map(clip);
 
   const room = Math.max(0, cap - 1);
   const wanted = regions.head.length + tail.length;
-  const floor = Math.min(regions.rows.length, room, 1);
-  const shown = Math.max(floor, Math.min(regions.rows.length, room - wanted));
-  const kept = regions.keep === "tail"
-    ? regions.rows.slice(regions.rows.length - shown)
-    : regions.rows.slice(0, shown);
+  const { kept, used } = keepItems(regions.rows, regions.keep, room, room - wanted);
 
-  const fixed = Math.max(0, Math.min(wanted, room - shown));
+  const fixed = Math.max(0, Math.min(wanted, room - used));
   const headRoom = Math.min(regions.head.length, fixed);
   const tailRoom = Math.max(0, fixed - headRoom);
 
   return [
     ...regions.head.slice(0, headRoom),
-    ...kept,
-    truncationMarker(regions.rows.length - shown),
+    ...kept.flatMap((row) => [...rowLines(row)]),
+    truncationMarker(regions.rows.length - kept.length),
     ...tail.slice(tail.length - tailRoom),
   ].slice(0, cap).map(clip);
 }
