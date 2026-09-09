@@ -116,7 +116,14 @@ function freshState(): OperatorState {
       signalIdentityKey: "BQdNjP6tbN00N3eS6DNpmKpMDFDeDa4MFuUO1QWt8i",
     }],
     selectedContactId: CONTACT_ID,
-    mailbox: { outboxPending: 0, inboxReceived: 0, more: false, lastPolledAtMs: null },
+    // Fixture correction (task-implementer, 2026-09-09): this hand-written copy of
+    // `createInitialState` claimed `outboxPending: 0, inboxReceived: 0` — a count this very file's
+    // own representation paragraph (state.ts:120-128) says must be `null`, the absence of a report,
+    // not an invented zero. The two RED cases in "T23-AC2-A" read this object directly, with no
+    // `applyOutcome` in between, so they failed against any implementation until the fixture matched
+    // what `createInitialState` (state.ts:376) now produces. Only this line moved; no assertion and
+    // no other file changed.
+    mailbox: { outboxPending: null, inboxReceived: null, more: false, lastPolledAtMs: null },
     rejections: [],
     history: [],
     health: { relayUrl: PROFILE.relayUrl, status: "unknown", uptimeMs: null, checkedAtMs: null },
