@@ -1,0 +1,290 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "004-T29-verify-2026-09-09",
+  "dispatch_id": "004-T29-verify",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Three pieces, all closed. (1) AC8 RE-MEASURED over the states that exist today rather than the ones that existed when it was last swept: 22 states (registration checklist in three conditions, all five panes, the conversation pane's continuation rows and its withholding filter, the key list, a command in flight, five compose-row states, four trust-modal states) crossed with 10 viewports (three below MIN_VIEWPORT on both axes, one below on each axis alone, and up to 200x60) = 220 combinations. NO STATE HAS NO WAY OUT: Ctrl-C quits in all 22, proven twice over -- purely, by enumerating the console's entire input alphabet (26 control keys, Esc, Backspace, both newlines, all 95 printable ASCII) through mapKey+reduce, and driven, by running the REAL runTuiShell with an injected terminal at every one of the 220 combinations and requiring the session to end with exit 0, raw mode off and the alternate screen given back. `q` and `Q` also quit in the 13 pane-owned states and are deliberately dead in the other 9 (a modal owns the keyboard; inside the compose row `q` is text). Pinned in apps/cli/src/tui/tui-shell.wayOut.test.ts, 3 tests, and mutation-tested three ways: dropping Ctrl-C from the modal branch, dropping the `q` binding, and accepting the quit intent without stopping the loop -- all three killed, all three reverted and byte-compared. WHAT IS NOT MET is the criterion's second clause. Of the 220 combinations, 140 name a live way out, 62 name none at all, and 18 NAME A DEAD ONE; in 13 of those 18 the only key the frame names is the dead one. The sharp case is a trust modal open below MIN_VIEWPORT: the degraded frame says 'resize, or press q to quit' -- and with a modal up, `q` does nothing. (2) AC10's DEPLOYMENT HALF driven for real: the shipped dist/tui.js over the shipped dist/cli.js against the operator's own relay at https://depr.tail5a88fb.ts.net:8443 -- real TLS on a real remote host over the tailnet, no local relay, no fake anything. Registration from inside the console (startup doctor's INVALID_CONFIGURATION, init with the URL typed into the console, relay publish, contact export, contact import confirmed on the four identifiers the real CLI printed, doctor closing step 5 on a non-zero contact_count), a message composed in the console and read byte-exact out of the PEER's encrypted store, the peer's 52-character reply painted IN FULL inside the console, alice's own store holding [outbound, inbound] in order, Ctrl-C exit 0, no key in a frame, empty stderr. 18.8s wall, first attempt, nothing failed that does not fail locally. A second real session measured AC8's 'command in flight' clause against the real binary and the real network: Ctrl-C pressed while a genuine 6-second `relay publish` was in flight gave the terminal back in 0 ms and the process exited 0 -- but only 5972 ms later, when the child it was waiting on finished. THIS IS NOT AC10 MET: there is no second machine, no second person, and the peer is a second profile on this machine. (3) The stale comment at console-real-cli.test.ts:250-271 is corrected and the markers are now LONGER, not shorter: 52 characters each, one more than the 51-character body the old one-line history row could not paint. Proven load-bearing by restoring the pre-fix row, which makes the file time out waiting for the reply exactly as 004-T25 originally did. Full package afterwards: 77 files reported against 77 counted on disk, 517/517 tests, exit 0, 249.94s, zero failure markers. tsc --noEmit exit 0. No source file changed: `git diff -- apps packages docs deploy` is one test file, 23 insertions and 14 deletions, all inside one comment and two marker lines.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC8 re-measured over the states that exist today, with any state that has no way out named plainly",
+      "status": "met",
+      "evidence": "apps/cli/src/tui/tui-shell.wayOut.test.ts. 22 states x 10 viewports = 220 combinations. NO STATE HAS NO WAY OUT -- Ctrl-C quits in every one, and the driven half requires the real `runTuiShell` to actually END the session (exit 0, `setRawMode(false)`, the alternate-screen exit sequence written) rather than merely to accept the intent. The states are the ones this flow added since the last sweep, not the ones that existed then: the registration checklist (pending / store key absent / one step failed), the compose row over four of its seven fields plus an unpainted one, the trust modal painted, unpainted, incomplete and with the key list behind it, the conversation pane with bodies spending continuation rows and with entries withheld by its filter, and a command genuinely in flight (the shell's own startup `doctor`, against a `runCli` that never settles, confirmed busy on the painted frame before the key is pressed). Which keys quit is pinned exactly -- [Ctrl-C, Q, q] where the panes own the keyboard, [Ctrl-C] where the modal or the compose row does -- so a binding lost anywhere turns the file red."
+    },
+    {
+      "criterion": "The AC8 measurement is not vacuous",
+      "status": "met",
+      "evidence": "Three mutations, each applied to apps/cli/src/tui/tui-shell.ts, run, reverted with `git checkout --` and byte-compared by shasum. M1 (the modal branch stops binding Ctrl-C): 2 of 3 tests red, the pure one naming 'trust modal open, not yet painted: no key quits' and the driven one hanging its full 60s -- which is what an operator would experience. M2 (the `q` binding removed): 2 of 3 red. M3 (`case \"quit\"` no longer clears `running`, so the intent is accepted and the loop continues): the PURE test still passes and both DRIVEN tests fail on timeout -- which is the measurement that the driven half is load-bearing and not a restatement of the pure one."
+    },
+    {
+      "criterion": "AC8's second clause -- the console says why the key that quits is not available -- measured rather than assumed",
+      "status": "not_met",
+      "evidence": "Measured over all 220 combinations with a throwaway probe (added, run, deleted in the same step; the tree is proven clean below): 140 name a live way out, 62 name none, 18 name a DEAD one, and in 13 of those 18 the dead one is the only key the frame names. Recorded as findings F-001, F-002 and F-003 rather than as an assertion in the committed file: pinning today's text would enshrine it, and pinning the corrected text would land a red test with no implementer behind it and no source change permitted to this dispatch."
+    },
+    {
+      "criterion": "Drive the console over the real dist/cli.js against the depr relay on the tailnet, and record what happens",
+      "status": "met",
+      "evidence": "One scratchpad driver, no repository file, spawning apps/cli/dist/tui.js with `--cli apps/cli/dist/cli.js` and no `--relay-url` (the URL is typed into the console) against https://depr.tail5a88fb.ts.net:8443. Every step green on the first attempt: peer init/export/publish (6183 ms), the console's startup `doctor` returning the real INVALID_CONFIGURATION at exit 2, `init` (220 ms), `relay publish` over TLS (5895 ms), `contact export` producing exactly one card on disk, `contact import` confirmed on the four identifiers awaited BY VALUE against the peer's card, `doctor` closing step 5, `send` (1148 ms) read back byte-exact from the peer's own encrypted store, the peer's reply polled and painted in full inside the console, alice's store holding [outbound, inbound] in that order, Ctrl-C exit 0, empty stderr, no store key in any frame. 18768 ms total. Temporary profile directory removed; the transcript never left it."
+    },
+    {
+      "criterion": "Say what the tailnet run does and does not prove, and do not record AC10 as met if it is not",
+      "status": "met",
+      "evidence": "AC10 is recorded as STILL NOT MET (finding F-006). What is now proven that was not: real TLS to a real remote host over the tailnet, a relay this session did not start and does not control, the shipped console driving the shipped CLI end to end against it. What is still absent, and is most of what AC10 asks: a second user on `depr` -- the peer here is a second profile on THIS machine, driven by the same script; no second human who has not read this code; no second machine; and the console was again driven over a pipe rather than a pty, so every frame took the MIN_VIEWPORT fallback (004-T25 F-005, unchanged). AC1's store-key miss (004-T25 F-004) is unchanged too: the driver had to put the key in the console's environment before spawning it."
+    },
+    {
+      "criterion": "Correct the stale comment at console-real-cli.test.ts:250-271, and reconsider the marker lengths",
+      "status": "met",
+      "evidence": "The comment now says what is true: the one-line row is gone, the body gets rows of its own at 68 columns each up to MAX_BODY_ROWS (272 columns total at MIN_VIEWPORT), and the old constraint that '51 characters would make this test fail' no longer holds. The markers were lengthened from 12 characters to 52 -- one more than the 51-character body 004-T25 F-001 measured as unreadable -- which turns `awaitFrame(reply, …)` into an assertion that the WHOLE body was painted inside the console. Green with the new markers (7050 ms test, 9035 ms file). Load-bearing: mutation M4 restores the pre-fix single-line row and the file fails at 52603 ms with 'timed out waiting for a frame containing \"CONSOLE_E2E_IN__…\"' -- the original F-001 failure, reproduced from the opposite direction. Reverted and byte-compared. Nothing else in that file changed: `git diff --numstat` is 23 insertions, 14 deletions, confined to the comment and the two marker lines."
+    },
+    {
+      "criterion": "Change no source file except as a mutation reverted in the same step; prove the tree with git status",
+      "status": "met",
+      "evidence": "`git status --porcelain` at the end: two flow files already modified at session start, `M apps/cli/test/e2e/console-real-cli.test.ts` (a test file, item 3), and `?? apps/cli/src/tui/tui-shell.wayOut.test.ts` (a test file, item 1). `git diff --stat -- apps packages docs deploy` names that one test file and nothing else. All four mutations (three in tui-shell.ts, one in history-pane.ts) were reverted with `git checkout --` and the restored file byte-compared against a shasum taken before the mutation. The measurement probe (src/tui/zz-wayout-probe.test.ts) and the two temporary exports it needed from the sweep file were removed in the same step, and the sweep re-run green afterwards."
+    },
+    {
+      "criterion": "Reported file counts checked against files on disk; no long run piped through head or tail",
+      "status": "met",
+      "evidence": "77 test files counted on disk by walking apps/cli/src and apps/cli/test (36 under src/tui, 8 under test/e2e); vitest reported `Test Files 77 passed (77)` and `Tests 517 passed (517)` at exit 0, so no report was lost this run. The raw log was searched for the failure marker: 0 occurrences of the vitest cross, 0 RPC timeouts, and the 3 `FAIL` hits are each a passing test whose NAME contains PERSISTENCE_FAILURE (each line quoted and checked). Every vitest, tsc, build and driver invocation was redirected whole to a scratchpad file with `>` and read back afterwards; the exit code was appended on the following line with `>>` in the same shell invocation, never through a wrapper whose own last command reports its own status."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T29-verify-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.wayOut.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "AC8's sweep over the states the console has today: 22 states x 10 viewports, measured purely over the whole input alphabet and driven through the real runTuiShell.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/test/e2e/console-real-cli.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The AC1/AC10 end-to-end test. Its stale comment about a 19-20 column body is corrected and its round-trip markers are lengthened to 52 characters so that they now exercise the continuation layout that replaced it.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/tui/tui-shell.wayOut.test.ts", "change": "added" },
+    { "path": "apps/cli/test/e2e/console-real-cli.test.ts", "change": "modified" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T29-verify#F-001",
+      "reviewer": "004-T29-verify",
+      "severity": "major",
+      "file": "apps/cli/src/tui/shell-chrome.ts",
+      "line": 291,
+      "symbol": "tooSmallFrame",
+      "problem": "Below MIN_VIEWPORT with a trust modal open, the console names a way out that does not work. `tooSmallFrame` chooses between 'resize, or press q to quit' and 'resize, or press ctrl-c to quit' by asking whether the COMPOSE ROW is open (`const composing = state.input !== undefined`), and asks nothing about the modal -- but `mapKey`'s modal branch binds only Ctrl-C, y, n and Esc, so with a modal up `q` is dead. The same frame then adds 'a trust decision is waiting -- resize to answer it', so the operator is told the console is alive, told which key leaves, and the key does nothing.",
+      "impact": "This is the exact failure AC8 exists to forbid, in the one state the criterion names explicitly. A way out does still exist -- Ctrl-C -- but it is named nowhere on that frame, so the operator's evidence is: the console said press q, q did nothing, twice, three times. That reads as a hung program holding an unanswered trust decision. Measured across the sweep: 12 of the 220 state x viewport combinations are a modal at 40x10, 71x16 or 72x15, and in every one the only advertised key is the dead one.",
+      "suggested_fix": "One condition, at the one line: choose the ctrl-c wording when `state.modal !== undefined` as well as when `state.input !== undefined` -- the modal takes the keyboard exactly as the compose row does, and the frame already has a modal-specific branch three lines below it for the trust notice. Pin it by rendering the degraded frame with a modal open and asserting that every key the text names is a key `mapKey` turns into a quit intent in that same state, which is the shape the sweep file already computes.",
+      "evidence": "Measured, not reasoned: a probe rendered all 220 combinations, extracted every quit key each frame advertises ('[q] quit', 'press q to quit', 'q  …  quit', '[ctrl-c] quit', 'press ctrl-c to quit', 'ctrl-c also quits') and compared it against the keys mapKey+reduce actually turn into a quit effect in that state. 18 combinations advertise a dead key; 13 of those advertise no live one. The 12 modal-below-minimum rows are: {trust modal open, not yet painted / painted / one identifier missing / key list open} x {40x10, 71x16, 72x15}, each reported as `DEAD:q  adv=q  live=ctrl-c  unnamed=ctrl-c`.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/shell-chrome.ts:291 (tooSmallFrame's quit line, whose only input is `composing`)",
+          "apps/cli/src/tui/shell-chrome.ts:296 (the modal notice on the same frame, which proves the frame already knows a modal is open)",
+          "apps/cli/src/tui/tui-shell.ts:94 (mapKey's modal branch: Ctrl-C only)"
+        ],
+        "enumeration_method": "Every place a frame can name a quit key was enumerated by rendering all 22 states at all 10 viewports and pattern-matching the painted text, rather than by reading the renderer: that is what caught the third site (F-003), where a modal panel overwrites half of the key list's own sentence. The three producers of such text are `footerLine`/`fitFooter`, `HELP_LINES` and `tooSmallFrame`, and all three appear in the probe's output."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T29-verify#F-002",
+      "reviewer": "004-T29-verify",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/shell-chrome.ts",
+      "line": 127,
+      "symbol": "footerLine",
+      "problem": "At or above MIN_VIEWPORT with a trust modal open, no frame names any way out of the PROGRAM. `footerLine` returns '[y] trust  [n] reject  [esc] cancel' and stops; Esc cancels the decision, which is a way out of the modal and not of the console. Ctrl-C works and is named nowhere. The compose row's own footer does the opposite and names it -- '[ctrl-c] quit', argued in place as 'AC8's way out, named rather than assumed, on every frame the operator can type into' -- so the console already holds the standard it does not meet here.",
+      "impact": "Weaker than F-001 (nothing false is said, and the way out exists) but it is the same clause of AC8 and the same state. 18 of the 220 combinations are a modal at or above the minimum viewport with a live Ctrl-C named nowhere (four modal states x five such viewports, less the two modal+key-list rows that name a dead key instead -- F-003); a further 44 are the two degenerate viewports (1x1, 20x5) across all 22 states, where the degraded frame's hint line is sliced off by the row budget. 62 combinations in total name no way out.",
+      "suggested_fix": "Not a drive-by change: `modal-host.test.ts:131` pins TRUST_MODAL_FOOTER to exactly ['y','n','esc'], and `tui-shell.ts:91` records that this is why the Ctrl-C binding was put in `mapKey` rather than into the footer in the first place. So this is a decision (see Q-002), and if it is taken the pinned list is the first thing to change, deliberately and with the test edited by the same hand.",
+      "evidence": "Same probe. `SILENT  adv=-  live=ctrl-c  unnamed=ctrl-c` for all four modal states at 72x16, 80x24, 96x28, 120x40 and 200x60 (the 120x40 and 200x60 rows of the modal+key-list state are the exception, and they are F-003), and for every state at 1x1 and 20x5.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T29-verify#F-003",
+      "reviewer": "004-T29-verify",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/shell-chrome.ts",
+      "line": 356,
+      "symbol": "overlayModal",
+      "problem": "Nobody was looking for this one. With the key list open and a trust modal over it at 120x40, the modal panel is painted over the middle columns of the frame, and the help line it lands on is '  q          quit (ctrl-c also quits)'. The panel starts at column 20, so what survives is 'q          quit (c' -- the overlay removes the half of the sentence that names the key which works and leaves the half that names the key which does not. At 200x60 the panel starts far enough right that the whole sentence survives and the frame is honest again.",
+      "impact": "A frame that is honest at one width and misleading at another, produced by an overlay that has no idea what it is covering. Bounded: it needs the key list open at the moment an import handshake opens the modal, and Ctrl-C still works. Recorded because it is a class -- `overlayModal` will silently truncate any sentence any pane paints under it -- and because it is the second time in this dispatch that the console's advertisement and its bindings disagreed only at particular widths.",
+      "suggested_fix": "Nothing here alone: it is F-001/F-002's fix that makes it moot, because a footer or a degraded line that names the live key is not paintable-over by the panel (the footer is on the last row, which the panel never reaches). Worth keeping as the reason not to answer F-002 by adding text to a PANE BODY.",
+      "evidence": "Probe rows for 'trust modal open, key list open': `120x40  DEAD:q  adv=q  live=ctrl-c  unnamed=ctrl-c` and `200x60  DEAD:q  adv=q|ctrl-c  live=ctrl-c  unnamed=-`. The difference between the two is the panel's left offset: `resolveModalPanelSize` caps the panel at 80 columns, so at 120 it starts at column 20 and at 200 at column 60.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-004",
+      "global_id": "004-T29-verify#F-004",
+      "reviewer": "004-T29-verify",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 947,
+      "symbol": "runTuiShell.finish",
+      "problem": "MEASURED against the shipped binary and the real tailnet relay, which no in-process test can show: pressing Ctrl-C while a command is genuinely in flight gives the TERMINAL back immediately (raw mode off and the alternate screen exited, 0 ms after the keypress) but the PROCESS does not exit for as long as the child runs -- 5972 ms in this run, waiting for a `relay publish` against depr. `main.ts` sets `process.exitCode` and returns; Node cannot exit while a spawned child is alive, and nothing kills the child.",
+      "impact": "AC8's 'including a command in flight' clause is met in the sense that matters most -- the console stops owning the keyboard and the screen at once -- but the operator's shell prompt does not come back until the child finishes, and `relay publish` was measured at ~20s under contention by flow 003 T16. There is no message during that window because the console has stopped painting. Escalation exists: `keryx ctx rg` finds no SIGINT or SIGTERM handler anywhere in apps/cli/src (0 matches over 91 files), and raw mode is off by then, so a second Ctrl-C at the terminal would signal the process group -- but that is an inference from tty semantics plus the absence of a handler, NOT measured here, because this run drives the console over a pipe and a pipe generates no SIGINT.",
+      "suggested_fix": "Either kill the in-flight child in `finish()` (which changes what a half-finished `relay publish` leaves behind, and is therefore a decision rather than a tidy-up), or paint one line before the screen is given back saying that a command is still running and the prompt will return when it does. Measuring the escalation properly needs a pty harness, which 004-T25 F-005 already names as a separate slice.",
+      "evidence": "A second real session against https://depr.tail5a88fb.ts.net:8443: the console was driven to step 2, Ctrl-C was pressed only AFTER the frame painted 'running… (busy' so the key demonstrably landed mid-command, and the run recorded `terminalRestoredAfterMs: 0`, `processExitedAfterMs: 5972`, `exitCode: 0`, `publishCompletedBeforeExit: false` (the console never painted the outcome), `stderrBytes: 0`, `secretInFrame: false`.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-005",
+      "global_id": "004-T29-verify#F-005",
+      "reviewer": "004-T29-verify",
+      "severity": "info",
+      "file": "apps/cli/src/tui/shell-chrome.ts",
+      "line": 210,
+      "symbol": "HELP_LINES",
+      "problem": "004-T12's F-003, re-measured on today's tree and now bounded: with the compose row open AND the key list open, the help body still says 'q          quit (ctrl-c also quits)' while `q` is text. It is not visible at every viewport -- at MIN_VIEWPORT the key list is cut by the row budget before it reaches that line -- and it appears at 80x24, 96x28, 120x40 and 200x60.",
+      "impact": "Misleading rather than trapping, and less so than T12 recorded: the FOOTER of those same frames says '[ctrl-c] quit', so a live key is named on every frame where the dead one is. 4 of the 220 combinations.",
+      "suggested_fix": "None proposed. If F-001 is taken, the same idea covers this: what the frame names should be a function of who owns the keyboard, and the key list is the one surface that describes the keyboard without asking who has it.",
+      "evidence": "Probe rows for 'compose row open, key list open': `DEAD:q  adv=q|ctrl-c  live=ctrl-c  unnamed=-` at 80x24, 96x28, 120x40 and 200x60; `ok` at 72x16 and below-minimum widths, where the line is not painted.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-006",
+      "global_id": "004-T29-verify#F-006",
+      "reviewer": "004-T29-verify",
+      "severity": "info",
+      "problem": "AC10 IS STILL NOT MET, and the run that came closest says so. What the tailnet session proves: the shipped console drives the shipped CLI end to end against a relay this session did not start, over real TLS, to a real remote host on the tailnet, with registration, a message sent and a message received in both directions, and the arrival proved by reading the other side's store. What it does not prove is most of what AC10 asks: the peer is a second PROFILE on this machine driven by the same script, not a second user on `depr`; no second human, and none who has not read this code; the console is again driven over a pipe rather than a pty, so every frame took the MIN_VIEWPORT fallback; and AC1's store-key step still had to be performed from outside the console (004-T25 F-004, unchanged). A REPORTABLE NON-EVENT: nothing failed against the real relay that does not fail against a loopback one -- no TLS surprise, no timeout, no shape the remote relay answered differently -- so the gap this closes is the one the wave report ranked first (undiscovered risk), and it turned out to hold none.",
+      "impact": "The deployment half of AC10 is now demonstrated for the transport and for the shipped binaries; the operator half is not, and cannot be by an agent. Recorded so that the difference between 'the console works against your relay' and 'AC10 is met' stays visible to whoever reads this next.",
+      "suggested_fix": "The remaining step belongs to the operator: run the same registration on `depr` as a second person, with a card exchanged out of band, and record it. Everything the console needs for that is now known to work against that exact relay.",
+      "evidence": "Driver output, first attempt, exit 0: peer publish 6183 ms, console init 220 ms, console publish 5895 ms, console send 1148 ms, 18768 ms total; peer history `entries: 1, direction: inbound, byteExact: true`; console painted the peer's 52-character reply in full; alice's store `order: [outbound, inbound], matchesWhatWasTyped: true`; console exit 0, stderr 0 bytes, no store key in any painted frame. RESIDUE, stated rather than hidden: three ephemeral identities and their published prekey pools were created on the operator's own depr relay (two by the round trip, one by the Ctrl-C probe) and cannot be removed by this dispatch; the two envelopes were consumed by their polls, and `apps/relay` carries a cleanup service with a 168-hour mailbox retention cap. All local profile directories, both store keys and the captured transcript lived in one temporary directory and were removed; `glob('t29-*')` in the scratchpad returns empty.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-007",
+      "global_id": "004-T29-verify#F-007",
+      "reviewer": "004-T29-verify",
+      "severity": "info",
+      "problem": "The routed-search hazard this dispatch was warned about, met in the OPPOSITE direction from the one that has bitten this project before. `keryx ctx rg 'SIGINT|SIGTERM' apps/cli/src` printed a summary header reading `Matches: 8` and `Files: 1` for a search that matched NOTHING: rg's own exit code was 1 and its `--stats` block, carried through in the same summary, read `0 matches / 0 matched lines / 0 files contained matches / 91 files searched`. The header appears to be counting its own output lines rather than rg's matches.",
+      "impact": "004-T7's F-005 was wrong because a summary header claimed 9 matches while displaying 4, and 004-T24 warned that the displayed list truncates under an accurate total. This is the same tool reporting a non-zero total for an EMPTY result, which no amount of reading the displayed list would catch. Any count taken from that header is unsafe in both directions.",
+      "suggested_fix": "Take counts from the `--stats` block or the raw log, never from the summary header -- which is what this dispatch did, and why the 'no signal handler' claim in F-004 is stated as zero matches over 91 files rather than as eight.",
+      "evidence": "The command's own output: header `Matches: 8`, `Files: 1`, exit code 1; body `0 matches`, `0 matched lines`, `0 files contained matches`, `91 files searched`. Cross-checked against the tree by the fact that no `finish()`/`main()` path in apps/cli/src installs a handler.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "In AC8, is 'the key that quits' the console's own `q`, or any key that quits?",
+      "why": "The verdict turns on it and the measurement does not. Under the loose reading (any key), AC8 is MET everywhere: Ctrl-C quits in all 22 states at all 10 viewports, proven purely and driven. Under the strict reading (the key the console itself advertises as the way out, which is `q` in the footer and in the key list), AC8 is NOT MET in the nine states where a modal or the compose row owns the keyboard: `q` is unavailable there by design, and the console says why it is not in none of them -- while below the minimum viewport with a modal open it actively names `q`. Both readings are defensible from the sentence as frozen; only one of them is what the flow should report.",
+      "options": [
+        { "id": "any-key", "label": "Any key that quits satisfies the clause: AC8 met, F-001 stays a defect worth fixing on its own merits" },
+        { "id": "advertised-key", "label": "The clause is about the key the console advertises: AC8 partial until the modal and compose-row frames name their live way out", "recommended": true },
+        { "id": "reword", "label": "Reword AC8 to say 'a way out is available and named on the frame', which is what both readings agree the console should do" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q-002",
+      "question": "Should the trust modal's footer name Ctrl-C?",
+      "why": "It is the smallest fix for F-002 and it cannot be done quietly: `modal-host.test.ts:131` pins TRUST_MODAL_FOOTER to exactly ['y','n','esc'], and `tui-shell.ts:91` records that this pin is precisely why the Ctrl-C binding went into `mapKey` rather than into the footer when 004-T12 found the modal trapping. Changing it means editing a test that a previous slice deliberately did not edit. There is also a reason not to: the modal is the one surface on which a stray keystroke is dangerous, and every key named on it is a key someone might press.",
+      "options": [
+        { "id": "name-it", "label": "Add '[ctrl-c] quit' to the modal footer and edit the pinned list in the same commit, with the reason recorded" },
+        { "id": "degraded-only", "label": "Fix only the degraded frame (F-001), where the console currently names a DEAD key, and leave the full-size modal silent", "recommended": true },
+        { "id": "leave", "label": "Leave both: Ctrl-C works, and the modal's footer is deliberately minimal" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_changed": 0,
+    "test_files_changed": 2,
+    "typecheck_exit_code": 0,
+    "ac8_sweep": {
+      "states": 22,
+      "viewports": 10,
+      "combinations": 220,
+      "states_with_no_way_out": 0,
+      "quit_keys_pane_states": ["ctrl-c", "q", "Q"],
+      "quit_keys_modal_and_compose_states": ["ctrl-c"],
+      "alphabet_size": 125,
+      "driven_sessions": 353,
+      "advertisement_ok": 140,
+      "advertisement_silent": 62,
+      "advertisement_dead_key": 18,
+      "advertisement_dead_key_and_no_live_key_named": 13,
+      "file": "apps/cli/src/tui/tui-shell.wayOut.test.ts",
+      "tests": 3,
+      "duration_ms": 99
+    },
+    "mutations": [
+      { "id": "M1-modal-drops-ctrl-c", "site": "tui-shell.ts mapKey modal branch: `if (key.ctrl) return … quit …` -> `return undefined`", "scope": "tui-shell.wayOut.test.ts", "tests": "2 failed | 1 passed (3)", "killed": true, "reverted": true, "note": "the pure half names 'trust modal open, not yet painted: no key quits'; the driven half hangs its full 60s, which is what the operator would experience." },
+      { "id": "M2-q-binding-removed", "site": "tui-shell.ts mapKey: `if (key.name === \"q\") return { kind: \"quit\" };` deleted", "scope": "tui-shell.wayOut.test.ts", "tests": "2 failed | 1 passed (3)", "killed": true, "reverted": true },
+      { "id": "M3-quit-does-not-stop-the-loop", "site": "tui-shell.ts apply(): `case \"quit\": running = false;` -> `case \"quit\":`", "scope": "tui-shell.wayOut.test.ts", "tests": "2 failed | 1 passed (3)", "killed": true, "reverted": true, "note": "the PURE test still passes and both DRIVEN tests time out -- the measurement that the driven half is not a restatement of the pure one." },
+      { "id": "M4-history-row-pre-fix", "site": "history-pane.ts formatHistoryLines: the metadata+body continuation rows -> the old single `  ${meta}  ${body}` line", "scope": "test/e2e/console-real-cli.test.ts", "tests": "1 failed (1)", "killed": true, "reverted": true, "note": "fails at 52603 ms with 'timed out waiting for a frame containing \"CONSOLE_E2E_IN__…\"' -- 004-T25 F-001 reproduced, which is what proves the lengthened markers exercise the fix." }
+    ],
+    "tailnet_run": {
+      "relay": "https://depr.tail5a88fb.ts.net:8443",
+      "tls": "real, validated by curl and by the CLI without any -k or NODE_TLS_REJECT_UNAUTHORIZED",
+      "health_before": "depr 200 in 0.88s; geekom 200 (both checked, only depr driven)",
+      "console_binary": "apps/cli/dist/tui.js (rebuilt from HEAD before the run)",
+      "cli_binary": "apps/cli/dist/cli.js (handed to the console with --cli; every child the console spawned is this file)",
+      "attempts": 1,
+      "outcome": "green on the first attempt",
+      "peer_publish_ms": 6183,
+      "console_init_ms": 220,
+      "console_publish_ms": 5895,
+      "console_send_ms": 1148,
+      "total_ms": 18768,
+      "marker_length_chars": 52,
+      "console_exit_code": 0,
+      "console_stderr_bytes": 0,
+      "store_key_in_any_painted_frame": false,
+      "peer_read_byte_exact": true,
+      "alice_store_order": ["outbound", "inbound"],
+      "quit_probe": { "busy_confirmed_on_frame": true, "terminal_restored_after_ms": 0, "process_exited_after_ms": 5972, "exit_code": 0 },
+      "residue_on_operator_infrastructure": "3 ephemeral identities and their published prekey pools remain on depr; 2 envelopes were consumed by their polls; apps/relay carries a cleanup service with a 168-hour mailbox retention cap. Nothing local remains: one temporary directory held both profiles, both store keys and the transcript, and it was removed."
+    },
+    "full_package_run": {
+      "files_on_disk": 77,
+      "files_reported": 77,
+      "src_tui_files_on_disk": 36,
+      "e2e_files_on_disk": 8,
+      "tests": 517,
+      "passed": 517,
+      "failed": 0,
+      "vitest_exit_code": 0,
+      "duration_s": 249.94,
+      "failure_markers_in_raw_log": 0,
+      "rpc_timeout_errors": 0,
+      "note": "The 3 `FAIL` substring hits are passing tests whose names contain PERSISTENCE_FAILURE; each line was printed and checked."
+    },
+    "tree_state": {
+      "git_status_short": "M flow.json, M journal.md (both already modified at session start), M apps/cli/test/e2e/console-real-cli.test.ts, ?? apps/cli/src/tui/tui-shell.wayOut.test.ts",
+      "git_diff_stat_apps_packages_docs_deploy": "apps/cli/test/e2e/console-real-cli.test.ts | 37 +++---, 1 file changed, 23 insertions(+), 14 deletions(-)",
+      "source_files_touched": "none; four mutations, each reverted with `git checkout --` and byte-compared by shasum against a hash taken before the mutation",
+      "temporary_files_removed": "apps/cli/src/tui/zz-wayout-probe.test.ts (the advertisement probe) and the two exports it needed from the sweep file; the sweep was re-run green afterwards"
+    },
+    "machine_idle": false,
+    "load_note": "10 cores, never idle: the operator's own VM and browser run throughout. 1-minute load average at each measurement, in order: 23.97 (session start) -> 14.73 (AC8 sweep) -> 15.16 (before the rebuild) -> 12.87 (tailnet round trip) -> 13.59 (tailnet quit probe) -> 14.65 (e2e re-run with the longer markers) -> 11.93 at the start of the full package run and 79.72 at its end, that run's own 77 files being most of the difference. Every figure above was taken with the machine in that state; the tailnet timings in particular are wall-clock over a real network on a loaded machine and are not a benchmark.",
+    "discipline": "Every vitest, tsc, esbuild and driver invocation was redirected whole to a scratchpad file and read back afterwards; nothing was piped through head or tail, and every exit code was appended by `>>` on the line after the command in the same shell invocation rather than through a wrapper. File counts were taken by walking the directory tree and compared against vitest's own summary. Counts were never taken from a `keryx ctx rg` summary header -- see F-007, where that header reported 8 matches for a search that matched none. Each mutation was reverted and the restored file byte-compared inside the same step. The tailnet driver logged needle hits, exit codes and durations only: no message body, no store key and no transcript left the temporary directory, which was deleted.",
+    "routing_audit": {
+      "graph_used": "no -- not-relevant: the dispatch named the three files it is about (tui-shell.ts's key map, shell-chrome.ts's frames, console-real-cli.test.ts:250-271), and the states AC8 has to cover were enumerated from the state module itself rather than from a dependency graph. The graph predates this session's commits.",
+      "wiki_used": "no -- not-relevant: the questions were 'which keys quit in which state', 'does the console leave', and 'does the shipped console work against a real remote relay' -- all settled by execution.",
+      "ctx_used": "yes -- keryx ctx read for the flow records, the acceptance criteria, the two contract schemas and the smaller source modules; keryx ctx run for every git, curl, uptime, shasum and log summary; keryx ctx rg for the code searches (with F-007's caveat about its match count).",
+      "raw_rg_used": "no",
+      "testing_context_used": "yes -- .metaproject/data/testing/context.md was read before writing or running anything. Recorded as STALE: it lists 61 test files against the 77 on disk and was generated on 2026-09-08, before this flow's last four slices; the file counts in this result come from the working tree, not from it.",
+      "memory_used": "no -- not-relevant: 004-T24's wave report, 004-T25's result and the frozen acceptance criteria carried the history this task needed."
+    }
+  },
+  "timestamp_utc": "2026-09-09T08:30:00Z"
+}
