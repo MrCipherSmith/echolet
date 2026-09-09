@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T04:05:23.071Z",
+  "updatedAt": "2026-09-09T05:27:34.590Z",
   "source": {
     "type": "description",
     "ref": null
@@ -384,6 +384,115 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Independent verification of the registration slice",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T04:07:43.068Z",
+            "outcome": "started",
+            "detail": "Opus: mutation work and suite runs. The ONLY agent permitted to run tests in this batch, so the other two cannot corrupt its measurements."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Reconcile every document with the console the tree now has",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T04:07:43.296Z",
+            "outcome": "started",
+            "detail": "Sonnet: documents only, no source, no test run. Mechanical against a tree that changed a great deal tonight."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Design the address book and conversation pane, both with and without the pane removal the user has not decided",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T04:07:43.538Z",
+            "outcome": "started",
+            "detail": "Sonnet: design only, one new document, no runs. Both branches of the pane decision the user still holds, so their answer starts implementation rather than a design."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "RED tests: the escape hole reopened in foldSetup, the two untested keystroke behaviours, and the ninth way to read the store key",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T18"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T04:35:29.754Z",
+            "outcome": "started",
+            "detail": "Security first: the escape-sequence class was closed last night at six boundaries and reopened at a seventh this slice added, with a vacuous test beside it. The test that exists feeds only well-formed codes, so it passes over the defect."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "Close the reopened escape hole at foldSetup, the boundary its sibling already uses",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T21"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T05:03:47.012Z",
+            "outcome": "started",
+            "detail": "Owner decision on the test author's Q-001: the filter goes at foldSetup, not inside parseCliOutcome. The principle established last night is that filtering belongs at the narrowing functions that WRITE external text into the state; foldSetup is such a writer, the parser is not, and the parser's verbatim contract exists so the console reports the code the CLI returned."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -629,6 +738,81 @@
       "at": "2026-09-09T04:05:23.071Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-09T04:07:33.203Z",
+      "event": "task-added",
+      "detail": "T18: Independent verification of the registration slice"
+    },
+    {
+      "at": "2026-09-09T04:07:33.536Z",
+      "event": "task-added",
+      "detail": "T19: Reconcile every document with the console the tree now has"
+    },
+    {
+      "at": "2026-09-09T04:07:33.773Z",
+      "event": "task-added",
+      "detail": "T20: Design the address book and conversation pane, both with and without the pane removal the user has not decided"
+    },
+    {
+      "at": "2026-09-09T04:07:43.068Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — Opus: mutation work and suite runs. The ONLY agent permitted to run tests in this batch, so the other two cannot corrupt its measurements."
+    },
+    {
+      "at": "2026-09-09T04:07:43.296Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — Sonnet: documents only, no source, no test run. Mechanical against a tree that changed a great deal tonight."
+    },
+    {
+      "at": "2026-09-09T04:07:43.538Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — Sonnet: design only, one new document, no runs. Both branches of the pane decision the user still holds, so their answer starts implementation rather than a design."
+    },
+    {
+      "at": "2026-09-09T04:18:32.193Z",
+      "event": "task-done",
+      "detail": "T19: Reconcile every document with the console the tree now has"
+    },
+    {
+      "at": "2026-09-09T04:22:46.544Z",
+      "event": "task-done",
+      "detail": "T20: Design the address book and conversation pane, both with and without the pane removal the user has not decided"
+    },
+    {
+      "at": "2026-09-09T04:35:22.514Z",
+      "event": "task-done",
+      "detail": "T18: Independent verification of the registration slice"
+    },
+    {
+      "at": "2026-09-09T04:35:22.613Z",
+      "event": "task-added",
+      "detail": "T21: RED tests: the escape hole reopened in foldSetup, the two untested keystroke behaviours, and the ninth way to read the store key"
+    },
+    {
+      "at": "2026-09-09T04:35:29.755Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — Security first: the escape-sequence class was closed last night at six boundaries and reopened at a seventh this slice added, with a vacuous test beside it. The test that exists feeds only well-formed codes, so it passes over the defect."
+    },
+    {
+      "at": "2026-09-09T05:03:43.515Z",
+      "event": "task-done",
+      "detail": "T21: RED tests: the escape hole reopened in foldSetup, the two untested keystroke behaviours, and the ninth way to read the store key"
+    },
+    {
+      "at": "2026-09-09T05:03:43.599Z",
+      "event": "task-added",
+      "detail": "T22: Close the reopened escape hole at foldSetup, the boundary its sibling already uses"
+    },
+    {
+      "at": "2026-09-09T05:03:47.012Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — Owner decision on the test author's Q-001: the filter goes at foldSetup, not inside parseCliOutcome. The principle established last night is that filtering belongs at the narrowing functions that WRITE external text into the state; foldSetup is such a writer, the parser is not, and the parser's verbatim contract exists so the console reports the code the CLI returned."
+    },
+    {
+      "at": "2026-09-09T05:27:34.590Z",
+      "event": "task-done",
+      "detail": "T22: Close the reopened escape hole at foldSetup, the boundary its sibling already uses"
     }
   ]
 }

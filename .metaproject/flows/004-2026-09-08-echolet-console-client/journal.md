@@ -49,3 +49,18 @@
 - 2026-09-09T04:05:22.882Z - task-done: T2: Implement per plan
 - 2026-09-09T04:05:22.967Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-09T04:05:23.071Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-09T04:07:33.203Z - task-added: T18: Independent verification of the registration slice
+- 2026-09-09T04:07:33.536Z - task-added: T19: Reconcile every document with the console the tree now has
+- 2026-09-09T04:07:33.773Z - task-added: T20: Design the address book and conversation pane, both with and without the pane removal the user has not decided
+- 2026-09-09T04:07:43.068Z - task-attempt: T18: started (attempt 1) — Opus: mutation work and suite runs. The ONLY agent permitted to run tests in this batch, so the other two cannot corrupt its measurements.
+- 2026-09-09T04:07:43.296Z - task-attempt: T19: started (attempt 1) — Sonnet: documents only, no source, no test run. Mechanical against a tree that changed a great deal tonight.
+- 2026-09-09T04:07:43.538Z - task-attempt: T20: started (attempt 1) — Sonnet: design only, one new document, no runs. Both branches of the pane decision the user still holds, so their answer starts implementation rather than a design.
+- 2026-09-09T04:18:32.193Z - task-done: T19: Reconcile every document with the console the tree now has
+- 2026-09-09T04:22:46.544Z - task-done: T20: Design the address book and conversation pane, both with and without the pane removal the user has not decided
+- 2026-09-09T04:35:22.514Z - task-done: T18: Independent verification of the registration slice
+- 2026-09-09T04:35:22.613Z - task-added: T21: RED tests: the escape hole reopened in foldSetup, the two untested keystroke behaviours, and the ninth way to read the store key
+- 2026-09-09T04:35:29.755Z - task-attempt: T21: started (attempt 1) — Security first: the escape-sequence class was closed last night at six boundaries and reopened at a seventh this slice added, with a vacuous test beside it. The test that exists feeds only well-formed codes, so it passes over the defect.
+- 2026-09-09T05:03:43.515Z - task-done: T21: RED tests: the escape hole reopened in foldSetup, the two untested keystroke behaviours, and the ninth way to read the store key
+- 2026-09-09T05:03:43.599Z - task-added: T22: Close the reopened escape hole at foldSetup, the boundary its sibling already uses
+- 2026-09-09T05:03:47.012Z - task-attempt: T22: started (attempt 1) — Owner decision on the test author's Q-001: the filter goes at foldSetup, not inside parseCliOutcome. The principle established last night is that filtering belongs at the narrowing functions that WRITE external text into the state; foldSetup is such a writer, the parser is not, and the parser's verbatim contract exists so the console reports the code the CLI returned.
+- 2026-09-09T05:27:34.590Z - task-done: T22: Close the reopened escape hole at foldSetup, the boundary its sibling already uses
