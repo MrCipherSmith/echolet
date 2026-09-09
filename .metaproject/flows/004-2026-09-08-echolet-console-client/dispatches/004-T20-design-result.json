@@ -1,0 +1,180 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "004",
+  "dispatch_id": "004-T20-design",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Designed the contacts pane in both branches the operator still holds, against the tree as it actually stands rather than as flow 003's design note described it: doctor has enumerated pinned contacts since T9 (profile.ts diagnostics(), :476-479) and nothing in src/tui reads the field - applyOutcome's doctor/init case (tui-shell.ts:735-749) still folds only identity_id, device_id and contact_count, PANE_IDS (state.ts:25) still names the same five panes flow 002 shipped with no contacts pane, and profiles-pane.ts's own header comment asserting doctor cannot enumerate contacts is now stale against the code it sits beside. The design is one contract shared by both branches: three provenances (pinned from doctor, observed this session via the existing observeContact path, and card candidates read from cards named at launch) merged by identity_id into one list, ordered pinned-first then candidates in launch order; three marks (pinned, unexpired candidate, expired candidate) computed from a card's own signal_bundle.created_at_ms/expires_at_ms - public fields readable with no store key, verified by reading packages/protocol/src/types/signalPreKeyBundleV2.ts; the four out-of-band identifiers shown one field-per-line for the selected row in a fixed detail block, never elided, proven arithmetically to fit at MIN_VIEWPORT (72x16, 11 body rows minus 5 for the block leaves 6 for the list) rather than assumed; selection via new j/k navigation and Enter reusing the existing select-contact intent (intents.ts:16, already live, only ever driven by the c cycle today); overflow handled by the existing fitPane head/rows/tail contract, keep:\"head\", the same rule profiles-pane.ts already documents for a selection surface; and four keys that change meaning (c retired, i re-scoped to the highlighted candidate now that --card must become repeatable, return gains a second per-pane meaning, j/k newly bound). The branch question is answered with arithmetic rather than argument: a standalone Node reproduction of headerLine/padOrClip exactly as written in shell-chrome.ts and text.ts shows the header ALREADY overflows 72 columns today with the five panes that exist now (84 columns with a five-character label, 79 with an empty one - a defect this design did not create), Branch A's five renamed panes overflow it by 4-9 columns depending on label length, and Branch B's six overflow it by 19-35, with every mitigation measured: dropping the word echolet saves 8 columns (not enough alone), four-letter abbreviations fit at 66 columns but only for labels under roughly eleven characters against a profile label field that has no length bound anywhere in main.ts, and the only mitigation robust to any label length - digits-only for inactive tabs - fits with 27 columns to spare but deletes every pane name but the active one from the header, which is the specific thing a sixth named pane was for. Branch B is stated plainly as tenable only in the weaker sense (every key still works, ? still names every binding) and untenable in the sense that motivated naming six panes (reading, at a glance, at the narrowest supported terminal, what the other five are called). Six hard constraints are re-proved constraint by constraint in section 5, one new CLI-adjacent prerequisite (repeatable --card/--name in main.ts, sized and bounded) is named and numbered P-4 in flow 003's own sequence, eleven tests are ordered pure-before-driven with two driven tests naming exactly what they prove against a real profile and a real console binary, and five open questions are recorded with the evidence that would settle each. One new document was written; no source file, no test file, no suite and no build.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Read .metaproject/index.md and route through it before any search or read; read t35-console-client-design.md sections 2.3 and 2.2 before designing",
+      "status": "met",
+      "evidence": "Index read in full before the first search. t35 §2.3 (address book) and §2.2 (conversations) read in full alongside the surrounding sections needed to ground them (§0, §1.3, §3.4, §5, §8). Both are cited by section number throughout the design document rather than paraphrased from memory."
+    },
+    {
+      "criterion": "Design BOTH branches (panes removed / nothing removed) in one document so the operator's answer starts implementation immediately",
+      "status": "met",
+      "evidence": "t20-address-book-design.md §3 (Branch A, five panes, ordinal table, measured header cost) and §4 (Branch B, six panes, ordinal table, measured header cost and mitigation table) are both fully specified; §2 states the one contract both share exactly once rather than twice, as the dispatch required."
+    },
+    {
+      "criterion": "State what Branch B costs, measured rather than asserted, and say plainly if it is untenable",
+      "status": "met",
+      "evidence": "§4: a Node reproduction of the real headerLine/padOrClip functions (shell-chrome.ts:64-68, text.ts:37-42) measured at label lengths 0/5/16 characters, overflow of 19-35 columns past MIN_VIEWPORT.cols=72, four mitigations each measured (8, 7, 66-column, 45-column results), and a plain conclusion: six full pane names are not showable at 72 columns for any non-trivial label, and the one robust mitigation removes the labels that motivated the sixth pane. Not softened: the paragraph states the two senses of 'tenable' separately and says which one fails."
+    },
+    {
+      "criterion": "State what the pane shows per contact and in what order",
+      "status": "met",
+      "evidence": "§2.2 (worked example, per-row fields and order rule) and §2.1 (the three provenances and the merge-by-identity_id rule, pinned in doctor's own stable order, candidates in launch order)."
+    },
+    {
+      "criterion": "Settle how a pinned contact is visibly different from an unpinned card candidate and from an expired one",
+      "status": "met",
+      "evidence": "§2.3, a three-row table (marker, meaning, selectability, offered action) plus the exact expiry predicate (signal_bundle.expires_at_ms against state.observedAtMs, both already-existing state, no new clock read) and its source citation (wire.ts:40,82; cli.ts:317-320 for the exit-3 consequence named on the expired row's own status line)."
+    },
+    {
+      "criterion": "Settle where the four out-of-band comparison identifiers are shown in full, and at which viewports that is possible",
+      "status": "met",
+      "evidence": "§2.4: a fixed detail block below the list, one field-per-line (a deliberate, justified difference from the trust modal's two-line layout, justified by the pane's width being the whole frame rather than modal-host's MODAL_PANEL_MIN_WIDTH=56 floor), reusing TRUST_IDENTIFIER_FIELDS and the modal's own never-elide rule (modal-host.ts:18-23,105-113) verbatim. Viewport answer given as arithmetic, not assumption: at MIN_VIEWPORT (72x16) bodyRows is 11 (10 while composing elsewhere), the block is 5 lines, so the identifiers fit with 5-6 rows still free for the list; below MIN_VIEWPORT the frame is the existing degraded one with no pane body at all, the same floor the trust modal and compose row already answer to, so no new viewport gate is introduced."
+    },
+    {
+      "criterion": "Settle how a contact is selected for a conversation",
+      "status": "met",
+      "evidence": "§2.5: j/k move a new pane-local cursor, Enter on a pinned/observed row emits the ALREADY-EXISTING select-contact intent (intents.ts:16, tui-shell.ts:311-312, today driven only by the c-cycle) and switches state.pane in the same step; Enter on a candidate is a no-op because it would build an incomplete request, the same refusal rule paneKeyIntent already documents for itself. Ties into t35 §2.2 by naming the exact, unmodified point of contact: history-pane.ts already reads state.selectedContactId and w is already gated on it (tui-shell.ts:205-207)."
+    },
+    {
+      "criterion": "Settle what happens when there are more contacts than rows",
+      "status": "met",
+      "evidence": "§2.6: reuses pane-fit.ts's head/rows/tail contract unmodified, keep:\"head\" for the reason profiles-pane.ts already gives (a selection surface's order must match what the cursor walks), truncationMarker names the hidden count, and the cursor is stated to be able to move past what is currently visible with the pane scrolling to follow it."
+    },
+    {
+      "criterion": "Settle which existing keys change meaning",
+      "status": "met",
+      "evidence": "§2.8, a four-row before/after table: c retired (footer rank freed), i re-scoped from a global single-card import to a pane-scoped highlighted-candidate import (required, not optional, once --card becomes repeatable), return gains a second per-pane branch, j/k newly bound. A fifth row states what is explicitly NOT changed."
+    },
+    {
+      "criterion": "Re-prove every hard constraint costs nothing: renderFrame purity/totality/determinism/escape-freedom/exact rows-by-cols; no key material in any frame or child argv; the unaudited-prototype notice on every frame; one command in flight at a time; the trust modal's single door; control/display-steering character filtering on everything arriving from outside the process",
+      "status": "met",
+      "evidence": "§5, one paragraph per constraint, each citing the exact existing mechanism reused (paintable/steersTheDisplay at tui-shell.ts:471-473, the D-1 gate at tui-shell.ts:137, buildArgv's unmodified contact-import case at cli-bridge.ts:86-90, the modal's own never-pre-fill rule) rather than a new one invented for this pane."
+    },
+    {
+      "criterion": "Name the tests that would have to exist first, in the order they would be written, marking which are pure and which need a real driven process",
+      "status": "met",
+      "evidence": "§6, eleven tests (U-1 through U-9 pure, D-1 and D-2 driven), ordered so the pane's own value contract (U-1-U-7) can be written and made red before the one new CLI-adjacent prerequisite (P-4, repeatable --card) exists, with D-1 named explicitly as P-4's red test and D-2 named as the test that proves the point of the whole design (an address book that is not empty on a fresh session, with no operator keystroke)."
+    },
+    {
+      "criterion": "For whichever parts are common to both branches, say so once rather than twice",
+      "status": "met",
+      "evidence": "§2's own header states this explicitly and §3/§4 each cross-reference it rather than repeating it; the only content duplicated between the two branch sections is the two ordinal tables and the header arithmetic, which is precisely the part that differs."
+    },
+    {
+      "criterion": "Design against what the code does; where a document disagrees with the code, believe the code and say so",
+      "status": "met",
+      "evidence": "§1.1-§1.9 name eight places the tree has already moved past t35's own description (doctor's contacts field shipped and unread, --card still singular not repeatable, MAX_PLAINTEXT_BYTES already resolved via a leaf module, the footer not yet pane-aware, j/k unbound, select-contact intent already live, ContactView.displayName already present) plus one place a MODULE'S OWN comment (profiles-pane.ts:12-19) is stale against code that sits one file away from it (profile.ts:476-479) - flagged explicitly in §1.2 as the first correction this design's own implementation will have to make."
+    },
+    {
+      "criterion": "RUN NO TEST SUITE AND NO BUILD; change no source file and no test file",
+      "status": "met",
+      "evidence": "Only two files were written: the design document and this result. Every quantitative claim in §1.4/§3/§4 was produced by a standalone Node script re-implementing headerLine/padOrClip from the already-committed source text, not by running the project's build or test tooling - recorded as such in §9's routing audit."
+    },
+    {
+      "criterion": "Write the design to the named path, the result JSON to the named path, and validate the result against the subagent-result schema",
+      "status": "met",
+      "evidence": "Both files written to the exact paths given in the dispatch; `keryx skills contracts validate` run against this file with --schema subagent-result immediately after writing it (see this run's own tool history)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/t20-address-book-design.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Design for the contacts pane: the shared three-provenance contract (pinned/observed/candidate), per-row display and order, visible distinction including expiry, the four identifiers shown in full with a proven viewport floor, contact-to-conversation selection, overflow handling, naming, and which keys change meaning - followed by Branch A (five panes, two removed) and Branch B (six panes, none removed) each measured against the real headerLine/padOrClip functions, six hard constraints re-proved, one new CLI-adjacent prerequisite sized (P-4, repeatable --card), an eleven-test plan ordered pure-before-driven, and five open questions with the evidence that would settle each.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T20-design-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "subagent-result for 004-T20-design.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/t20-address-book-design.md",
+      "change": "added - contacts pane design, both pane-budget branches"
+    },
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T20-design-result.json",
+      "change": "added - subagent-result for 004-T20-design"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T20-F-001",
+      "global_id": "004-T20-design#T20-F-001",
+      "reviewer": "address-book-design",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/profiles-pane.ts",
+      "line": 12,
+      "symbol": "buildProfilesSnapshot module doc comment",
+      "problem": "The module's leading doc comment states that 'the frozen eight-command CLI surface has no command that lists pinned contacts: doctor reports contact_count and nothing else, and Profile.listContacts() has no entry point'. This was true when flow 003 T2 wrote it and has been false since T9: Profile.diagnostics() (profile.ts:476-479) has returned a contacts: ContactIdentifiers[] array since that task landed, and applyOutcome (tui-shell.ts:735-749) simply never reads it.",
+      "impact": "The comment is load-bearing for a mechanism (rosterDiscrepancy, profiles-pane.ts:183-186) that computes a reconciliation the console no longer needs: doctor's own array is now the authority, not a count to check a partial list against. A reader of this module today is told a capability does not exist one file away from the code that added it.",
+      "suggested_fix": "Once the contacts pane (this design) folds doctor's contacts array into state, retire rosterDiscrepancy and correct this module's doc comment as part of the same change - not as a separate cleanup, since the comment's claim and the mechanism it justifies are the same defect.",
+      "evidence": "profile.ts:476-479 (diagnostics() returning contacts); tui-shell.ts:735-749 (applyOutcome's doctor/init case, reads identity_id/device_id/contact_count only, no data.contacts); profiles-pane.ts:12-19 (the comment) and :183-186 (the mechanism it justifies).",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/profiles-pane.ts:12-19 the module doc comment asserting doctor cannot enumerate contacts",
+          "apps/cli/src/tui/profiles-pane.ts:183-186 rosterDiscrepancy, the mechanism built on that now-false premise"
+        ],
+        "enumeration_method": "Read profile.ts's diagnostics()/listContacts()/summary() in full and cross-referenced every reader of a doctor/init CliOutcome in tui-shell.ts (applyOutcome) and every consumer of ProfileView.contactCount in profiles-pane.ts; the only place the stale premise is stated is this module's own header comment, and the only place it is acted on is rosterDiscrepancy."
+      }
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Branch A (remove health and rejections, five panes total) or Branch B (keep all six)?",
+      "why": "The dispatch is explicit that this decision belongs to the operator, not to this design or its reviewer. Section 4's measurement shows Branch B costs the header measurably more at every profile-label length than Branch A does, and that the one mitigation robust enough to fit six panes at any label length removes the per-pane labels that motivated keeping six panes in the first place; Branch A still needs a lesser version of the same mitigation but closes most of the gap with the cheapest single change (dropping the word 'echolet' from the header prefix).",
+      "options": [
+        { "id": "branchA", "label": "Remove health and rejections; five panes, contacts at ordinal 2", "recommended": true },
+        { "id": "branchB", "label": "Keep all five existing panes and add contacts as a sixth" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q2",
+      "question": "Does ProfileView.contactCardPath (singular) have any reader outside apps/cli/src/tui that repeatable --card (P-4) would silently break?",
+      "why": "Design §2.10/§7 Q2 found two readers inside src/tui (paneKeyIntent's i case and initialBuffer's card-path default) and accounts for both, but a repository-wide search was deliberately not run to keep this dispatch read-only and inside its scope. Confirming no reader exists outside apps/cli/src/tui is cheap and mechanical.",
+      "options": [
+        { "id": "search", "label": "Run a repository-wide search for contactCardPath before implementation starts", "recommended": true },
+        { "id": "skip", "label": "Proceed without searching, on the strength of the two call sites already found" }
+      ],
+      "can_be_resolved_by_agent": true
+    },
+    {
+      "id": "Q3",
+      "question": "Is the fifth Branch-A pane (an activity list, ordinal 5) in scope for this wave, or does Branch A leave that ordinal reserved and unspent?",
+      "why": "Section 3 measures the header cost assuming the ordinal is spent on an 'activity' pane because that is the more expensive of the two readings and therefore the honest one to measure against; nothing in T5-T17's implementation or in this design requires building it, and state.activity already has a chrome-line renderer (activityLine, shell-chrome.ts:196-200) that may be judged sufficient on its own.",
+      "options": [
+        { "id": "reserved", "label": "Leave ordinal 5 reserved; ship Branch A as four occupied panes plus contacts", "recommended": false },
+        { "id": "spend", "label": "Build the activity pane as part of this wave, matching the header measurement already taken" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_read": 19,
+    "arithmetic_scripts_run": 4,
+    "repo_files_modified": 0,
+    "tests_run": 0,
+    "builds_run": 0
+  },
+  "timestamp_utc": "2026-09-09T04:20:00Z"
+}
