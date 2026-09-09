@@ -1,0 +1,242 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "004-T30-tests-2026-09-09",
+  "dispatch_id": "004-T30-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Two new test files, both red on the untouched tree, no source file changed. (1) apps/cli/src/tui/tui-shell.namedWayOut.test.ts pins AC8's SECOND clause as a property over 17 states x 10 viewports = 170 frames: every key a frame names as a way out must quit in that state (HONEST), and every frame with room to name one must name a working one (NAMED). It reads the painted frame rather than the renderer, which is the only way F-003 is visible at all. Red at 18 frames naming a dead key -- the sharp case included, a trust modal below MIN_VIEWPORT saying 'press q to quit' -- and at 31 frames naming no working way out. Fixing only the sharp case leaves the rest red; deleting the advice fails the NAMED clause. The MODAL FOOTER DECISION: yes, the trust modal's frame must name the way out, and doing so needs NO change to modal-host.test.ts:131, because that test pins TRUST_MODAL_FOOTER -- the answers to the trust QUESTION, painted inside the panel by renderModal -- while the frame's last row is a separate hard-coded string in shell-chrome.ts footerLine, and overlayModal never reaches the last row. Demonstrated by an experimental fix (three edits in shell-chrome.ts, reverted and byte-compared) under which all three of my tests, modal-host.test.ts, shell-chrome.legend.test.ts and four other chrome suites are green: 7 files, 41 tests, exit 0. No other test's assertion is widened or touched. (2) apps/cli/src/tui/tui-shell.quitWithChildInFlight.test.ts pins what Ctrl-C owes when a child is genuinely running: the terminal is given back at once, then a line on the operator's REAL screen (after the alternate-screen restore) says a command is still running and NAMES it, and the process does not close before that child does. Chosen over killing the child, because the child holds the store key mid-transaction and PERSISTENCE_FAILURE at exit 5 is what this project has measured an interrupted writer producing; an operator can escalate to their own signal, the console must not do it for them as the meaning of a keystroke. A FIRST DRAFT ALSO REQUIRED runTuiShell TO AWAIT THE CHILD BEFORE RESOLVING, AND THAT WAS WRONG AND WAS REMOVED: measured, it turns three tests in tui-shell.wayOut.test.ts and tui-shell.singleFlight.test.ts into timeouts, because both drive a runCli that NEVER SETTLES and require the session to end anyway -- which is AC8 itself. A shell that waited for its child would trap the operator inside a hung CLI. Satisfiability of the corrected shape proven by a notice-only experimental fix in tui-shell.ts (reverted and byte-compared) under which 6 files and 19 tests pass at exit 0, including both of those existing files and all three process-driven suites. Final state on the untouched tree: 6 tests, 4 red with the exact failures below, 2 green and both deliberately so (one is the scanner's own self-test, one is the paired case that kills an always-warn repair). tsc --noEmit exit 0. git status shows exactly two added files, both tests.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Pin, as a property, that a frame naming a way out names one that works in that state",
+      "status": "met",
+      "evidence": "apps/cli/src/tui/tui-shell.namedWayOut.test.ts, test 'never names a key that does not quit in that state'. Live keys are computed by running the console's whole input alphabet (26 control keys, Esc, Backspace, both newlines, 95 printable ASCII) through mapKey+reduce per state and keeping only those that produce a quit EFFECT. Advertised keys are extracted from the painted frame text: for each occurrence of the word 'quit'/'quits', the nearest key token starting before it (falling back to the nearest after), where a token is `[q]`, `[ctrl-c]`, `[esc]`, a bare `ctrl-c`, or a bare single letter. RED at 18 of 170 combinations, listed individually in the failure message."
+    },
+    {
+      "criterion": "Fixing only the sharp case leaves the rest red",
+      "status": "met",
+      "evidence": "The sharp case is 12 of the 18 rows (four trust-modal states at 40x10, 71x16 and 72x15, each saying 'resize, or press q to quit'). The remaining 6 are the key list naming `q` while the compose row owns the keyboard at 80x24, 96x28, 120x40 and 200x60 (004-T29 F-005), and the same line under a trust modal at 200x60 and -- truncated by overlayModal to '  q          quit (c' -- at 120x40 (F-003). Those are produced by HELP_LINES, a different constant in a different function from tooSmallFrame, so a one-line repair to the degraded frame leaves all six. The second test then leaves 31 more rows red, of which 20 are at or above MIN_VIEWPORT and cannot be reached by any change to the degraded frame at all."
+    },
+    {
+      "criterion": "A repair that simply deletes the advice also fails",
+      "status": "met",
+      "evidence": "Test 'names a working way out on every frame that has room for one'. The obligation is gated by ROOM, and the room witness is a DIFFERENT sentence on the same frame -- tooSmallFrame's '…this console needs 72x16' -- precisely so that deleting the advice cannot exempt a frame from the clause meant to forbid deleting it. At or above MIN_VIEWPORT the obligation is unconditional, because renderFrame always reserves the footer row and the centred modal panel never reaches it. 1x1 and 20x5 are exempt because the size sentence does not fit there either, so the clause is satisfiable everywhere it applies. RED at 31 of 170."
+    },
+    {
+      "criterion": "Decide whether the modal footer should name the way out, and do not quietly widen another test",
+      "status": "met",
+      "evidence": "DECIDED: yes, and it costs modal-host.test.ts:131 nothing. TRUST_MODAL_FOOTER is the panel's list of answers to the trust question (modal-host.ts:32, rendered at :136 inside the boxed panel); the frame's last row is the unrelated hard-coded string at shell-chrome.ts:127, and resolveModalPanelSize caps the panel so overlayModal never paints the last row (verified at 72x16 and 80x24: panel rows 2-13 and 2-21, footer rows 15 and 23). The experimental fix appended '  [ctrl-c] quit' to that string only; modal-host.test.ts stayed green. The recorded objection -- every key named on the modal is a key someone might press -- does not reach Ctrl-C, which answers the trust question with nothing: the child is left at its own [y/N] prompt, whose default is no. modal-host.test.ts was not opened for editing and is unchanged."
+    },
+    {
+      "criterion": "Pin what must happen when Ctrl-C arrives with a child in flight",
+      "status": "met",
+      "evidence": "apps/cli/src/tui/tui-shell.quitWithChildInFlight.test.ts. Three obligations: the terminal is handed back at once (unchanged, and AC8 requires it); a line is written AFTER the alternate-screen restore -- text written before it is painted on a screen about to be discarded -- naming the command and saying it is still running; and the process does not close before that child does. Pinned twice: in process against runTuiShell with an injected TuiIo, and against the shipped composition root, bundled with esbuild and driven over a real pipe with a real child process held open on a control socket."
+    },
+    {
+      "criterion": "Neither the frame nor the exit lies about which of wait-or-kill is happening",
+      "status": "met",
+      "evidence": "The choice is stated in the file and argued: the console lets the child finish rather than killing it, because the child is the only process holding the store key and is mid-transaction (relay publish mints and publishes a full prekey pool a peer may already be fetching), and PERSISTENCE_FAILURE at exit 5 is what this project has measured an interrupted writer producing. The lie is therefore removed by the LINE, not by changing what happens. The process-level test also pins the ordering ['the child finished', 'the console process closed'], so a repair that killed the child instead fails deterministically -- and so does a future process.exit() that would orphan a writer, which today is prevented only by Node's own refusal to exit under a live child and by nothing in the tree."
+    },
+    {
+      "criterion": "Vacuous cases are paired with a red case that kills the degenerate implementation",
+      "status": "met",
+      "evidence": "Two green tests, both deliberate and both named as such in the files. (a) 'reads, out of a painted line, which key that line offers as the way out' is the scanner's self-test: both clauses are computed from that scanner, and a scanner that silently found nothing would make the HONEST clause vacuous. It pins attribution against seven exact painted shapes including the F-003 truncation, and then requires that some real frame in the sweep advertises something. (b) 'says nothing of the kind, and leaves at once, when nothing is running' kills the repair that satisfies the interrupted-child tests by always warning and always waiting -- which would cry wolf on the one line the operator is now asked to read. The HONEST clause is additionally vacuous at 1x1 and 20x5, where nothing is named; those two viewports are paired with the 8 roomier ones in the same sweep, which are red."
+    },
+    {
+      "criterion": "Change no source file; every timeout from childProcessTimeouts.ts; no new millisecond literal",
+      "status": "met",
+      "evidence": "git status --porcelain -- apps packages docs deploy is exactly two `??` lines, both test files. Four experimental mutations (three in shell-chrome.ts, one shape in tui-shell.ts applied twice) were each reverted with `git checkout --` and the restored file byte-compared by shasum against a hash taken before the mutation; both comparisons printed REVERT_BYTE_IDENTICAL. Timeouts: CLI_CHILD_TIMEOUT_MS for the esbuild hook and every event wait, CLI_TEST_TIMEOUT_MS for the process-level test; nothing else in either file has a per-test ceiling. No new millisecond literal exists in either file: the fixture clock is `Date.UTC(2026, 8, 9)` rather than an epoch constant, and the in-process ordering uses `setImmediate`, which takes no duration."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T30-tests-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.namedWayOut.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "AC8's second clause as a property over 170 painted frames: a named way out must work, and a frame with room must name one. 3 tests, 2 red, 1 green anti-vacuity self-test.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.quitWithChildInFlight.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "What Ctrl-C owes when a child is genuinely running: a line on the real screen naming the command, and a process that does not predecease its child. 3 tests, 2 red, 1 green paired case.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/tui/tui-shell.namedWayOut.test.ts", "change": "added" },
+    { "path": "apps/cli/src/tui/tui-shell.quitWithChildInFlight.test.ts", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T30-tests#F-001",
+      "reviewer": "004-T30-tests",
+      "severity": "info",
+      "file": "apps/cli/src/tui/modal-host.test.ts",
+      "line": 131,
+      "symbol": "TRUST_MODAL_FOOTER",
+      "problem": "004-T29's Q-002 records that naming the way out on the trust modal requires editing this pin, and that this is why the Ctrl-C binding went into mapKey rather than into a footer (tui-shell.ts:91 says so in a comment). It does not. TRUST_MODAL_FOOTER is the list of answers to the trust QUESTION and is painted INSIDE the panel by renderModal (modal-host.ts:136). The frame's own last row is a different string built by a different function -- shell-chrome.ts:127, `footerLine`'s modal branch, which returns a hard-coded literal that merely duplicates the same three labels.",
+      "impact": "The blocker recorded against the smallest fix for F-002 is not a blocker, which changes the answer to Q-002 from a decision-with-a-cost into a repair. It also means the comment at tui-shell.ts:91 -- 'this is also the only one of the verifier's two suggested fixes the existing tests permit' -- is wrong on today's tree and will mislead the next reader.",
+      "suggested_fix": "Name the way out on the frame footer (shell-chrome.ts:127) and leave TRUST_MODAL_FOOTER and its pin exactly as they are. Whoever takes it should also correct the comment at tui-shell.ts:91, which is the only place the false constraint is written down.",
+      "evidence": "Measured, not reasoned: the experimental fix appended '  [ctrl-c] quit' to the literal at shell-chrome.ts:127 and touched nothing in modal-host.ts. modal-host.test.ts ran green in the same invocation (7 files, 41 tests, exit 0), as did shell-chrome.legend.test.ts, tui-shell.trustViewport.test.ts and tui-shell.smallViewport.test.ts. The panel cannot reach the row: resolveModalPanelSize caps height at 20 and overlayModal centres it, so at 72x16 the panel occupies rows 2-13 with the footer at row 15, and at 80x24 rows 2-21 with the footer at row 23.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T30-tests#F-002",
+      "reviewer": "004-T30-tests",
+      "severity": "major",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 947,
+      "symbol": "runTuiShell.finish",
+      "problem": "The obvious reading of 004-T29 F-004 -- make the shell wait for the in-flight child before it reports the session over -- is WRONG, and this dispatch measured the cost rather than shipping it. tui-shell.wayOut.test.ts and tui-shell.singleFlight.test.ts both drive runTuiShell with a `runCli` that never settles and require the session to end anyway. That is AC8: a hung CLI must not become a console that cannot be left. Under the awaiting shape, three tests across those two files fail on timeout (60008ms, 30008ms, 30007ms) -- and each timeout is exactly the operator experience the change would create.",
+      "impact": "Whoever implements F-004 will reach for the await first; it is the natural shape and it converts a measured lie into a measured trap. Recorded so that the reason the shell must resolve promptly is written down beside the reason the process must not.",
+      "suggested_fix": "Leave the shell's resolution where it is. Track the in-flight command's NAME, and after ALTERNATE_SCREEN_OFF write one line naming it, clipped to `viewport().cols` and WITHOUT a trailing newline -- tui-shell.wayOut.test.ts's `frames()` helper treats every non-empty chunk as a painted frame and asserts its shape, so a wider line or a trailing `\\r\\n` makes that file red at 1x1. The waiting itself already happens in the process, held by its own child; the process-level test pins that it keeps happening.",
+      "evidence": "Both experiments were run and reverted. AWAITING SHAPE: quitWithChildInFlight green, main.processDriven green, wayOut 2 of 3 red on timeout, singleFlight 1 of 4 red on timeout (2 files failed, 3 tests, exit 1). NOTICE-ONLY SHAPE (clipped, no trailing newline): 6 files, 19 tests, exit 0 -- quitWithChildInFlight, wayOut, singleFlight, main.processDriven, main.sendChild and main.registration.processDriven all green. tui-shell.ts was restored with `git checkout --` after each and byte-compared by shasum.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:947 (`finish`, the only place the session is settled and the only place a final line can be written)",
+          "apps/cli/src/tui/tui-shell.ts:970 (`else finish()`, the second caller — see F-003)",
+          "apps/cli/src/tui/tui-shell.ts:874 (`apply`'s run-cli case, the only place a child is awaited and therefore the only place the in-flight command's name exists)",
+          "apps/cli/src/tui/main.ts:230 (the only `spawn` in the console, and the reason the process outlives the shell)",
+          "apps/cli/src/tui/main.ts:295-301 (`main().then`, which sets `process.exitCode` and returns rather than calling `process.exit` — the accident that currently keeps the child from being orphaned)"
+        ],
+        "enumeration_method": "Every path by which this console can leave was enumerated from the source rather than searched for: `runTuiShell` settles in exactly one function (`finish`), which has exactly two callers, and the whole file contains exactly one `settle(` besides them; the process has exactly one `spawn` and exactly one place that sets an exit status, both in `main.ts`. Cross-checked against 004-T29 F-004's own search, which found no SIGINT or SIGTERM handler anywhere in apps/cli/src (0 matches over 91 files, taken from the raw log rather than from the summary header — F-007)."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T30-tests#F-003",
+      "reviewer": "004-T30-tests",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 968,
+      "symbol": "runTuiShell.handleKey",
+      "problem": "Noticed while writing the interrupted-child file, and not in 004-T29's list: after Ctrl-C with a child in flight, `finish()` runs a SECOND time. The quit keystroke's own chain sets `running = false` and calls it; the earlier keystroke's chain is still awaiting `io.runCli`, and when that finally settles it reaches `if (running) paint(); else finish();` and calls it again. So the console writes a second `ESC[?25h ESC[?1049l` to a terminal it announced it had given back -- 5972 ms later, in 004-T29's own measurement.",
+      "impact": "Small and mostly invisible (the sequences are idempotent at most terminals), but it is the same defect in miniature: the console acts on a terminal it has already relinquished. It also means a naive repair that writes the explanatory line inside `finish()` would write it twice, the second time after the wait it describes is over.",
+      "suggested_fix": "None on its own. Whoever writes the line should make `finish()` idempotent, or write the line where the quit is decided rather than where the session is settled.",
+      "evidence": "Read from the two call sites (tui-shell.ts:947 `finish`, :970 `else finish()`), and consistent with 004-T29 F-004's measured 5972 ms gap between the terminal restore and the process exit. The in-process notice test looks for its needle after the FIRST restore for this reason.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-004",
+      "global_id": "004-T30-tests#F-004",
+      "reviewer": "004-T30-tests",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.namedWayOut.test.ts",
+      "problem": "A limit of the measurement, stated rather than buried. The scanner reads a painted frame exactly as a human does, so it cannot tell an ADVERTISEMENT from an operator's own text: a message body, a contact label or a decrypted history entry containing the word 'quit' would be read as a frame naming a way out. The fixtures therefore keep that word out of every operator-supplied string -- which is a departure from tui-shell.wayOut.test.ts, whose compose fixture deliberately buffers the word 'quit' to prove that `q` is text there.",
+      "impact": "None on the property, which is about what the CONSOLE says. It does mean a future state added to this file with 'quit' in its fixture text would produce a false red, and the file says so at the fixture block.",
+      "suggested_fix": "None. The alternative -- teaching the scanner which lines came from which producer -- would make the measurement depend on the renderer, and reading the frame instead of the renderer is what caught 004-T29's F-003 in the first place.",
+      "evidence": "The scanner's own self-test pins that `[y] trust  [n] reject  [esc] cancel` and `poll → ok (exit 0)` contribute nothing, which is the same ambiguity in the other direction: 'exit' is deliberately outside the vocabulary because the activity line paints `(exit 0)` on almost every frame.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "Should the explanatory line at quit also say what the operator can do about the wait?",
+      "why": "This file pins that the line names the command and says it is still running, and no more. A line that added 'press ctrl-c again to stop waiting' would be a promise the console cannot keep: there is no signal handler anywhere in apps/cli/src, and what a second Ctrl-C actually does at a real terminal is an inference from tty semantics that neither 004-T29 nor this dispatch has measured -- both drove the console over a pipe, and a pipe generates no SIGINT. Measuring it needs the pty harness 004-T25 F-005 already names as a separate slice.",
+      "options": [
+        { "id": "name-the-command-only", "label": "Say what is running and nothing else, which is all the console can currently vouch for", "recommended": true },
+        { "id": "measure-then-say", "label": "Build the pty harness first, measure what a second Ctrl-C does, and only then offer it in the line" },
+        { "id": "promise-escalation", "label": "Offer an escalation in the line and implement a signal handler to back it" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q-002",
+      "question": "Is the key list (`?`) allowed to describe bindings that are not live in the current state?",
+      "why": "It is the one surface that describes the keyboard without asking who owns it, and it is the source of 6 of the 18 dead-key rows. Two coherent answers: make its quit line state-dependent like everything else (which is what the experimental fix did, and what turns the file green), or keep it a static reference and let it name every binding the console has -- in which case the HONEST clause needs an explicit exemption for it, written deliberately, and the operator keeps a list that is true in general and false where they are standing.",
+      "options": [
+        { "id": "state-dependent", "label": "The key list names what is bound HERE, like the footer and the degraded frame", "recommended": true },
+        { "id": "static-reference", "label": "The key list is a static reference; exempt it in the test and say so on the frame" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_changed": 0,
+    "test_files_changed": 2,
+    "typecheck_exit_code": 0,
+    "final_run": {
+      "command": "npx vitest run src/tui/tui-shell.namedWayOut.test.ts src/tui/tui-shell.quitWithChildInFlight.test.ts",
+      "files": 2,
+      "tests": 6,
+      "failed": 4,
+      "passed": 2,
+      "vitest_exit_code": 1,
+      "duration_ms_of_the_slowest_red": 45156,
+      "note": "The 45.2s red is the process-level test waiting out CLI_CHILD_TIMEOUT_MS for a line that is never written. Under the notice-only experimental fix the same test completed in well under a second of waiting."
+    },
+    "named_way_out_sweep": {
+      "states": 17,
+      "viewports": 10,
+      "combinations": 170,
+      "dead_key_named": 18,
+      "no_working_key_named_where_there_is_room": 31,
+      "exempt_for_lack_of_room": "every state at 1x1 and 20x5",
+      "file": "apps/cli/src/tui/tui-shell.namedWayOut.test.ts"
+    },
+    "experiments": [
+      {
+        "id": "E1-name-what-is-bound",
+        "site": "shell-chrome.ts: tooSmallFrame's `composing` also asks about the modal; footerLine's modal branch appends '  [ctrl-c] quit'; the key list's quit row becomes state-dependent",
+        "purpose": "prove the named-way-out property is satisfiable and costs modal-host.test.ts nothing",
+        "scope": "namedWayOut, wayOut, modal-host, shell-chrome, shell-chrome.legend, smallViewport, trustViewport",
+        "result": "7 files, 41 tests, exit 0",
+        "reverted": true,
+        "byte_compared": true
+      },
+      {
+        "id": "E2-shell-awaits-the-child",
+        "site": "tui-shell.ts: finish() awaits the in-flight runCli promise before settling",
+        "purpose": "test the obvious reading of 004-T29 F-004",
+        "scope": "quitWithChildInFlight, wayOut, singleFlight, main.processDriven",
+        "result": "2 files failed, 3 tests red on timeout (60008ms, 30008ms, 30007ms) -- REJECTED, see F-002",
+        "reverted": true,
+        "byte_compared": true
+      },
+      {
+        "id": "E3-notice-only",
+        "site": "tui-shell.ts: track the in-flight command name; after ALTERNATE_SCREEN_OFF write one line naming it, clipped to the terminal's own width, no trailing newline",
+        "purpose": "prove the corrected interrupted-child specification is satisfiable and conflicts with nothing",
+        "scope": "quitWithChildInFlight, wayOut, singleFlight, main.processDriven, main.sendChild, main.registration.processDriven",
+        "result": "6 files, 19 tests, exit 0",
+        "reverted": true,
+        "byte_compared": true
+      }
+    ],
+    "tree_state": {
+      "git_status_porcelain_apps_packages_docs_deploy": "?? apps/cli/src/tui/tui-shell.namedWayOut.test.ts\n?? apps/cli/src/tui/tui-shell.quitWithChildInFlight.test.ts",
+      "source_files_touched": "none; three experiments, each reverted with `git checkout --` and the restored file byte-compared by shasum against a hash taken before the edit (shell-chrome.ts 763bf473…, tui-shell.ts a3f9a9d8…), both printing REVERT_BYTE_IDENTICAL",
+      "test_files_on_disk": 79,
+      "test_files_on_disk_note": "77 before this dispatch (004-T29's counted figure) plus the two added here; counted by walking apps/cli/src and apps/cli/test."
+    },
+    "machine_idle": false,
+    "load_note": "10 cores, never idle: the operator's own VM and browser run throughout. 1-minute load average at each measurement, in order: 28.40 (session start) -> 12.27 (first red run of the interrupted-child file) -> 12.06 (E2) -> 11.68 (E3) -> 18.53 (final red run). Every duration above is wall-clock on a machine in that state and is not a benchmark; in particular the 45.2s red is a ceiling being reached, not work being done.",
+    "discipline": "Every vitest, tsc and eslint invocation was redirected whole to a scratchpad file with `>` and read back afterwards, with the exit code appended by `>>` on the following line in the SAME shell invocation -- never through a wrapper whose own last command reports its own status (the first attempt in this session did exactly that and reported the echo's status, which is why it was redone). Nothing was piped through head or tail during a run. File counts were taken by walking the directory tree. No count was taken from a `keryx ctx rg` summary header (004-T29 F-007).",
+    "routing_audit": {
+      "graph_used": "no -- not-relevant: the dispatch named the sweep that names the files, and the states this property has to cover were enumerated from state.ts and mapKey's own branch order rather than from a dependency graph.",
+      "wiki_used": "no -- not-relevant: the questions were 'which keys quit in which state', 'what does the frame say', and 'what does the process do when interrupted' -- all settled by execution.",
+      "ctx_used": "yes -- keryx ctx rg for the TRUST_MODAL_FOOTER and CliOutcome lookups, keryx ctx run for the file counts and package scripts. Raw reads were used for whole source and test modules where the compact form would have hidden the exact text a scanner has to match.",
+      "raw_rg_used": "no",
+      "testing_context_used": "partial -- .metaproject/data/testing/context.md was not read before writing, because 004-T29 recorded it as STALE (61 files listed against 77 on disk, generated 2026-09-08, before this flow's last four slices) and every file count here comes from the working tree instead.",
+      "memory_used": "no -- not-relevant: 004-T29-verify's findings and questions carried the history this task needed."
+    }
+  },
+  "timestamp_utc": "2026-09-09T10:15:00Z"
+}
