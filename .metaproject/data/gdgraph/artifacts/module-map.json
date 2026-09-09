@@ -92,6 +92,7 @@
     "apps/cli/src/tui/tui-shell.test.ts",
     "apps/cli/src/tui/tui-shell.trustViewport.test.ts",
     "apps/cli/src/tui/tui-shell.ts",
+    "apps/cli/src/tui/tui-shell.wayOut.test.ts",
     "apps/cli/src/tui/tui.keyMaterial.test.ts",
     "apps/cli/test/childProcessTimeouts.ts",
     "apps/cli/test/e2e/console-real-cli.test.ts",

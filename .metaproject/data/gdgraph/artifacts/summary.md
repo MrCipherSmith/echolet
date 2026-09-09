@@ -2,11 +2,11 @@
 
 ## Stats
 
-- Source files indexed: 160
+- Source files indexed: 161
 - Imported asset files indexed: 1
-- Total nodes: 161
-- Edges: 315
-- Import edges: 310
+- Total nodes: 162
+- Edges: 319
+- Import edges: 314
 - Asset edges: 5
 - Unresolved imports: 0
 - Import resolution: 100%
@@ -16,7 +16,7 @@
 
 | Module | Source Files |
 |---|---:|
-| apps | 109 |
+| apps | 110 |
 | packages | 50 |
 | .opencode | 1 |
 
