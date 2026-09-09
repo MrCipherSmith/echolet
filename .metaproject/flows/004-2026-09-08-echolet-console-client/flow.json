@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T03:31:56.076Z",
+  "updatedAt": "2026-09-09T03:43:53.537Z",
   "source": {
     "type": "description",
     "ref": null
@@ -333,7 +333,7 @@
       "id": "T16",
       "title": "Implement registration from inside the console, keeping the store key out of the process",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T15"
       ],
@@ -349,13 +349,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T17",
       "title": "Reconcile the flow-003 driven test with the startup profile probe, without weakening it",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T16"
       ],
@@ -371,7 +372,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -572,6 +574,16 @@
       "at": "2026-09-09T03:31:56.076Z",
       "event": "task-attempt",
       "detail": "T17: started (attempt 1) — Owner decision: the startup probe stays - the design requires it, all three registration cases rest on it, and it arms the store-key probe. The flow-003 test's complete-list assertions are corrected, not relaxed; its three properties must survive intact."
+    },
+    {
+      "at": "2026-09-09T03:43:51.579Z",
+      "event": "task-done",
+      "detail": "T16: Implement registration from inside the console, keeping the store key out of the process"
+    },
+    {
+      "at": "2026-09-09T03:43:53.537Z",
+      "event": "task-done",
+      "detail": "T17: Reconcile the flow-003 driven test with the startup profile probe, without weakening it"
     }
   ]
 }
