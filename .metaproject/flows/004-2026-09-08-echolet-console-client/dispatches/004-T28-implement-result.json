@@ -1,0 +1,239 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "004-T28-implement-2026-09-09",
+  "dispatch_id": "004-T28-implement",
+  "status": "DONE",
+  "summary": "Both defects are closed and the whole apps/cli package is green: 76 files reported against 76 counted on disk, 514 tests, 514 passed, 0 failure markers in the raw log, 248.67s, vitest exit 0, tsc exit 0. Four source files changed and one document; no test file was touched (`git status --short -- apps docs` lists exactly apps/cli/src/tui/history-pane.ts, main.ts, pane-fit.ts, text.ts and docs/STATUS_CURRENT.md). DEFECT ONE (the message that cannot be read): the chosen layout is the CONTINUATION ROW. The metadata keeps a line of its own and keeps the WHOLE 36-character message id beside the sequence and the direction, and the body is painted underneath it, indented four columns, across as many rows as it needs up to a cap of four. At MIN_VIEWPORT the body gets 68 columns instead of 20, so the owner's 51-character message — the one this wave actually sent and received through a real relay — is read whole on one row with 17 columns to spare, and the 50-character reply beside it likewise. Rendered and checked, not reasoned about: `1  outbound  37ffccdc-5428-4ae6-87da-bcdd8fb42ec5` on one row and `CONSOLE_E2E_OUT_ea2b1c4d5e6f708192a3b4c5d6e7f8091a2` whole on the next. `short-id` was rejected for the reason 004-T27's F-002 named: 48 columns still elides that message by three characters. Past four body rows (272 columns at 72) the body is cut and says so with U+2026, which answers Q-001 as `both` — a within-row ellipsis for a body the entry cannot hold, and `fitPane`'s existing row marker for messages the pane cannot hold. DEFECT TWO (argv reaches frames unfiltered): `parseOptions` now filters EVERY argv token through `paintable` as its first statement — not per field, and not in the renderer. The grammar walk went from 91 violations to 0. All five fields the enumeration names are covered, the flag names in its own `throw` messages are covered, and a flag added later inherits the boundary rather than needing its own audit. The green pair `renderFrame filters nothing` stayed green, which is the check that the repair did not migrate into the reader. Layout arithmetic that had to be preserved: `shell-chrome.overflow.test.ts` derives the hidden count from the frame, so `fitPane` had to learn that a list ITEM may occupy more than one line — it now drops whole messages and its marker still counts messages, which is why 30 entries at 72x16 report `… 26 more not shown` beside the four that are shown, exactly as before. The machine was never idle throughout: the operator's own VM and browser ran the whole time. 1-minute load averages, in order: 15.61 (session start) -> 10.79 (the two specification files) -> 11.03 (src/tui scope) -> 12.22 at the start of the full-package run, 63.77 at its end.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "A 51-character message is readable in the console without leaving it",
+      "status": "met",
+      "evidence": "MEASURED by rendering the frame, not by arithmetic: `renderFrame(<the §9 conversation>, MIN_VIEWPORT).join(\"\\n\").includes(\"CONSOLE_E2E_OUT_ea2b1c4d5e6f708192a3b4c5d6e7f8091a2\")` is true. The painted rows at 72x16 are `  1  outbound  37ffccdc-5428-4ae6-87da-bcdd8fb42ec5` and, beneath it, `    CONSOLE_E2E_OUT_…091a2` — 51 of the row's 68 body columns. The layout chosen is the CONTINUATION ROW rather than `short-id`, precisely because 004-T27's F-002 measured that an 8-character prefix leaves 48 columns and would elide this message by three characters, and eliding a real message and announcing it does not satisfy the criterion this wave exists for."
+    },
+    {
+      "criterion": "The body gets at least half the row at any supported width, and the id is not deleted",
+      "status": "met",
+      "evidence": "`history-pane.readable.test.ts` green, 5 of 5, including the four-viewport sweep (72x16, 80x24, 120x40, 203x61) that was red at the two narrow legs. The body's budget is `width - 4` on its own row, which is 94% of the row at 72 and rises with the terminal, so the 120 and 203 legs — the pair that kills a body capped at a constant — stay green for the right reason. The id is not deleted and not shortened: all 36 characters stay on the metadata line beside the sequence and the direction, so the green pairs `keeps the message id recoverable` and `keeps the direction and the sequence` pass on the whole value rather than on a floor."
+    },
+    {
+      "criterion": "A body longer than the pane can hold says so instead of stopping mid-message",
+      "status": "met",
+      "evidence": "Two independent disclosures, and Q-001 answered as `both`. WITHIN an entry: a body needing more than MAX_BODY_ROWS (4) rows is cut on the fourth and the cut row ends in U+2026 — rendered and checked at 72x16 with a 400-character body, the fourth row ends `…xxx…`. ACROSS entries: `fitPane` still spends a row on `truncationMarker`, and it now counts messages rather than lines. The specification's 5000-character case is green on both of its assertions — the frame carries U+2026, and a contiguous 36-character window of the body survives (four rows of 68 characters do)."
+    },
+    {
+      "criterion": "Launch arguments pass the shared filter, at the place argv enters the program",
+      "status": "met",
+      "evidence": "`parseOptions` opens with `const argv = rawArgv.map((token) => paintable(token))`. `main.argvEscape.test.ts` green, 7 of 7: `--label`, `--relay-url`, `--card` inside the trust modal and `--store-key-env` in the step-0 recipe all report 0 injected screen clears, and the FIX-shape pair `keeps the printable remainder of a hostile flag` is green, so the console still paints `A[2JB` rather than refusing to start or painting a placeholder. Filtering the tokens rather than the five known fields also covers `--profile`, `--cli` and the flag NAMES that `throw new Error(\\`${flag} needs a value\\`)` writes to stderr after the alternate screen has been given back."
+    },
+    {
+      "criterion": "The repair is not in the renderer",
+      "status": "met",
+      "evidence": "`renderFrame filters nothing, so the repair cannot be made in the renderer` is still green: `shell-chrome.ts` is not among the changed files at all. `git diff --stat -- apps packages docs deploy` lists history-pane.ts, main.ts, pane-fit.ts, text.ts and docs/STATUS_CURRENT.md and nothing else."
+    },
+    {
+      "criterion": "The grammar test goes green",
+      "status": "met",
+      "evidence": "0 violations, from 91. The assertion is `expect(shapes).toEqual([])` where `shapes` is derived from `problems`, so an empty `shapes` is an empty `problems`: the console's ENTIRE output stream — 45 painted frames driven through the checklist, both argv-prefilled compose rows, the trust modal, all five panes, the help list and a settled result from every command, with five argv flags, two children's stdout, one child's stderr and the operator's own keystrokes all hostile at once — parsed clean against the console's own closed vocabulary. It went green for the expected reason and reported nothing unexpected on the way. It is worth more than the other cases combined because it enumerates no field: the same run is now a passing re-verification of all eight boundaries rather than of seven."
+    },
+    {
+      "criterion": "No test file edited",
+      "status": "met",
+      "evidence": "`git status --short -- apps docs` returns five ` M` entries, none of which is a test. Nothing was skipped, narrowed, weakened or deleted: the src/tui scope reports 35 files of 35 on disk and 342 tests of 342, which is the same 342 004-T27 measured — the nine that were red are the nine that are now green, and the other 333 are unchanged."
+    },
+    {
+      "criterion": "Run the two specification files, then the whole src/tui, then the whole apps/cli including the end-to-end directory",
+      "status": "met",
+      "evidence": "In that order, each captured whole to a log file and read back: (1) the two files — 2 of 2, 12 tests, 12 passed, 1.81s, exit 0; (2) src/tui — 35 files reported against 35 counted on disk, 342 tests, 342 passed, 3.04s, exit 0; (3) the whole package — 76 files reported against 76 counted on disk, 514 tests, 514 passed, 248.67s, exit 0. The end-to-end directory ran inside (3), all eight of its files green, including `test/e2e/console-real-cli.test.ts` (the shipped console over the shipped CLI against a real relay, 21.5s) and `flood-closure.test.ts` (247.8s)."
+    },
+    {
+      "criterion": "Reported file counts checked against files on disk",
+      "status": "met",
+      "evidence": "A routed find over `apps/cli/src apps/cli/test` for `*.test.ts`/`*.test.mjs` counts 76; vitest reported `Test Files 76 passed (76)`. A routed find over `apps/cli/src/tui` counts 35; the scoped run reported `35 passed (35)`. The raw full-package log was searched for the `×` failure marker and returned 0, matching `Tests 514 passed (514)` and `VITEST_EXIT=0`. No report was lost this run."
+    },
+    {
+      "criterion": "Update any document that describes what a conversation row shows",
+      "status": "met",
+      "evidence": "A routed search found the row described in exactly four places, three of which are editable. `history-pane.ts`'s module doc now states what a message occupies and why it is two rows, with the measurement and the reason the id could not be deleted or shortened. `pane-fit.ts`'s module doc now states that a list item is not always one line and that the marker counts items. `text.ts:68` described the bidi hazard by citing the one-line layout; it now describes the two-region layout, says the change narrows the blast radius rather than removing the hazard, and says explicitly that the filter does not rest on the layout. `docs/STATUS_CURRENT.md` gained a dated flow-004 T28 delta, in the document's own language and its own delta form, covering both defects. The fourth place is `apps/cli/test/e2e/console-real-cli.test.ts:250-268`, a test file, left alone and reported as F-001."
+    },
+    {
+      "criterion": "Commit nothing",
+      "status": "met",
+      "evidence": "No `git commit`, `git add` or `git stash` was run. `git status --short -- apps docs` shows five unstaged modifications."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T28-implement-result.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/history-pane.ts",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "The conversation row. `HistorySnapshot.lines` is now `HistoryLine[]` — `meta` (sequence, direction, the whole message id) apart from `body` — and `formatHistoryLines` hands `fitPane` each entry as the lines it occupies: the metadata row plus `bodyRows(body, width)`, the body hard-wrapped into indented rows and elided with U+2026 past MAX_BODY_ROWS.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/pane-fit.ts",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "A list item may now be a `string` or the array of lines it occupies (`PaneRow`). Truncation drops whole items and `truncationMarker` still counts items, so every existing single-line pane behaves identically and the conversation pane's count stays a count of messages.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/main.ts",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "The eighth boundary. `parseOptions` filters every argv token through `paintable` before it reads a flag, with the measurement, the five fields, the reason it is not per-field and not in the renderer, and the reason it filters rather than rejects recorded above it.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/text.ts",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "The bidi paragraph of `steersTheDisplay`'s doc no longer describes a one-line conversation row, and says explicitly that the new layout narrows the hazard without being what the filter rests on.",
+      "hash": null
+    },
+    {
+      "path": "docs/STATUS_CURRENT.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "A dated flow-004 T28 delta covering both defects, in the document's existing delta form.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/tui/history-pane.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/pane-fit.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/main.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/text.ts", "change": "modified" },
+    { "path": "docs/STATUS_CURRENT.md", "change": "modified" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T28-implement#F-001",
+      "reviewer": "004-T28-implement",
+      "severity": "info",
+      "file": "apps/cli/test/e2e/console-real-cli.test.ts",
+      "line": 250,
+      "problem": "The end-to-end console test carries a nineteen-line comment that describes the defect this dispatch removed as though it were current — 'the prefix costs 53 columns for an outbound row and 52 for an inbound one, leaving 19 and 20 columns for the BODY' — and it sizes its round-trip markers SHORT ON PURPOSE to fit those 19 columns, saying that 'a 51-character marker would make this test fail for a reason that is not the round trip'. That constraint no longer exists: a 51-character marker now fits. This dispatch did not edit it, because it is a test file.",
+      "impact": "The test still passes and its markers are still valid, so nothing is broken; what is stale is the reasoning a later reader will inherit. The specific risk is the opposite of the usual one — the comment tells the next author that the console cannot show a full-length body, so a test that SHOULD assert a realistic body length will go on using a truncated one, and the pane's new property will stay unpinned at the one place it was actually measured. The comment also points at `history-pane.ts:41`, which is no longer the line that formats a row.",
+      "suggested_fix": "In a separate change by whoever owns the test: rewrite the comment to record the elision as HISTORICAL (it is a good measurement and worth keeping as one), and lengthen `fromConsole`/`reply` to at least the 50 and 51 characters the verifier measured, so the end-to-end path asserts what the console can now show rather than what it once could not.",
+      "evidence": "apps/cli/test/e2e/console-real-cli.test.ts:250-271. The file passed unchanged in the full-package run (1 test, 21455ms), so this is a documentation residue and not a failure.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T28-implement#F-002",
+      "reviewer": "004-T28-implement",
+      "severity": "info",
+      "file": "apps/cli/src/tui/main.ts",
+      "line": 116,
+      "symbol": "parseOptions",
+      "problem": "Filtering every argv TOKEN rather than the five painted fields also filters two values that are never painted: `--cli`, which names the bundle the console spawns, and the path half of `--profile`, which is passed to every child as `--profile <dir>`. For those two the filter changes a value that is used as a filesystem path, not only a value that is displayed.",
+      "impact": "Deliberate, and the smaller of the two hazards, but it should be recorded rather than discovered. A path that genuinely contained a C0 byte or a bidi control would now be spawned or opened under its filtered spelling and would fail as a missing file rather than as a strange one. Such a path is not something a person types, and the console already treats a filtered card path as THE path when the operator types one into the compose row (tui-shell.ts:371), so this is consistent with the surface rather than new. The alternative — filtering only on the way to a frame — was rejected because it puts the guarantee back where a field added later does not inherit it, which is the exact shape of the defect being repaired.",
+      "suggested_fix": "None proposed. If the project later decides a path must reach a child byte-for-byte, the split is a filtered `ProfileView` for display beside an unfiltered value for `buildArgv` — which is two values to keep in agreement, and is the trade this dispatch declined.",
+      "evidence": "apps/cli/src/tui/main.ts, first statement of `parseOptions`. The whole-package run is green, including `main.processDriven.test.ts`, `main.registration.processDriven.test.ts` and `test/e2e/console-real-cli.test.ts`, all of which spawn real children over real `--profile` and `--cli` paths.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T28-implement#F-003",
+      "reviewer": "004-T28-implement",
+      "severity": "info",
+      "file": "apps/cli/src/tui/history-pane.ts",
+      "line": 74,
+      "symbol": "MAX_BODY_ROWS",
+      "problem": "Two things an operator still cannot read from inside this console, both bounded and both disclosed rather than silent. (1) A body longer than MAX_BODY_ROWS rows — 272 columns at the minimum viewport, 464 at 80x24 — is elided with U+2026, and there is no key that expands it. The plaintext bound is 65536 bytes, so the gap between what is readable and what is sendable is large. (2) An entry the pane dropped is counted by `… N more not shown` and cannot be reached: there is no scroll, no paging key, and `keep: \"tail\"` means the oldest of a long conversation are the ones out of reach.",
+      "impact": "Both were true before this change and neither is made worse by it; the reason to record them is that the first one is NEW in kind. Until now the pane elided every long body silently at 20 columns; now it shows 272 and says when it stops, which turns an invisible loss into a visible boundary an operator will want a key for. Four rows is a deliberate bound and not an oversight: an unbounded body would evict a whole conversation from an eleven-row pane to show one message nobody asked to see in full, which trades one unreadable pane for another.",
+      "suggested_fix": "Not this dispatch's to make. A selected-entry detail view — the third option the owner named — is the natural home for both: it would give one message the whole pane, and the same selection mechanism is what a paging key needs. Until then the whole body and the whole conversation are available from `history --with <identity-id>`, which the pane's own head line names.",
+      "evidence": "Rendered at 72x16 and read back: a 400-character body paints four rows of 68 columns with the fourth ending in U+2026; 30 entries paint the four newest and `… 26 more not shown`. `apps/cli/src/tui/history-pane.ts` MAX_BODY_ROWS = 4; `pane-fit.ts` keep: \"tail\".",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_changed": 4,
+    "documents_changed": 1,
+    "test_files_changed": 0,
+    "typecheck_exit_code": 0,
+    "layout_choice": {
+      "chosen": "continuation-row",
+      "rejected": {
+        "short-id": "8 characters of id leave 48 columns at 72, three short of the 51-character message this wave measured (004-T27 F-002)",
+        "drop-id": "58 columns, but the id keys the inbox, names an exact retry and is what the runbook's §9 comparison reads; the specification forbids deleting it"
+      },
+      "metadata_row": "  <sequence>  <direction>  <messageId>   — the whole 36-character id, unshortened",
+      "body_rows": "indented 4 columns, hard-wrapped, up to MAX_BODY_ROWS = 4",
+      "body_columns_at_min_viewport": 68,
+      "body_columns_before": "19 outbound / 20 inbound",
+      "q_001_answer": "both — U+2026 within an entry whose body the entry cannot hold, and fitPane's existing row marker for messages the pane cannot hold"
+    },
+    "grammar_walk": {
+      "violations_before": 91,
+      "violations_after": 0,
+      "frames_painted": 45,
+      "note": "Green for the expected reason and reporting nothing unexpected. The assertion is on the DISTINCT SHAPES derived from the violation list, so an empty result is an empty list."
+    },
+    "runs": [
+      {
+        "scope": "src/tui/history-pane.readable.test.ts + src/tui/main.argvEscape.test.ts",
+        "files": "2 passed (2)",
+        "tests": "12 passed (12)",
+        "duration_s": 1.81,
+        "vitest_exit_code": 0,
+        "load_1min_at_start": 10.79
+      },
+      {
+        "scope": "src/tui",
+        "files_on_disk": 35,
+        "files_reported": 35,
+        "files": "35 passed (35)",
+        "tests": "342 passed (342)",
+        "duration_s": 3.04,
+        "vitest_exit_code": 0,
+        "load_1min_at_start": 11.03,
+        "note": "The same 342 004-T27 measured. The nine that were red are green; the other 333 are unchanged."
+      },
+      {
+        "scope": "apps/cli (full package, including test/e2e)",
+        "files_on_disk": 76,
+        "files_reported": 76,
+        "files": "76 passed (76)",
+        "tests": "514 passed (514)",
+        "duration_s": 248.67,
+        "vitest_exit_code": 0,
+        "failure_markers_in_raw_log": 0,
+        "load_1min_at_start": 12.22,
+        "load_1min_at_end": 63.77,
+        "e2e": "all 8 files green: console-real-cli 21.5s, relay-tls 26.0s, publication-claimability 26.9s, init-relay-url 7.1s, two-process 54.4s, rewalk-crash-safety 95.7s, prekey-pool-replenishment 106.6s, flood-closure 247.8s"
+      },
+      {
+        "scope": "tsc -p tsconfig.json --noEmit",
+        "exit_code": 0
+      }
+    ],
+    "machine_idle": false,
+    "load_note": "10 cores, never idle: the operator's own VM and browser ran throughout. 1-minute load averages at each measurement, in order: 15.61 (session start) -> 10.79 (the two specification files) -> 11.03 (src/tui scope) -> 12.22 at the start of the full-package run, 63.77 at its end. Every figure above was taken with the machine in that state.",
+    "discipline": "Every vitest and tsc invocation was redirected whole to a scratchpad log file and read back; nothing was piped through head or tail, and every exit code was captured with `echo \"..._EXIT=$?\"` appended by `>>` on the line immediately after the command in the same shell invocation. Both file counts came from a routed find over the working tree and were compared against vitest's own summary; the failure-marker count came from the raw log rather than from a gdctx summary's match list. The layout was verified by RENDERING frames through the real `renderFrame` (esbuild-bundled into the scratchpad, never into the repository) and reading the rows, not by arithmetic over the format string.",
+    "routing_audit": {
+      "graph_used": "no -- not-relevant: the dispatch named both defect sites (history-pane.ts and main.ts parseOptions) and 004-T27's result named every collaborator. The one structural question that mattered — which other callers a change to `HistorySnapshot` and `PaneRegions` would break — was answered by routed searches for the two symbols, which returned four files, and confirmed by running the whole package.",
+      "wiki_used": "no -- not-relevant: a routed search found no console or conversation-row content in the wiki at all. The two questions were how many columns a row spends and which bytes reach a painted frame, both settled by measurement.",
+      "ctx_used": "yes -- keryx ctx run for every git, find, date and log search; keryx ctx read for package.json, vitest.config.ts and both contract schemas; keryx ctx rg for every code and documentation search.",
+      "raw_rg_used": "no",
+      "testing_context_used": "no -- not-relevant: the dispatch named the two specification files and the three scopes to run, in order; no test-selection question existed.",
+      "memory_used": "no -- not-relevant: 004-T27's result and the two specification files carried every measurement and every design constraint this work had to respect."
+    }
+  },
+  "timestamp_utc": "2026-09-09T07:55:00Z"
+}

@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildArgv, parseCliOutcome, type CliOutcome, type CliRequest } from "./cli-bridge";
 import { PENDING_SETUP, createInitialState, type ProfileView, type StepOutcome, type TrustIdentifiers } from "./state";
+import { paintable } from "./text";
 import { runTuiShell, type TuiIo } from "./tui-shell";
 
 /**
@@ -84,8 +85,37 @@ function wantsHelp(argv: readonly string[]): boolean {
   return false;
 }
 
-/** Splits argv into one `ProfileView` per `--profile`. No option here can carry a key value. */
-function parseOptions(argv: readonly string[]): Options {
+/**
+ * Splits argv into one `ProfileView` per `--profile`. No option here can carry a key value.
+ *
+ * ── THE EIGHTH BOUNDARY ────────────────────────────────────────────────────────────────────────
+ *
+ * MEASURED (004-T25-verify F-002, and 004-T27's fifth field): seven boundaries in this console
+ * filter what enters the state through `paintable`, and argv passed none of them. Launched with
+ * `--label 'A<ESC>[2JB'` the shipped console painted four frames and emitted eight screen clears —
+ * two per frame it never wrote — because the label is painted in the header on EVERY frame. Five
+ * fields reach a frame this way: `--label`, `--relay-url`, `--store-key-env` (painted TWICE on the
+ * step-0 recipe, the one frame whose whole purpose is a shell command the operator is asked to
+ * copy), `--card` and `--profile`.
+ *
+ * `--card` is the sharp one, and it is not the operator's own string: it is a FILENAME CHOSEN BY
+ * WHOEVER SENT THE CARD, painted as `card: …` on the line directly above the four identifiers a
+ * human is being asked to compare out of band. The four identifiers beside it are already filtered;
+ * the path was not. And the runbook launches this console from wrapper scripts where `--label` and
+ * `--relay-url` are shell variables rather than something a human typed.
+ *
+ * The filter is applied to EVERY argv token, once, here — not per field and not in the renderer.
+ * Per field, a flag added later would arrive unguarded and the audit would have to be repeated; in
+ * the renderer, AC7's property would move off the state and onto a reader's defensiveness, which is
+ * the one thing t35 §5 item 4 says it must not do (`renderFrame` filters nothing, and a test pins
+ * that it does not). Filtering the tokens also covers the flag NAMES, which `throw` writes to
+ * stderr after the alternate screen has been given back.
+ *
+ * It FILTERS and does not reject: `paintable` keeps the printable remainder, so a hostile `--label`
+ * still tells two profiles apart instead of becoming a placeholder or a refusal to start.
+ */
+function parseOptions(rawArgv: readonly string[]): Options {
+  const argv = rawArgv.map((token) => paintable(token));
   const profiles: ProfileView[] = [];
   let cliPath = resolve(HERE, "cli.js");
 
