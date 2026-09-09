@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CLI_CHILD_TIMEOUT_MS, E2E_TEST_TIMEOUT_MS } from "../childProcessTimeouts";
+import { E2E_CHILD_TIMEOUT_MS, E2E_TEST_TIMEOUT_MS } from "../childProcessTimeouts";
 
 /**
  * RED suite for flow 002 / T10-F-003 — `echolet init` must refuse a relay URL that every later
@@ -50,7 +50,7 @@ const project = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const cli = join(project, "apps/cli/dist/cli.js");
 
 interface Result { code: number | null; stdout: string; stderr: string }
-function command(args: string[], env: Record<string, string> = {}, timeoutMs = CLI_CHILD_TIMEOUT_MS): Promise<Result> {
+function command(args: string[], env: Record<string, string> = {}, timeoutMs = E2E_CHILD_TIMEOUT_MS): Promise<Result> {
   return new Promise((done, reject) => {
     const child = spawn(process.execPath, [cli, ...args], { cwd: project, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "";

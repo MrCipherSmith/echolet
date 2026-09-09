@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { deriveMailboxId, generateIdentityKeyPair, signUtf8Message } from "@echolet/crypto-core";
-import { CLI_CHILD_TIMEOUT_MS } from "../childProcessTimeouts";
+import { E2E_CHILD_TIMEOUT_MS, E2E_RELAY_READY_TIMEOUT_MS } from "../childProcessTimeouts";
 
 /**
  * RED suite for flow 002 / T5 — closing the mailbox-flooding class against the REAL relay binary.
@@ -65,7 +65,7 @@ const suite = mkdtempSync(join(tmpdir(), "echolet-flood-closure-e2e-"));
 const binary = join(suite, "relay"), cli = join(project, "apps/cli/dist/cli.js");
 
 interface Result { code: number | null; stdout: string; stderr: string }
-function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = CLI_CHILD_TIMEOUT_MS): Promise<Result> {
+function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = E2E_CHILD_TIMEOUT_MS): Promise<Result> {
   return new Promise((done, reject) => {
     const child = spawn(executable, args, { cwd: project, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "";
@@ -102,7 +102,7 @@ async function close(server: Server) {
   });
 }
 async function relayReady(url: string, child: ChildProcess) {
-  const end = Date.now() + 10000;
+  const end = Date.now() + E2E_RELAY_READY_TIMEOUT_MS;
   while (Date.now() < end) {
     if (child.exitCode !== null || child.signalCode !== null) throw new Error("Relay exited during startup");
     try { if ((await fetch(`${url}/health`, { signal: AbortSignal.timeout(500) })).ok) return; } catch { /* bounded startup retry */ }
@@ -373,10 +373,10 @@ async function world(label: string, body: (world: World) => Promise<void>) {
     const proxyPort = await listen(proxy); listening = true;
     const proxyUrl = `http://127.0.0.1:${proxyPort}`;
 
-    async function runRaw(profile: string, args: string[], timeoutMs = CLI_CHILD_TIMEOUT_MS) {
+    async function runRaw(profile: string, args: string[], timeoutMs = E2E_CHILD_TIMEOUT_MS) {
       return command(process.execPath, [cli, ...args, "--profile", profile, "--json"], { ECHOLET_E2E_KEY: keys.get(profile)! }, timeoutMs);
     }
-    async function run(profile: string, args: string[], expected: number | null = 0, timeoutMs = CLI_CHILD_TIMEOUT_MS) {
+    async function run(profile: string, args: string[], expected: number | null = 0, timeoutMs = E2E_CHILD_TIMEOUT_MS) {
       const result = await runRaw(profile, args, timeoutMs);
       const value = JSON.parse(result.stdout) as { ok: boolean; data?: Record<string, unknown>; error?: { code: string } };
       const errorCode = /^[A-Z_]+$/.test(value.error?.code ?? "") ? value.error!.code : "none";
@@ -408,7 +408,7 @@ async function world(label: string, body: (world: World) => Promise<void>) {
      * Any other exit (4 RELAY_UNAVAILABLE, 5 PERSISTENCE_FAILURE) stops the drive and is reported,
      * because degrading the operator-visible failure is itself a regression the design names (§2).
      */
-    async function poll(profile: string, maxPolls: number, timeoutMs = 120000) {
+    async function poll(profile: string, maxPolls: number, timeoutMs = E2E_CHILD_TIMEOUT_MS) {
       const codes: number[] = [];
       for (let attempt = 0; attempt < maxPolls; attempt += 1) {
         const result = await runRaw(profile, ["poll"], timeoutMs);
@@ -420,7 +420,7 @@ async function world(label: string, body: (world: World) => Promise<void>) {
     }
 
     /** Starts `poll` and SIGKILLs it once the relay has served `pages` poll requests. */
-    async function killPollAfterPages(profile: string, pages: number, timeoutMs = 120000) {
+    async function killPollAfterPages(profile: string, pages: number, timeoutMs = E2E_CHILD_TIMEOUT_MS) {
       const target = counters.polls + pages;
       const child = spawn(process.execPath, [cli, "poll", "--profile", profile, "--json"], {
         cwd: project, env: { ...process.env, ECHOLET_E2E_KEY: keys.get(profile)! }, stdio: ["ignore", "ignore", "ignore"],

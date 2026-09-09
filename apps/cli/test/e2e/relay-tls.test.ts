@@ -9,7 +9,7 @@ import { networkInterfaces, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
-import { CLI_CHILD_TIMEOUT_MS, E2E_TEST_TIMEOUT_MS } from "../childProcessTimeouts";
+import { E2E_CHILD_TIMEOUT_MS, E2E_TEST_TIMEOUT_MS } from "../childProcessTimeouts";
 
 /**
  * Flow 002 / T8 — the relay serves HTTPS, and it fails loudly rather than quietly
@@ -35,7 +35,7 @@ const certPath = join(tlsDir, "cert.pem"), keyPath = join(tlsDir, "key.pem");
 const renewedCert = join(renewalDir, "cert.pem"), renewedKey = join(renewalDir, "key.pem");
 
 interface Result { code: number | null; stdout: string; stderr: string }
-function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = CLI_CHILD_TIMEOUT_MS): Promise<Result> {
+function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = E2E_CHILD_TIMEOUT_MS): Promise<Result> {
   return new Promise((done, reject) => {
     const child = spawn(executable, args, { cwd: project, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "";
