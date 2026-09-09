@@ -1,0 +1,277 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "004-T25-verify-2026-09-09",
+  "dispatch_id": "004-T25-verify",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Both gaps 004-T24's wave report found in its own orchestration are closed, and closing the first one found two live defects nobody was looking for. GAP ONE (the fake CLI): apps/cli/test/e2e/console-real-cli.test.ts now drives the SHIPPED console (apps/cli/dist/tui.js, built by test/globalSetup.ts) over the SHIPPED CLI (apps/cli/dist/cli.js, handed to it with --cli and spawned by the console's own spawn()) against the REAL relay binary (go build ./cmd/relay, brought up on a free loopback port exactly as two-process.test.ts brings it up), with a second REAL profile as the peer. Nothing in it is stubbed. All five registration steps are driven from keystrokes -- the startup doctor's real INVALID_CONFIGURATION/exit 2, init with a relay URL typed into the console, a real relay publish minting the real prekey pool, contact export to the path the console generates (asserted to exist on disk afterwards), contact import through the trust modal on the four identifiers the REAL contact import printed on its stderr and the real readIdentifiers parsed (each compared against the card on disk), the operator's y answering the CHILD's own prompt, and doctor closing step 5 on a non-zero contact_count. Then a message is composed with [3][c][w], typed, and sent -- body on the child's stdin, no --text -- and READ ON THE OTHER SIDE out of the peer's own encrypted store via the real CLI (byte-exact). Then the reverse direction: the peer sends, the console polls with [p] and reads with [h], and alice's store is checked through the CLI to hold exactly [outbound, inbound] in order. Ctrl-C exits 0. Green three times (6.9s / 6.1s / 6.1s test duration), tsc --noEmit exit 0. GAP TWO (the unverified escape fix at 0d97cbc): put back and killed. Restoring `failed: outcome.code` at tui-shell.ts:657 turns 6 of 7 cases red in tui-shell.outcomeEscape.test.ts and 6 of 330 red across the src/tui scope -- and ONLY that file catches it, 32 of 33 files stay green, which is what makes the fix load-bearing rather than incidentally covered. Reverted byte-for-byte. Then the hunt the four previous verifications each won: seven further mutations, one at every remaining paintable() boundary in the console (modal identifiers, the activity line, doctor's identity/device, history plaintext, rejection fields, the compose-row insert) plus one that drops a trust identifier in main.ts's readIdentifiers -- all seven killed, all seven reverted and byte-compared. Every FILTERED boundary is pinned. The eighth route is the one with no boundary at all, and it is live: main.ts's parseOptions contains no paintable() (routed rg: zero matches in main.ts and state.ts), so --label, --relay-url and --card reach a painted frame verbatim. Measured against the shipped binary: 4 paints emitted 12 ESC[2J sequences, 8 of them injected from argv -- the console clears the operator's screen twice per frame from its own launch line. Separately, the real run found that the console's ONLY surface for reading a received message elides the body after 19-20 columns at MIN_VIEWPORT, because history-pane.ts:41 spends 36 of 72 columns on a message UUID before the body. Full package afterwards: 74 test files reported against 74 counted on disk with a routed find, 502/502 tests, exit 0, 221.04s, zero failure markers in the raw log. Tree unchanged: `git diff --stat -- apps packages docs deploy` is empty, and the only untracked addition is the new test file.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Drive the real console over the real cli.js, against a real relay: register a profile from the console's own checklist through to a confirmed contact",
+      "status": "met",
+      "evidence": "apps/cli/test/e2e/console-real-cli.test.ts, green 3/3. The console is `dist/tui.js` spawned with `--cli <project>/apps/cli/dist/cli.js`; every child it runs is the real CLI, and the relay is the real Go binary on a free loopback port. All five steps are driven from keystrokes and each is asserted on the console's own activity line: `doctor → INVALID_CONFIGURATION (exit 2)`, `init → ok (exit 0)`, `relay publish → ok (exit 0)`, `contact export → ok (exit 0)`, `contact import → ok (exit 0)`, `doctor → ok (exit 0)`. The import is confirmed through the modal on the four identifiers the real `contact import` printed on stderr, each awaited by value against the peer's card on disk (identity_id, device_id, signal_identity_key), and step 5's `doctor` completes only on a non-zero contact_count, so the pin reached the real encrypted store rather than only the screen."
+    },
+    {
+      "criterion": "Compose and send a message from the console, then verify it arrived by reading it on the other side",
+      "status": "met",
+      "evidence": "Same file. `[3]` (conversation pane), `[c]` (select the contact the trust modal produced), `[w]` (compose), the body typed as keystrokes, Enter -> `send → ok (exit 0)`. The body travels on the child's stdin: `buildArgv` puts no `--text` on a send, and the REAL CLI's `resolveSendBody` read it, which no fake had ever proven. The arrival assertion is made on the PEER: `poll` then `history --with <alice>` through the real CLI returns exactly one entry, `direction: inbound`, `plaintext` byte-equal to what was typed into the console."
+    },
+    {
+      "criterion": "AC10's second direction: a message received",
+      "status": "met",
+      "evidence": "The peer sends a reply through the real CLI; the console polls with `[p]` (`poll → ok (exit 0)`), reads with `[h]` (`history → ok (exit 0)`), and the reply appears in the console's own painted frame. Alice's store is then read independently through the CLI and holds exactly `[fromConsole, reply]` in that order -- so what the console painted is what the store holds, not an echo (AC2's shape, on the real thing)."
+    },
+    {
+      "criterion": "Any step that could not be driven is named as an AC1 or AC10 miss rather than worked around silently",
+      "status": "met",
+      "evidence": "Three are named, as findings F-004 (store key must exist in the console's environment before launch -- AC1 miss, and the run itself had to supply it from outside), F-005 (no real TTY: the console is driven over a pipe and takes the MIN_VIEWPORT fallback, so raw mode and a real terminal size are unexercised -- AC1 miss), and F-006 (no tailnet, no second machine, no `depr`, no second human -- AC10's deployment half, unreachable from a harness). Nothing was worked around: the harness supplies what it can and the rest is recorded."
+    },
+    {
+      "criterion": "Verify the escape fix at 0d97cbc by mutation: put the raw code back and confirm the specification catches it",
+      "status": "met",
+      "evidence": "`failed: paintable(outcome.code)` -> `failed: outcome.code` at tui-shell.ts:657. tui-shell.outcomeEscape.test.ts goes 6 failed / 1 passed of 7, naming U+001B in profile.setup, U+001B in the frame at all three viewports, U+009B and U+202E, and the filter-not-discard pair. Across the whole src/tui scope: 1 file failed / 32 passed (33), 6 tests failed / 324 passed (330) -- only the specification catches it. Reverted and byte-compared against the original."
+    },
+    {
+      "criterion": "Try to find a route the specification does not cover",
+      "status": "met",
+      "evidence": "Found: F-002. Seven more mutations, one per remaining paintable() boundary, were all killed (see metrics.mutations), so no FILTERED boundary is unpinned. The route that is open is the one with no boundary: `parseOptions` (main.ts:88-137) writes `--label`, `--relay-url`, `--card` and `--profile` straight into ProfileView, and a routed rg for `paintable` in main.ts and state.ts returns zero matches. Measured live against dist/tui.js: 4 paints, 12 ESC[2J sequences, 8 injected from argv. F-001 (the history pane elides a received body after 19-20 columns) is the second thing nobody was looking for, and it was found by running the console for real rather than by mutation."
+    },
+    {
+      "criterion": "Change no source file except as a mutation reverted in the same step, and prove the tree unchanged",
+      "status": "met",
+      "evidence": "`git diff --stat -- apps packages docs deploy` prints nothing. `git status --short` shows only the two flow files that were already modified at session start (flow.json, journal.md) plus the untracked `apps/cli/test/e2e/console-real-cli.test.ts`. Each of the eight mutations was reverted with `git checkout --` and the restored file was byte-compared against the pre-mutation bytes inside the same script (metrics.mutations[].reverted, all true)."
+    },
+    {
+      "criterion": "Timeouts come from apps/cli/test/childProcessTimeouts.ts",
+      "status": "met",
+      "evidence": "The new file imports CLI_CHILD_TIMEOUT_MS (every per-child wait and every frame wait), CLI_TEST_TIMEOUT_MS (the relay `go build`) and E2E_TEST_TIMEOUT_MS (the test and the beforeAll hook). No millisecond literal is introduced except the three bounded loopback/teardown guards copied verbatim from two-process.test.ts, which the same directory already uses."
+    },
+    {
+      "criterion": "Reported file counts checked against files on disk",
+      "status": "met",
+      "evidence": "A routed `find src test -name '*.test.ts' -o -name '*.test.mjs'` lists 74 files (33 under src/tui, 8 under test/e2e). vitest reported `Test Files 74 passed (74)` and `Tests 502 passed (502)` at exit 0, so nothing was lost this run; the raw log was searched for the `×` marker and returned zero, and the three `FAIL` hits are the substring inside passing test names such as PERSISTENCE_FAILURE."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T25-verify-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/test/e2e/console-real-cli.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The AC1/AC10 end-to-end test. Drives dist/tui.js over dist/cli.js against the real relay binary, with a second real profile as the peer: registration from the console's checklist, a message sent and read on the other side, a message received and read inside the console, Ctrl-C exit 0.",
+      "hash": "e66cac660acebc28491f2d7054af86bd55daf0a3243600dcfc8e7236ffd3b9ba"
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/test/e2e/console-real-cli.test.ts", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T25-verify#F-001",
+      "reviewer": "004-T25-verify",
+      "severity": "major",
+      "file": "apps/cli/src/tui/history-pane.ts",
+      "line": 41,
+      "symbol": "buildHistorySnapshot",
+      "problem": "The console's only surface for reading a message elides the body. `buildHistorySnapshot` formats one entry as `${sequence}  ${direction}  ${messageId}  ${plaintext}`, `formatHistoryLines` indents it by two more columns, and `messageId` is a 36-character UUID. At MIN_VIEWPORT (72x16 -- which is exactly what the console falls back to when stdout reports no size, and one column-count above an 80-column terminal) the prefix costs 53 columns for an `outbound` row and 52 for an `inbound` one, leaving 19 and 20 columns for the message body.",
+      "impact": "AC10 requires that a message received is recorded as working. It arrives, is decrypted, is committed to the store, and the operator cannot read it: the pane shows the first 19-20 characters and stops, with no scroll, no wrap, no detail view and no way to widen the column from inside the console. The one thing an operator opens the history pane to do is the thing the pane will not do. This is not a hypothetical -- it is how this defect was found: the first run of the new end-to-end test failed waiting 45 seconds for a 51-character message body that had already arrived, and the captured frame reads `  2  inbound  cb926153-a958-4419-96af-346282953f1d  CONSOLE_E2E_IN_b9cf4`.",
+      "suggested_fix": "Spend the 36 columns on the body rather than on an identifier the operator never quotes: drop `messageId` from the row (it is already available on demand and is not a comparison value the way the four trust identifiers are), or truncate it to a short prefix, or give the body its own continuation row the way `renderModal` gives each identifier its own line for exactly this reason ('a modal that elided the middle of a base64url key would look correct and verify nothing', modal-host.ts:109-113). Whichever is chosen, the property to pin is that a body of at least the CLI's own minimum interesting length is painted in full at MIN_VIEWPORT.",
+      "evidence": "Measured on a live run of dist/tui.js against dist/cli.js and the real relay, transcript captured whole to a file and the last frame decoded line by line: `  1  outbound  37ffccdc-5428-4ae6-87da-bcdd8fb42ec5  CONSOLE_E2E_OUT_ea2` and `  2  inbound  cb926153-a958-4419-96af-346282953f1d  CONSOLE_E2E_IN_b9cf4`, each exactly 72 code points. The full bodies were `CONSOLE_E2E_OUT_<uuid>` and `CONSOLE_E2E_IN_<uuid>` (51 and 50 characters); the CLI read both back in full from both stores in the same run, so the loss is the pane's alone.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/history-pane.ts:41 (the row format that composes a body into a line)",
+          "apps/cli/src/tui/history-pane.ts:63 (the two-column indent applied to every row)",
+          "apps/cli/src/tui/shell-chrome.ts:39 (MIN_VIEWPORT = 72x16, the width the pipe fallback and the smallest supported terminal both get)"
+        ],
+        "enumeration_method": "A routed rg over apps/cli/src/tui for the pane formatters: `buildHistorySnapshot` is the only function in the console that composes a message body into a painted line, and `formatHistoryLines` is its only caller. The rejection, mailbox, profiles and health panes carry no plaintext at all (history-pane.ts:7-15 states the rule and the CLI enforces it by requiring `history --with`), so the class has the one member and its two width contributors."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T25-verify#F-002",
+      "reviewer": "004-T25-verify",
+      "severity": "major",
+      "file": "apps/cli/src/tui/main.ts",
+      "line": 92,
+      "symbol": "parseOptions",
+      "problem": "The eighth route, and the one the escape-fix specification cannot reach. Every filtered boundary in the console is now pinned by a test (all seven mutations below were killed), but the composition root applies NO boundary at all: `parseOptions` writes `--label`, `--relay-url`, `--card` and `--profile` verbatim into `ProfileView`, and a routed rg for `paintable` returns zero matches in main.ts and zero in state.ts. `renderFrame` then paints the label in the header on every frame, the relay URL on the health line, and the card path inside the trust modal (`card: ${modal.cardPath}`, modal-host.ts:120) and prefilled into the compose row (`initialBuffer`, tui-shell.ts:296). AC6 states the property as one of `renderFrame` -- 'stays pure, total, deterministic, escape-free' -- and it does not hold over the states this route can build.",
+      "impact": "The frame is still exactly rows-by-cols, so every shape assertion in the package passes while the terminal executes the sequence -- the same shape of hazard T18's F-001 measured for the CLI's error code, at a place no test looks. The argv is nominally the operator's own, which is why this is not a blocker, but two things stop it being purely theoretical: the runbook launches the console from wrapper scripts (`echolet-try.sh`, the `depr` peer wrapper) where `--label` and `--relay-url` come from shell variables rather than from a human typing them, and `--card <path>` is a FILENAME CHOSEN BY WHOEVER SENT THE CARD, which puts a correspondent's bytes on the operator's screen through the one modal on this surface whose entire purpose is to be read carefully. The console's own compose row filters the same card path when the operator types it (`input-insert`, tui-shell.ts:371); the launch flag does not.",
+      "suggested_fix": "Apply the existing predicate at the one place these values become state, matching every other writer: filter `label`, `relayUrl`, `contactCardPath` and `profileDir` through `paintable` in `parseOptions`/`assign` before they reach `ProfileView`, and `relayUrl` again where `createInitialState` builds `health`. Do not add a second filter in the renderer -- tui-shell.ts:832-833 argues that case, and the outcomeEscape specification's own header rejects a pane-side fix for the same reason. Pin it the way tui-shell.outcomeEscape.test.ts pins the CLI-code route: start from an argv string, assert the STATE first and the frame second.",
+      "evidence": "Measured against the shipped binary, not reasoned about: dist/tui.js launched with `--label 'A<ESC>[2JB'` and `--relay-url 'http://127.0.0.1:1<ESC>[2J9999'` painted 4 frames and emitted 12 `ESC[2J` sequences. Each paint legitimately writes exactly one `ESC[H` and one `ESC[2J` (tui-shell.ts:816, HOME); the counts are 4 and 12, so 8 screen-clears were injected from argv -- two per frame, one from each flag. The console exited 0 on Ctrl-C with empty stderr, so nothing refused the input. Routed rg: `paintable` has 0 matches in apps/cli/src/tui/main.ts and 0 in apps/cli/src/tui/state.ts.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/main.ts:96-99 (assign: --label, --relay-url, --store-key-env, --card)",
+          "apps/cli/src/tui/main.ts:112-127 (--profile: profileDir, and the label default)",
+          "apps/cli/src/tui/tui-shell.ts:916 (the modal's cardPath and profileLabel, passed through unfiltered while the four identifiers beside them are filtered)",
+          "apps/cli/src/tui/tui-shell.ts:296 (initialBuffer prefills the compose row from contactCardPath)",
+          "apps/cli/src/tui/state.ts createInitialState (health.relayUrl)"
+        ],
+        "enumeration_method": "Every string field of ProfileView was traced to its writer: `identityId`, `deviceId` and `contactCount` are written by applyOutcome and filtered there; `setup[].failed` is filtered at foldSetup; `published` and `state` are not strings; `label`, `profileDir`, `relayUrl`, `storeKeyEnv` and `contactCardPath` are written only by parseOptions, which a routed rg confirms contains no call to paintable. The modal's two unfiltered fields were found the same way -- paintableIdentifiers covers `identifiers` and nothing covers `cardPath`/`profileLabel` on the line above it."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T25-verify#F-003",
+      "reviewer": "004-T25-verify",
+      "severity": "info",
+      "file": "apps/cli/src/tui/failure-text.ts",
+      "line": 311,
+      "symbol": "explain",
+      "problem": "`explain` deliberately returns the CLI's `code` UNFILTERED while filtering the same string into `sentence` and `action` ('the echoed `code` field is left alone', :26). That is defensible as written, but it means the module exports a field that must never be painted, with nothing but its doc comment saying so.",
+      "impact": "Latent, not live. Today there is exactly one production caller -- `outcomeLine` (tui-shell.ts:789) -- and it uses only `.sentence` and `.action`, after which `note()` filters the whole composed line. A second caller that painted `.code` would reopen precisely the hole 0d97cbc closed, and no test would catch it: the outcomeEscape specification starts from a `CliOutcome` and never calls `explain` directly.",
+      "suggested_fix": "Either rename the field to say what it is for (`codeForComparison`), or add one case to failure-text.test.ts asserting that `explain`'s `code` is byte-identical to its input AND that `sentence`/`action` are filtered -- which pins the asymmetry as intentional rather than leaving the next reader to infer it from prose.",
+      "evidence": "Routed rg for `explain(` over apps/cli/src: two production matches, both in failure-text.ts and tui-shell.ts:789; the remaining 35 are in failure-text.test.ts and tui-shell.exitClassMatrix.test.ts. tui-shell.ts:790 composes `${head}  ${text.sentence} ${text.action}` and `note` (tui-shell.ts:845) applies paintable to the result.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-004",
+      "global_id": "004-T25-verify#F-004",
+      "reviewer": "004-T25-verify",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/main.ts",
+      "line": 262,
+      "symbol": "withStoreKeyPresence",
+      "problem": "AC1 MISS, now forced by an actual run rather than left as an open question (004-T18 Q-001). The end-to-end test could not create the store key from inside the console: the console cannot generate it, cannot be told it, and `withStoreKeyPresence` is computed once at startup and never recomputed, so a key created after launch is invisible until the console is restarted. The harness had to put the variable in the console's environment before spawning it -- which is exactly 'a step that still needed a terminal outside the console'.",
+      "impact": "AC10's last sentence requires such a step to be named as a miss against AC1. It is now named, on evidence: the run that satisfies every other clause of AC1 did so only because the key was supplied from outside. Cost is one shell command plus one restart, paid by every fresh operator once.",
+      "suggested_fix": "Not a code change this dispatch should make -- the flow raised it for the user and it is still theirs to answer. What has changed is that it is no longer arguable as a precondition outside the five-step list: an end-to-end run had to reach outside the console to satisfy it.",
+      "evidence": "apps/cli/test/e2e/console-real-cli.test.ts spawns dist/tui.js with `env: { ...process.env, [ALICE_KEY_ENV]: options.storeKey }`. The test asserts the console then does NOT print `export <VAR>=`, which is the console's own recipe for the step it cannot perform. main.ts:262 calls withStoreKeyPresence once, inside the `createInitialState` argument, and nothing recomputes it.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-005",
+      "global_id": "004-T25-verify#F-005",
+      "reviewer": "004-T25-verify",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 809,
+      "symbol": "runTuiShell",
+      "problem": "AC1 MISS (harness limit, stated rather than worked around): the console was driven over a PIPE, not a pty. `io.stdout.columns` is therefore undefined and every frame in this run took the MIN_VIEWPORT fallback (72x16); `setRawMode` is optional-called and does nothing on a pipe; the alternate-screen enter/exit sequences were written but never interpreted by a terminal.",
+      "impact": "Everything this test proves about the console is proved at one viewport, with no raw mode and no terminal. AC8's 'at any viewport, and in any state' remains carried forward from earlier flows rather than re-measured here, and F-001's elision is stated at MIN_VIEWPORT because that is the width this harness can produce -- a real 80-column terminal would leave 27-28 columns for the body rather than 19-20, which is better and still not enough.",
+      "suggested_fix": "If a pty-driven case is wanted, drive dist/tui.js through a pseudo-terminal so `columns`/`rows` are real and resize can be exercised; that is a new dependency and a separate slice, not something to bolt onto this file.",
+      "evidence": "The harness spawns with `stdio: ['pipe','pipe','pipe']`. Every captured frame is exactly 72 code points wide and 16 rows tall (decoded line by line from the transcript), which is MIN_VIEWPORT as defined at shell-chrome.ts:39.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-006",
+      "global_id": "004-T25-verify#F-006",
+      "reviewer": "004-T25-verify",
+      "severity": "minor",
+      "problem": "AC10 MISS (harness limit): the deployment half of AC10 is unreachable from a test. There is no tailnet, no second machine, no `depr`, and no second human. The relay is the real binary but it runs on 127.0.0.1 in a temporary data directory, and the peer is a second profile on this machine driven by this process.",
+      "impact": "AC10 as frozen asks for 'a live run against the real relay on the tailnet, with the second user on depr'. What now exists is the PROTOCOL half of it, automated and repeatable: registration, a message sent, a message received, both directions, against the real relay binary and the real CLI, with the arrival proved by reading the other side's store. What is still owed is the transport-and-operator half -- TLS on the tailnet, a relay someone else deployed, and a second person who has not read this code.",
+      "suggested_fix": "Record the automated half as satisfying AC1's 'real driven CLI process' clause outright, and keep AC10 open pending an operator-run session with `depr`. The e2e file's own header states this boundary so a later reader does not mistake one for the other.",
+      "evidence": "apps/cli/test/e2e/console-real-cli.test.ts brings the relay up with `ECHOLET_HTTP_ADDR=127.0.0.1:<free port>` and a temporary `ECHOLET_DATA_DIR`, and both profiles live under one `mkdtempSync` directory. No flow-directory file records a tailnet run, which is what T7, T12 and T18 each independently found.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-007",
+      "global_id": "004-T25-verify#F-007",
+      "reviewer": "004-T25-verify",
+      "severity": "info",
+      "file": "apps/cli/src/tui/shell-chrome.ts",
+      "problem": "The header overflow t20-address-book-design.md measured on paper is confirmed against the running binary: at 72 columns the header reads `echolet operator · alice · 1 profiles  2 mailbox [3 history] 4 rejection` -- pane 4's name is cut mid-word and pane 5 (`health`) has no tab at all, even though `[5]` still selects it and `?` still advertises it.",
+      "impact": "None new -- item 5 of the wave report's remaining-work list already names this as a live, present-tense defect independent of the address-book decision. Recorded here only because it is now measured on a real frame from the shipped console rather than computed from the layout, which removes any question about whether the arithmetic matched reality.",
+      "suggested_fix": "The rank-based header mitigation t20 already specifies, mirroring the footer's `fitFooter`. Unchanged by this dispatch.",
+      "evidence": "Frame captured whole from a live run and decoded: row 2 is `echolet operator · alice · 1 profiles  2 mailbox [3 history] 4 rejection`, exactly 72 code points, with no `5 health`.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "F-001: should the message id come off the history row, be shortened, or should the body get its own continuation line?",
+      "why": "The console's only reading surface loses the message after 19-20 characters at the minimum viewport, and the three fixes trade differently: dropping the id costs the runbook §9 side-by-side comparison (the same messageId appearing as outbound on one side and inbound on the other), shortening it keeps a weaker form of that comparison, and a continuation row costs body rows in a pane that already has few. This is a design choice about what the pane is for, not a defect with one correct repair.",
+      "options": [
+        { "id": "drop-id", "label": "Drop messageId from the row; recover the full 36 columns for the body" },
+        { "id": "short-id", "label": "Show a short messageId prefix (8 characters), keeping the §9 comparison in weakened form", "recommended": true },
+        { "id": "continuation", "label": "Give the body its own row beneath the metadata, as renderModal does for each identifier" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q-002",
+      "question": "F-002: is the console's own argv inside AC6's escape-free class, or outside it as the operator's own input?",
+      "why": "It reaches the frame either way, and the measurement is not in doubt (8 injected screen-clears over 4 paints). What is in doubt is whether that is a defect or an accepted boundary: --label and --relay-url are the operator's, but --card is a filename a correspondent chose, and it is painted inside the one modal whose purpose is careful reading. The fix is one line per field at one function; the question is whether the criterion asks for it.",
+      "options": [
+        { "id": "filter-all", "label": "Filter every parseOptions string, matching every other writer into the state", "recommended": true },
+        { "id": "filter-card", "label": "Filter only contactCardPath, on the ground that only it carries a third party's bytes" },
+        { "id": "out-of-class", "label": "Record argv as outside AC6's class and pin that decision in a test comment" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_changed": 0,
+    "test_files_changed": 1,
+    "typecheck_exit_code": 0,
+    "e2e_runs": [
+      { "attempt": 1, "note": "long message markers; failed waiting for the reply body in the console's history pane after 45s. Every step before it -- registration, send, and the peer's decrypted read -- passed. This is how F-001 was found.", "file_duration_s": 53.6, "vitest_exit_code": 1 },
+      { "attempt": 2, "note": "same, re-run with the painted transcript captured whole to a file so the frame could be decoded line by line. Same failure, same point.", "file_duration_s": 53.5, "vitest_exit_code": 1 },
+      { "attempt": 3, "note": "markers sized to fit the pane's 19/20 remaining columns; full-fidelity assertion moved to the store, where no pane can elide it.", "file_duration_s": 8.6, "test_duration_s": 6.9, "vitest_exit_code": 0 },
+      { "attempt": 4, "file_duration_s": 9.3, "test_duration_s": 6.1, "vitest_exit_code": 0 },
+      { "attempt": 5, "file_duration_s": 7.6, "test_duration_s": 6.1, "vitest_exit_code": 0 }
+    ],
+    "mutations": [
+      { "id": "M1-foldSetup-failed", "site": "tui-shell.ts:657 `failed: paintable(outcome.code)` -> `failed: outcome.code`", "scope": "src/tui", "files": "1 failed | 32 passed (33)", "tests": "6 failed | 324 passed (330)", "killed": true, "reverted": true, "note": "the 0d97cbc fix, independently re-verified. tui-shell.outcomeEscape.test.ts alone: 6 failed | 1 passed (7). No other file in the package catches it." },
+      { "id": "M2-modal-identifiers", "site": "tui-shell.ts:427 paintableIdentifiers clean() -> identity", "scope": "src/tui", "files": "1 failed | 32 passed (33)", "tests": "2 failed | 328 passed (330)", "killed": true, "reverted": true },
+      { "id": "M3-activity-note", "site": "tui-shell.ts:845 note() drops paintable", "scope": "src/tui", "files": "1 failed | 32 passed (33)", "tests": "4 failed | 326 passed (330)", "killed": true, "reverted": true },
+      { "id": "M4-doctor-identity", "site": "tui-shell.ts:718 identityId written raw from the child's JSON", "scope": "src/tui", "files": "2 failed | 31 passed (33)", "tests": "2 failed | 328 passed (330)", "killed": true, "reverted": true },
+      { "id": "M5-history-plaintext", "site": "tui-shell.ts:589 a correspondent's decrypted body written raw", "scope": "src/tui", "files": "2 failed | 31 passed (33)", "tests": "9 failed | 321 passed (330)", "killed": true, "reverted": true },
+      { "id": "M6-rejection-fields", "site": "tui-shell.ts:561 envelopeId/code written raw", "scope": "src/tui", "files": "2 failed | 31 passed (33)", "tests": "2 failed | 328 passed (330)", "killed": true, "reverted": true },
+      { "id": "M7-compose-insert", "site": "tui-shell.ts:371 input-insert drops paintable (AC7's boundary)", "scope": "src/tui", "files": "3 failed | 30 passed (33)", "tests": "19 failed | 311 passed (330)", "killed": true, "reverted": true },
+      { "id": "M8-readIdentifiers-devicepubkey", "site": "main.ts:172 device_pubkey forced to undefined, so the trust modal is incomplete", "scope": "src/tui", "files": "1 failed | 32 passed (33)", "tests": "1 failed | 329 passed (330)", "killed": true, "reverted": true, "note": "the trust gate refuses a confirmation on three identifiers, and a test says so." }
+    ],
+    "argv_escape_probe": {
+      "binary": "apps/cli/dist/tui.js",
+      "flags": "--label 'A<ESC>[2JB' --relay-url 'http://127.0.0.1:1<ESC>[2J9999'",
+      "paints_home": 4,
+      "clear_screen_sequences": 12,
+      "injected_from_argv": 8,
+      "console_exit_code": 0,
+      "console_stderr": "",
+      "note": "Each paint writes exactly one ESC[H and one ESC[2J (tui-shell.ts:816). 12 - 4 = 8 sequences arrived from argv: two per frame, one per flag."
+    },
+    "full_package_run": {
+      "files_on_disk": 74,
+      "files_reported": 74,
+      "tests": 502,
+      "passed": 502,
+      "failed": 0,
+      "vitest_exit_code": 0,
+      "duration_s": 221.04,
+      "failure_markers_in_raw_log": 0,
+      "rpc_timeout_errors": 0,
+      "note": "No report was lost this run, unlike T22's three attempts. The raw log was searched for the `×` marker (0 matches); the three `FAIL` hits are the substring inside passing test names such as PERSISTENCE_FAILURE."
+    },
+    "tree_state": {
+      "git_diff_stat_apps_packages_docs_deploy": "empty",
+      "git_status_short": "M .metaproject/.../flow.json, M .metaproject/.../journal.md (both already modified at session start), ?? apps/cli/test/e2e/console-real-cli.test.ts",
+      "mutation_reverts": "8 of 8, each byte-compared against the pre-mutation file inside the same script"
+    },
+    "machine_idle": false,
+    "load_note": "10 cores, never idle: the operator's own VM and browser run throughout. 1-minute load average at each measurement, in order: 22.23 (session start) -> 12.71 (before e2e attempt 1) -> 23.60 (before attempt 3) -> 17.06 (after attempt 5) -> load through the mutation sweep unmeasured but bounded by the runs either side -> 221.04s full-package run finishing at a 1-minute average of 32.11 (five-minute 48.03, fifteen-minute 37.59). Every figure quoted above was taken with the machine in that state.",
+    "discipline": "Every vitest and tsc invocation was redirected whole to a scratchpad log file and read back; nothing was piped through head or tail. Every exit code was captured with `echo \"EXIT_X=$?\"` appended by `>>` on the line immediately after the command in the same shell invocation, never through a wrapper whose own last command could report its own status. The 74-file package count and the 33-file src/tui count were taken from a routed `find` over the working tree and compared against vitest's own summary. The `paintable` search whose gdctx summary could have truncated was read from the raw log. The mutation sweep reverted with `git checkout --` and then byte-compared the restored file, so 'reverted' is a measurement rather than an assumption.",
+    "routing_audit": {
+      "graph_used": "no -- not-relevant: the dispatch named the flow files, the acceptance criteria and the fix site (tui-shell.ts:713 as of 0d97cbc, line 657 on this tree); every other file was reached by reading the two driven-test harnesses the dispatch itself pointed at (test/e2e/two-process.test.ts, src/tui/main.registration.processDriven.test.ts). The graph predates this session's commits.",
+      "wiki_used": "no -- not-relevant: the questions were 'does the shipped console work against the shipped CLI and a real relay' and 'does the fix survive mutation', both settled by execution rather than by architecture.",
+      "ctx_used": "yes -- keryx ctx run for every git, find, ls, shasum, uptime and node probe; keryx ctx rg for every code search; keryx ctx read for the two contract schemas and the mutation log.",
+      "raw_rg_used": "no",
+      "testing_context_used": "no -- not-relevant: the dispatch named the directory (apps/cli/test/e2e), the two files to model the harness on, and the timeout module; no test-selection question existed.",
+      "memory_used": "no -- not-relevant: 004-T24's wave report, the frozen acceptance criteria and 004-T22's result carried the full history this task needed."
+    }
+  },
+  "timestamp_utc": "2026-09-09T07:05:00Z"
+}
