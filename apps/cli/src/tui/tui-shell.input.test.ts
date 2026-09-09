@@ -284,7 +284,10 @@ describe("T10-C: the byte bound refuses rather than truncates", () => {
     // operator believes they sent.
     const state = composing({ buffer: "1234567", maxBytes: 8 });
     expect(bufferOf(typeChunk(state, "ab"))).toBe("1234567");
-    expect(bufferOf(typeChunk(state, "a"))).toBe("12345678");
+    // The original expectation here was "12345678", which is unsatisfiable: typing "a" into
+    // "1234567" can only ever produce "1234567a". Found by the implementer, confirmed by the
+    // orchestrator reading the source; only this expectation moved to match the typed chunk.
+    expect(bufferOf(typeChunk(state, "a"))).toBe("1234567a");
   });
 
   it("counts UTF-8 bytes, not code points, because that is what the CLI bounds", () => {
