@@ -1,0 +1,349 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "004-T18-verify-2026-09-09",
+  "dispatch_id": "004-T18-verify",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent verification of the registration slice (dc6f140 red, 8a92ec8 reconciliation, bd10b1d implementation) at tree 860005b. The store-key probe is SOUND against the five spellings the specification names — comparison, spread, Object.entries, destructure and serialise were each injected into main.ts:153 and each was killed, naming withStoreKeyPresence — but it has one hole: Object.getOwnPropertyDescriptor(process.env, name)?.value yields the 32 bytes with the Proxy's get trap never firing, and that mutant passed all three specification files (exit 0). No other path can reach the value: the shipped console bundle contains exactly two process.env references, the Object.hasOwn presence test and the env handed to a spawned child. The startup-probe correction did NOT weaken main.processDriven.test.ts: spawning a second unreserved child at startup is caught (expected [ 'poll' ] to deeply equal []) and skipping the startup child is caught (timed out waiting for a reserved doctor child). The keystroke fix is real — reverting it reproduces the measured hang — but two of its four claimed properties are pinned by nothing: splitting the ESC sequence survives all 284 src/tui tests, and under it a left arrow (ESC [ D) spawns doctor; splitting while the compose row is open also survives, and under it a paste containing a carriage return submits the draft mid-paste. AC2's optimistic echo is unchanged at tui-shell.ts:768. The most serious find is outside the slice's stated scope and inside the surface it added: the CLI's error.code is kept verbatim by parseCliOutcome, foldSetup stores it into profile.setup without the paintable() boundary that tui-shell.ts:826-837 documents for exactly this field, and profiles-pane.ts:85 paints it — a raw ESC reaches the frame, which is AC6's escape-free property broken on the new checklist. Full package 455/455 across 68 files reported against 68 counted on disk, exit 0, 231.6s; tsc --noEmit exit 0. Every mutation reverted in the same step and the tree proved unchanged.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC1 — a person completes registration from inside the console alone, demonstrated against a real driven CLI process",
+      "status": "partial",
+      "evidence": "The five steps AC1 lists (init, relay publish, contact export, contact import through the trust modal, confirming doctor) are driven end to end from keystrokes in main.registration.processDriven.test.ts, one child at a time, with every argv asserted — I re-ran it green and killed five mutations against it. Two shortfalls. (1) The driven child is a FAKE CLI written by the test (FAKE_CLI, main.registration.processDriven.test.ts:101-143), not apps/cli/dist/cli.js; nothing anywhere proves the real CLI accepts the argv the console emits, and a routed search over apps/cli/test/e2e returns zero matches for 'tui' or 'console'. 'A real driven CLI process' is satisfied as a real process, not as the real CLI. (2) Step 0 requires the operator to run `export <VAR>=...` in another shell AND restart the console — storeKeyPresent is computed once in main.ts:262 and never recomputed, so a key exported after startup is invisible until restart. The pane says so honestly ('run this in your shell, then restart the console', profiles-pane.ts:123), but AC10 requires such a step be NAMED AS A MISS against AC1, and bd10b1d's message calls it 'by design and permanently' instead."
+    },
+    {
+      "criterion": "AC2 — what the console shows after a send is what the store holds, not an optimistic local echo",
+      "status": "not_met",
+      "evidence": "Unchanged since the T12 verification. tui-shell.ts:768, applyOutcome's send case, is still `return { ...next, mailbox: { ...next.mailbox, outboxPending: next.mailbox.outboxPending + 1 } }` — a count the console computes itself and never reconciles against the store, which is exactly what the criterion forbids. A routed search for outboxPending over apps/cli/src returns that one increment and no reconciliation. The same shape appears one case above at tui-shell.ts:756, `inboxReceived: next.mailbox.inboxReceived + asNumber(data.received, 0)`, which accumulates poll deltas locally rather than reading a store total. No `history` follow-up runs after a send."
+    },
+    {
+      "criterion": "AC3 — the plaintext body never appears in the argv or environment of any child; send takes the body on stdin and only that path",
+      "status": "met",
+      "evidence": "Re-checked by source audit rather than by fresh mutation (T12 killed three mutants here and I did not repeat them). The console bundle I built from src/tui/main.ts has exactly one spawn site; the body reaches the child only through `child.stdin.end(request.text, \"utf8\")` at main.ts:249, and main.ts:243-246 records why --text is deliberately not passed alongside it. main.sendChild.test.ts, which asserts the complete argv and the child's environment, is green in the 455/455 run. The registration suite additionally asserts `token.includes(operator.storeKey) === false` over every token of every real argv, and that the key still reached every child."
+    },
+    {
+      "criterion": "AC4 — the address book lists every pinned correspondent with trust state and the four comparison values in full",
+      "status": "not_applicable",
+      "evidence": "No such pane exists on this tree. PANE_IDS is profiles/mailbox/history/rejections/health and no key names a contact. The design landed as t20-address-book-design.md in fc5bb8f, after this slice. NOT APPLICABLE YET."
+    },
+    {
+      "criterion": "AC5 — every exit class presented accurately, proven over the command x exit-class matrix rather than sampled",
+      "status": "partial",
+      "evidence": "Totality now exists for ONE surface: profiles-pane.setup.test.ts:255-282 crosses the five child-spawning registration steps against all four failure classes (INVALID_CONFIGURATION 2, INVALID_CONTACT_CARD 3, RELAY_UNAVAILABLE 4, PERSISTENCE_FAILURE 5), and each case additionally asserts the pane reports no OTHER exit number. That is 20 real cases and it is genuine totality over the checklist. It is not AC5: the console's other commands (poll, send, history, contact) are covered by one sampled case in main.processDriven.test.ts, and the criterion's 'presented with a message that is accurate' is not met at all — the checklist prints the raw code and the exit number, which bd10b1d's own message lists as a known gap ('exit classes are shown as the CLI's code and number rather than in words')."
+    },
+    {
+      "criterion": "AC6 — flow 002/003 properties re-verified unchanged: renderFrame pure, total, deterministic, escape-free, exactly rows by cols; no key material in a frame or argv; the notice on every frame; one command in flight; the trust modal cannot confirm what was never painted",
+      "status": "not_met",
+      "evidence": "Escape-free is BROKEN on the surface this slice added, and I reproduced it: parseCliOutcome keeps error.code verbatim (cli-bridge.ts:143), foldSetup writes it into profile.setup with no filter (tui-shell.ts:713), and profiles-pane.ts:85 paints it, so renderFrame emits `step 1  create profile  init            X<ESC>[2JY (exit 2)` with a raw 0x1b in the row. See F-001. The remaining AC6 clauses hold on the evidence I ran: rows-by-cols and the notice are asserted over three viewports in profiles-pane.setup.test.ts:296-319; no key reached any argv or frame in the driven registration run; one-command-in-flight survived both of my startup mutations and my own coalesced-burst probe; and the 455/455 package run includes tui.keyMaterial.test.ts and the trust-modal gates."
+    },
+    {
+      "criterion": "AC7 — text the operator types cannot put a control character or an escape sequence into a frame, proven at the reducer boundary",
+      "status": "met",
+      "evidence": "The operator's own text is filtered where it becomes state, not in the renderer: tui-shell.ts:370, `const text = paintable(intent.text)` on the input-insert path, with paintable defined at 471 as a code-point filter. tui-shell.input.test.ts, tui-shell.externalText.test.ts and tui-shell.externalTextViewport.test.ts are green in the 455/455 run, and my own probe P4 confirmed an ESC-prefixed chunk in the compose row is refused rather than inserted. F-001 is a CLI-supplied channel, not operator-typed text, so it is charged to AC6 and not here."
+    },
+    {
+      "criterion": "AC8 — nothing the console can do denies the operator a way out, at any viewport and in any state",
+      "status": "partial",
+      "evidence": "Demonstrated for the states this slice touches, not re-proven over the totality the criterion states. Ctrl-C quits from a state with the compose row open and with the trust modal open — the registration harness's quit() uses Ctrl-C precisely because 'it is the one binding that survives an open compose row and an open modal' (main.registration.processDriven.test.ts:406-408), and all three driven cases closed on it. inputKey (tui-shell.ts:155) binds Ctrl-C and nothing else while composing. I did not re-run a viewport sweep against a command in flight, so the 'at any viewport, in any state' clause is carried forward from earlier flows rather than re-measured here."
+    },
+    {
+      "criterion": "AC9 — no test weakened, skipped, narrowed or deleted, and every fix lands after a test that failed for the right reason, with the ordering provable from git history",
+      "status": "partial",
+      "evidence": "The no-weakening half is CONFIRMED by mutation, which is the strongest form available: T17 changed exactly three lines in main.processDriven.test.ts (reserved 0->1 and two complete-list toEqual arrays), and both directions still bite — S1_secondChild (an extra unreserved io.runCli at startup) fails with `expected [ 'poll' ] to deeply equal []`, S2_noStartupChild fails with `timed out waiting for a reserved doctor child`. Neither list became a toContain and nothing was deleted. The git ordering also holds: at 8a92ec8 the test expects the startup doctor (`let reserved = 1`, `[\"doctor\",\"poll\",\"doctor\"]`) while tui-shell.ts contains zero occurrences of askWhatIsThere, so that commit is genuinely red and bd10b1d is the fix. The reservation is about authoring order rather than commit order: T17's own metrics record its measured baseline failures as reservation starvation caused by a startup child that already existed in the working tree, so the test was written against an already-implemented tree and committed ahead of it. T17 states this openly, which is why this is recorded and not charged as a violation."
+    },
+    {
+      "criterion": "AC10 — a live run against the real relay on the tailnet, with the second user on depr, recorded in both directions",
+      "status": "not_applicable",
+      "evidence": "No such record exists on this tree. A routed search over apps/cli/test/e2e returns no console or tui coverage, and the flow directory carries no live-run report. NOT APPLICABLE YET — and it is the criterion that would have caught AC1's fake-CLI gap and would be the place the store-key step is named as a miss."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T18-verify-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/main.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Mutated seven ways at line 153 and reverted each time; the store-key boundary under test.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Mutated six ways (startup child x2, keystroke splitting x4) and reverted each time.",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T18-verify#F-001",
+      "reviewer": "004-T18-verify",
+      "severity": "major",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 713,
+      "symbol": "foldSetup",
+      "problem": "The CLI's error.code reaches the registration checklist without the paintable() boundary the console defines for exactly that field, so a raw escape sequence is painted into a frame. parseCliOutcome keeps error.code verbatim by design (cli-bridge.ts:143, 'typed failure codes are kept verbatim'). tui-shell.ts:826-837 names the single boundary for that verbatim value and applies it: note() wraps every activity line in paintable(), with the comment 'Keeping the NAME distinguishable does not require keeping the BYTES paintable'. foldSetup, added by bd10b1d, writes `{ failed: outcome.code, exitCode: outcome.exitCode }` straight into profile.setup without passing through that boundary, and profiles-pane.ts:85 renders it as `${outcome.failed} (exit ${exitCode})`.",
+      "impact": "AC6's escape-free property is false on the surface this slice added. A frame row is emitted as `step 1  create profile  init            X<0x1b>[2JY (exit 2)`: the row is still exactly cols code points, so every width assertion in the suite passes while the terminal executes ESC[2J and clears the screen. This is the same hazard class flow 003's T12-T14 closed for correspondent-supplied text ('a correspondent can no longer steer the operator's terminal', 94899ef), re-opened on a new field. The existing escape-free test feeds only well-formed codes (profiles-pane.setup.test.ts:301 uses RELAY_UNAVAILABLE and PERSISTENCE_FAILURE), so the property is asserted only over inputs that could never violate it — the vacuity AC7 explicitly warns against.",
+      "suggested_fix": "Filter where the value becomes state, matching the rule note() already follows: `{ failed: paintable(outcome.code), exitCode: outcome.exitCode }` at tui-shell.ts:713 — or better, apply paintable to `code` once inside parseCliOutcome's failure return so every present and future consumer inherits it, which is the argument tui-shell.ts:832-833 makes for filtering at the one place text becomes state. Then add the hostile-code case to profiles-pane.setup.test.ts:296-319 so the escape-free assertion stops being vacuous.",
+      "evidence": "Reproduced with a driven probe on tree 860005b, since deleted. parseCliOutcome(JSON.stringify({ok:false,error:{code:`X${ESC}[2JY`}}), 2) -> outcome.code contains 0x1b (passes). applyOutcome(state, initRequest, outcome, t) -> JSON.stringify(profiles[0].setup) contains \\u001b (passes). renderFrame(next, {cols:120,rows:40}) -> the joined frame contains a 0x1b code point; the assertion `expected [ '\\u001b' ] to deeply equal []` failed, and the dumped frame row reads `step 1  create profile  init            X\\u001b[2JY (exit 2)`. The contrast holds: the same code on the activity line is filtered by note(). Whether the relay can drive the bytes of a code is a further question I did not settle — cli-bridge.ts:46 records that three refusals are reported under the relay's own name — but the console's own documented rule is that these bytes must be made paintable regardless of provenance, and the checklist breaks that rule.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:713 — foldSetup writes outcome.code into profile.setup UNFILTERED (the defect)",
+          "apps/cli/src/tui/tui-shell.ts:836 — note() wraps the composed activity line in paintable() (correct; the rule this violates)",
+          "apps/cli/src/tui/tui-shell.ts:617 — readRejections wraps envelopeId and code in paintable() (correct)",
+          "apps/cli/src/tui/tui-shell.ts:642-645 — readHistoryEntries wraps contactIdentityId, messageId and plaintext (correct)",
+          "apps/cli/src/tui/tui-shell.ts:744-745 — doctor's identity_id and device_id wrapped (correct)",
+          "apps/cli/src/tui/tui-shell.ts:907 — paintableIdentifiers on the trust modal's four values (correct), but cardPath and profileLabel on the same line are NOT wrapped; both are operator-supplied via argv or an already-filtered compose buffer, so they are noted rather than charged"
+        ],
+        "enumeration_method": "Routed rg for `paintable` over apps/cli/src/tui/tui-shell.ts, read from the raw log rather than the truncated summary: 15 matches, of which 8 are call sites. Every field of OperatorState that is written from a CliOutcome was then checked against that list; foldSetup's `failed` is the only CLI-derived string that reaches a frame without passing one. Confirmed from the other end by rendering a frame and finding a 0x1b in it."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "A temporary probe file under apps/cli/src/tui was run with `npx vitest run`; Q1 and Q2 passed and Q3 failed with `a control/escape byte from a CLI error code reached the painted frame: expected [ '\\u001b' ] to deeply equal []`, with the offending frame row printed. The probe was removed and `git status --porcelain -- apps/ packages/` returned empty.",
+        "verifier": "004-T18-verify"
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T18-verify#F-002",
+      "reviewer": "004-T18-verify",
+      "severity": "major",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 591,
+      "symbol": "splitKeystrokes",
+      "problem": "The rule that keeps an escape sequence whole — the ESC branch of splitKeystrokes — is pinned by no test. Replacing the whole function body with `return [...chunk]` (splitting every code point, ESC included) leaves all 284 tests under src/tui green, vitest exit 0.",
+      "impact": "Under that mutant a left arrow, ESC [ D, is decoded as three keystrokes ending in 'D', which decodeKey lower-cases to 'd' — the doctor binding — so an arrow key spawns a child against the encrypted store. A right arrow, ESC [ C, reaches the contact binding. bd10b1d's message states the property ('keeps everything from an ESC onward as a single keystroke so an arrow key does not become three typed letters') and the code is correct today, but nothing stops the next edit from removing it silently. This is the decay pattern the flow has already measured twice: 004-T12-verify F-001 on the submit busy gate, and flow 003 T25 on the paint gate.",
+      "suggested_fix": "Add a driven case beside tui-shell.submitSingleFlight.test.ts's drive() harness: press `${ESC}[D` on the profiles pane and assert the request list is empty; press `${ESC}[C` and assert the same. Both are pure — no clock, no process, no store — and each fails against the mutant and passes on the current tree.",
+      "evidence": "Mutation K2_splitEscape, `return [...chunk]` replacing the loop body at tui-shell.ts:586-597, run against `npx vitest run src/tui`: exit 0, 284/284 passed. The same mutant against my own probe failed with `an arrow key started a command: expected [ 'doctor' ] to deeply equal []`, which is what proves the mutant is behavioural and not equivalent. Reverted with `git checkout --`; tree confirmed clean.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:591 — the ESC branch of splitKeystrokes (unpinned)",
+          "apps/cli/src/tui/tui-shell.ts:976 — the compose-row guard on the same dispatch (also unpinned; F-003)",
+          "apps/cli/src/tui/tui-shell.ts:586-597 — the per-code-point split itself (PINNED, incidentally; see F-004)"
+        ],
+        "enumeration_method": "The keystroke fix has exactly three separable decisions, each isolated as its own mutation (K1/K4 no split, K2 split the escape, K3 split in compose) and each run against the whole src/tui suite. Two of the three survived. The site list is the three branches of one function plus its one call site, which is the whole of the changed behaviour in bd10b1d's shell dispatch."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "`npx vitest run src/tui` with K2 applied: exit 0, Test Files 28 passed (28), Tests 284 passed (284). Probe run with K2 applied: 1 failed | 6 passed, the failure naming `[ 'doctor' ]`.",
+        "verifier": "004-T18-verify"
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T18-verify#F-003",
+      "reviewer": "004-T18-verify",
+      "severity": "major",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 976,
+      "symbol": "runTuiShell stdin data handler",
+      "problem": "The rule that a chunk is NOT split while the compose row is open is pinned by no test. Replacing `current.input === undefined ? splitKeystrokes(text) : [text]` with an unconditional `splitKeystrokes(text)` leaves all 284 tests under src/tui green, vitest exit 0.",
+      "impact": "Under that mutant a paste stops being one insertion. For plain ASCII the buffer ends up identical, which is why the existing pure test 'inserts a whole pasted chunk, not merely its first code point' (tui-shell.input.test.ts:188) cannot see it — that test calls reduce directly and never crosses the impure dispatch where the split happens. The difference is real for any paste containing a control byte: a pasted body carrying a carriage return SUBMITS the draft at the newline and types the remainder into whatever state follows, so the operator sends half a message and cannot see where the rest went.",
+      "suggested_fix": "Add a driven case using the existing drive() harness: open the compose row, press a single chunk `hello\\rworld`, and assert the request list is empty and the buffer holds the whole string. It fails against the mutant and passes today.",
+      "evidence": "Mutation K3_splitInCompose against `npx vitest run src/tui`: exit 0, 284/284. The same mutant against my probe failed on `a paste containing a carriage return submitted the draft mid-paste`, which establishes the mutant is behavioural rather than equivalent. Reverted; tree confirmed clean.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:976 — the compose-row guard on the split (unpinned)",
+          "apps/cli/src/tui/tui-shell.ts:154-162 — inputKey, which decides what a whole chunk means once it is handed over (pinned by tui-shell.input.test.ts at the reducer, not through the shell)",
+          "apps/cli/src/tui/tui-shell.input.test.ts:188 — the existing paste test, which drives reduce and not the dispatch, and therefore cannot reach this branch"
+        ],
+        "enumeration_method": "Same three-branch enumeration as F-002. The claim that the existing paste test cannot see the mutant was checked by running the whole src/tui suite against it and observing exit 0, not by reading the test alone."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "`npx vitest run src/tui` with K3 applied: exit 0, 284/284 passed. Probe with K3 applied: exit 1, failing on the carriage-return paste case.",
+        "verifier": "004-T18-verify"
+      }
+    },
+    {
+      "id": "F-004",
+      "global_id": "004-T18-verify#F-004",
+      "reviewer": "004-T18-verify",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/main.registration.processDriven.test.ts",
+      "line": 553,
+      "symbol": "refuses to start step 1 when the store key is not in its environment",
+      "problem": "The one property of the keystroke fix that IS pinned is pinned incidentally, by a test about something else, and it reports the failure as a 45-second timeout rather than as a named assertion. Reverting the split entirely (K1, `return [chunk]`) is caught only by `press(ENTER); press(\"?\")` inside the store-key test, whose stated subject is step 0.",
+      "impact": "When the fix regresses, the suite says `timed out waiting for a frame containing \"key bindings\"` in a test named for the store key. A future reader looking at that failure has no reason to suspect keystroke coalescing, and the diagnosis cost is exactly the cost this project has already paid twice for false-red timeouts under load. It also means the burst property has no home: if that store-key test is ever narrowed, the fix loses its only cover.",
+      "suggested_fix": "Give the burst its own named driven case beside the other three — press `pd` as one chunk and assert the first command ran — so the regression reports as an assertion rather than a wait. My probe P1/P2/P3 are the shape; P3 in particular fails in 4ms where the current cover takes 45s.",
+      "evidence": "Mutation K1_noSplit against `npx vitest run src/tui`: exit 1, one failure, `AC1: registration is completed from inside the console alone > refuses to start step 1 when the store key is not in its environment ... timed out waiting for a frame containing \"key bindings\"`. K4_neverSplit, a different spelling of the same revert, produced the identical single failure. My probe caught the same mutants in 4ms with the message `the '?' after a coalesced Enter was lost`.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "Two independent mutations (K1, K4) each produced exactly one failing test, and it was the store-key test rather than any input test.",
+        "verifier": "004-T18-verify"
+      }
+    },
+    {
+      "id": "F-005",
+      "global_id": "004-T18-verify#F-005",
+      "reviewer": "004-T18-verify",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/main.registration.processDriven.test.ts",
+      "line": 161,
+      "symbol": "ENV_PROBE",
+      "problem": "The environment probe catches every value read that goes through the [[Get]] path and misses the one that goes through the property descriptor. `process.env` is replaced by a Proxy carrying only a `get` trap, so `Object.getOwnPropertyDescriptor(process.env, name)?.value` returns the 32 secret bytes with the trap never firing and `reads` staying empty.",
+      "impact": "The specification's headline claim is that the difference between presence and value is DETECTED rather than described. There is a spelling of the forbidden read that the detector passes. It is not the likeliest spelling an implementer would reach for — which is why this is minor and not major — but it is the one that most resembles the permitted `Object.hasOwn`, and an implementer optimising the presence test toward the descriptor path lands on it naturally.",
+      "suggested_fix": "Add a `getOwnPropertyDescriptor` trap to ENV_PROBE that records the calling frame when the descriptor it is about to return carries the key's value, and exclude the frames Object.hasOwn produces — or, more simply, have the trap return a descriptor with the value replaced by a sentinel when the caller is not node:child_process, so a value-read through that path yields the sentinel and every downstream assertion about the key fails loudly.",
+      "evidence": "Mutation M6_descriptor, `const present = Object.getOwnPropertyDescriptor(process.env, profile.storeKeyEnv)?.value !== undefined;` at main.ts:153, against `npx vitest run src/tui/main.registration.processDriven.test.ts`: exit 0, all three cases green. Independently confirmed that the trap cannot see it: a standalone Node run over a Proxy with only a get trap reported `descriptor value = \"sekritvalue\"` with `get trap fired: 0`. The control holds — M7_getOwnPropertyNames, which reaches the descriptor path but yields only NAMES, also passed, and that is correct behaviour rather than a hole.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "M6 applied and the specification file run: exit 0. The five spellings the specification names (M1 comparison, M2 spread, M3 Object.entries, M4 destructure, M5 JSON round-trip) were each applied and each produced exit 1 with `the console read the store key's VALUE`, so the probe is sound for the class it was built for and this is the boundary of that class.",
+        "verifier": "004-T18-verify"
+      }
+    },
+    {
+      "id": "F-006",
+      "global_id": "004-T18-verify#F-006",
+      "reviewer": "004-T18-verify",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/main.ts",
+      "line": 262,
+      "symbol": "main",
+      "problem": "Store-key presence is decided once, at startup, and can never be re-decided. withStoreKeyPresence runs inside the argument to createInitialState and there is no other call site, so a console started without the variable stays in that state for its whole life.",
+      "impact": "The pane's instruction is correct and honest — it says 'run this in your shell, then restart the console' — but the consequence is that AC1's step 0 costs the operator a full console restart, and the operator's own report of the problem ('register and write to someone from the console') is answered with a workflow that leaves and re-enters the console. It also means the six-step checklist is a five-step checklist plus a precondition, which is not how it reads on screen.",
+      "suggested_fix": "Nothing to fix in the code — a child cannot inherit a variable the parent's process.env never had, so the restart is real. The fix is to AC10's record and to the flow's own framing: name it as a miss against AC1 rather than as design, which is what AC10's last sentence requires.",
+      "evidence": "Routed rg for `withStoreKeyPresence|storeKeyPresent` over apps/cli/src returns one definition (main.ts:152), one call (main.ts:262), and read-only consumers in state.ts:254/278, profiles-pane.ts:117 and tui-shell.ts:521. profiles-pane.ts:123 is the line that tells the operator to restart.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "site-check",
+        "evidence": "The routed search enumerating every reader and the single writer, plus reading main.ts:262 in place.",
+        "verifier": "004-T18-verify"
+      }
+    },
+    {
+      "id": "F-007",
+      "global_id": "004-T18-verify#F-007",
+      "reviewer": "004-T18-verify",
+      "severity": "info",
+      "file": "apps/cli/src/tui/main.registration.processDriven.test.ts",
+      "line": 101,
+      "symbol": "FAKE_CLI",
+      "problem": "AC1 asks for a demonstration 'against a real driven CLI process'. Every driven console test in the package spawns a fake CLI the test writes to a temp file; none spawns apps/cli/dist/cli.js. There is no end-to-end coverage of the console at all.",
+      "impact": "The suite proves the console emits a particular argv and reacts correctly to a particular reply. It cannot prove the real CLI accepts that argv, prints the trust identifiers on stderr in the shape readIdentifiers expects, or exits with the classes the checklist renders. The one place those two halves have ever met is a manual run, and AC10's record of that does not exist yet.",
+      "suggested_fix": "Nothing in this slice. Record it against AC10 so the live run explicitly checks the five argvs the console emits against the real binary, and name any mismatch there.",
+      "evidence": "Routed rg for `tui|console` over apps/cli/test/e2e returns zero matches across seven e2e files. main.registration.processDriven.test.ts:341 passes `--cli fakeCli`; main.processDriven.test.ts:220 does the same. 004-T12-verify already recorded the neighbouring gap for the send path.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "verification": {
+        "verdict": "confirmed",
+        "method": "site-check",
+        "evidence": "The routed search over apps/cli/test/e2e returning zero matches, and the `--cli` argument in both driven harnesses.",
+        "verifier": "004-T18-verify"
+      }
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "Should the console's store-key step 0 be recorded as a miss against AC1, or is 'the operator creates the key in their own shell' a precondition that sits outside AC1's list of five steps?",
+      "why": "AC1 says 'without typing a CLI command in another terminal' and lists five steps, none of which is the key. AC10 says any step that still needed an outside terminal must be named as a miss against AC1. bd10b1d calls it 'by design and permanently'. The three readings give three different AC1 verdicts and only the user can settle which one the criterion meant.",
+      "options": [
+        { "id": "miss", "label": "Record it as a named AC1 miss, as AC10's wording requires", "recommended": true },
+        { "id": "precondition", "label": "Treat it as a precondition outside AC1's five steps, and say so in the criteria" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q-002",
+      "question": "Can the relay drive the BYTES of an error code the CLI reports under the relay's own name, or are those three codes drawn from a fixed local enum?",
+      "why": "It sets the severity of F-001. If the bytes are attacker-influenced, a correspondent or a hostile relay can clear the operator's screen through the registration checklist, and the finding is a blocker rather than a major. cli-bridge.ts:46 records that PREKEY_BUNDLE_UNAVAILABLE and two siblings are 'reported under the relay's own name', which is what raised the question; settling it needs a read of the relay protocol layer that this dispatch did not have scope for. The fix is the same either way, so this does not block the fix.",
+      "can_be_resolved_by_agent": true
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tree_verified_at": "860005b",
+    "head_at_finish": "fc5bb8f",
+    "head_moved_during_run": "yes — 82655bf (docs/STATUS_CURRENT.md) and fc5bb8f (t20 design + two dispatch results). `git diff --name-only 860005b..HEAD` touches only .metaproject/flows/004 and docs/STATUS_CURRENT.md, so apps/ and packages/ are byte-identical to the tree every measurement below was taken on.",
+    "source_files_changed": 0,
+    "test_files_changed": 0,
+    "mutations_applied": 13,
+    "mutations_killed": 10,
+    "mutations_survived": 3,
+    "mutations_reverted": 13,
+    "typecheck_exit_code": 0,
+    "baseline_tui_run": {
+      "scope": "apps/cli/src/tui",
+      "files_on_disk": 28,
+      "files_reported": 28,
+      "tests": 284,
+      "passed": 284,
+      "failed": 0,
+      "vitest_exit_code": 0,
+      "duration_s": 2.54,
+      "load_1min": 30.4
+    },
+    "full_package_run": {
+      "scope": "apps/cli",
+      "files_on_disk": 68,
+      "files_reported": 68,
+      "tests": 455,
+      "passed": 455,
+      "failed": 0,
+      "vitest_exit_code": 0,
+      "duration_s": 231.6,
+      "load_1min_start": 16.77,
+      "load_1min_end": 13.9,
+      "note": "68 reported against 68 counted on disk under apps/cli/src and apps/cli/test, so vitest 3.0.8 did not lose a file's report in this run. This independently reproduces T16's 455/455 across 68/68 claim."
+    },
+    "store_key_mutations": {
+      "M1_comparison": "process.env[profile.storeKeyEnv] !== undefined — KILLED, exit 1, 'the console read the store key's VALUE', frame named `at withStoreKeyPresence`",
+      "M2_spread": "{ ...process.env }[profile.storeKeyEnv] !== undefined — KILLED, exit 1",
+      "M3_entries": "Object.entries(process.env).some(([n]) => n === profile.storeKeyEnv) — KILLED, exit 1",
+      "M4_destructure": "const { [profile.storeKeyEnv]: probed } = process.env — KILLED, exit 1",
+      "M5_serialise": "JSON.parse(JSON.stringify(process.env))[profile.storeKeyEnv] !== undefined — KILLED, exit 1",
+      "M6_descriptor": "Object.getOwnPropertyDescriptor(process.env, profile.storeKeyEnv)?.value !== undefined — SURVIVED, exit 0 (F-005)",
+      "M7_getOwnPropertyNames": "Object.getOwnPropertyNames(process.env).includes(profile.storeKeyEnv) — SURVIVED, exit 0, and correctly so: it yields names, never the value. Recorded as the control that shows the probe is not simply refusing every descriptor-path spelling."
+    },
+    "startup_child_mutations": {
+      "S1_secondChild": "an extra `void io.runCli({ command: \"poll\", ... })` inside askWhatIsThere, outside reduce so single-flight cannot refuse it — KILLED by main.processDriven.test.ts, `expected [ 'poll' ] to deeply equal []`",
+      "S2_noStartupChild": "`askWhatIsThere();` replaced by `void askWhatIsThere;` — KILLED by main.processDriven.test.ts, `timed out waiting for a reserved doctor child` in both D-1 cases"
+    },
+    "keystroke_mutations": {
+      "K1_noSplit": "splitKeystrokes body replaced by `return [chunk];` — KILLED by src/tui, one failure, a 20s timeout inside the store-key test (F-004)",
+      "K2_splitEscape": "body replaced by `return [...chunk];` — SURVIVED src/tui 284/284 exit 0; killed by my probe with `[ 'doctor' ]` (F-002)",
+      "K3_splitInCompose": "dispatch guard replaced by unconditional `splitKeystrokes(text)` — SURVIVED src/tui 284/284 exit 0; killed by my probe on the carriage-return paste (F-003)",
+      "K4_neverSplit": "dispatch guard replaced by `[text]` — KILLED by src/tui, the same single failure as K1"
+    },
+    "machine_idle": false,
+    "load_note": "A `git push` launched from this session's own scratchpad was already running the full pre-push gate when this dispatch began: 1-minute load 127.4 at first sample, an echolet-flood-closure e2e relay at 367% CPU and ten vitest workers. NOTHING was measured until that gate finished and PUSH_EXIT=0 was recorded. Every number above was taken afterwards, at 1-minute loads between 13.8 and 30.4. Guards applied: every log captured whole to a file and read afterwards, nothing piped through head or tail; each exit code captured on the line immediately after its command and never through a wrapper's trailing echo; reported file counts checked against files counted on disk for both long runs (28/28 and 68/68); rg match lists read from the raw log rather than the truncated gdctx summary wherever the summary elided matches.",
+    "routing_audit": {
+      "graph_used": "no — not-relevant: the three commits and the frozen criteria named every file, and the graph predates this session's mutations; the one structural question (does anything but main.ts touch the environment) was answered more strongly by auditing the built bundle than by the graph",
+      "wiki_used": "no — not-relevant: the questions were all 'does this code do what its report says', settled by mutation and execution rather than by domain knowledge",
+      "ctx_used": "yes — keryx ctx run for every git command, keryx ctx read for logs and schemas, keryx ctx rg for every code search, with raw logs read directly whenever the summary truncated a match list",
+      "raw_rg_used": "no",
+      "testing_context_used": "no — the dispatch named the exact scopes to run and forbade broad test search; timeouts were taken from apps/cli/test/childProcessTimeouts.ts, which was read in full",
+      "memory_used": "no — not-relevant: the flow's own T12, T15, T16 and T17 dispatch results carried the history this task needed"
+    }
+  },
+  "timestamp_utc": "2026-09-09T04:30:53Z"
+}
