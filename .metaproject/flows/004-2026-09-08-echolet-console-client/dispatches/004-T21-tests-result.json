@@ -1,0 +1,185 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "004-T21-tests-2026-09-09",
+  "dispatch_id": "004-T21-tests",
+  "status": "DONE",
+  "summary": "Three test surfaces written, no source changed. (1) THE ESCAPE HOLE IS RED. apps/cli/src/tui/tui-shell.outcomeEscape.test.ts drives the real parseCliOutcome -> applyOutcome -> renderFrame path and fails 6 of 7 cases on the current tree: profile.setup holds U+001B, the frame at 72x16, 120x40 and 203x61 carries it while every width assertion passes, the same holds for all five step-bearing commands and for U+009B and U+202E, the whole-state walk reports [U+001B, U+009B, U+202E], and the printable remainder X[2JY is absent because the raw ESC is still between X and [. The seventh case passes today and is the pair that kills a fix which discards the code instead of filtering it. Applying the verifier's one-line fix (paintable(outcome.code) at tui-shell.ts:713) turns all 7 green and leaves profiles-pane.setup.test.ts's 29 untouched, so the reds are satisfiable and do not over-constrain; the fix was reverted and both source files verified byte-identical by SHA-256. The existing vacuous assertion at profiles-pane.setup.test.ts:296-319 was LEFT IN PLACE, deliberately: feeding it a hand-built hostile StepOutcome would assert a property of the renderer and could be satisfied inside stepStatus, which is the second-filter arrangement tui-shell.ts:832-833 argues against. No SECOND unfiltered field exists: applyOutcome is the only writer of state from a CliOutcome, and its eleven writes are three enums, five numbers, two booleans and the paintable-wrapped identifier/rejection/history routes -- foldSetup's failed is the only CLI-derived string reaching a frame unfiltered, and the class test now walks every string in the state so a future one is caught by the same assertion. (2) BOTH LIVE BEHAVIOURS ARE PINNED. apps/cli/src/tui/tui-shell.keystrokeDispatch.test.ts, 7 cases, all green today, each killed by exactly one mutation applied and reverted in one atomic step: K2 (split the ESC sequence) fails 'an arrow key started a command: \"\\u001b[D\" was decoded as more than one keystroke: expected [ 'doctor' ] to deeply equal []'; K3 (split while composing) fails 'a paste containing a carriage return submitted the draft mid-paste ... expected [ 'send' ] to deeply equal []'; K1 (do not split) fails \"the '?' after a coalesced Enter was lost\" in 5ms where its only cover today is a 45-second timeout in a test named for the store key. Each has a pair that a console broken the other way cannot pass. (3) THE NINTH SPELLING IS CLOSED, by construction rather than by detection. ENV_PROBE gains a getOwnPropertyDescriptor trap that returns a descriptor confirming PRESENCE and carrying NO VALUE. Measured on Node v26.5.0: Object.hasOwn still answers true, Object.keys/spread/entries/JSON.stringify still take the value through get where it is recorded, a spawned child still receives the real bytes, and Object.getOwnPropertyDescriptor(env,name)?.value is undefined -- so M6 computes storeKeyPresent === false and the driven case now fails in 108ms with 'the console did not see the store key it was given', where before it passed with exit 0. A new in-file case runs the SHIPPED probe text under --import against all nine spellings and asserts each property directly. Package: 470 tests across 70 files reported against 70 counted on disk, 6 failed (all the intended reds), 233.17s; src/tui 299 across 30/30, +15 over the 284 baseline and nothing lost; tsc --noEmit exit 0. git status shows one modified test file and two new test files, and the three lines removed from the modified file are the probe's payload literal and its type -- no assertion weakened, narrowed or deleted.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "The escape hole is reopened at a seventh field and a test must fail on it; decide and justify what happens to the existing vacuous assertion; look for any other field the slice added that reaches a frame unfiltered",
+      "status": "met",
+      "evidence": "apps/cli/src/tui/tui-shell.outcomeEscape.test.ts is red 6/7 on the current tree. The pin starts from the child's JSON, runs the real parseCliOutcome and applyOutcome, and asserts the STATE first and the FRAME second, so a fix applied in profiles-pane.ts (which would satisfy a frame-only assertion) still fails the state assertion at line 205. Two flaws in my own first draft were found and removed by running it: JSON.stringify escapes C0 bytes into a six-character ASCII escape and therefore reported a state holding a raw ESC as clean (a false pass), and frame.join('\\n') counted this test's own newlines as steering points; both were replaced by a structural string walker and a per-line frame scan, and the reds moved from 5 to 6 as a result. DECISION on the vacuous case: left in place. profiles-pane.setup.test.ts:296-319 is a PANE test and its subject is the pane; a hostile hand-built StepOutcome there asserts a renderer property, and the cheapest way to satisfy it is a second filter inside stepStatus -- exactly the per-reader defence tui-shell.ts:832-833 rejects in favour of filtering once where text becomes state. A test that can be passed at the wrong boundary is worse than a vacuous one, so the property was moved to the boundary rather than strengthened where it could be mis-satisfied; the reasoning is recorded in the new file's header for the implementer to reconcile. SECOND FIELD: none found. applyOutcome is the sole writer of OperatorState from a CliOutcome; its writes are health.status/checkedAtMs (enum, number), foldSetup's state (enum), setup[step] (literal, or {failed: outcome.code, exitCode: number}), identityId/deviceId (paintable), contactCount/received/outboxPending/lastPolledAtMs (numbers), more/published (booleans), rejections (paintable), history entries (paintable). foldSetup's failed is the only CLI-derived string that reaches a frame without a boundary. Rather than rest on that enumeration, the last case folds a hostile outcome for every one of those routes at once and walks EVERY string in the resulting state and in all five panes' frames, so a field added later that nobody lists is caught by the same assertion."
+    },
+    {
+      "criterion": "Pin the two live behaviours that survived all 284 tui tests: the escape-grouping in splitKeystrokes, and the compose-row guard",
+      "status": "met",
+      "evidence": "apps/cli/src/tui/tui-shell.keystrokeDispatch.test.ts, 7 cases, 40ms, all green on the current tree and each proved behavioural by mutation. K2 (splitKeystrokes body -> `return [...chunk];`): killed by 'spawns no child and repaints nothing when an arrow key is pressed', which reports `an arrow key started a command: \"\\u001b[D\" was decoded as more than one keystroke: expected [ 'doctor' ] to deeply equal []`. It sweeps all four arrows and asserts BOTH that no child was spawned and that the screen did not change, so the right arrow (which reaches the contact binding rather than a command) is caught too. K3 (dispatch guard -> unconditional splitKeystrokes): killed by 'does not submit a draft part-way through a paste that carries a carriage return', `expected [ 'send' ] to deeply equal []`, and the same case asserts the whole paste reached the buffer. K1/K4 (no split): killed by 'acts on the second key of a chunk the terminal coalesced' in 5ms, giving F-004's burst property its own home instead of a 45-second timeout inside the store-key test. Three pairs stop a broken-the-other-way console passing: pressing `d` alone must spawn doctor, Escape must close an open row, a lone Enter must send, and a coalesced `pd` must still spawn exactly one child. Every mutation was applied and reverted inside a single command and both source files verified byte-identical by SHA-256 afterwards."
+    },
+    {
+      "criterion": "Close the store-key probe's ninth spelling, distinguishing a descriptor request that yields the value from one that does not, or say plainly that it cannot be closed soundly",
+      "status": "met",
+      "evidence": "CLOSED, and not by frame-matching. Measured first in an isolated Node script (scratchpad, no repository file touched): from inside a getOwnPropertyDescriptor trap, Object.hasOwn and Object.getOwnPropertyDescriptor run the same internal method and the specification's ToPropertyDescriptor reads `value` off the trap's result in BOTH cases, so no trap can detect which one the caller is. (The stack frames do differ -- `at Proxy.hasOwn` versus `at Object.getOwnPropertyDescriptor` on Node v26.5.0 -- but building the assertion on those strings would make a Node upgrade a false red, which is the class of defect T16/T40 already paid for.) So the probe removes the difference instead: the trap returns the target's descriptor with `value` replaced by undefined, which is legal because backing's properties are writable and configurable. The distinction the hole needs is then structural -- a request that only wants PRESENCE is answered truthfully, a request that wanted the VALUE gets nothing. PROOF, four ways: (a) the new in-file case runs the SHIPPED ENV_PROBE text under --import and reports, per spelling, whether it obtained the 32 bytes -- hasOwn true and no value, the five forbidden spellings each obtain the value and each is recorded with a non-child_process frame, the descriptor spelling obtains nothing AND answers false, and a spawned grandchild still sees the real value; (b) the full registration suite is green on the current tree, so Object.hasOwn is unharmed; (c) M6 applied to main.ts:153 now fails in 108ms with 'the console did not see the store key it was given: step 0 told the operator to create one that already exists' -- the same mutant the T18 verification measured passing with exit 0; (d) probe.descriptors > 0 is asserted so the trap cannot be silently absent. The closure is a DENIAL rather than a detection and the new assertion is what converts that denial into a named failure; both are stated in the file's header so nobody reads the trap as a recorder."
+    },
+    {
+      "criterion": "Change no source file; take every timeout from apps/cli/test/childProcessTimeouts.ts; write no new millisecond literal",
+      "status": "met",
+      "evidence": "git status --porcelain -- apps/ packages/ deploy/ docs/ returns exactly three lines: one modified test file and two new test files. No source file is changed at rest. Mutation validation required tui-shell.ts and main.ts to be edited transiently; each apply-run-revert ran inside ONE command, and `shasum -a 256 -c` against a pre-run snapshot reported both files OK after every one of the five mutations (K1, K2, K3, M6, and the suggested fix). Timeouts: the two new files spawn nothing, read no clock and touch no store, so they take no timeout and declare why in their headers; the new case inside main.registration.processDriven.test.ts takes CLI_TEST_TIMEOUT_MS from apps/cli/test/childProcessTimeouts.ts, the constant that file already imports. The only numeric literals introduced are PAINTED_AT/AT_MS (1_757_000_000_000, a fixed clock reading copied in shape from tui-shell.submitSingleFlight.test.ts) and viewport dimensions; no new millisecond ceiling exists anywhere in the change."
+    },
+    {
+      "criterion": "AC9 -- no test weakened, skipped, narrowed or deleted",
+      "status": "met",
+      "evidence": "git diff -U0 on the one modified file shows exactly three removed lines: the probe's `writeFileSync(out, JSON.stringify({ reads, trapped }))` payload literal, the inline `probe()` return type on the Harness interface, and the same inline type at its implementation. All three were replaced by wider forms (a named ProbeReport carrying the two original fields plus two new ones). No `expect` was removed, loosened or turned into a `toContain`; three were added. Test totals rose from 284 to 299 under src/tui and from 455 to 470 for the package, which is exactly +7 +7 +1, so nothing was lost while files were added."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T21-tests-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.outcomeEscape.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "NEW. 7 cases, 6 RED: a CLI error code's bytes must not reach profile.setup or a frame, over all five step-bearing commands, over U+001B/U+009B/U+202E, and over every string an outcome can write into the state.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.keystrokeDispatch.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "NEW. 7 cases, all green: the arrow-key, mid-paste-submit and coalesced-burst properties, each killed by exactly one of K2, K3 and K1.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/main.registration.processDriven.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "MODIFIED. ENV_PROBE gains a presence-only getOwnPropertyDescriptor trap; the key-present case gains a named assertion that step 0 is satisfied; a new case runs the shipped probe against all nine spellings. 4 tests, green.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "UNCHANGED at rest. Mutated four ways (K1, K2, K3, and the suggested paintable fix) and reverted each time inside the same command; SHA-256 a166c277fe5ce4b0513414d3dbdb55a33965bddf21ed2306ff7b84483b6191d5 before and after every one.",
+      "hash": "a166c277fe5ce4b0513414d3dbdb55a33965bddf21ed2306ff7b84483b6191d5"
+    },
+    {
+      "path": "apps/cli/src/tui/main.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "UNCHANGED at rest. Mutated once (M6, the descriptor spelling) and reverted; SHA-256 7c7bd0135e8b2b8bbcc63afa4a9b89d87ac1fe9be52adeba7b59b83a03f17f6e before and after.",
+      "hash": "7c7bd0135e8b2b8bbcc63afa4a9b89d87ac1fe9be52adeba7b59b83a03f17f6e"
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/tui/tui-shell.outcomeEscape.test.ts", "change": "added" },
+    { "path": "apps/cli/src/tui/tui-shell.keystrokeDispatch.test.ts", "change": "added" },
+    { "path": "apps/cli/src/tui/main.registration.processDriven.test.ts", "change": "modified" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T21-tests#F-001",
+      "reviewer": "004-T21-tests",
+      "severity": "info",
+      "file": "apps/cli/src/tui/profiles-pane.setup.test.ts",
+      "line": 297,
+      "symbol": "keeps the frame exactly rows by cols, escape-free, and carrying the notice",
+      "problem": "The pane's escape-free assertion is still vacuous and was deliberately NOT strengthened in place. It builds `setup` by hand from RELAY_UNAVAILABLE and PERSISTENCE_FAILURE, inputs that could not violate the property whatever the code did, so `joined.includes(ESC)` is asserted only over states that could never carry one.",
+      "impact": "Read on its own, that case still reads as cover for a property it does not test, and a later reader may take it as such. The property itself is now covered -- tui-shell.outcomeEscape.test.ts asserts it from the bytes a child actually returns -- so this is a documentation and reconciliation item for the implementer, not an open hazard.",
+      "suggested_fix": "Leave the assertion as the pane's shape-and-notice check, and add a one-line pointer to tui-shell.outcomeEscape.test.ts beside it. Do NOT feed it a hostile hand-built StepOutcome: that asserts a property of the RENDERER, and the cheapest way to satisfy it is a second filter inside stepStatus -- the per-reader defence tui-shell.ts:832-833 rejects in favour of filtering once where text becomes state. If the implementer prefers to strengthen it there anyway, the boundary test must stay, because a renderer-level filter passes the frame assertion and still leaves the state holding the byte.",
+      "evidence": "Measured: applying the verifier's suggested fix (`failed: paintable(outcome.code)` at tui-shell.ts:713) and running profiles-pane.setup.test.ts alongside the new file gave 43 passed across 3 files, exit 0 -- the pane's 29 cases neither notice the defect nor notice the fix, which is what vacuity means here. Reverted; both source files verified byte-identical by SHA-256.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T21-tests#F-002",
+      "reviewer": "004-T21-tests",
+      "severity": "info",
+      "file": "apps/cli/src/tui/main.registration.processDriven.test.ts",
+      "line": 199,
+      "symbol": "ENV_PROBE",
+      "problem": "The ninth spelling is closed by DENIAL, not by DETECTION, and the distinction matters to anyone reading the probe later. No trap can tell a descriptor request that wants presence from one that wants the value: Object.hasOwn and Object.getOwnPropertyDescriptor run the same internal method and ToPropertyDescriptor reads `value` off the trap's result either way. So the trap returns a descriptor with no value, and the mutant is caught by the CONSEQUENCE (storeKeyPresent comes out false, the pane prints the create-a-key recipe, and the new assertion names it) rather than by an entry in `reads`.",
+      "impact": "`probe.reads` remains, correctly, a record of [[Get]] reads only. Someone auditing the probe by reading `reads` alone would not see a descriptor-path read and could conclude the path is unwatched. It is watched, by a different mechanism, and both the header and the trap's own comment say so.",
+      "suggested_fix": "Nothing to change. If the probe is ever extended, keep the two mechanisms separate: `reads` records, the descriptor trap denies, and the assertion that connects the denial to a failure is `expect(painted.includes('export <VAR>=')).toBe(false)` in the key-present case. Do not replace the denial with frame-string matching on `at Proxy.hasOwn`, which works on Node v26.5.0 and would make a Node upgrade a false red.",
+      "evidence": "Isolated Node script (scratchpad, no repository file touched) ran all nine spellings against the current probe and the candidate: with the get trap alone, M6 obtained the secret with getReads=0; with the descriptor trap, M6 obtained nothing and answered false while hasOwn stayed true and a spawnSync child still received the real value, its read attributed to `at normalizeSpawnArguments (node:child_process:749:22)`. Then confirmed against the repository: M6 applied to main.ts:153 fails in 108ms by name where the T18 verification measured it passing with exit 0.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "Should the implementer apply the filter at foldSetup (tui-shell.ts:713) or one level up, inside parseCliOutcome's failure return (cli-bridge.ts:143), so every present and future consumer of `code` inherits it?",
+      "why": "The new tests pass under EITHER, deliberately: they assert that the bytes do not reach the state, not where the call sits. The verifier argued for the parseCliOutcome site on the grounds tui-shell.ts:832-833 gives -- filter once, where text becomes state -- but cli-bridge.ts:118-124 states the opposite intention for that field ('typed failure codes are kept verbatim'), so moving it there changes a documented contract and is a decision rather than a fix. Measured: the foldSetup form turns all 7 cases green with the pane's 29 untouched.",
+      "options": [
+        { "id": "foldSetup", "label": "Filter at tui-shell.ts:713, matching the rule note() already follows; leave cli-bridge's verbatim contract as written", "recommended": true },
+        { "id": "parseCliOutcome", "label": "Filter inside parseCliOutcome so every consumer inherits it, and amend cli-bridge.ts's 'kept verbatim' comment to say what verbatim now means" }
+      ],
+      "can_be_resolved_by_agent": true
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_changed": 0,
+    "test_files_changed": 3,
+    "typecheck_exit_code": 0,
+    "tests_added": 15,
+    "tests_red_by_design": 6,
+    "tui_scope_run": {
+      "scope": "apps/cli/src/tui",
+      "files_on_disk": 30,
+      "files_reported": 30,
+      "tests": 299,
+      "passed": 293,
+      "failed": 6,
+      "vitest_exit_code": 1,
+      "duration_s": 2.48,
+      "baseline_before_this_dispatch": 284,
+      "note": "299 = 284 + 7 (keystrokeDispatch) + 7 (outcomeEscape) + 1 (probe self-test). The 6 failures are the intended reds and are all in tui-shell.outcomeEscape.test.ts."
+    },
+    "full_package_run": {
+      "scope": "apps/cli",
+      "files_on_disk": 70,
+      "files_reported": 70,
+      "tests": 470,
+      "passed": 464,
+      "failed": 6,
+      "vitest_exit_code": 1,
+      "duration_s": 233.17,
+      "load_1min_start": 18.96,
+      "load_1min_end": 52.56,
+      "note": "70 reported against 70 counted on disk with `find src test -name '*.test.ts' -o -name '*.test.mjs'`, so vitest 3.0.8 lost no report in this run. 470 = the 455 the T18 verification recorded, plus the 15 added here. Every failure is in the new red file; the e2e directory, src/commands, src/runtime and src/transport are all green and untouched."
+    },
+    "mutations": {
+      "K2_splitEscape": "splitKeystrokes -> `return [...chunk];` — KILLED by tui-shell.keystrokeDispatch.test.ts, 1 failed | 6 passed, `an arrow key started a command: \"\\u001b[D\" was decoded as more than one keystroke: expected [ 'doctor' ] to deeply equal []`",
+      "K3_splitInCompose": "dispatch guard -> unconditional `splitKeystrokes(text)` — KILLED, 1 failed | 6 passed, `a paste containing a carriage return submitted the draft mid-paste: the operator sent half a message they never finished writing: expected [ 'send' ] to deeply equal []`",
+      "K1_noSplit": "splitKeystrokes -> `return [chunk];` — KILLED, 1 failed | 6 passed, `the '?' after a coalesced Enter was lost: one chunk carrying two keystrokes was decoded as one`, in 5ms",
+      "M6_descriptor": "main.ts:153 -> `Object.getOwnPropertyDescriptor(process.env, profile.storeKeyEnv)?.value !== undefined` — KILLED by main.registration.processDriven.test.ts in 108ms, `the console did not see the store key it was given: step 0 told the operator to create one that already exists: expected true to be false`. The T18 verification measured this same mutant passing with exit 0.",
+      "FIX_paintable": "tui-shell.ts:713 -> `failed: paintable(outcome.code)` — the red file goes 7/7 GREEN and profiles-pane.setup.test.ts stays 29/29; 43 passed across 3 files, exit 0. Applied only to prove the reds are satisfiable and do not over-constrain the fix.",
+      "discipline": "Every mutation was applied, run and reverted inside ONE bash command, and `shasum -a 256 -c` against a snapshot taken before any of them reported `apps/cli/src/tui/tui-shell.ts: OK` and `apps/cli/src/tui/main.ts: OK` after each. No source file is modified at rest."
+    },
+    "machine_idle": false,
+    "load_note": "The machine carries the operator's own VM and browser throughout. 1-minute load averages at each measurement: tsc 15.7; the two new files 17.3; the registration suite 19.9; K2/K3/K1/M6 between 15.9 and 20.0; src/tui scope 20.0; the full package 18.96 at start and 52.56 at finish (the run's own ten workers). Guards applied: every log captured whole to a file in the scratchpad and read afterwards, nothing piped through head or tail; each exit code captured on the line immediately after its command and never through a wrapper's trailing echo; reported file counts checked against files counted on disk for both scoped runs (30/30 and 70/70); rg match lists read from the raw log rather than the truncated gdctx summary.",
+    "self_correction": "Two defects in my own first draft were caught by running it rather than by reading it, and are recorded because both are the vacuity this dispatch warns about: (1) the state assertion used JSON.stringify, which escapes C0 bytes into a six-character ASCII escape and therefore reported a state holding a raw ESC as CLEAN while reporting U+009B and U+202E correctly — a false pass, replaced by a structural walk over every string in the value; (2) the frame assertion joined lines with a newline and then counted its own newlines as C0 steering points, replaced by a per-line scan. The red count went from 5 to 6 after the fix.",
+    "routing_audit": {
+      "graph_used": "no — not-relevant: the commissioning verification named every file and line, and every symbol needed (foldSetup, splitKeystrokes, ENV_PROBE, paintable) was reached by reading those files directly",
+      "wiki_used": "no — not-relevant: the questions were all 'does this byte reach that frame' and 'does this mutant die', settled by execution rather than by domain knowledge",
+      "ctx_used": "yes — keryx ctx run for every git command, keryx ctx read for schemas and captured logs, keryx ctx rg for every code search",
+      "raw_rg_used": "no",
+      "testing_context_used": "yes — .metaproject/data/testing/context.md read before writing any test, and apps/cli/test/childProcessTimeouts.ts read in full before taking a timeout",
+      "memory_used": "no — not-relevant: the flow's own T18 verification carried the history this task needed"
+    }
+  },
+  "timestamp_utc": "2026-09-09T05:02:00Z"
+}

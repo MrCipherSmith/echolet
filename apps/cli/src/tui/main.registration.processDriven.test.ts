@@ -53,6 +53,19 @@ import { UNAUDITED_NOTICE } from "./shell-chrome";
  * (`Object.defineProperty(process.env, name, { get })` is not available — Node refuses an accessor
  * descriptor on `process.env` — which is why the whole object is replaced instead.)
  *
+ * A `get` trap alone leaves a NINTH spelling open, and it was measured open (004-T18-verify, F-005):
+ * `Object.getOwnPropertyDescriptor(process.env, name)?.value` yields the 32 bytes with the `get`
+ * trap never firing. No trap can DETECT that one — `Object.hasOwn` and `Object.getOwnPropertyDescriptor`
+ * run the same internal method, and the trap's result has its `value` read by the specification's own
+ * `ToPropertyDescriptor` in both cases, so the two are indistinguishable from inside. So the probe
+ * removes the difference instead of detecting it: its `getOwnPropertyDescriptor` trap returns a
+ * descriptor that CONFIRMS PRESENCE AND CARRIES NO VALUE. `Object.hasOwn` still answers true,
+ * `Object.keys`/spread/`JSON.stringify` still see an enumerable property and still take the value
+ * through `get` where it is recorded, and the child still inherits the real bytes — while a caller
+ * that wanted the value through the descriptor gets `undefined`, computes `storeKeyPresent === false`
+ * and paints the "create a key" recipe, which the first case below asserts is absent.
+ * `describe("the environment probe…")` at the foot of this file pins all nine spellings directly.
+ *
  * ONE read of the value is legitimate and unavoidable: Node's own `normalizeSpawnArguments` copies
  * the inherited environment into each child, which is how the key reaches the CLI. That read is
  * told apart by its IMMEDIATE CALLER FRAME — `node:child_process` — and every other caller is the
@@ -156,7 +169,9 @@ const ENV_PROBE = [
   "const out = process.env.ECHOLET_PROBE_OUT;",
   "const backing = { ...process.env };",
   "const reads = [];",
+  "const descriptorFrames = [];",
   "let trapped = 0;",
+  "let descriptors = 0;",
   "",
   "process.env = new Proxy(backing, {",
   "  get(target, property, receiver) {",
@@ -168,10 +183,50 @@ const ENV_PROBE = [
   "    }",
   "    return Reflect.get(target, property, receiver);",
   "  },",
+  // The ninth spelling, closed by CONSTRUCTION rather than by detection (004-T18-verify, F-005).
+  //
+  // `Object.getOwnPropertyDescriptor(process.env, name)?.value` yields the 32 bytes with the `get`
+  // trap never firing, so a probe carrying only `get` passes it. No trap can tell what a caller
+  // will DO with a descriptor — `Object.hasOwn` and `Object.getOwnPropertyDescriptor` both run the
+  // same internal method, and `ToPropertyDescriptor` reads `value` off the trap's result either way
+  // — so this does not try to detect the difference. It removes it: the descriptor this trap
+  // returns CONFIRMS PRESENCE AND CARRIES NO VALUE.
+  //
+  // That is exactly the distinction the hole needs. A descriptor request that only wants to know
+  // whether the property is there is answered truthfully — `Object.hasOwn` still returns true, and
+  // `Object.keys`/spread/`JSON.stringify` still see an enumerable property — while a request that
+  // wanted the VALUE gets `undefined`, and an implementation spelled that way computes
+  // `storeKeyPresent === false` and prints the "create a key" recipe for a key that already exists.
+  // The case above asserts that the recipe is absent, which turns the ninth spelling from an
+  // undetected read into a named failure.
+  //
+  // The value itself is untouched on the [[Get]] path, so the key still reaches every child exactly
+  // as the runbook passes it: `normalizeSpawnArguments` reads it through `get`, where it is recorded
+  // and attributed to `node:child_process` as before. The rewrite is legal because `backing`'s
+  // properties are writable and configurable, so a proxy may report a different value for them.
+  "  getOwnPropertyDescriptor(target, property) {",
+  "    const descriptor = Reflect.getOwnPropertyDescriptor(target, property);",
+  "    if (property !== name || descriptor === undefined) return descriptor;",
+  "    descriptors += 1;",
+  '    const lines = (new Error("descriptor").stack ?? "").split("\\n");',
+  '    descriptorFrames.push((lines[2] ?? "").trim());',
+  "    return { ...descriptor, value: undefined };",
+  "  },",
   "});",
   "",
-  'process.on("exit", () => { writeFileSync(out, JSON.stringify({ reads, trapped })); });',
+  'process.on("exit", () => { writeFileSync(out, JSON.stringify({ reads, trapped, descriptors, descriptorFrames })); });',
 ].join("\n");
+
+/** What `ENV_PROBE` writes on exit: every read of the key's value, and every descriptor request. */
+interface ProbeReport {
+  /** The calling frame of every read that went through the `get` trap for the probed name. */
+  readonly reads: readonly string[];
+  /** Every `get` the proxy saw, for any property. Non-zero proves the probe was installed. */
+  readonly trapped: number;
+  /** How many descriptor requests the probed name received. Non-zero proves that trap is armed. */
+  readonly descriptors: number;
+  readonly descriptorFrames: readonly string[];
+}
 
 interface Announcement {
   readonly command: string;
@@ -213,7 +268,7 @@ interface Harness {
   awaitChild(command: string): Promise<Announcement>;
   awaitStdin(announcement: Announcement): Promise<string>;
   release(announcement: Announcement, reply: Reply): void;
-  probe(): { readonly reads: readonly string[]; readonly trapped: number };
+  probe(): ProbeReport;
   quit(): Promise<number | null>;
 }
 
@@ -393,7 +448,7 @@ async function startConsole(options: { readonly storeKeyInEnvironment: boolean }
       return announcement.stdin ?? "";
     },
     release,
-    probe: () => JSON.parse(readFileSync(probePath, "utf8")) as { readonly reads: readonly string[]; readonly trapped: number },
+    probe: () => JSON.parse(readFileSync(probePath, "utf8")) as ProbeReport,
     // Nothing is left hanging: a child the test never answered would keep the console alive and
     // turn a wrong result into a timeout, so any such child is answered here and NAMED, and the
     // tests assert that the list is empty.
@@ -428,6 +483,20 @@ describe("AC1: registration is completed from inside the console alone", () => {
       operator.release(startup, { stdout: failure("INVALID_CONFIGURATION"), exit: 2 });
       await operator.awaitOutcome("doctor", "INVALID_CONFIGURATION", 2);
       await operator.awaitFrame("step 1");
+
+      /*
+       * Step 0 is SATISFIED, and the pane has to say so on the first frame that carries the
+       * checklist. This is the named half of the descriptor hole (004-T18-verify, F-005): the probe
+       * now answers a descriptor request for the key with a value-less descriptor, so an
+       * implementation that spelled presence as `Object.getOwnPropertyDescriptor(env, name)?.value`
+       * computes `false` and prints the "create a key" recipe for a key that is already there. That
+       * fails HERE, in milliseconds, naming what went wrong — rather than 45 seconds later as a
+       * timeout waiting for an `init` child the checklist would never start.
+       */
+      expect(
+        operator.painted().includes(`export ${KEY_ENV}=`),
+        "the console did not see the store key it was given: step 0 told the operator to create one that already exists",
+      ).toBe(false);
 
       // STEP 1 — the identity. The relay URL has no default and is typed here; the profile
       // directory and the store-key variable name are the ones this console was launched with.
@@ -526,6 +595,9 @@ describe("AC1: registration is completed from inside the console alone", () => {
         "the console read the store key's VALUE — the design requires Object.hasOwn(process.env, name), never process.env[name]",
       ).toEqual([]);
       expect(probe.reads.length, "the key never reached a child, so the probe cannot have been watching").toBeGreaterThan(0);
+      // The descriptor trap is the ninth spelling's boundary; if it never fired, the assertion
+      // above about `export …=` is proving something else.
+      expect(probe.descriptors, "the descriptor trap never fired, so the descriptor path is unwatched").toBeGreaterThan(0);
     },
     CLI_TEST_TIMEOUT_MS,
   );
@@ -636,6 +708,136 @@ describe("AC1: registration is completed from inside the console alone", () => {
       // t35 §4.1: on `contact export`, exit 5 has one cause that is not a disk problem, and naming
       // it is the difference between a console that helps and one that says "do not retry blindly".
       expect(painted, "t35 §4.1: exit 5 on contact export names the existing-file cause").toContain("already exists");
+    },
+    CLI_TEST_TIMEOUT_MS,
+  );
+});
+
+/**
+ * Every way a program can ask `process.env` about one variable, run against `ENV_PROBE` itself.
+ *
+ * The two cases above assert what the CONSOLE does. This one asserts what the DETECTOR can see, and
+ * it exists because 004-T18-verify found the detector's boundary by mutation: five forbidden
+ * spellings were each killed, and a sixth — the property descriptor — passed with the 32 bytes in
+ * hand. A probe whose reach is only known by mutating the thing it watches is a probe whose reach
+ * nobody will re-check after the next edit.
+ *
+ * It runs the SHIPPED probe text rather than a copy of it: `ENV_PROBE` is written to a file and
+ * preloaded with `--import`, exactly as `startConsole` preloads it, and a small script then performs
+ * each spelling in turn and reports, for each, whether it OBTAINED the value and what it ANSWERED
+ * about presence. The secret is never printed: every reported field is a boolean, the discipline
+ * `tui.keyMaterial.test.ts` established.
+ */
+const SPELLINGS = [
+  'import { spawnSync } from "node:child_process";',
+  'import { writeFileSync } from "node:fs";',
+  "",
+  "const name = process.env.ECHOLET_PROBE_NAME;",
+  // A second variable carrying the same bytes, so the comparisons below can say "did this spelling
+  // obtain the value" without reading the probed name for the comparison itself.
+  "const mirror = process.env.ECHOLET_PROBE_MIRROR;",
+  "const out = process.env.ECHOLET_SPELLING_OUT;",
+  "",
+  "const answers = {};",
+  "const obtained = {};",
+  "",
+  "answers.hasOwn = Object.hasOwn(process.env, name);",
+  "",
+  "answers.comparison = process.env[name] !== undefined;",
+  "obtained.comparison = process.env[name] === mirror;",
+  "",
+  "answers.spread = { ...process.env }[name] !== undefined;",
+  "obtained.spread = { ...process.env }[name] === mirror;",
+  "",
+  "answers.entries = Object.entries(process.env).some(([key]) => key === name);",
+  "obtained.entries = Object.fromEntries(Object.entries(process.env))[name] === mirror;",
+  "",
+  "const { [name]: destructured } = process.env;",
+  "answers.destructure = destructured !== undefined;",
+  "obtained.destructure = destructured === mirror;",
+  "",
+  "const serialised = JSON.parse(JSON.stringify(process.env));",
+  "answers.serialise = serialised[name] !== undefined;",
+  "obtained.serialise = serialised[name] === mirror;",
+  "",
+  "const descriptor = Object.getOwnPropertyDescriptor(process.env, name);",
+  "answers.descriptor = descriptor?.value !== undefined;",
+  "obtained.descriptor = descriptor?.value === mirror;",
+  "",
+  "answers.names = Object.getOwnPropertyNames(process.env).includes(name);",
+  "",
+  // The feature, not only the hazard: the key must still reach a child through the inherited
+  // environment. A probe that closed the descriptor path by breaking `spawn` would be useless.
+  'const child = spawnSync(process.execPath, ["-e", "process.stdout.write(String(process.env[process.env.ECHOLET_PROBE_NAME] === process.env.ECHOLET_PROBE_MIRROR))"], { env: process.env, encoding: "utf8" });',
+  "",
+  'writeFileSync(out, JSON.stringify({ answers, obtained, childSawTheValue: child.stdout === "true" }));',
+].join("\n");
+
+interface SpellingReport {
+  readonly answers: Readonly<Record<string, boolean>>;
+  readonly obtained: Readonly<Record<string, boolean>>;
+  readonly childSawTheValue: boolean;
+}
+
+describe("the environment probe reaches every spelling of a read, including the descriptor", () => {
+  it(
+    "records every value read through [[Get]] and yields no value through the property descriptor",
+    async () => {
+      const workDir = mkdtempSync(join(tmpdir(), "echolet-probe-reach-"));
+      cleanups.push(() => { rmSync(workDir, { recursive: true, force: true }); });
+
+      const envProbe = join(workDir, "env-probe.mjs");
+      const spellings = join(workDir, "spellings.mjs");
+      const probePath = join(workDir, "env-reads.json");
+      const spellingPath = join(workDir, "spellings.json");
+
+      writeFileSync(envProbe, ENV_PROBE, "utf8");
+      writeFileSync(spellings, SPELLINGS, "utf8");
+
+      const secret = randomBytes(32).toString("base64url");
+      const child = spawn(process.execPath, ["--import", pathToFileURL(envProbe).href, spellings], {
+        cwd: workDir,
+        env: {
+          ...process.env,
+          [KEY_ENV]: secret,
+          ECHOLET_PROBE_NAME: KEY_ENV,
+          ECHOLET_PROBE_OUT: probePath,
+          ECHOLET_PROBE_MIRROR: secret,
+          ECHOLET_SPELLING_OUT: spellingPath,
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let stderr = "";
+      child.stderr?.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
+      const exitCode = await new Promise<number | null>((done) => { child.once("close", (code) => { done(code); }); });
+      expect(exitCode, `the spelling probe failed: ${stderr}`).toBe(0);
+
+      const report = JSON.parse(readFileSync(spellingPath, "utf8")) as SpellingReport;
+      const probe = JSON.parse(readFileSync(probePath, "utf8")) as ProbeReport;
+
+      // The permitted spelling, unchanged: presence is answered truthfully and nothing is read.
+      expect(report.answers.hasOwn, "Object.hasOwn stopped answering presence — the design's own spelling is broken").toBe(true);
+      expect(report.answers.names, "Object.getOwnPropertyNames stopped answering presence").toBe(true);
+
+      // The five forbidden spellings: each really does obtain the value — which is why each has to
+      // be recorded — and each was recorded with a frame that is not Node's own child-process code.
+      for (const spelling of ["comparison", "spread", "entries", "destructure", "serialise"]) {
+        expect(report.obtained[spelling], `${spelling} did not obtain the value, so recording it proves nothing`).toBe(true);
+      }
+      expect(
+        probe.reads.filter((frame) => !frame.includes("node:child_process")).length,
+        "the probe recorded fewer reads than the number of forbidden spellings that obtained the value",
+      ).toBeGreaterThanOrEqual(5);
+
+      // The ninth spelling, and the whole point of this case. It obtains NOTHING, and it answers
+      // `false` about presence — so an implementation written that way is not merely unrecorded, it
+      // visibly refuses to start step 1 and the driven case above fails by name.
+      expect(report.obtained.descriptor, "the property descriptor still yields the store key's VALUE — F-005 is open").toBe(false);
+      expect(report.answers.descriptor, "the descriptor path still answers presence, so a value-read through it stays silent").toBe(false);
+      expect(probe.descriptors, "the descriptor trap never fired").toBeGreaterThan(0);
+
+      // …and none of it at the cost of the feature: the child still inherits the real bytes.
+      expect(report.childSawTheValue, "closing the descriptor path stopped the key reaching a child").toBe(true);
     },
     CLI_TEST_TIMEOUT_MS,
   );
