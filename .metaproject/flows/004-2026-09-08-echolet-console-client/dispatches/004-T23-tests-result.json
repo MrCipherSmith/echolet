@@ -1,0 +1,250 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "004-T23-tests-2026-09-09",
+  "dispatch_id": "004-T23-tests",
+  "status": "DONE",
+  "summary": "Failing tests for AC2 and AC5, written first and against an unmodified source tree. Four files: three new (tui-shell.storeTruth.test.ts, failure-text.test.ts, tui-shell.exitClassMatrix.test.ts) and one additive block in main.processDriven.test.ts (+105/-0, nothing weakened, skipped, narrowed or deleted). AC2: the shape specified is SHOW NOTHING UNTIL A COMMAND SAYS, because no command in the frozen eight reports an outbox figure at all — doctor's diagnostics() returns profile_id, identity_id, device_id, contact_count, contacts, storage, runtime and no outbox count — so the rejected shape, count from the last command result, has nothing to count from and must fall back on createInitialState's literal 0 (state.ts:345), which is the same invention in a quieter voice. The first case is written to fail exactly that: before any command has run, `0 pending` is a claim about an encrypted store this process cannot open. A second, sharper reading was found while reading the CLI: a successful send sets its outbox record to \"delivered\" (outbound.ts:289) and returns status \"delivered\" (outbound.ts:46), while pending is derived from records whose status is \"pending\" (outbound.ts:294) — so `outboxPending + 1` does not merely guess, it guesses in the direction opposite to the one the store moved. Ten cases are red, three green PAIRS kill the degenerate fix that shows nothing ever (a poll's own figure must still be shown, and an unreadable result must not erase a readable one's). AC5: totality is proven by walking CLI_COMMANDS x {2,3,4,5}, collecting the visited cells in a set and asserting the set's size equals the product computed from the frozen surface — 32, not a hand-written 32-row fixture — and the default-returning implementation is killed by blanking each code out of its own explanation and comparing the SHAPE against a synthetic unknown code at the same class: equal shapes mean the code went down the generic path and has no entry of its own. That check runs over 23 codes enumerated from classify (commands/cli.ts:465-477) x 8 commands. The console half of AC5 drives the real runTuiShell over the same matrix and pins, on the current tree, that the CLI's code and exactly its class reach a frame and no other class does — paired with the RED that the sentence explaining them is painted nowhere. Measured under load on a 10-core machine that was never idle: apps/cli full run 73 files reported against 73 counted on disk, 10 failed / 476 passed, exit 1, with the 1-minute load rising 16.2 -> 53.5 across the run and no lost report; src/tui 33/33 files, 10 failed / 305 passed. tsc --noEmit reports exactly two errors, both `Cannot find module './failure-text'`, and nothing else — the AC2 file uses a widening cast so it runs and typechecks against the tree as it stands. git status shows three new test files and one modified test file; no source file was touched.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC2 — a red test that pins what the console may show after a send, written so that the wrong shape fails",
+      "status": "met",
+      "evidence": "apps/cli/src/tui/tui-shell.storeTruth.test.ts, 11 cases, 8 red on this tree, plus one real-child case appended to main.processDriven.test.ts. The reds, verbatim from the captured run: 'the console asserted an outbox count before any command reported one: expected +0 to be null'; 'the console asserted an inbox count before any command reported one: expected +0 to be null'; 'the console invented an outbox count out of a send the store recorded as delivered: expected 1 to be null'; 'the console accumulated a count of its own sends and called it the store's outbox: expected 2 to be 1'; 'the console asserted an outbox count after INVALID_CONFIGURATION (exit 2): expected +0 to be null' (and the same at exits 3, 4, 5); 'the console added one poll's count to the next and showed the sum as the store's inbox: expected 3 to be +0'; 'a poll's result carries no outbox figure, so the console must still report none: expected +0 to be null'; and, driven through the real shell from w/type/Enter, 'the console painted an outbox figure no command reported: the row still shows a figure — \"1 pending\"'. Over real child processes: 'the console added one poll's figure to the next and showed the sum: expected \"3 received\" to contain \"0\"'. A test that merely checked a number went up would be satisfied by the defect; every case here is about what the console may NOT claim."
+    },
+    {
+      "criterion": "AC2 — demonstrated against a real driven process",
+      "status": "met",
+      "evidence": "main.processDriven.test.ts gained one case that spawns the shipped console bundle over a pipe with real children on the file's existing control-socket harness: startup doctor released, mailbox pane selected, two real poll children released with received 3 then received 0. The intermediate assertion after the first poll ('the console dropped the figure the poll reported') PASSES, which is what proves the harness is reading the frame the second poll painted rather than a stale one; the final assertions are red. Its per-test ceiling is CLI_TEST_TIMEOUT_MS imported from apps/cli/test/childProcessTimeouts.ts — no millisecond literal was written anywhere in this dispatch. The three pre-existing cases in that file (two D-1 cases and the --help case) stayed green throughout."
+    },
+    {
+      "criterion": "AC5 — totality over the command x exit-class matrix, proven rather than sampled",
+      "status": "met",
+      "evidence": "Two files, and totality is a computed claim in both. failure-text.test.ts walks CLI_COMMANDS x {2,3,4,5}, adds `${command} ${exitCode}` to a Set, and asserts `covered.size === CLI_COMMANDS.length * CLASSES.length` and separately `=== 32` — so a cell silently skipped changes the count and a ninth command changes the product. tui-shell.exitClassMatrix.test.ts does the same over the REAL runTuiShell: each of the 32 cells is started from the keyboard as an operator would start it (p, d, r, h, i, w+text+Enter, Enter on the checklist, Enter+Enter for the export path), settled with that class, and the painted frame is read. That PIN passes on the current tree — the code and exactly its class reach a frame and no other class does — and is paired with the RED that the sentence is painted nowhere, so it cannot pass vacuously."
+    },
+    {
+      "criterion": "AC5 — a function that returns a default string for anything it does not recognise must fail",
+      "status": "met",
+      "evidence": "T23-AC5-B, 'does not answer a known code with the text it answers an unknown one with'. Comparing a known code's explanation with an unknown code's directly would prove nothing, because an honest fallback interpolates the code and the two differ either way. So each code is blanked out of its OWN result and the remaining SHAPES are compared: if a real code's shape equals the shape a synthetic unknown code gets at the same class, that code has no entry and went down the generic path. Run over 23 codes enumerated from classify (commands/cli.ts:465-477) and its five branches, x all 8 commands = 184 cells, with every failing cell collected and reported in one list rather than aborting on the first. Totality is completed from the other side by T23-AC5-B's last case: the fallback must still exist, name the code and the class it was given, and answer two different unknown codes differently — which is what keeps the function total without making it useless."
+    },
+    {
+      "criterion": "AC5 — the console must not invent a class the CLI did not return, and must not lose the CLI's own code",
+      "status": "met",
+      "evidence": "Both halves, on both surfaces. In the module: `text.code` must equal the code it was given and appear verbatim in the words the operator reads; `text.exitCode` must equal the exit code it was given; and over the whole matrix neither string may name another class's number (matched with a whole-number regex so `exit 1` does not match inside `exit 127`) or another class's canonical code. An exit code outside {2,3,4,5} — 0, 1, 6, 127, -1, NaN — must not be explained as any of the four. On the frame: for all 32 cells the code is present, `exit N` is present for the returned N and absent for the other three; a SUCCESSFUL command's frame names no class at all; and at MIN_VIEWPORT (72x16), where the one-row activity line may have no space for a sentence, the code and the number an operator quotes in a bug report must still survive. The last three are PINs that pass today and are the pairs for the RED."
+    },
+    {
+      "criterion": "No source file changed",
+      "status": "met",
+      "evidence": "`git status --porcelain` after the work: two .metaproject/flows/004 files that were already modified when this dispatch began, plus ` M apps/cli/src/tui/main.processDriven.test.ts` and three untracked `*.test.ts` files. `git diff --stat -- apps/ packages/` is one file, 105 insertions, 0 deletions. Nothing under apps/cli/src that is not a test file was opened for writing at any point."
+    },
+    {
+      "criterion": "AC9 — no test weakened, skipped, narrowed or deleted",
+      "status": "met",
+      "evidence": "The only existing file touched is main.processDriven.test.ts and the diff is purely additive: 105 insertions, 0 deletions, one import line and one new describe block placed between two existing ones. Measured rather than asserted: the whole apps/cli package reports 476 passed and 10 failed, and every one of the 10 is a T23 case named in this dispatch. The src/tui scope was 30 files / 299 tests at T22; it is now 33 files / 315 tests, which is exactly +3 files and +16 tests (11 + 4 + 1; failure-text.test.ts contributes 0 because it fails to load). No pre-existing test changed state."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T23-tests-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This record.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.storeTruth.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "AC2. 11 cases: 8 red (the outbox is claimed before any command reported it, raised on a send the store recorded as delivered, accumulated across two sends, and claimed at every refusal class; the inbox accumulates one poll's figure into the next; the outbox moves on a poll that reports none; and the same painted through the real shell from the keystroke that sends) and 3 green PAIRS that a console showing nothing ever cannot pass.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/failure-text.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "AC5, the pure module t35 §4.1 names. Specifies explain(command, code, exitCode) -> {command, code, exitCode, sentence, action}; proves totality over the 8x4 matrix by a computed set size; kills a default-returning implementation by shape comparison against a synthetic unknown code; pins the command-sensitive sentences the design commits to; pins one code at two classes; and pins that explain is total, deterministic and emits nothing that can steer a terminal. Red at the import: the module does not exist.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.exitClassMatrix.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "AC5 on the console's own surfaces. Drives the real runTuiShell through the real stdin handler for all 32 cells, each started from the keyboard the way an operator would. Three PINs pass today (code and exact class on the frame with no other class; no class at all on success; code and class survive MIN_VIEWPORT) and one RED fails (the sentence is painted nowhere), with explain imported dynamically inside that one case so the PINs still run while failure-text.ts does not exist.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/main.processDriven.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "AC2's 'demonstrated against a real driven process' half: one additive describe block (+105/-0) reusing the file's existing control-socket harness to release two real poll children with received 3 then received 0.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/tui/tui-shell.storeTruth.test.ts", "change": "added" },
+    { "path": "apps/cli/src/tui/failure-text.test.ts", "change": "added" },
+    { "path": "apps/cli/src/tui/tui-shell.exitClassMatrix.test.ts", "change": "added" },
+    { "path": "apps/cli/src/tui/main.processDriven.test.ts", "change": "modified (additive: +105/-0, one import and one describe block)" },
+    { "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T23-tests-result.json", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T23-tests#F-001",
+      "reviewer": "004-T23-tests",
+      "severity": "major",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 768,
+      "symbol": "applyOutcome > send",
+      "problem": "The optimistic echo is not only invented, it moves the number the WRONG WAY. `outboxPending + 1` fires on `outcome.ok` — that is, on a send the CLI reported as succeeded. `runtime/outbound.ts:289` writes that message's outbox record with `status: \"delivered\"` before returning, `outbound.ts:46` returns `status: \"delivered\"` to the caller, and `outbound.ts:294` derives 'pending' from exactly the records whose status is `\"pending\"`. So the store's pending set did not grow, and the console adds one to its display of it.",
+      "impact": "Both verifications recorded this as an unreconciled local increment. The stronger statement is available and is what the test asserts: there is no reading of the store under which the number after a successful send is one more than the number before, so no reconciliation could ever make the current line correct. Nothing decrements it either, so the drift only accumulates over a session.",
+      "suggested_fix": "Make both counts `number | null` on `MailboxView` (matching `lastPolledAtMs: number | null` on the same interface, which already means 'never'), start them null, assign `inboxReceived` from `data.received` verbatim on a successful poll, and never write `outboxPending` from any result the frozen eight can return. Render null as something that is not a digit and is not the sentinel. tui-shell.storeTruth.test.ts turns green on exactly that.",
+      "evidence": "Captured run: 'the console invented an outbox count out of a send the store recorded as delivered: expected 1 to be null', and 'the console accumulated a count of its own sends and called it the store's outbox: expected 2 to be 1'. Source: outbound.ts:46, :289, :294.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:768 — applyOutcome's send case, `outboxPending + 1`",
+          "apps/cli/src/tui/tui-shell.ts:756 — applyOutcome's poll case, `inboxReceived + asNumber(data.received, 0)`",
+          "apps/cli/src/tui/state.ts:345 — createInitialState's `outboxPending: 0, inboxReceived: 0`, the third invented figure and the one no result can ever have carried",
+          "apps/cli/src/tui/mailbox-pane.ts:33-34 — the two rows that paint them"
+        ],
+        "enumeration_method": "A routed rg for `outboxPending|inboxReceived` over apps/cli/src: 30 matches across 24 files, of which 8 are in non-test source — state.ts:118,119 (the two declarations), state.ts:345 (the initial literals), tui-shell.ts:755 (a pass-through that writes nothing new), :756 and :768 (the two arithmetic writes), and mailbox-pane.ts:33,34 (the two rows that paint them). Every one was traced. There is no third writer and no reconciliation anywhere; the remaining 22 matches are test fixtures constructing a MailboxView."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T23-tests#F-002",
+      "reviewer": "004-T23-tests",
+      "severity": "minor",
+      "file": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t35-console-client-design.md",
+      "line": 488,
+      "symbol": "§4.1, the class-3 code list",
+      "problem": "The design's class-3 row lists `INVALID_RELAY_RESPONSE` as a code the console will see. It cannot: `classify` (commands/cli.ts:472) reads `error.remoteCode`, not `error.code`, and `INVALID_RELAY_RESPONSE` is a LOCAL verdict raised by `transport/relayClient.ts:38` with no remote code, so it is flattened to `PROTOCOL_REJECTED` before the console ever sees an envelope.",
+      "impact": "An implementer working from the design's table would write an entry explaining a string the CLI cannot return, and a totality test that required one would fail forever for the wrong reason. The same paragraph's list is otherwise accurate.",
+      "suggested_fix": "Nothing in the code. failure-text.test.ts's REACHABLE list excludes it with the reason written out beside the exclusion, so the record is where the next reader will look; the design note can be corrected when it is next touched.",
+      "evidence": "commands/cli.ts:469-473 and transport/relayClient.ts:37-38, read together. The same paragraph in failure-text.test.ts also excludes `INVALID_ENVELOPE` and the other per-envelope verdicts, which are isolated into poll's `rejected` array (inbound.ts:242) and painted by the rejection list rather than being an exit class.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "t35-console-client-design.md:488 — `INVALID_RELAY_RESPONSE` listed under class 3 (the mistake)",
+          "apps/cli/src/commands/cli.ts:471-472 — `error.remoteCode`, not `error.code`, is what selects a reported name",
+          "apps/cli/src/transport/relayClient.ts:38 — `new RelayError(\"INVALID_RELAY_RESPONSE\", false)`, a local verdict with no remote code",
+          "apps/cli/src/commands/cli.ts:58 — the three codes that DO survive under their own name"
+        ],
+        "enumeration_method": "Every code in the design's §4.1 class-3 row was checked against the branch of `classify` that could produce it. Only one is unreachable: the three `reportedRelayCodes` pass through by name, and every other entry traces to an OutboundError, InboundError, ProfileError or CliFailure literal that `classify` forwards. The per-envelope verdicts were separated the same way, by following `inbound.ts:242` to the `rejected` array rather than to a throw."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T23-tests#F-003",
+      "reviewer": "004-T23-tests",
+      "severity": "info",
+      "file": "apps/cli/src/tui/failure-text.test.ts",
+      "line": 46,
+      "symbol": "the FailureText contract",
+      "problem": "`code` is echoed verbatim while `sentence` and `action` must be paintable, and the two obligations pull in opposite directions for a hostile code. The split is deliberate — `code` is a VALUE a caller compares, the other two are TEXT A FRAME CARRIES — but an implementer who filters in one place and not the other will make one of the two case groups red.",
+      "impact": "None on the tree; it is a note about the contract this file specifies. 004-T18-verify F-001 is the measured record of what happens when a new consumer of `parseCliOutcome`'s verbatim `code` is added without a paintable boundary, and `explain` will be the eighth such consumer.",
+      "suggested_fix": "Filter the code once, where it is interpolated into prose, and leave the echoed `code` field alone — the same rule note() follows at tui-shell.ts:836 and foldSetup now follows at :713.",
+      "evidence": "T23-AC5-B 'keeps the CLI's own code verbatim' runs over clean codes only; T23-AC5-E's last case runs over ESC-bearing, C1-bearing and U+202E-bearing codes and asserts only on the composed words.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:617 — readRejections wraps envelopeId and code (correct)",
+          "apps/cli/src/tui/tui-shell.ts:642-645 — readHistoryEntries wraps the two identifiers and the plaintext (correct)",
+          "apps/cli/src/tui/tui-shell.ts:713 — foldSetup wraps the checklist's failure code (correct since 0d97cbc; the site 004-T18-verify F-001 found open)",
+          "apps/cli/src/tui/tui-shell.ts:744-745 — doctor's identity_id and device_id (correct)",
+          "apps/cli/src/tui/tui-shell.ts:836 — note() wraps the whole composed activity line (correct)",
+          "apps/cli/src/tui/tui-shell.ts:907 — paintableIdentifiers on the trust modal's four values (correct)",
+          "apps/cli/src/tui/failure-text.ts — the eighth boundary, which does not exist yet and is what this dispatch's tests specify"
+        ],
+        "enumeration_method": "The seven existing call sites of `paintable`/`paintableIdentifiers` in tui-shell.ts were listed and each checked against the field it guards; `explain` is the first NEW consumer of `parseCliOutcome`'s verbatim `code` since that list was completed, so it is the eighth member of the class rather than a different problem."
+      }
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "Should the mailbox pane keep an outbox row at all, once the console may no longer claim a figure for it?",
+      "why": "No command in the frozen eight reports an outbox figure, so under the shape this dispatch specified the row can only ever say 'nothing has reported this'. Three answers are defensible and only the user can pick: keep the row and say so (honest, and a standing reminder that the surface is missing a report); drop the row (less clutter, but the operator loses the fact that the console has no view of its own outbox); or add the figure to `doctor`'s result, which is a change to a CLI command's output and belongs to a task about the CLI, not to this one. The tests as written pass under the first two and are unaffected by the third.",
+      "options": [
+        { "id": "keep", "label": "Keep the row and render the absence, so the missing report is visible", "recommended": true },
+        { "id": "drop", "label": "Drop the outbox row until a command reports one" },
+        { "id": "extend-doctor", "label": "Add a pending-outbox count to doctor's result — a separate task about the CLI's output" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q-002",
+      "question": "Is the inbox row's LABEL still honest once the figure is the last poll's rather than a session total?",
+      "why": "`mailbox-pane.ts:34` renders `${inboxReceived} received` under the label `inbox`, which reads as 'this is what is in the inbox'. Under the specified shape the figure is what the LAST POLL accepted and committed (inbound.ts:27), which is a different quantity. The tests pin the figure, deliberately not the wording — a test that pinned the label would be this dispatch choosing the console's words. Someone should choose them.",
+      "options": [
+        { "id": "relabel", "label": "Relabel the row to name what the figure is, e.g. 'last poll  N received'", "recommended": true },
+        { "id": "keep", "label": "Keep the label and let the 'last poll' row beneath it carry the timing" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_changed": 0,
+    "test_files_added": 3,
+    "test_files_modified": 1,
+    "test_files_modified_diffstat": "apps/cli/src/tui/main.processDriven.test.ts | 105 insertions(+), 0 deletions(-)",
+    "cases_added": 16,
+    "cases_red_on_this_tree": 10,
+    "cases_red_at_load": "failure-text.test.ts as a whole (Failed Suites 1) — `Failed to load url ./failure-text ... Does the file exist?`, which is the canonical red for a module a design names and no one has written",
+    "cases_green_as_pairs": 6,
+    "full_package_run": {
+      "scope": "apps/cli",
+      "files_on_disk": 73,
+      "files_reported": 73,
+      "tests": 486,
+      "passed": 476,
+      "failed": 10,
+      "failed_suites": 1,
+      "vitest_exit_code": 1,
+      "load_1min_start": 16.18,
+      "load_1min_end": 53.51,
+      "note": "73 reported against 73 counted on disk with a routed ls, so vitest 3.0.8 lost no file's report in this run despite the load more than tripling across it. Every one of the 10 failures is a T23 case named in this record; no pre-existing test changed state."
+    },
+    "tui_scope_run": {
+      "scope": "apps/cli/src/tui",
+      "files_on_disk": 33,
+      "files_reported": 33,
+      "tests": 315,
+      "passed": 305,
+      "failed": 10,
+      "vitest_exit_code": 1,
+      "delta_from_T22": "30 files / 299 tests -> 33 / 315, which is exactly +3 files and +16 cases (11 + 4 + 1; failure-text.test.ts contributes 0 because it fails to load)"
+    },
+    "typecheck": {
+      "command": "npx tsc --noEmit",
+      "exit_code": 2,
+      "errors": 2,
+      "detail": "Both are `TS2307: Cannot find module './failure-text'`, at failure-text.test.ts:3 and tui-shell.exitClassMatrix.test.ts:266. There is no third error: the AC2 file reads the two counts through a widening cast rather than a type change, so it compiles and RUNS against the tree as it stands and every one of its failures is an assertion rather than a loader error."
+    },
+    "timeouts": "Every ceiling written in this dispatch is CLI_TEST_TIMEOUT_MS, imported from apps/cli/test/childProcessTimeouts.ts. The three new files spawn nothing, open no store, read no clock and touch no relay, so they declare no ceiling at all. No millisecond literal was written anywhere.",
+    "machine_idle": false,
+    "load_note": "A 10-core machine carrying the operator's own Virtualization.framework VM and browser throughout; it was never idle. 1-minute load averages at the four measurements: 20.3 (the three new files, 708ms), 15.1 (main.processDriven.test.ts alone, 1.59s), 15.3 (src/tui), and 16.2 rising to 53.5 across the full package run. Guards applied: every log captured WHOLE to a file in the scratchpad and read afterwards, nothing piped through head or tail; each exit code captured on the line immediately after its own command and never through a wrapper's trailing echo; reported file counts checked against files counted on disk for both long runs (33/33 and 73/73); every rg match list read from the raw log rather than from the truncated gdctx summary wherever the summary elided matches.",
+    "not_tested": [
+      "AC2's real-child half covers the INBOX only. Reaching a real-child SEND needs a published profile and a pinned contact, and `state.contacts` is written only by `observeContact` after a completed trust-modal handshake — so a real-child send case would have to replay the whole of main.registration.processDriven.test.ts's five-step drive first. The send path over a real child is already pinned by main.sendChild.test.ts (argv and environment, complete, three mutations killed at T12), and the count is a pure-state question that a real child cannot make more true, so the keystroke-to-frame half is covered by tui-shell.storeTruth.test.ts's T23-AC2-D instead. This is a deliberate scope call, not an oversight.",
+      "AC5's console matrix is measured at 203x61 for the sentence and at 72x16 for the code and class. Whether the sentence must also fit at the minimum viewport is not decided here: the activity line is one clipped row there and the pane body is eleven, so requiring it would be this dispatch making a layout decision the design has not made.",
+      "No test asserts the WORDS of the mailbox rows or the exact wording of any explanation beyond the three phrases t35 §4.1 commits to in its own text ('already exists', 'publish', 'not a trust failure'). Pinning more would be the test author writing the console's prose."
+    ],
+    "routing_audit": {
+      "graph_used": "no — not-relevant: the dispatch named the two criteria and the two verification records, and those named every file; the one enumeration question (which codes reach the console as an exit) was answered by reading classify and its five branches, which is stronger than a graph query",
+      "wiki_used": "no — not-relevant: every question was 'what does this code actually return', settled by reading the CLI and running it, not by domain knowledge",
+      "ctx_used": "yes — keryx ctx run for every git and shell command, keryx ctx read for the schema and the captured logs, keryx ctx rg for every code search, with raw logs read directly whenever a summary truncated a match list",
+      "raw_rg_used": "no",
+      "testing_context_used": "no — the dispatch named the two criteria and forbade source changes; timeouts were taken from apps/cli/test/childProcessTimeouts.ts, which was read in full",
+      "memory_used": "no — not-relevant: 004-T12-verify and 004-T18-verify carried the history this task needed, and the dispatch named both"
+    }
+  },
+  "timestamp_utc": "2026-09-09T06:02:00Z"
+}
