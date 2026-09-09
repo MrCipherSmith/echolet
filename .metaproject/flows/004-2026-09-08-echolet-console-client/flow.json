@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T02:23:51.426Z",
+  "updatedAt": "2026-09-09T02:28:57.618Z",
   "source": {
     "type": "description",
     "ref": null
@@ -306,6 +306,28 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "RED tests for registration from inside the console: the six-step checklist on the profiles pane",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T02:28:57.617Z",
+            "outcome": "started",
+            "detail": "Registration is the user's stated goal and does not depend on the pane-removal decision they still hold: the design renders it on the existing profiles pane, costing no ordinal. Step 0 is the security boundary - presence of the store key tested with Object.hasOwn, never by reading the value."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -476,6 +498,16 @@
       "at": "2026-09-09T02:23:51.426Z",
       "event": "task-done",
       "detail": "T14: Close the escape-sequence hole at the six narrowing boundaries, and keep the submit path single-flight"
+    },
+    {
+      "at": "2026-09-09T02:28:41.759Z",
+      "event": "task-added",
+      "detail": "T15: RED tests for registration from inside the console: the six-step checklist on the profiles pane"
+    },
+    {
+      "at": "2026-09-09T02:28:57.618Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — Registration is the user's stated goal and does not depend on the pane-removal decision they still hold: the design renders it on the existing profiles pane, costing no ordinal. Step 0 is the security boundary - presence of the store key tested with Object.hasOwn, never by reading the value."
     }
   ]
 }
