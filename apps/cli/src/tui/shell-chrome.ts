@@ -132,14 +132,33 @@ function footerLine(state: OperatorState, cols: number): string {
      * ten lies at once. These three are what `inputKey` actually binds — and `[ctrl-c] quit` is
      * AC8's way out, named rather than assumed, on every frame the operator can type into.
      *
-     * `[enter] send` appears only for the field whose submit builds a request today; the other six
-     * are operands of steps that do not exist yet, and a footer promising to send one would be the
-     * same lie in a smaller hat.
+     * The submit label appears only for the four fields whose submit builds a request today — one
+     * message and the three registration operands — and it says which of the two it would be. The
+     * other three are operands of steps that do not exist yet, and a footer promising to send or run
+     * one would be the same lie in a smaller hat.
      */
-    const submit = input.field === "message" ? "[enter] send  " : "";
-    return `${submit}[esc] cancel  [ctrl-c] quit`;
+    return `${submitLabel(input)}[esc] cancel  [ctrl-c] quit`;
   }
   return fitFooter(state.help === true ? FOOTER_KEYS_HELP_OPEN : FOOTER_KEYS, cols);
+}
+
+/**
+ * What `Enter` does on the row that is open, named only where it does something.
+ *
+ * It mirrors `submitRequest` exactly: the four fields that build a request are the four fields
+ * advertised. A row whose submit is a refusal advertises nothing.
+ */
+function submitLabel(input: InputState): string {
+  switch (input.field) {
+    case "message":
+      return "[enter] send  ";
+    case "relay-url":
+    case "export-path":
+    case "card-path":
+      return "[enter] run  ";
+    default:
+      return "";
+  }
 }
 
 /**
@@ -191,6 +210,7 @@ function activityLine(state: OperatorState): string {
 const HELP_LINES: readonly string[] = [
   "key bindings",
   "  1-5        select pane",
+  "  enter      start the next registration step (profiles pane, while one is left)",
   "  p          poll",
   "  d          doctor",
   "  r          relay publish",

@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T02:28:57.618Z",
+  "updatedAt": "2026-09-09T03:31:56.076Z",
   "source": {
     "type": "description",
     "ref": null
@@ -328,6 +328,50 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T16",
+      "title": "Implement registration from inside the console, keeping the store key out of the process",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T15"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T03:02:10.361Z",
+            "outcome": "started",
+            "detail": "A fresh agent. The store-key boundary is enforced by a probe that records every read of the environment and its calling frame, so an implementation that reads the value instead of testing presence fails by name."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T17",
+      "title": "Reconcile the flow-003 driven test with the startup profile probe, without weakening it",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T16"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T03:31:56.076Z",
+            "outcome": "started",
+            "detail": "Owner decision: the startup probe stays - the design requires it, all three registration cases rest on it, and it arms the store-key probe. The flow-003 test's complete-list assertions are corrected, not relaxed; its three properties must survive intact."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -508,6 +552,26 @@
       "at": "2026-09-09T02:28:57.618Z",
       "event": "task-attempt",
       "detail": "T15: started (attempt 1) — Registration is the user's stated goal and does not depend on the pane-removal decision they still hold: the design renders it on the existing profiles pane, costing no ordinal. Step 0 is the security boundary - presence of the store key tested with Object.hasOwn, never by reading the value."
+    },
+    {
+      "at": "2026-09-09T03:02:04.034Z",
+      "event": "task-added",
+      "detail": "T16: Implement registration from inside the console, keeping the store key out of the process"
+    },
+    {
+      "at": "2026-09-09T03:02:10.361Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — A fresh agent. The store-key boundary is enforced by a probe that records every read of the environment and its calling frame, so an implementation that reads the value instead of testing presence fails by name."
+    },
+    {
+      "at": "2026-09-09T03:31:53.998Z",
+      "event": "task-added",
+      "detail": "T17: Reconcile the flow-003 driven test with the startup profile probe, without weakening it"
+    },
+    {
+      "at": "2026-09-09T03:31:56.076Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — Owner decision: the startup probe stays - the design requires it, all three registration cases rest on it, and it arms the store-key probe. The flow-003 test's complete-list assertions are corrected, not relaxed; its three properties must survive intact."
     }
   ]
 }

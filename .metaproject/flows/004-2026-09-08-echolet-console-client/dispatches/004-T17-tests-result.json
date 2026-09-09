@@ -1,0 +1,206 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-004-t17-tests",
+  "dispatch_id": "004-T17-tests",
+  "status": "DONE",
+  "summary": "main.processDriven.test.ts now expects the startup `doctor` the owner kept, and every property it guarded survives at the same strength. Exactly three lines changed: the harness's standing reservation `let reserved = 0` → `let reserved = 1`, and the two COMPLETE child lists `[\"poll\",\"doctor\"]` → `[\"doctor\",\"poll\",\"doctor\"]` and `[\"relay publish\",\"poll\",\"relay publish\"]` → `[\"doctor\",\"relay publish\",\"poll\",\"relay publish\"]`. Both lists stay exact `toEqual` lists; no assertion became a `toContain`, none was deleted, and the two `filter(!held) → []` sweeps, both `not.toContain(\"PERSISTENCE_FAILURE\")` and the reported-class set `[\"RELAY_UNAVAILABLE exit 4\"]` are untouched. The startup child is reserved by the SAME counter the other reservations use, one line above the spawn rather than after it, because a reservation made after `spawn` returns races that child to the socket — which is what the measured baseline showed. Each test releases it with INVALID_CONFIGURATION / exit 2, the class the CLI returns for a profile directory this harness names and never creates, and waits for its outcome line before the first keystroke; releasing it as `ok`/exit 0 would have silently satisfied a later `doctor → ok (exit 0)` frame wait a pressed command owns, so the failing class is load-bearing, not decoration. Baseline before the change (measured, not quoted): 2 failed / 1 passed, exit 1. After: the file 3/3, src/tui 284/284 across 28 of 28 files, apps/cli 455/455 across 68 of 68 files, all exit 0, plus tsc --noEmit exit 0. One honest gap is reported rather than closed: nothing in this file now pins that a keystroke arriving DURING the startup child is refused, and I declined to add it because the only available shape repeats an already-accepted press-then-release race on a host whose 1-minute load peaked at 140 during this dispatch.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Property 1 survives at the same strength: the console runs one command at a time, and no child is ever refused as a second concurrent writer over the encrypted store",
+      "status": "met",
+      "evidence": "Both `expect(operator.announcements.filter((entry) => !entry.held).map((entry) => entry.command)).toEqual([])` sweeps are byte-identical to the committed file. What changed is that the startup child now meets a reservation instead of a refusal — made by the same `reserved` counter `reserveNextChild()` increments, read on the same `const held = reserved > 0` line, answered on the same `held` path. Nothing is masked by the standing reservation: it is consumed by the FIRST child to announce, which is the startup `doctor`, so any second unasked-for child, or any child the console overlapped with another, finds the counter at zero, is answered PERSISTENCE_FAILURE / exit 5, and appears in that list. The reducer confirms the shape rather than the test asserting around it: `reduce`'s `case \"run\"` returns `{ state, effects: [] }` while `state.busy`, and `askWhatIsThere` goes through `reduce` (tui-shell.ts:929), so the startup child is inside the D-1 gate, not beside it."
+    },
+    {
+      "criterion": "Property 2 survives at the same strength: the exit class the console reports is the class the CLI returned, and it never manufactures a persistence failure",
+      "status": "met",
+      "evidence": "Both `expect(operator.painted()).not.toContain(\"PERSISTENCE_FAILURE\")` assertions and the `[...new Set(reported)]).toEqual([\"RELAY_UNAVAILABLE exit 4\"])` set are unchanged. The startup child is released with INVALID_CONFIGURATION / exit 2 — a class the CLI genuinely returns and one the `relay publish → ([A-Z_]+) \\(exit (\\d+)\\)` sweep cannot match, so it neither introduces the forbidden string nor enlarges the reported set. The control run in test 2 (`runCliDirectly`, exit 4, RELAY_UNAVAILABLE in stdout) is untouched and still the thing the console's own report is compared against."
+    },
+    {
+      "criterion": "Property 3 survives at the same strength: the child list assertions stay COMPLETE lists",
+      "status": "met",
+      "evidence": "Both remain `expect(operator.announcements.map((entry) => entry.command)).toEqual([...])` over the whole announcement array behind the process-exit barrier. One element was prepended to each. No `toContain`, no `arrayContaining`, no `expect.any`, no filtering of the array before comparison, no length-only check. `keryx ctx diff` reports +32 −3 on this file: the three removed lines are `let reserved = 0;` and the two old lists, so no other assertion line was even rewritten."
+    },
+    {
+      "criterion": "The startup child is reserved the same way the others are",
+      "status": "met",
+      "evidence": "`let reserved = 1;` sits in `startConsole` where `let reserved = 0;` sat — inside the closure the control-plane `connection` handler reads, above `spawn`. It is not a new code path, a new flag, or a special case in the server: the announcement is held, pushed with `held: true`, and each test releases it through the same `release()` the poll and relay-publish children go through. Placing it before `spawn` is required rather than stylistic: see finding T17-F-001."
+    },
+    {
+      "criterion": "The corrected file still fails if the console's behaviour regresses",
+      "status": "met",
+      "evidence": "Drop the startup child and `awaitReservedChild(\"doctor\")` at the top of each test times out (that exact timeout is what the baseline measured, from the mirror-image cause). Run a second unasked-for child and it is refused, so it lands in the `!held` list and paints PERSISTENCE_FAILURE. Run any child concurrently with another and the same two assertions fire. Reorder the children and the exact `toEqual` lists fire. Every original failure mode is still reachable."
+    },
+    {
+      "criterion": "Change no source file, and no test file other than main.processDriven.test.ts",
+      "status": "met",
+      "evidence": "`git status --porcelain apps/` lists six modified files: `apps/cli/src/tui/main.processDriven.test.ts`, and the five source files (`main.ts`, `profiles-pane.ts`, `shell-chrome.ts`, `state.ts`, `tui-shell.ts`) that T16 left uncommitted in the working tree before this dispatch began and that I did not open for editing. No other test file, no config, no fixture."
+    },
+    {
+      "criterion": "Runs recorded before and after, with the load",
+      "status": "met",
+      "evidence": "Before, against the working tree carrying T16's registration work: 2 failed / 1 passed, exit 1, 40.81 s, 1-minute load 16.80 at start and 13.65 at end. After: the file 3 passed / 3, exit 0, 1.08 s, load 11.65; `src/tui` 284 passed / 284 over 28 test files reported against 28 `*.test.ts` on disk, exit 0, 2.18 s; `apps/cli` 455 passed / 455 over 68 files reported against 68 on disk, exit 0, 231.12 s, load 12.12 at start, 59.62 at end and 140.30 measured mid-run. Every log was redirected whole to a file and read afterwards; no run was piped through head or tail; each exit code was captured immediately after vitest, never through a trailing echo's own status."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/src/tui/main.processDriven.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The reconciled file. A header paragraph naming the startup child and why it is reserved before the spawn; two constants (INVALID_CONFIGURATION_ENVELOPE, STARTUP_OUTCOME); the standing reservation; a two-line release-and-wait at the top of each D-1 test; and one element prepended to each of the two exact child lists.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T16-implement-result.json",
+      "kind": "context",
+      "exists": true,
+      "summary": "The dispatch that found the contradiction, named the four assertion sites, and recommended exactly this correction.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/main.registration.processDriven.test.ts",
+      "kind": "context",
+      "exists": true,
+      "summary": "The newer file whose three cases all open with the startup `doctor` released as INVALID_CONFIGURATION / exit 2 — the release class this correction adopts, so the two driven suites now describe the same console.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/tui/main.processDriven.test.ts",
+      "change": "modified — +32 −3. Three lines replaced: `let reserved = 0;` → `let reserved = 1;`; `[\"poll\", \"doctor\"]` → `[\"doctor\", \"poll\", \"doctor\"]`; `[\"relay publish\", \"poll\", \"relay publish\"]` → `[\"doctor\", \"relay publish\", \"poll\", \"relay publish\"]`. The rest is added: the header paragraph, two constants, and the startup release plus outcome wait in each D-1 test."
+    }
+  ],
+  "findings": [
+    {
+      "id": "T17-F-001",
+      "reviewer": "tests-creator",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/main.processDriven.test.ts",
+      "line": 157,
+      "symbol": "startConsole > reserved",
+      "problem": "The obvious form of this correction — call `operator.reserveNextChild()` after `startConsole()` returns, as T16's suggested_fix reads — is a race, not a fix. The console spawns the startup `doctor` from `runTuiShell` immediately after its first `paint()`, so between `spawn` returning inside `startConsole` and the test's first statement, that child may already have announced and been refused.",
+      "impact": "Placed after the spawn, the reservation is consumed by whichever child wins the race, and the suite's failure mode becomes nondeterministic: T16 measured `expected [ 'doctor' ] to deeply equal []` (startup child announced first, refused, and the test's reservation went to its own child), while my baseline on the same tree measured `timed out waiting for a reserved poll child` and `timed out waiting for a reserved relay publish child` (the reservation was consumed by the startup child and the test's own child was refused instead). Same defect, two faces, four minutes apart.",
+      "suggested_fix": "Reserve inside `startConsole` before `spawn` — `let reserved = 1;` — which is what this dispatch did. There is no window before it, because the console process does not exist yet.",
+      "evidence": "tui-shell.ts:982-983 — `paint(); askWhatIsThere();` — is the last statement of `runTuiShell`, and `askWhatIsThere` spawns the child synchronously through `reduce`. Baseline log: 2 failed / 1 passed, exit 1, both failures timeouts at main.processDriven.test.ts:159. After the pre-spawn reservation: 3/3, exit 0, the two D-1 tests at 385 ms and 383 ms.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "T17-F-002",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/cli/src/tui/main.processDriven.test.ts",
+      "line": 282,
+      "symbol": "D-1 > startup release class",
+      "problem": "Releasing the startup child as `ok` / exit 0 would have been the lazy choice and would have quietly weakened test 1: its later `await operator.awaitFrame(\"doctor → ok (exit 0)\")` would then be satisfied by the STARTUP child's outcome, so the wait meant to order the operator's pressed `doctor` would resolve before that child had settled — and possibly before it had spawned.",
+      "impact": "None as landed: the startup child is released with INVALID_CONFIGURATION / exit 2, so `doctor → ok (exit 0)` is still produced by exactly one command, the one the test pressed. Recorded because the next person to touch this file will be tempted by the shorter form.",
+      "suggested_fix": "Keep the startup outcome a class no later frame wait in this file names. The constant `STARTUP_OUTCOME` exists so the coupling is visible in one place.",
+      "evidence": "main.processDriven.test.ts:303 waits on `\"doctor → ok (exit 0)\"`; the startup release at :282 paints `\"doctor → INVALID_CONFIGURATION (exit 2)\"`. The newer registration suite releases its own startup child the same way (main.registration.processDriven.test.ts:428).",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "T17-F-003",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/cli/src/tui/main.processDriven.test.ts",
+      "line": 277,
+      "symbol": "D-1 > spawns no second child while a command is in flight",
+      "problem": "A guarantee this file could now carry and does not: that a keystroke arriving while the STARTUP child is in flight is refused. Test 1 pins that for a pressed `poll`; the unasked-for child is the one case it does not cover, and it is the case a reader would most doubt, because that child is the newest thing in the console.",
+      "impact": "No strength was lost — the property did not exist before the startup child did — but the file does not close it either. The pure half is covered (`reduce`'s `busy` gate, tui-shell.singleFlight.test.ts), so what is missing is only the process-level pin.",
+      "suggested_fix": "Press a command key between `awaitReservedChild(\"doctor\")` and `release(...)`, exactly as line 292 does during the poll, and let the two unchanged assertions carry it. I did not add it here: it repeats a press-then-release race that is already accepted once in this file, and adding a second instance on a host whose 1-minute load peaked at 140 during this dispatch buys one guarantee at the price of a flake in the suite that exists to make a NON-event deterministic. It belongs in a verify pass that can run the file enough times to earn it.",
+      "evidence": "reduce (tui-shell.ts:315-321) refuses a `run` while `state.busy`, and askWhatIsThere (tui-shell.ts:929) goes through `reduce`, so the behaviour is almost certainly correct — which is the argument for pinning it, not for assuming it.",
+      "confidence": "medium",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "T17-Q1",
+      "question": "Should the press-during-startup-child pin (T17-F-003) be added to this file, and if so under a repeated-run check?",
+      "why": "It is the one guarantee about the startup child that this file could hold and does not. It is cheap in code and the implementation looks correct; the only cost is one more press-then-release race in a suite whose whole design is about not depending on timing.",
+      "options": [
+        { "id": "a", "label": "Leave it out; the pure single-flight gate covers the mechanism", "recommended": false },
+        { "id": "b", "label": "Add it in the verify pass, gated on the file passing a repeated run", "recommended": true },
+        { "id": "c", "label": "Add it now, unrepeated", "recommended": false }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_changed": 0,
+    "test_files_changed": 1,
+    "assertions_changed": 2,
+    "assertions_deleted": 0,
+    "assertions_relaxed": 0,
+    "harness_lines_changed": 1,
+    "typecheck_exit_code": 0,
+    "baseline_before_change": {
+      "scope": "apps/cli/src/tui/main.processDriven.test.ts",
+      "files": "1 failed (1)",
+      "tests": "2 failed | 1 passed (3)",
+      "vitest_exit_code": 1,
+      "duration_s": 40.81,
+      "load_1min_start": 16.8,
+      "load_1min_end": 13.65,
+      "failures": [
+        "D-1 > spawns no second child while a command is in flight — timed out waiting for a reserved poll child (20073 ms, at main.processDriven.test.ts:159)",
+        "D-1 > reports the exit class the CLI returned, and does not manufacture a persistence failure — timed out waiting for a reserved relay publish child (20069 ms, at main.processDriven.test.ts:159)"
+      ],
+      "passed": ["the console explains itself when asked > prints usage and exits 0 for --help"],
+      "note": "Both failures are reservation starvation, not the assertion mismatch T16 recorded: the startup child consumed each test's first reservation, so the test's own child was refused as an unreserved second writer and never became reserved. Same contradiction, the other face of it — see T17-F-001."
+    },
+    "after_file_run": {
+      "scope": "apps/cli/src/tui/main.processDriven.test.ts",
+      "files": "1 passed (1)",
+      "tests": "3 passed (3)",
+      "vitest_exit_code": 0,
+      "duration_s": 1.08,
+      "load_1min_start": 11.65,
+      "load_1min_end": 11.65
+    },
+    "after_tui_directory_run": {
+      "scope": "apps/cli/src/tui",
+      "files_on_disk": 28,
+      "files_reported": 28,
+      "tests": 284,
+      "passed": 284,
+      "failed": 0,
+      "vitest_exit_code": 0,
+      "duration_s": 2.18,
+      "load_1min_start": 13.22,
+      "load_1min_end": 13.22,
+      "note": "main.processDriven.test.ts 3 tests / 905 ms and main.registration.processDriven.test.ts 3 tests / 1457 ms both green in the same run — the two files that contradicted each other now pass together."
+    },
+    "after_package_run": {
+      "scope": "apps/cli",
+      "files_on_disk": 68,
+      "files_reported": 68,
+      "tests": 455,
+      "passed": 455,
+      "failed": 0,
+      "vitest_exit_code": 0,
+      "duration_s": 231.12,
+      "load_1min_start": 12.12,
+      "load_1min_peak": 140.3,
+      "load_1min_end": 59.62
+    },
+    "machine_idle": false,
+    "load_note": "10-core host running the operator's own VM and browser throughout. The 1-minute load ranged 11.6 to 140.3 across this dispatch, so every duration reported here is a loaded duration; the 140.3 peak was measured during the 231 s package run. Guards against a lying run: reported file counts were checked against files on disk for both long runs (28 against 28 `*.test.ts` under src/tui, 68 against 68 under src and test), since vitest 3.0.8 can lose a file's report under load. Every log was captured whole to a file and read afterwards; nothing was piped through head or tail; each exit code was captured on the line immediately after the command rather than through a wrapper's trailing echo. The baseline was measured on this working tree before the edit, and the 455/455 package run was measured after it.",
+    "routing_audit": {
+      "graph_used": "no — not-relevant: the two files in question were named by the dispatch, and the one source symbol I needed (askWhatIsThere) was reached by a routed search; the graph also predates this session's uncommitted edits",
+      "wiki_used": "no — not-relevant: the question is a contradiction between two test files, settled by reading them and by running them",
+      "ctx_used": "yes — keryx ctx read for the dispatch result, the schema and the logs; keryx ctx rg for every code search; keryx ctx diff for the change",
+      "raw_rg_used": "no",
+      "testing_context_used": "yes — .metaproject/data/testing/context.md read before touching the test file",
+      "memory_used": "no — not-relevant: the flow's own T15 and T16 dispatch results carried the history this task needed"
+    }
+  },
+  "timestamp_utc": "2026-09-09T03:40:36Z"
+}

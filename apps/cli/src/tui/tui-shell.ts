@@ -5,12 +5,17 @@ import { MIN_VIEWPORT, isBelowMinViewport, renderFrame, styleFrame } from "./she
 import {
   PANE_IDS,
   inputMaxBytes,
+  nextSetupStep,
   type ContactView,
   type HistoryEntryView,
+  type InputField,
   type InputState,
   type KeyEvent,
   type OperatorState,
+  type ProfileState,
+  type ProfileView,
   type RejectionView,
+  type StepOutcome,
   type TrustIdentifiers,
   type TrustModal,
   type Viewport,
@@ -190,9 +195,30 @@ function paneKeyIntent(key: KeyEvent, state: OperatorState): Intent | undefined 
        * The key list under `?` names it, which is the same resolution the footer's dropped labels
        * already have. The per-pane footer relation is t35's T-11.
        */
-      return state.pane !== "history" || state.selectedContactId === null || state.busy
+      /*
+       * The fourth precondition is publication, and it is step 2 of the checklist enforcing itself
+       * (t35 §2.1): `outbound.ts:152` refuses an unpublished sender LOCALLY, before it spends a
+       * peer's prekey, and `writeResult` drops the actionable sentence it refuses with. So a console
+       * that let the operator compose first would spend a keystroke, a child and a draft to earn a
+       * bare `SENDER_NOT_PUBLISHED` it cannot explain.
+       */
+      return state.pane !== "history" || state.selectedContactId === null || state.busy || profile.published !== true
         ? undefined
         : { kind: "input-open", field: "message" };
+    case "return":
+      /*
+       * The checklist advances one step per keystroke, and never further (t35 §2.1, "Advancing is
+       * manual"). Chaining 1→2→3 was rejected there: two of the three need an operand the operator
+       * has to supply anyway, and a console that ran three commands from one keystroke makes "which
+       * of the three failed" a question the operator reconstructs from a log rather than reads on a
+       * line.
+       *
+       * Bound on the profiles pane, which is where the checklist is painted, and refused outright
+       * while a child is alive rather than left to the D-1 gate below — because half the steps open
+       * an operand row rather than a `run`, and a row opened during a command would be a second
+       * thing in flight in everything but name.
+       */
+      return state.pane !== "profiles" || state.busy ? undefined : setupStepIntent(profile);
     case "c": {
       const next = state.contacts[(state.contacts.findIndex((contact) => contact.identityId === state.selectedContactId) + 1) % Math.max(1, state.contacts.length)];
       return next === undefined ? undefined : { kind: "select-contact", identityId: next.identityId };
@@ -201,6 +227,74 @@ function paneKeyIntent(key: KeyEvent, state: OperatorState): Intent | undefined 
       return state.profiles.length < 2 ? undefined : { kind: "select-profile", index: (state.activeProfile + 1) % state.profiles.length };
     default:
       return undefined;
+  }
+}
+
+/**
+ * What `Enter` starts on the profiles pane: the NEXT incomplete step, or nothing.
+ *
+ * Two of the five steps run straight away because every operand they need is already known; three
+ * open the input row first, because an operand the console guessed would be an operand the operator
+ * never named. `nextSetupStep` is where step 0 gates step 1 — with the store key absent it returns
+ * `undefined`, so no keystroke on this pane can spawn a child at all.
+ */
+function setupStepIntent(profile: ProfileView): Intent | undefined {
+  const step = nextSetupStep(profile);
+  const profileDir = profile.profileDir;
+  switch (step) {
+    case 1:
+      // t35 §2.1 gives the relay URL no default, and `main.ts --relay-url` already puts one on the
+      // profile. Read together: the console invents none, and a URL supplied at launch is the
+      // profile's own and is used directly. An empty one opens the row instead of guessing.
+      return profile.relayUrl === ""
+        ? { kind: "input-open", field: "relay-url" }
+        : { kind: "run", request: { command: "init", profileDir, relayUrl: profile.relayUrl, storeKeyEnv: profile.storeKeyEnv } };
+    case 2:
+      return { kind: "run", request: { command: "relay publish", profileDir } };
+    case 3:
+      return { kind: "input-open", field: "export-path" };
+    case 4:
+      return { kind: "input-open", field: "card-path" };
+    case 5:
+      return { kind: "run", request: { command: "doctor", profileDir } };
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * A UTC instant with nothing in it a path separator could be mistaken for.
+ *
+ * Read off `state.observedAtMs` rather than a clock, so `reduce` stays pure: the shell folds a
+ * reading in at startup and after every settled command (t35 §2.3).
+ */
+function cardInstant(atMs: number): string {
+  const at = Number.isFinite(atMs) ? atMs : 0;
+  return new Date(at).toISOString().replace(/[-:.]/g, "");
+}
+
+/**
+ * What an operand row opens with.
+ *
+ * Only step 3's export path is generated, and it is generated because `contact export` writes with
+ * `flag: "wx"`: a second export over the same path is `PERSISTENCE_FAILURE` at exit 5, cards expire
+ * after seven days, so re-export is routine. A timestamped name costs nothing and never destroys a
+ * card a peer may still be importing — which is why `contact export --force` was rejected.
+ *
+ * The relay URL deliberately opens EMPTY even though the profile carries one: the only branch that
+ * opens it is the one where the profile's URL is empty, and prefilling from a field that is empty by
+ * construction would read as a default the console had invented.
+ */
+function initialBuffer(state: OperatorState, field: InputField): string {
+  const profile = state.profiles[state.activeProfile];
+  if (profile === undefined) return "";
+  switch (field) {
+    case "export-path":
+      return `${profile.profileDir}/card-${cardInstant(state.observedAtMs ?? 0)}.json`;
+    case "card-path":
+      return profile.contactCardPath ?? "";
+    default:
+      return "";
   }
 }
 
@@ -254,7 +348,7 @@ export function reduce(state: OperatorState, intent: Intent): Step {
           ...state,
           // Unpainted, exactly like `buildTrustModal`'s `renderedAt: null`: the shell stamps it
           // after the frame carrying the row was written, and never before.
-          input: { field: intent.field, buffer: "", renderedAt: null, maxBytes: inputMaxBytes(intent.field) },
+          input: { field: intent.field, buffer: initialBuffer(state, intent.field), renderedAt: null, maxBytes: inputMaxBytes(intent.field) },
         },
         effects: [],
       };
@@ -303,9 +397,16 @@ export function reduce(state: OperatorState, intent: Intent): Step {
       if (input.renderedAt === null) return { state, effects: [] };
       const request = submitRequest(state, input);
       if (request === undefined) return { state, effects: [] };
+      // A relay URL the operator typed becomes the profile's own, so a retry after a failed `init`
+      // does not ask for it a second time and the pane stops claiming the profile has none. It is an
+      // operand, not a secret: it is already on screen, already in the argv, and already in the
+      // runbook's own launcher.
+      const profiles = request.command !== "init"
+        ? state.profiles
+        : state.profiles.map((profile, index) => (index === state.activeProfile ? { ...profile, relayUrl: request.relayUrl } : profile));
       // `busy` is set here for the same reason `run` sets it: one command in flight at a time, and
       // the unit is one operator action.
-      return { state: { ...state, input: undefined, busy: true }, effects: [{ kind: "run-cli", request }] };
+      return { state: { ...state, profiles, input: undefined, busy: true }, effects: [{ kind: "run-cli", request }] };
     }
     case "quit":
       return { state, effects: [{ kind: "quit" }] };
@@ -391,20 +492,45 @@ function paintableIdentifiers(identifiers: TrustIdentifiers): TrustIdentifiers {
 /**
  * The request a submitted buffer builds, or `undefined` when it would be incomplete.
  *
- * Only the `message` field has a submit today. The other six are operands of the registration and
- * address-book steps (t35 §2.1, §2.3), whose requests belong to those tasks; until one lands, no
- * key opens those fields and a submit on one is a refusal rather than a guess at what it meant.
+ * Four of the seven fields have a submit: one message and three registration operands. The other
+ * three — `profile-dir`, `store-key-env` and `contact-name` — are operands of steps that do not
+ * exist yet, no key opens them, and a submit on one is a refusal rather than a guess at what it
+ * meant. Every refusal here is also the deep half of a gate `mapKey` holds: a submit arriving from
+ * anywhere at all meets the same precondition.
  *
- * The body travels on the request OBJECT and never in an argv: `buildArgv` puts `text` in no token,
- * and `main.ts` writes it to the child's stdin. That is AC3, and it is why this is a `send` request
- * rather than a command line.
+ * The message body travels on the request OBJECT and never in an argv: `buildArgv` puts `text` in no
+ * token, and `main.ts` writes it to the child's stdin. That is AC3, and it is why this is a `send`
+ * request rather than a command line.
  */
 function submitRequest(state: OperatorState, input: InputState): CliRequest | undefined {
-  if (input.field !== "message") return undefined;
   const profile = state.profiles[state.activeProfile];
-  const to = state.selectedContactId;
-  if (profile === undefined || to === null || input.buffer === "") return undefined;
-  return { command: "send", profileDir: profile.profileDir, to, text: input.buffer };
+  if (profile === undefined) return undefined;
+  const value = input.buffer;
+  const profileDir = profile.profileDir;
+  switch (input.field) {
+    case "message": {
+      const to = state.selectedContactId;
+      // Publication gates every send, here as well as at the key, because `outbound.ts:152` refuses
+      // an unpublished sender before it spends a peer's prekey.
+      if (to === null || value === "" || profile.published !== true) return undefined;
+      return { command: "send", profileDir, to, text: value };
+    }
+    case "relay-url":
+      // Step 0 gates step 1 here too: the store key must already be in this console's environment,
+      // and `storeKeyPresent` is the only thing about it this process may hold.
+      if (value === "" || profile.storeKeyPresent !== true) return undefined;
+      return { command: "init", profileDir, relayUrl: value, storeKeyEnv: profile.storeKeyEnv };
+    case "export-path":
+      if (value === "") return undefined;
+      return { command: "contact export", profileDir, out: value };
+    case "card-path":
+      // Deliberately without `--yes`: the child prints the four identifiers and the operator answers
+      // the child's own prompt, so the trust decision never moves into the console.
+      if (value === "") return undefined;
+      return { command: "contact import", profileDir, from: value };
+    default:
+      return undefined;
+  }
 }
 
 /**
@@ -439,6 +565,36 @@ export function decodeKey(chunk: Buffer | string): KeyEvent {
     return { name: String.fromCharCode(code + 96), ctrl: true, sequence };
   }
   return { name: first.toLowerCase(), ctrl: false, sequence };
+}
+
+/**
+ * One raw chunk, split into the keystrokes it carries.
+ *
+ * MEASURED: a pipe delivers `Enter` and `?` written back to back as the single chunk `"\r?"`, and
+ * `decodeKey` reads that as Ctrl-M — so BOTH keystrokes are lost, silently, and the console looks
+ * hung. A terminal does the same thing to anyone typing faster than one key per read, which is every
+ * operator who has ever pressed `1` and `p` together.
+ *
+ * A chunk from ESC onwards is kept WHOLE and is one keystroke. That is what keeps a bare Escape a
+ * cancel and an arrow key — `ESC [ A` — a single refused key rather than three: decoding arrows
+ * would put an escape-sequence decoder in the input path of a program whose security argument rests
+ * on the pure layer emitting no escape bytes, and splitting them would paste their letters instead.
+ *
+ * Splitting happens only where a chunk is a burst of KEYS. While the compose row is open every byte
+ * after the first is TEXT, so the chunk is handed over whole and a paste stays one insertion.
+ */
+function splitKeystrokes(chunk: string): string[] {
+  const points = [...chunk];
+  const keys: string[] = [];
+  for (let at = 0; at < points.length; at += 1) {
+    const point = points[at] ?? "";
+    if (point === ESC) {
+      keys.push(points.slice(at).join(""));
+      return keys;
+    }
+    keys.push(point);
+  }
+  return keys;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -500,6 +656,66 @@ function readHistoryEntries(value: unknown): HistoryEntryView[] {
  * not. `uptimeMs` therefore stays null — the CLI does not report it, and inventing a number the
  * console did not observe would be worse than an empty field.
  */
+/**
+ * Which registration step each command completes (t35 §2.1). `poll`, `history` and `send` complete
+ * none: they are not steps, and a console that folded them onto one would report progress the
+ * operator did not make.
+ */
+const SETUP_STEP_OF: Readonly<Record<string, number | undefined>> = {
+  init: 1,
+  "relay publish": 2,
+  "contact export": 3,
+  "contact import": 4,
+  doctor: 5,
+};
+
+/** `doctor` completes step 5 only with a non-zero `contact_count`; every other step, on exit 0. */
+function stepSucceeded(request: CliRequest, outcome: CliOutcome): boolean {
+  if (request.command !== "doctor") return true;
+  return isRecord(outcome.data) && asNumber(outcome.data.contact_count, 0) > 0;
+}
+
+/** The `identity_id` an `init` or a `doctor` reported, which is what proves the profile is there. */
+function reportedIdentity(request: CliRequest, outcome: CliOutcome): string | undefined {
+  if (request.command !== "init" && request.command !== "doctor") return undefined;
+  if (!outcome.ok || !isRecord(outcome.data)) return undefined;
+  return typeof outcome.data.identity_id === "string" ? outcome.data.identity_id : undefined;
+}
+
+/**
+ * Folds one outcome onto the active profile's checklist. Pure, and derived from nothing but the
+ * result the CLI returned.
+ *
+ * A profile with no `setup` is untouched: the checklist belongs to profiles the composition root
+ * built, and every surface that predates it keeps the shape it had.
+ *
+ * Two rules, both of which are refusals to guess. A step that succeeded says NOTHING about the steps
+ * after it, so they are returned to `pending` rather than inherited — a stale failure from an
+ * earlier attempt is not evidence about a step that has not been tried since. And `state` moves only
+ * on the two things a result actually proves: `INVALID_CONFIGURATION` at exit 2 proves the profile
+ * is not there (six causes share that one code, and this is all of it the console can know), and an
+ * `identity_id` proves it is.
+ */
+function foldSetup(state: OperatorState, request: CliRequest, outcome: CliOutcome): readonly ProfileView[] {
+  const step = SETUP_STEP_OF[request.command];
+  const identity = reportedIdentity(request, outcome);
+  const absent = !outcome.ok && outcome.code === "INVALID_CONFIGURATION" && outcome.exitCode === 2;
+
+  return state.profiles.map((profile, index) => {
+    const setup = profile.setup;
+    if (index !== state.activeProfile || setup === undefined) return profile;
+
+    const profileState: ProfileState | undefined = absent ? "absent" : identity !== undefined ? "ready" : profile.state;
+    if (step === undefined) return { ...profile, state: profileState };
+
+    const value: StepOutcome = outcome.ok
+      ? (stepSucceeded(request, outcome) ? "ok" : "pending")
+      : { failed: outcome.code, exitCode: outcome.exitCode };
+    const folded = setup.map((previous, at): StepOutcome => (at === step ? value : at > step ? "pending" : previous));
+    return { ...profile, state: profileState, setup: folded };
+  });
+}
+
 export function applyOutcome(state: OperatorState, request: CliRequest, outcome: CliOutcome, atMs: number): OperatorState {
   const health = outcome.ok
     ? { ...state.health, status: "healthy" as const, checkedAtMs: atMs }
@@ -507,12 +723,16 @@ export function applyOutcome(state: OperatorState, request: CliRequest, outcome:
       ? { ...state.health, status: "unreachable" as const, checkedAtMs: atMs }
       : state.health;
   const touchedRelay = request.command === "poll" || request.command === "relay publish" || request.command === "send";
-  const next: OperatorState = { ...state, health: touchedRelay ? health : state.health };
+  const next: OperatorState = { ...state, health: touchedRelay ? health : state.health, profiles: foldSetup(state, request, outcome) };
 
   if (!outcome.ok) return next;
   const data = outcome.data;
 
   switch (request.command) {
+    // `init` returns the identical `summary()` shape `doctor` returns — `identity_id`, `device_id`,
+    // `profile_id` — so the same case serves both (t35 §2.1). One fold, no second parser, and no
+    // second place for a child's bytes to enter the state unfiltered.
+    case "init":
     case "doctor": {
       if (!isRecord(data)) return next;
       // `label`, `relayUrl` and `profileDir` come from the operator's own argv and are outside this
@@ -562,7 +782,10 @@ export function applyOutcome(state: OperatorState, request: CliRequest, outcome:
  * be driven end to end by a test with no process and no terminal.
  */
 export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
-  let current = state;
+  // The first of the two moments a clock reading is folded in (t35 §2.3). It is done HERE, in the
+  // one impure function, so that `reduce` can build a timestamped export path without reading a
+  // clock and `renderFrame` stays a deterministic function of its two arguments.
+  let current: OperatorState = { ...state, observedAtMs: state.observedAtMs ?? io.now() };
   let running = true;
 
   /**
@@ -641,7 +864,8 @@ export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
       case "run-cli": {
         const outcome = await io.runCli(effect.request);
         note(`${effect.request.command} → ${outcome.code} (exit ${outcome.exitCode})`);
-        current = { ...applyOutcome(current, effect.request, outcome, io.now()), busy: false };
+        // The second moment the clock is read into the state, for the reason above.
+        current = { ...applyOutcome(current, effect.request, outcome, io.now()), busy: false, observedAtMs: io.now() };
         if (effect.request.command === "contact import") {
           if (outcome.ok && confirmed !== undefined) observeContact(confirmed);
           confirmed = undefined;
@@ -685,6 +909,32 @@ export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
       paint();
     });
 
+    /**
+     * The one command the console runs that the operator did not press (t35 §2.1, §5 item 6).
+     *
+     * Without it the console begins knowing neither its own identity nor whether the profile exists
+     * — `"(run doctor)"` where an identity belongs, and a checklist that cannot say which step is
+     * next — which is flow 003 T2 §1.3's measured complaint. It is read-only, touches no relay,
+     * creates no trust, spawns exactly one child, and is subject to the same single-flight rule as
+     * every other command: it goes through `reduce`, so it sets `busy` and a keystroke arriving
+     * while it runs is refused and told so on the activity line.
+     *
+     * It runs only for a profile whose `state` is `"unknown"` — a profile the composition root built
+     * and has observed nothing about. A profile handed to this shell by a script, with no state to
+     * be unknown, is left exactly alone.
+     */
+    const askWhatIsThere = (): void => {
+      const profile = current.profiles[current.activeProfile];
+      if (profile === undefined || profile.state !== "unknown") return;
+      const step = reduce(current, { kind: "run", request: { command: "doctor", profileDir: profile.profileDir } });
+      current = step.state;
+      paint();
+      void (async () => {
+        for (const effect of step.effects) await apply(effect);
+        if (running) paint();
+      })();
+    };
+
     const finish = (): void => {
       io.stdin.setRawMode?.(false);
       io.stdin.pause();
@@ -692,9 +942,8 @@ export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
       settle(0);
     };
 
-    io.stdin.on("data", (chunk: Buffer) => {
-      if (!running) return;
-      const intent = mapKey(decodeKey(chunk), current);
+    const handleKey = (sequence: string): void => {
+      const intent = mapKey(decodeKey(sequence), current);
       if (intent === undefined) return;
       const open = current.modal;
       const step = reduce(current, intent);
@@ -711,8 +960,26 @@ export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
         if (running) paint();
         else finish();
       })();
+    };
+
+    io.stdin.on("data", (chunk: Buffer) => {
+      if (!running) return;
+      const text = chunk.toString("utf8");
+      /*
+       * One chunk can carry more than one keystroke, and each of them is the operator's. While the
+       * compose row is open the chunk is the operator's TEXT instead, and is inserted whole.
+       *
+       * Nothing here evades the single-flight rule: `reduce` sets `busy` synchronously, and the D-1
+       * gate reads it, so the second key of a burst meets a console that is already running one
+       * command and is refused exactly as a second keystroke a second later would be.
+       */
+      for (const key of current.input === undefined ? splitKeystrokes(text) : [text]) {
+        if (!running) return;
+        handleKey(key);
+      }
     });
 
     paint();
+    askWhatIsThere();
   });
 }
