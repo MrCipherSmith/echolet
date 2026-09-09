@@ -75,12 +75,13 @@ Commands return exit code `0` on success, `2` for input/configuration errors, `3
 
 ### `send`: where the message body comes from
 
-The body may be given with `--text` or on stdin. When `--text` is present it wins and **stdin is never read**.
+The body may be given with `--text` or on stdin. `--text` counts as supplied whenever it appears on the command line, empty value included; when it is supplied **stdin is not read**, and the decision is made from the flag alone.
 
 | Body source | Behaviour |
 |---|---|
 | stdin, `--text` absent | The bytes read to EOF, decoded UTF-8 and **untrimmed** — a trailing newline is part of the message, so the same text supplied two ways does not produce two different ciphertexts. |
-| `--text <text>` | Unchanged from earlier releases and still supported. stdin is not read, not even to check. |
+| `--text <text>`, non-empty | Still supported and unchanged from earlier releases. stdin is not read, not even to check. |
+| `--text ""` | `INVALID_ARGUMENTS`, exit 2, and stdin is still not read. This is the one thing about the `--text` path that DID change during flow 004: for one commit an explicitly supplied empty value was reclassified as "absent" and the body was read from stdin instead, which turned `--text "$*"` called with no message from an immediate failure into a hang wherever stdin is an inherited pipe nobody closes. The refusal needs no read of stdin — an empty string and an absent flag are already distinguishable in the parsed arguments — so restoring it does not reopen the hang the precedence rule below exists to avoid. |
 | Both | `--text` wins, silently. Refusing the ambiguity was specified first and reverted: detecting it requires reading stdin to EOF even when `--text` was given, so a caller whose stdin is an inherited pipe nobody closes — a service, a `docker exec` without a TTY — would hang instead of sending. A silent precedence beats a loud refusal only because the loud one cannot be implemented without that hang. |
 | Neither (empty stdin) | `INVALID_ARGUMENTS`, exit 2. |
 | Over the 65536-byte plaintext bound | `INVALID_MESSAGE`, exit 2 — the same bound and the same code the messenger already enforces. |

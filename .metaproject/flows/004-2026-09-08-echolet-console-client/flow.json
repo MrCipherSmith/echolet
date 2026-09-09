@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T00:14:22.101Z",
+  "updatedAt": "2026-09-09T00:28:36.727Z",
   "source": {
     "type": "description",
     "ref": null
@@ -151,7 +151,7 @@
       "id": "T8",
       "title": "RED tests for the three gaps verification found: the real spawn argv, the console's stdin write, and an empty --text",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
@@ -162,6 +162,29 @@
             "at": "2026-09-09T00:14:22.100Z",
             "outcome": "started",
             "detail": "Three mutations survived verification (M5, M6, M7) and one behavioural claim by the orchestrator was false. Tests first, by a fresh agent; the orchestrator writes none of them this time."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Fix the empty --text defect and the orchestrator's three false claims",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T00:28:36.727Z",
+            "outcome": "started",
+            "detail": "Dispatched to a fresh agent rather than fixed by the orchestrator, who wrote both the defect and the false claims and must not be the one to sign them off. It also reconciles the now-superseded unsound doctor offline test."
           }
         ]
       },
@@ -248,6 +271,21 @@
       "at": "2026-09-09T00:14:22.101Z",
       "event": "task-attempt",
       "detail": "T8: started (attempt 1) — Three mutations survived verification (M5, M6, M7) and one behavioural claim by the orchestrator was false. Tests first, by a fresh agent; the orchestrator writes none of them this time."
+    },
+    {
+      "at": "2026-09-09T00:28:29.632Z",
+      "event": "task-done",
+      "detail": "T8: RED tests for the three gaps verification found: the real spawn argv, the console's stdin write, and an empty --text"
+    },
+    {
+      "at": "2026-09-09T00:28:31.528Z",
+      "event": "task-added",
+      "detail": "T9: Fix the empty --text defect and the orchestrator's three false claims"
+    },
+    {
+      "at": "2026-09-09T00:28:36.727Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — Dispatched to a fresh agent rather than fixed by the orchestrator, who wrote both the defect and the false claims and must not be the one to sign them off. It also reconciles the now-superseded unsound doctor offline test."
     }
   ]
 }

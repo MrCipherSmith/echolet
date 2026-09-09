@@ -214,8 +214,10 @@ async function main(): Promise<number> {
       // body to EOF: this is why the body is not on argv, where `ps` would show the plaintext of an
       // end-to-end encrypted message to every process this user owns. It is written and never
       // logged. `--text` is not passed alongside it, and that matters: the CLI resolves `--text`
-      // first and does not read stdin at all when it is present, so a body sent both ways would be
-      // silently ignored here rather than refused.
+      // first and does not read stdin when the flag is supplied at all — a non-empty value wins
+      // outright, and an empty one is `INVALID_ARGUMENTS`. So a body sent both ways would be
+      // silently ignored here rather than refused, and an empty `--text` would refuse the send
+      // outright however good the body on stdin was. Passing the flag can only lose.
       //
       // Every other command still gets an empty, immediately closed stdin.
       if (request.command === "send") child.stdin.end(request.text, "utf8");

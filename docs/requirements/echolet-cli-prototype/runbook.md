@@ -102,30 +102,34 @@ and its limits.
 
 Bob simply does not poll. Nothing else is required to make him "offline".
 
-```sh
-a send --to "$BID" --text "Привет, Боб. Это первое сообщение через Echolet."
-b poll
-```
-
 > **`--text` shows the message to anyone with a shell on this host.** Process
 > arguments are readable through `ps` by every process the same user owns, so a
 > body passed this way is exposed locally for as long as the command runs — the
 > encryption protects it on the wire, not in the process table. `--text` keeps
-> working and every step below still uses it, because these steps are a
-> reproducible walkthrough with quotable output. For a real message, pipe the
-> body on stdin instead and it never reaches argv:
+> working, and every `send` in this runbook uses it — the one directly below, the
+> reply in §7, both retries in §8 and the unsolicited send under "Failure paths"
+> — because these steps are a reproducible walkthrough with quotable output. For
+> a real message, pipe the body on stdin instead and it never reaches argv:
 >
 > ```sh
 > printf '%s' "Привет, Боб. Это первое сообщение через Echolet." | a send --to "$BID"
 > ```
 >
-> When `--text` is given, stdin is **not read at all** and the flag wins. The
+> When `--text` is supplied, stdin is **not read at all** and the flag wins. The
 > alternative — refusing the ambiguity — was tried and reverted: detecting that
 > both sources were supplied means reading stdin to EOF even when `--text` was
 > given, so any caller whose stdin is an inherited pipe nobody closes (a service,
-> a `docker exec` without a TTY) would hang instead of sending. The body is taken
-> untrimmed, so a trailing newline is part of the message — use `printf` rather
-> than `echo` when that matters.
+> a `docker exec` without a TTY) would hang instead of sending. One value is
+> refused rather than used: `--text ""` is `INVALID_ARGUMENTS`, exit 2, and reads
+> no stdin either — so `--text "$*"` in a wrapper called with no message fails
+> immediately instead of waiting on a pipe that may never close. The body is
+> taken untrimmed, so a trailing newline is part of the message — use `printf`
+> rather than `echo` when that matters.
+
+```sh
+a send --to "$BID" --text "Привет, Боб. Это первое сообщение через Echolet."
+b poll
+```
 
 ```json
 {"ok":true,"data":{"messageId":"4ba942f0-...","envelopeId":"94a6f678-...","status":"delivered"}}
