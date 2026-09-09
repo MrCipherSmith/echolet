@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T00:39:53.934Z",
+  "updatedAt": "2026-09-09T00:45:06.759Z",
   "source": {
     "type": "description",
     "ref": null
@@ -192,6 +192,28 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "RED tests for the compose surface: an input mode, control-character filtering, frame exactness while typing",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T00:45:06.759Z",
+            "outcome": "started",
+            "detail": "Third wall: decodeKey collapses every chunk to one lower-cased character, so no operand can be typed. Tests first, pure layer, by a fresh agent. The orchestrator writes none of them."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -292,6 +314,16 @@
       "at": "2026-09-09T00:39:53.934Z",
       "event": "task-done",
       "detail": "T9: Fix the empty --text defect and the orchestrator's three false claims"
+    },
+    {
+      "at": "2026-09-09T00:44:52.786Z",
+      "event": "task-added",
+      "detail": "T10: RED tests for the compose surface: an input mode, control-character filtering, frame exactness while typing"
+    },
+    {
+      "at": "2026-09-09T00:45:06.759Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — Third wall: decodeKey collapses every chunk to one lower-cased character, so no operand can be typed. Tests first, pure layer, by a fresh agent. The orchestrator writes none of them."
     }
   ]
 }

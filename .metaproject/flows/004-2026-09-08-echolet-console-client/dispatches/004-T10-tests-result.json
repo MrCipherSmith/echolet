@@ -1,0 +1,253 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-004-t10-tests",
+  "dispatch_id": "004-T10-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Four new test files, no source file changed, specifying the pure layer of the console's input mode per t35-console-client-design.md §3.1/§3.2. 56 test cases, 28 red on this tree, `tsc --noEmit` green (the red is in assertions, never in the compiler). tui-shell.input.test.ts pins that typed text reaches state at all with its case intact and that no C0/DEL/C1 code point can enter the buffer from any chunk — asserted over state.input.buffer with renderFrame deliberately not imported, so a filter added inside the renderer leaves it exactly as red. shell-chrome.input.test.ts re-proves AC6 (exactly rows x cols, total, deterministic, escape-free, notice on every frame) with the input row open and a body longer than any supported pane, plus three assertions that force the row onto the screen so the exactness half cannot pass vacuously. tui-shell.inputTrustExclusion.test.ts makes input+modal coexistence unreachable in both orders and asserts it as an invariant over the whole intent vocabulary. tui-shell.inputViewport.test.ts drives the real runTuiShell (no process, no terminal) at both sides of MIN_VIEWPORT so the shell half of the painted-at gate cannot decay silently the way flow 003 T25's mutation M-A' showed it could.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "1. Typed text accumulates: printable characters, including non-ASCII, reach the buffer with their case intact",
+      "status": "met",
+      "evidence": "tui-shell.input.test.ts describe T10-A, six cases driving the whole real pipeline decodeKey -> mapKey -> reduce (never a hand-built KeyEvent, because decodeKey's toLowerCase() at tui-shell.ts:211 is the defect). RED: 'expected \"\" to be \"Hello\"', 'expected \"\" to be \"MiXeD CaSe SHOUTING quiet\"', 'expected \"\" to be \"Привет, Надя\"', 'expected \"\" to be \"многострочная вставка одним куском\"' (one paste chunk, not its first code point), 'expected { kind: \"run\", request: {...} } to deeply equal { kind: \"input-insert\", text: \"H\" }', 'expected undefined to deeply equal { kind: \"input-backspace\" }'."
+    },
+    {
+      "criterion": "2. AC7: control characters and escape sequences never enter the state, proven at the reducer boundary and not inside renderFrame",
+      "status": "met",
+      "evidence": "tui-shell.input.test.ts describe T10-B. Exhaustive over all 65 code points of C0 + DEL + C1, each delivered alone and embedded in a paste; a 400-trial seeded-LCG sweep over a mixed alphabet (control ranges, ASCII, Cyrillic, an astral pair, ESC, DEL); and a long-sequence case so a filter applied once at open time cannot pass. `renderFrame` is not imported by that file at all, so a renderer-side fix leaves every assertion in it exactly as red — which is what t35 §5 item 4 asks for. The non-vacuous half is RED: 'expected \"\" to be \"safe[31mred\"' — the design's own wording, a paste with an escape sequence inserts its printable remainder and nothing else."
+    },
+    {
+      "criterion": "3. The frame stays exactly rows by cols while typing, at the minimum viewport and beyond, with a body longer than the pane is wide; renderFrame stays pure, total and deterministic (AC6)",
+      "status": "met",
+      "evidence": "shell-chrome.input.test.ts describe T10-G: seven viewports (72x16, 96x28, 120x40, 203x61, and the three that bracket the isBelowMinViewport disjunction: 40x10, 71x16, 72x15) x five buffers including a 600+ code point body in four scripts; plus totality at six hostile viewports (0x0, 1x1, -5x3, 72.7x16.2, 5x200, 400x2), determinism (two calls deep-equal) and non-mutation (JSON before/after). These pass today because renderFrame ignores the field; they are made non-vacuous by T10-I, which is RED: 'at 72x16: expected [frame] to contain SYNTHETIC_COMPOSE_MARKER'."
+    },
+    {
+      "criterion": "4. Input mode and the trust modal cannot be open at once, in either order",
+      "status": "met",
+      "evidence": "tui-shell.inputTrustExclusion.test.ts. Order one: `input-open` is refused by the REDUCER while a modal is open, and mapKey routes every key to the modal (no intent starting 'input-' for any of eight chunks). Order two: `input-open` is refused while `busy`, which is the mechanism — a trust modal is only ever opened by the contact-import handshake (tui-shell.ts:398-404), which only runs while a child is alive. Then the invariant: over 6 states x 14 intents (every existing intent plus the five new ones), reduce never returns a state with both modal and input defined; and `answer-trust-prompt{answer:true}` is emitted by no intent other than trust-confirm. RED: 'still opens the input row when nothing is in flight and no modal is up' — 'expected undefined to be defined', the assertion that stops the two refusals being satisfied by never opening the row at all."
+    },
+    {
+      "criterion": "5. The unaudited-prototype notice survives every input state and no emitted line exceeds the viewport width",
+      "status": "met",
+      "evidence": "shell-chrome.input.test.ts describe T10-H: UNAUDITED_NOTICE present on every frame at all seven viewports x five buffers (joined without a separator, because below the minimum the notice is wrapped rather than truncated), still on row 0 at every supported viewport, and no ESC byte anywhere. Width: every line is asserted both == cols and <= cols. AC8's way-out half is T10-J, RED: 'at 72x16: expected [frame] to match /ctrl-c/i' — while composing, `q` is text, so a footer still advertising '[q] quit' would be the lie shell-chrome.ts:125 refuses."
+    },
+    {
+      "criterion": "6. Nothing typed can be submitted below the minimum viewport, reusing the trust modal's painted-at gate rather than a second rule",
+      "status": "met",
+      "evidence": "Two halves, deliberately split the way flow 003 T25 showed they must be. Reducer half, tui-shell.input.test.ts T10-E: a submit with renderedAt null emits no effect and leaves the state byte-identical (passes vacuously today), paired with 'does something when the input row HAS been painted' which is RED ('a painted submit did nothing at all'), so 'refuse everything' is not a passing fix. Shell half, tui-shell.inputViewport.test.ts: the real runTuiShell at 40x10 / 71x16 / 72x15 runs no CLI request on Enter and the frames there carry none of the body, and at 72x16 / 96x28 Enter produces a `send` request whose `to` is the selected contact and whose `text` is the buffer byte for byte. All five RED."
+    },
+    {
+      "criterion": "No source file changed",
+      "status": "met",
+      "evidence": "`git status --porcelain` lists exactly four untracked files, all *.test.ts under apps/cli/src/tui, plus two .metaproject/flows/004 files modified by the orchestrator before this dispatch began. `pnpm --filter @echolet/cli exec tsc -p tsconfig.json --noEmit` exits 0 on this tree, so the new files compile against the current types and the redness is in assertions."
+    },
+    {
+      "criterion": "Every timeout taken from apps/cli/test/childProcessTimeouts.ts; no new millisecond literal",
+      "status": "met",
+      "evidence": "All four files are pure or driven through an injected TuiIo; none spawns a process, opens a terminal, touches a store or a relay, and none declares a timeout, so none imports from childProcessTimeouts.ts. The one wait in the suite is `setImmediate` (a microtask drain copied in shape from tui-shell.trustViewport.test.ts), not a delay. `grep` for a millisecond literal across the four files finds none; the only numeric constants are viewport sizes, byte bounds and one fixed epoch instant (1_757_000_000_000) already used by four existing TUI suites."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T10-tests-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This record.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-09T00-57-26-626Z_read.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "The whole captured vitest run of the four new files, read after the fact rather than piped through head/tail. 4 files failed, 28 failed | 28 passed (56), 605ms.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/tui/tui-shell.input.test.ts",
+      "change": "added"
+    },
+    {
+      "path": "apps/cli/src/tui/shell-chrome.input.test.ts",
+      "change": "added"
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.inputTrustExclusion.test.ts",
+      "change": "added"
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.inputViewport.test.ts",
+      "change": "added"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T10-tests#F-001",
+      "reviewer": "004-T10-tests",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.input.test.ts",
+      "line": 38,
+      "symbol": "input-open / input-insert / input-backspace / input-cancel / input-submit",
+      "problem": "The design (§3.1) names an `inputKey(key, state)` returning four intent kinds but never writes the intent literals, and it never names an OPEN intent at all — §2.2 opens the row with `w` on a chat pane and §2.3 with `n` on a contacts pane, and neither pane exists yet (the pane budget of §3.4 is a different task). A test written against a key binding would have pre-decided the pane model.",
+      "impact": "Decided, not left open: this dispatch pins five intents — {kind:'input-open', field}, {kind:'input-insert', text}, {kind:'input-backspace'}, {kind:'input-cancel'}, {kind:'input-submit'} — and every test opens the row through `input-open` rather than through a key. The input mode is therefore fully specified without constraining which key opens which field. `input-insert` carries `text` (the raw `key.sequence`), and the FILTER is asserted to live in `reduce`, per §3.1 and AC7.",
+      "suggested_fix": "Implement exactly these five members on `Intent` in intents.ts and the `InputState`/`InputField` shapes of §3.1 on state.ts. The pane task that lands `w`/`n` then only has to produce `input-open`.",
+      "evidence": "t35-console-client-design.md §3.1 gives the state shape and the routing order but no intent literals; §2.2 step 1 and §2.3 give the keys.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T10-tests#F-002",
+      "reviewer": "004-T10-tests",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/shell-chrome.input.test.ts",
+      "line": 231,
+      "symbol": "tooSmallFrame / footerLine",
+      "problem": "§3.1 makes `q` TEXT while composing and keeps only Ctrl-C as the way out, but the design never says what becomes of the two places the console currently advertises `q`: the footer's '[q] quit' (shell-chrome.ts:95) and the degraded frame's 'resize, or press q to quit' (shell-chrome.ts:229). Both would be advertising an unbound key, which is exactly the lie shell-chrome.ts:125 says a footer must never tell, and AC8 requires the way out to be available or explained in every state.",
+      "impact": "Decided in the weakest form that still refuses the lie: T10-J asserts only that /ctrl-c/i appears somewhere on every composing frame, at all seven viewports. The implementer may satisfy it by replacing the quit label while composing or by adding ctrl-c beside it; no wording and no layout is pinned. Whether '[q] quit' should also DISAPPEAR while composing is left to the footer-honesty task (design T-11), which owns that relation.",
+      "suggested_fix": "While `state.input` is defined, name ctrl-c in the footer and in tooSmallFrame's resize line, and drop or requalify the `q` label. Land the per-pane footer-honesty relation (T-11) in the same wave so the two cannot drift.",
+      "evidence": "Measured on this tree: at 72x16 the composing frame's footer reads '[1-5] pane  [p] poll  [d] doctor  [r] publish  [?] help  [q] quit' and the 40x10 degraded frame reads 'resize, or press q to quit'. Both are in the captured run log.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T10-tests#F-003",
+      "reviewer": "004-T10-tests",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/tui-shell.input.test.ts",
+      "line": 1,
+      "symbol": "the 28 currently-passing cases",
+      "problem": "28 of the 56 cases pass on this tree. Every one of them is a property that is vacuously true while `state.input` is a field renderFrame and reduce ignore: the AC7 control-character sweeps (the buffer never exists, so it never holds a control character), the frame-exactness sweeps (the row is never painted, so the frame is trivially the right shape), the coexistence invariant (input never opens, so it never coexists), and the unpainted-submit refusal (submit is never mapped).",
+      "impact": "Bounded, and deliberately so: each vacuous group is paired with a RED case that makes the degenerate implementation fail. Control characters: T10-B's 'inserts the printable remainder' is red. Frame exactness: T10-I's 'paints the buffer' is red. Coexistence: T10-L's 'still opens the input row' is red. Unpainted submit: T10-E's 'does something when painted' is red, and the whole of tui-shell.inputViewport.test.ts is red. So no group can be satisfied by not building the feature. What cannot be claimed from this run is that the vacuous halves are correct — only that they will become real the moment the field exists.",
+      "suggested_fix": "The implementer should re-run these four files after the field exists and confirm the 28 flip from vacuous-pass to real-pass. A verify task should mutate the reducer's filter, the busy/modal refusals and paint()'s isBelowMinViewport condition and confirm each is killed — paint()'s condition is the one flow 003 T25 measured surviving.",
+      "evidence": "Per-file tally from the captured log: tui-shell.input 7 pass / 19 fail; shell-chrome.input 14 pass / 3 fail; inputTrustExclusion 7 pass / 1 fail; inputViewport 0 pass / 5 fail.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-004",
+      "global_id": "004-T10-tests#F-004",
+      "reviewer": "004-T10-tests",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.input.test.ts",
+      "line": 320,
+      "symbol": "maxBytes for the message field",
+      "problem": "§8 Q2 leaves open WHERE the plaintext byte bound should live — a MAX_PLAINTEXT_BYTES in packages/protocol/src/constants/limits.ts, or a leaf module in apps/cli imported by both — and records that the design could not run the build that would settle it. It does not leave the VALUE open: outbound.ts:22 (zod) and outbound.ts:118 (Buffer.byteLength) both bound plaintext at 65536.",
+      "impact": "The test pins the value (65_536) and not the home, so either answer to Q2 satisfies it. It also pins that the bound is counted in UTF-8 BYTES rather than code points, because outbound.ts:118 counts bytes and a console that counted code points would let the operator compose a body the CLI then refuses with INVALID_MESSAGE at exit 2. The other six fields are asserted only to have a positive safe-integer bound; §3.1's 1024 for paths/URLs and 128 for names are deliberately NOT pinned, so a later measurement can move them without a test rewrite.",
+      "suggested_fix": "Whoever settles Q2 should make the message bound reference that single constant rather than a third literal — §1.3 item 4 already records that this package has two literals for this one quantity.",
+      "evidence": "t35 §8 Q2; apps/cli/src/runtime/outbound.ts:22 and :118.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-005",
+      "global_id": "004-T10-tests#F-005",
+      "reviewer": "004-T10-tests",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.inputViewport.test.ts",
+      "line": 196,
+      "symbol": "what input-submit emits",
+      "problem": "§2.2 specifies the `message` field's submit completely — a run SEQUENCE of `send` then `history --with <to>` — but run sequences are the design's T-5 and the other six fields' submits belong to the registration and address-book tasks. A test that pinned the sequence here would specify a mechanism this dispatch was not asked for.",
+      "impact": "Two assertions were weakened on purpose. In the pure file, a painted submit is asserted only to be 'not a no-op' (state changed OR at least one effect). In the driven file, only requests[0] is read, so a single request and a two-request sequence both satisfy it — while `command`, `to` and `text` are pinned exactly, so the recipient and the body cannot drift.",
+      "suggested_fix": "T-5's sequence test should assert the second request and the stop-at-first-non-zero-exit rule; this file needs no change when it lands.",
+      "evidence": "t35 §2.2 items 4-6, §3.3, and the T-5 row of the §7 table.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-006",
+      "global_id": "004-T10-tests#F-006",
+      "reviewer": "004-T10-tests",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.inputViewport.test.ts",
+      "line": 205,
+      "symbol": "double submit",
+      "problem": "The trust modal's suite pins that a second `y` after a decision reaches nothing. The equivalent for submit — a second Enter after a successful send — is not pinned here.",
+      "impact": "Untested, and named as such. It is not the same size of hazard: §2.2 mints one message id per body and a byte-identical retry with the same id is the idempotent path the outbox is built for (outbound.ts:124-125), so a duplicate Enter is absorbed rather than duplicated. Stating it properly needs the `TuiIo.newMessageId` seam of design T-6, which this dispatch does not own.",
+      "suggested_fix": "Pin it in T-6's message-id test, together with 'a new id after an edit, the same id on an unchanged retry'.",
+      "evidence": "t35 §2.2 'The message id is generated once per body and reused across retries'; tui-shell.trustViewport.test.ts:212-215 for the modal's equivalent.",
+      "confidence": "medium",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-007",
+      "global_id": "004-T10-tests#F-007",
+      "reviewer": "004-T10-tests",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.input.test.ts",
+      "line": 199,
+      "symbol": "a chunk that begins with ESC",
+      "problem": "§3.1 says a chunk beginning with ESC 'is treated as a key, not as text, so Esc still cancels', and §2.3 refuses to decode arrow keys at all. It does not say whether `ESC [ A` should cancel the input row or be ignored.",
+      "impact": "Decided as unreachable rather than answered, the way §8 Q7 handles profile switching: the test asserts only that nothing of the arrow sequence reaches the buffer and that the buffer is left either untouched or empty. Both readings pass; a decoder that inserted '[A' fails. A bare ESC is pinned exactly — it cancels and discards.",
+      "suggested_fix": "None needed. If a later task binds arrows for cursor movement inside the buffer it will have to state the escape-decoder trade-off §2.3 refuses, and this assertion will be the place that argument surfaces.",
+      "evidence": "t35 §3.1 and §2.3.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Should '[q] quit' be removed from the footer while composing, or should ctrl-c simply be added beside it?",
+      "why": "F-002. §3.1 makes `q` text while composing, so the current footer advertises an unbound key — the exact lie shell-chrome.ts:125 forbids. T10-J requires only that ctrl-c be named, so either answer passes today, but the two produce different footers and the per-pane footer-honesty relation (design T-11) will have to pick one.",
+      "options": [
+        {
+          "id": "replace",
+          "label": "While composing, the footer shows [ctrl-c] quit and drops [q] quit",
+          "recommended": true
+        },
+        {
+          "id": "add",
+          "label": "Keep [q] quit and add [ctrl-c] quit beside it",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q2",
+      "question": "Is 65536 the number the console should bound the compose buffer at, or should the console bound lower and leave headroom?",
+      "why": "F-004. The test pins 65_536 because that is what outbound.ts enforces twice. If the flow wants the console to refuse earlier than the CLI does — so that a rejected body never costs a child process — that is a different number and a different test.",
+      "options": [
+        {
+          "id": "match",
+          "label": "Match the CLI exactly, so the console never refuses what the CLI would accept",
+          "recommended": true
+        },
+        {
+          "id": "headroom",
+          "label": "Bound lower, with a stated margin",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "files_added": 4,
+    "source_files_changed": 0,
+    "tests_added": 56,
+    "tests_red_on_this_tree": 28,
+    "tests_green_vacuously": 28,
+    "test_files_added": 4,
+    "typecheck_exit_code": 0,
+    "vitest_exit_code": 1,
+    "vitest_duration_ms": 605,
+    "processes_spawned_by_new_tests": 0,
+    "machine_idle": false,
+    "load_average_1min_at_session_start": 22.6,
+    "load_average_1min_at_run_start": 15.43,
+    "load_average_1min_at_run_end": 15.63,
+    "load_average_15min_at_run_start": 23.11,
+    "load_note": "10-core machine, never idle during this dispatch: the operator's own VM and browser hold roughly half of it. 1-minute load ran 12.1-22.6 and the 15-minute average 22.4-37.7 throughout. The four new files spawn no process and the whole run took 605ms, so no figure here is load-sensitive; the load is recorded because every number in this record was measured on that machine."
+  },
+  "timestamp_utc": "2026-09-09T01:05:00Z"
+}
