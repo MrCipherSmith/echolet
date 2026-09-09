@@ -11,3 +11,8 @@
 - 2026-09-08T23:18:17.747Z - task-done: T5: RED tests for the two CLI prerequisites: send takes its body on stdin, doctor enumerates correspondents
 - 2026-09-08T23:18:19.861Z - task-attempt: T6: started (attempt 1) — Dispatching a different agent from the one that wrote the tests. It may not modify the tests to suit the implementation, and it does not accept its own work: an independent check follows.
 - 2026-09-08T23:54:37.689Z - task-done: T6: Implement the two CLI prerequisites, keeping the command surface at eight commands
+- 2026-09-08T23:55:59.595Z - task-added: T7: Independent verification of the first slice, including the parts the orchestrator authored
+- 2026-09-08T23:56:05.564Z - task-attempt: T7: started (attempt 1) — Raised by the implementer as Q0: the orchestrator authored part of the code, the test expectation and the documentation, and cannot be the one to accept them. A fresh agent verifies, with the orchestrator's own edits named as the first targets.
+- 2026-09-09T00:14:14.682Z - task-done: T7: Independent verification of the first slice, including the parts the orchestrator authored
+- 2026-09-09T00:14:16.570Z - task-added: T8: RED tests for the three gaps verification found: the real spawn argv, the console's stdin write, and an empty --text
+- 2026-09-09T00:14:22.101Z - task-attempt: T8: started (attempt 1) — Three mutations survived verification (M5, M6, M7) and one behavioural claim by the orchestrator was false. Tests first, by a fresh agent; the orchestrator writes none of them this time.

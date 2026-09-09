@@ -59,7 +59,14 @@
       "path": "/private/tmp/claude-502/-Users-Goodea-goodea-projects-echolet/0c21ebf8-6665-4623-bf8a-bcc512e73047/scratchpad/t6-full.log",
       "kind": "report",
       "exists": true,
-      "summary": "Full apps/cli suite: 54 passed / 1 failed of 55 files, 283 passed / 1 failed of 284 tests, RECORDED_EXIT=1, duration 218.97s.",
+      "summary": "Full apps/cli suite on the implementer-only tree: 54 passed / 1 failed of 55 files, 283 passed / 1 failed of 284 tests, RECORDED_EXIT=1, duration 218.97s. The single failure is F-001.",
+      "hash": null
+    },
+    {
+      "path": "/private/tmp/claude-502/-Users-Goodea-goodea-projects-echolet/0c21ebf8-6665-4623-bf8a-bcc512e73047/scratchpad/t6-full-confirm.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Confirming full apps/cli suite on the final combined tree (implementer plus the orchestrator's in-flight edits): 55 passed (55) files, 284 passed (284) tests, RECORDED_EXIT=0, duration 358.54s, loadavg 9.40 / CPU 560.8 at start.",
       "hash": null
     }
   ],
@@ -82,7 +89,7 @@
     },
     {
       "path": "apps/cli/src/tui/main.ts",
-      "change": "runCli writes the send body to the child's stdin and closes it; contact import still stays open for the trust answer; everything else still gets an empty closed stdin. Added a child.stdin error handler so an EPIPE from a child that exits mid-write cannot take the console down — survivable when stdin carried two bytes, not when it carries a message body."
+      "change": "runCli writes the send body to the child's stdin and closes it; contact import still stays open for the trust answer; everything else still gets an empty closed stdin. Added a child.stdin error handler so an EPIPE from a child that exits mid-write cannot take the console down — survivable when stdin carried two bytes, not when it carries a message body. NOTE: the orchestrator later rewrote the trailing sentence of this file's stdin comment to describe the precedence rule it reverted to; the code is as this implementer wrote it."
     },
     {
       "path": "docs/requirements/echolet-cli-prototype/specification.md",
@@ -187,16 +194,20 @@
     "prompt_tokens": null,
     "output_tokens": null,
     "retries": 1,
-    "tests_passed": 283,
-    "tests_failed": 1,
-    "test_files_passed": 54,
-    "test_files_failed": 1,
+    "tests_passed": 284,
+    "tests_failed": 0,
+    "test_files_passed": 55,
+    "test_files_failed": 0,
     "target_spec_tests_passed": 11,
     "target_spec_tests_failed": 0,
-    "suite_duration_s": 218.97,
-    "loadavg_1m_at_full_run": 9.72,
-    "cpu_percent_of_1000_at_full_run": 498.5,
-    "test_files_edited": 0
+    "suite_duration_s": 358.54,
+    "loadavg_1m_at_final_run": 9.4,
+    "cpu_percent_of_1000_at_final_run": 560.8,
+    "first_run_tests_passed": 283,
+    "first_run_tests_failed": 1,
+    "first_run_loadavg_1m": 9.72,
+    "test_files_edited_by_implementer": 0,
+    "test_files_edited_by_orchestrator_mid_dispatch": 1
   },
-  "timestamp_utc": "2026-09-09T00:45:00Z"
+  "timestamp_utc": "2026-09-09T00:58:00Z"
 }
