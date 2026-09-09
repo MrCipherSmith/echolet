@@ -33,3 +33,4 @@
 - 2026-09-09T01:48:39.845Z - task-attempt: T13: started (attempt 1) — Security first: a peer controls the plaintext of an inbound message, and it reaches a frame unfiltered. Three other paths do too. Second, the single-flight rule on the submit path, whose mutation survived and is reachable in two keystrokes.
 - 2026-09-09T02:06:37.104Z - task-added: T14: Close the escape-sequence hole at the six narrowing boundaries, and keep the submit path single-flight
 - 2026-09-09T02:06:42.763Z - task-attempt: T14: started (attempt 1) — A fresh agent, not the test author and not the orchestrator. Six narrowing functions, not the renderer; the zero-width joiner must survive, which catches a strip-every-format-character fix.
+- 2026-09-09T02:23:51.426Z - task-done: T14: Close the escape-sequence hole at the six narrowing boundaries, and keep the submit path single-flight

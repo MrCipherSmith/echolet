@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T02:06:42.763Z",
+  "updatedAt": "2026-09-09T02:23:51.426Z",
   "source": {
     "type": "description",
     "ref": null
@@ -288,7 +288,7 @@
       "id": "T14",
       "title": "Close the escape-sequence hole at the six narrowing boundaries, and keep the submit path single-flight",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T13"
       ],
@@ -304,7 +304,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -470,6 +471,11 @@
       "at": "2026-09-09T02:06:42.763Z",
       "event": "task-attempt",
       "detail": "T14: started (attempt 1) — A fresh agent, not the test author and not the orchestrator. Six narrowing functions, not the renderer; the zero-width joiner must survive, which catches a strip-every-format-character fix."
+    },
+    {
+      "at": "2026-09-09T02:23:51.426Z",
+      "event": "task-done",
+      "detail": "T14: Close the escape-sequence hole at the six narrowing boundaries, and keep the submit path single-flight"
     }
   ]
 }
