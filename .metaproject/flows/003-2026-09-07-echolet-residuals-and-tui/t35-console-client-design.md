@@ -449,6 +449,30 @@ five are duplicates (§1.3 item 8), so:
 
 Nothing is lost: the health line and the rejection list keep the exact renderers they have today.
 
+**What "counts" means on the mailbox pane (flow 004 T26, AC2).** A count is a figure some command
+result carried, verbatim, or it is the absence of one — never arithmetic, never accumulation across
+results, and never an initial zero standing in for a report nobody made. The console holds no store
+key and cannot read `cli:outbox:*` itself, so what a command reported is the only honest source
+there is. That makes the two rows different, and the pane says which is which rather than printing
+two numbers that look alike:
+
+- **inbox** is `poll`'s own `received` (`runtime/inbound.ts:27`) — the envelopes accepted and
+  committed *by that poll*. It is shown as that poll's figure and never summed with an earlier one,
+  because per-poll deltas added together drift from the store the first time a result does not
+  arrive and nothing ever brings them back. A result that reports no figure reports nothing, so the
+  last poll's figure stands: an unreadable child does not erase what a readable one said.
+- **outbox** is empty, and the row says so in words. No command in the frozen eight reports a
+  pending count — `doctor`'s `diagnostics()` returns `profile_id`, `identity_id`, `device_id`,
+  `contact_count`, `contacts`, `storage` and `runtime`, and no outbox figure. The row is kept rather
+  than dropped so that the missing report is visible; an operator who cannot see that the console
+  has no view of its own outbox will assume it has one. What used to stand here was
+  `outboxPending + 1` on a *successful* send, which did not merely guess: a delivered message leaves
+  the pending set (`runtime/outbound.ts:289`, `:294`), so the figure moved the opposite way from the
+  store, and nothing decremented it.
+
+Adding a pending count to `doctor`'s result would give the row something true to show. That is a
+change to a CLI command's output and belongs to a task about the CLI, not to the console.
+
 **The footer becomes pane-aware.** Global keys (`1-5`, `p`, `d`, `r`, `t`, `?`, `q`) stay bound
 everywhere; list and compose keys (`j`, `k`, `Enter`, `w`, `s`, `i`, `n`) are bound per pane. The
 footer's rank-fitting (`shell-chrome.ts:109-123`) is unchanged; it just gets a shorter list. The
@@ -475,20 +499,45 @@ becomes a two-case statement rather than a one-case one.
 ### 4.1 The explanation table
 
 A new pure module, `failure-text.ts`, exporting one total function
-`explain(command, code, exitCode) -> {sentence, action}`. Total, because the CLI can return a code
-this table has never seen (`UNREADABLE_CLI_OUTPUT`, or a code added later) and the console must then
-say the code and the class rather than nothing. Keyed on **all three**, because
+`explain(command, code, exitCode) -> {command, code, exitCode, sentence, action}`. Total, because the
+CLI can return a code this table has never seen (`UNREADABLE_CLI_OUTPUT`, or a code added later) and
+the console must then say the code and the class rather than nothing. Keyed on **all three**, because
 `INVALID_CONTACT_CARD` is returned at exit 2 for a file that would not parse (`cli.ts:217-226`) and
 at exit 3 for a card that parsed and failed validation, expiry included (`:317-320`) — one code, two
 different things to do about it.
 
+**As built (flow 004 T26).** Three of the five fields are the three arguments, echoed: they are
+values a caller compares and a surface composes, and losing the CLI's own code would take away the
+string an operator quotes when they report a problem. The two strings are text a frame will carry, so
+the code is made paintable on its way into them and the echoed `code` field is left verbatim —
+`parseCliOutcome` keeps `error.code` exactly as the child printed it, which means it can carry an
+escape sequence, and this module composes new prose out of one. The module writes no `(exit N)` of
+its own and names no surface: the activity line composes `${command} → ${code} (exit ${N})` as it
+always has and adds the sentence and the action beside it. Two consequences worth stating, because
+neither is free: the code appears twice on a wide terminal, once as the value and once inside the
+sentence that explains it; and at `MIN_VIEWPORT` the activity line is one 72-column row, so the words
+are what gets clipped and the code and the number are what survive. That is the right way round, and
+it is why the words are an addition beside the code rather than a replacement for it.
+
 | Class | Codes seen from this tree | What the console says, and does |
 |---|---|---|
 | **2 — input/configuration** | `INVALID_ARGUMENTS`, `INVALID_CONFIGURATION`, `INVALID_CONTACT_CARD`, `INVALID_MESSAGE_ID`, `INVALID_MESSAGE` | The command was wrong, not the world. State stays put; the input row **reopens** with the rejected value so it can be corrected rather than retyped. `INVALID_CONFIGURATION` sets the profile to `"absent"` and jumps to the checklist. |
-| **3 — trust/protocol** | `TRUST_REJECTED`, `CONTACT_NOT_CONFIRMED`, `INVALID_CONTACT_CARD`, `PROTOCOL_REJECTED`, `PREKEY_BUNDLE_UNAVAILABLE`, `UNAUTHORIZED_MAILBOX_ACCESS`, `SENDER_QUOTA_EXCEEDED`, `CONTACT_NOT_TRUSTED`, `SENDER_NOT_PUBLISHED`, `CONTACT_PIN_MISMATCH`, `PREKEY_BUNDLE_EXPIRED`, `MESSAGE_ID_CONFLICT`, `OUTBOUND_REJECTED`, `PROFILE_REJECTED`, `INVALID_RELAY_RESPONSE` | Never flattened into one sentence — the CLI went to some trouble to keep three of them distinguishable (`cli.ts:24-58`) and the console is where that pays off. No trust state changes. `CONTACT_PIN_MISMATCH` is the one that raises an alarm and says so; the others say what to do. |
+| **3 — trust/protocol** | `TRUST_REJECTED`, `CONTACT_NOT_CONFIRMED`, `INVALID_CONTACT_CARD`, `PROTOCOL_REJECTED`, `PREKEY_BUNDLE_UNAVAILABLE`, `UNAUTHORIZED_MAILBOX_ACCESS`, `SENDER_QUOTA_EXCEEDED`, `CONTACT_NOT_TRUSTED`, `SENDER_NOT_PUBLISHED`, `CONTACT_PIN_MISMATCH`, `PREKEY_BUNDLE_EXPIRED`, `MESSAGE_ID_CONFLICT`, `OUTBOUND_REJECTED`, `PROFILE_REJECTED`, `INBOUND_REJECTED`, `CHALLENGE_EXPIRED` | Never flattened into one sentence — the CLI went to some trouble to keep three of them distinguishable (`cli.ts:24-58`) and the console is where that pays off. No trust state changes. `CONTACT_PIN_MISMATCH` is the one that raises an alarm and says so; the others say what to do. |
 | **4 — relay/network** | `RELAY_UNAVAILABLE` | `health.status` → `"unreachable"` (already: `tui-shell.ts:262`). "Retrying is safe." A composed message is kept with its message id, because the byte-identical retry is the designed path. |
 | **5 — persistence** | `PERSISTENCE_FAILURE` | "Do not retry blindly." On `contact export` it adds the one cause that is not a disk problem: the file already exists (`wx`). It never claims certainty — exit 5 is also a real storage failure. |
 | **bridge** | `UNREADABLE_CLI_OUTPUT` | The child's stdout was not one JSON envelope. Names the command and the exit code it did return, and says the console is showing nothing about it — which is honest, and is what `parseCliOutcome` already guarantees by never throwing. |
+
+**Two corrections to the class-3 row, measured while building the table (flow 004 T26, following
+004-T23-tests F-002).** `INVALID_RELAY_RESPONSE` was listed here and cannot reach the console under
+its own name: `classify` (`commands/cli.ts:472`) reads `error.remoteCode`, not `error.code`, and
+`transport/relayClient.ts:38` raises it as a LOCAL verdict with no remote code, so it is flattened to
+`PROTOCOL_REJECTED` before an envelope is ever written. An entry for it would explain a string the
+CLI cannot return, so it is gone. `INBOUND_REJECTED` (`runtime/inbound.ts:84`) and `CHALLENGE_EXPIRED`
+(`:107`) were missing and do reach the console: both are on the authentication path, and both abort
+the poll rather than being isolated into its `rejected` array. The per-envelope verdicts —
+`INVALID_ENVELOPE` and the rest — are deliberately still absent from every row: `inbound.ts:242`
+isolates them into `poll`'s `rejected` array instead of raising them, so they are painted by the
+rejection list and are not an exit class at all.
 
 The specific sentences the operator needs most, all of which the CLI itself cannot deliver (§1.3
 item 6):

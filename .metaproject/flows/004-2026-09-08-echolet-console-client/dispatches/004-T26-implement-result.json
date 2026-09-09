@@ -1,0 +1,261 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "004-T26-implement-2026-09-09",
+  "dispatch_id": "004-T26-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "AC2 and AC5 implemented against the red specification committed at 46bf89e, with no test file edited. Five source files: one new (apps/cli/src/tui/failure-text.ts) and four changed (state.ts, mailbox-pane.ts, tui-shell.ts, text.ts). AC2 — a mailbox count is now a figure some command result carried, verbatim, or the absence of one: MailboxView's two counts widen to `number | null`, createInitialState starts them null, `poll` writes `received` verbatim rather than adding it to the previous poll's, `send` writes no count at all, and applyOutcome writes `outboxPending: null` on every fold because no command in the frozen eight reports one. The increment that stood at tui-shell.ts:768 was not merely early: a successful send writes its outbox record `\"delivered\"` (outbound.ts:289) while `pending` is derived from the records still marked `\"pending\"` (:294), so `+ 1` moved the figure the opposite way from the store and nothing decremented it. The pane renders an absent count in words, never as a digit and never as a sentinel; `0` stays a figure a poll really can report. AC5 — failure-text.ts exports `explain(command, code, exitCode) -> {command, code, exitCode, sentence, action}`, total over the whole matrix: 23 code-and-class entries enumerated from `classify` (commands/cli.ts:465-477), one command override (`contact export` at exit 5, the failure whose class is most misleading), a per-class fallback that names the code and describes the class in WORDS, a separate answer for an exit code that is not a class at all, and a dedicated answer for the bridge's own UNREADABLE_CLI_OUTPUT. The prose writes no `(exit N)` of its own, so nothing can read a class out of it that the CLI did not return. The console composes `${command} → ${code} (exit ${N})  ${sentence} ${action}` — the head unchanged and first, so the code and the number are what survive when the row is clipped at MIN_VIEWPORT and the words are what go. Measured: every one of the 32 matrix cells composes to at most 200 columns at the 203-column viewport the specification measures at, checked by script over all 8 commands x 4 classes x both representative sets and over all 23 reachable codes x 8 commands. Test evidence on a 10-core machine that was never idle, carrying the operator's own VM and browser: the four specification files 34 tests, 32 passed, 2 failed; the whole apps/cli/src/tui 33 files reported against 33 counted on disk, 330 tests, 328 passed; the whole apps/cli package 73 files reported against 73 counted on disk (e2e included and green, 237.50s wall), 501 tests, 499 passed, 2 failed, exit 1, 1-minute load 13.1 at the start rising to 140.9 mid-run and 45.0 at the end. `tsc --noEmit` exits 0. TWO CASES REMAIN RED AND CANNOT BE MADE GREEN WITHOUT EDITING THE TEST, which was forbidden and was not done: T23-AC2-A's two cases read `freshState()`, a hand-written copy of the initial state that still carries the literals `outboxPending: 0, inboxReceived: 0` the same file's own REPRESENTATION paragraph says must become the absence — see finding F-001, which proves the defect is in the fixture rather than in the shape by pointing at a second committed test that requires the contradictory rendering of the same input. Every other one of the eight reds is green and no pre-existing test changed state: 476 passed before + 15 that failure-text.test.ts now contributes because the module exists + 8 reds turned = 499.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC2 — what the console shows after a send is what the store holds, not an optimistic local echo",
+      "status": "partial",
+      "evidence": "Nine of the eleven cases in tui-shell.storeTruth.test.ts pass, including all three PAIRs and the real-child case in main.processDriven.test.ts. Green: a send raises no outbox figure (T23-AC2-B x3, over success, over two successes and over all four refusal classes); a poll moves no outbox figure (T23-AC2-C); one poll's figure is not added to the next (3 then 0 reports 0); the driven shell paints no outbox figure after a send the console really made (T23-AC2-D, from `w`/type/Enter through the real stdin handler); and over real child processes the second poll's `received: 0` is what the pane shows, with `3` gone. The three anti-degenerate PAIRs are green too, so a console that showed nothing ever would not pass: a poll's own figure is still shown, an unreadable result does not erase a readable one's, and the driven frame still paints what a poll reported. NOT met: T23-AC2-A's two cases, which are unsatisfiable as written (F-001) — they assert over `freshState()`, which never goes through `applyOutcome` and hard-codes the two literals the fix removes from `createInitialState`."
+    },
+    {
+      "criterion": "AC2 — the count is never arithmetic and never an initial zero standing in for a report",
+      "status": "met",
+      "evidence": "There is no `+` on either count anywhere in `apps/cli/src`. `applyOutcome`'s poll case is `reportedCount(data.received, next.mailbox.inboxReceived)` — the result's own number, or, when the result carries none, the last figure that was reported, which is what keeps an unreadable child from erasing a readable one. Its send case returns `next` untouched. `outboxPending` is written `null` once for every command and every outcome, refusals included, with the reason on the line: no command in the frozen eight reports one, so there is no earlier report for a refusal to erase. `createInitialState` starts both at null. Verified by re-reading every one of the eight non-test sites the T23 record enumerated (state.ts:118,119,345; tui-shell.ts:755,756,768; mailbox-pane.ts:33,34); all eight are changed and no ninth writer exists."
+    },
+    {
+      "criterion": "AC5 — every exit class presented with a message accurate for the command that produced it",
+      "status": "met",
+      "evidence": "failure-text.test.ts is green in full: 15 tests, including T23-AC5-A's computed totality over CLI_COMMANDS x {2,3,4,5} (set size 32 asserted against the product of the frozen surface, not a fixture), T23-AC5-B's shape kill over 23 reachable codes x 8 commands = 184 cells with every cell answered by an entry of its own rather than by the default, T23-AC5-C's command-sensitive sentences, T23-AC5-D's one code at two classes, and T23-AC5-E's totality, determinism and paintability. The `contact export` exit-5 sentence names the file that already exists and the poll's does not, and it names A cause rather than THE cause — the action says a real storage failure looks the same, because the design forbids claiming certainty there."
+    },
+    {
+      "criterion": "AC5 — the console shows it, over the whole matrix, and never reports a class the CLI did not return",
+      "status": "met",
+      "evidence": "tui-shell.exitClassMatrix.test.ts is green in full, 4 tests. The RED case — for all 32 cells, the frame must carry `explain(...).sentence` and not only the code and the number — passes over the real `runTuiShell` driven from the real stdin handler, each cell started from the keyboard the way an operator would start it. Its three PINs still pass: the CLI's own code and exactly its class reach a frame with no other class on it; a successful command's frame names no class at all; and at MIN_VIEWPORT (72x16) the code and the number survive. The prose contains no `exit N` of its own at any class, which is what makes the second clause hold structurally rather than by inspection: an exit code outside the four classes (0, 1, 6, 127, -1, NaN) is answered by a sentence that names no class."
+    },
+    {
+      "criterion": "AC5 — a fallback that exists, names its own code and class, and answers two unknown codes differently",
+      "status": "met",
+      "evidence": "`GENERIC` gives each of the four classes its own words and describes the class in prose rather than as a number; `UNCLASSED` answers an exit code that is not a class at all and says exactly that. Both interpolate the code, so two unknown codes are answered differently, and neither can be mistaken for a real entry: T23-AC5-B's blanked-shape comparison finds no reachable cell whose shape equals the synthetic unknown's at the same class."
+    },
+    {
+      "criterion": "AC9 — no test weakened, skipped, narrowed or deleted",
+      "status": "met",
+      "evidence": "`git status --porcelain -- apps/` lists four modified source files and one untracked source file, and no test file at all. Measured rather than asserted: the whole apps/cli package was 486 tests / 476 passed / 10 failed at T23 and is now 501 / 499 / 2. 476 + 15 (failure-text.test.ts now loads, and it contributed 0 while the module did not exist) + 8 (the reds that turned) = 499 exactly, so no pre-existing test changed state in either direction."
+    },
+    {
+      "criterion": "Documents describing what the console shows are updated in the same change",
+      "status": "met",
+      "evidence": "t35-console-client-design.md gains an 'as built' paragraph under §4.1 recording the five-field shape, the two costs the composition carries (the code appears twice on a wide terminal; the words are what get clipped at the minimum viewport), and a 'what \"counts\" means on the mailbox pane' section under §3.4 stating the count rule and why the outbox row stays. Its class-3 code list is corrected: `INVALID_RELAY_RESPONSE` removed, because `classify` reads `error.remoteCode` and this is a local verdict with no remote code, so it is flattened to `PROTOCOL_REJECTED` before the console sees it (004-T23-tests F-002, now closed); `INBOUND_REJECTED` and `CHALLENGE_EXPIRED` added, because both reach the console and neither was listed. docs/requirements/echolet-cli-prototype/README.md gains a bullet beside the existing operator-TUI one, stating both changes in the terms a reader of that document needs."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T26-implement-result.json",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "This record.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/failure-text.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "New. The module t35 §4.1 names: `explain(command, code, exitCode)` over the whole command x exit-class matrix. 23 code-and-class entries enumerated from `classify`, one command override, a per-class fallback, an answer for an exit code that is not a class, and one for the bridge's own UNREADABLE_CLI_OUTPUT. Pure, total, deterministic; filters the CLI's own code on its way into prose and leaves the echoed `code` field verbatim.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/state.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "`MailboxView`'s two counts widen to `number | null` and carry the rule that governs them; `createInitialState` starts both null.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/mailbox-pane.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "An absent count renders as words — never a digit, never a sentinel — and each of the two rows says which silence it is. The inbox row names the figure as the last poll's rather than as a total.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "`applyOutcome` stops inventing both counts; `outcomeLine` composes the explanation beside the unchanged head on the activity line; `paintable` and `steersTheDisplay` move to the leaf module so there is still exactly one such predicate.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/text.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Now the home of `steersTheDisplay` and `paintable`, unchanged in behaviour, so `tui-shell.ts` and `failure-text.ts` share one predicate rather than keeping two in agreement.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t35-console-client-design.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "§4.1 records the module as built and corrects the class-3 code list; §3.4 gains what a mailbox count may be.",
+      "hash": null
+    },
+    {
+      "path": "docs/requirements/echolet-cli-prototype/README.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "One bullet beside the operator-TUI one, stating what the console may now claim about its counts and that every failure it shows carries words beside the code.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/tui/failure-text.ts", "change": "added" },
+    { "path": "apps/cli/src/tui/state.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/mailbox-pane.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/tui-shell.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/text.ts", "change": "modified" },
+    { "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t35-console-client-design.md", "change": "modified" },
+    { "path": "docs/requirements/echolet-cli-prototype/README.md", "change": "modified" },
+    { "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T26-implement-result.json", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T26-implement#F-001",
+      "reviewer": "004-T26-implement",
+      "severity": "major",
+      "file": "apps/cli/src/tui/tui-shell.storeTruth.test.ts",
+      "line": 119,
+      "symbol": "freshState",
+      "problem": "`freshState()` is described in its own docstring as a hand-written copy of `createInitialState` — \"Every field is the initial one; only the two counts are read\" — but it still carries the literals the file's REPRESENTATION paragraph (lines 53-59) says must become the absence: `mailbox: { outboxPending: 0, inboxReceived: 0, more: false, lastPolledAtMs: null }`. T23-AC2-A's two cases read that object DIRECTLY, without folding an outcome through `applyOutcome`, so `reported()` returns 0 and `.toBeNull()` cannot pass for any implementation. The same 0 is what `paneValue()` renders, so `expectsNoFigure` cannot pass either. Reported, not fixed: editing a test file was forbidden.",
+      "impact": "Two of the eight red cases the specification declares cannot be turned green by any change to source. They fail on this tree with the fix in place and would fail identically without it, so they measure the fixture rather than the console. The other six reds and all three PAIRs pass.",
+      "suggested_fix": "One line, and it belongs to whoever may edit the test: `mailbox: { outboxPending: null, inboxReceived: null, more: false, lastPolledAtMs: null }`. That makes `freshState()` the copy of `createInitialState` its docstring already claims it is. Both cases then pass against the shipped implementation, and this was MEASURED rather than argued: the shipped `buildMailboxSnapshot` was bundled with the package's own esbuild and both cases' four assertions replayed against a mailbox carrying that literal, outside the repository. All four pass — `reported()` returns null for both counts, the outbox row reads `no command reports an outbox count` and the inbox row `no poll has reported yet`, neither carrying a digit or a sentinel.",
+      "evidence": "PROOF THAT THE DEFECT IS THE FIXTURE AND NOT THE SPECIFIED SHAPE: two committed test files require contradictory renderings of the same input. `tui-shell.storeTruth.test.ts:192` requires `paneValue(mailbox, \"inbox\")` to contain NO digit for a mailbox whose `inboxReceived` is 0, while `main.processDriven.test.ts:456` requires the inbox row to CONTAIN \"0\" after a poll that reported `received: 0`. Both go through `buildMailboxSnapshot` with `inboxReceived === 0`; no implementation satisfies both. They are reconciled the moment `freshState()` supplies `null` for \"nothing has reported this\", which is exactly the distinction the file specifies and the pane implements: replayed against the shipped `buildMailboxSnapshot`, a null inbox renders `no poll has reported yet` and a reported zero renders `0 received by the last poll`, so both files are satisfied at once. Captured run: `Tests 2 failed | 499 passed (501)`, both failures `expected +0 to be null`.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.storeTruth.test.ts:119 — `freshState()`'s mailbox literal, the one site",
+          "apps/cli/src/tui/tui-shell.storeTruth.test.ts:172-183 — T23-AC2-A case 1, which reads it directly",
+          "apps/cli/src/tui/tui-shell.storeTruth.test.ts:185-193 — T23-AC2-A case 2, which reads it directly",
+          "apps/cli/src/tui/tui-shell.exitClassMatrix.test.ts:116 — the same literal in `stateWith`, and NOT a defect: that file asserts nothing about the counts, and 0 is a value the widened type still accepts",
+          "apps/cli/src/tui/tui-shell.test.ts:54, tui-shell.smallViewport.test.ts:42, tui-shell.externalText.test.ts:212, tui-shell.inputViewport.test.ts:77, profiles-pane.setup.test.ts:134, tui-shell.trustViewport.test.ts:79, mailbox-pane.test.ts:16,93 — the same literal in eight more fixtures, none of which asserts on a count either"
+        ],
+        "enumeration_method": "A routed rg for `outboxPending|inboxReceived` across apps/, packages/ and docs/ returned 49 matches in 27 files. Every one was read and classified: 8 non-test sites (all changed by this dispatch), 16 in the specification file itself, and 25 fixture literals. Each fixture was then checked against whether the file it lives in asserts anything about a count; exactly one does, and it is the one above. The nine other fixtures are unaffected because `number` remains assignable to `number | null`, which is why `tsc --noEmit` exits 0 with no test file touched."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T26-implement#F-002",
+      "reviewer": "004-T26-implement",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/profiles-pane.ts",
+      "line": 96,
+      "symbol": "stepHint",
+      "problem": "The registration checklist keeps its own sentence for `contact export` at exit 5 — \"a file at that path already exists — `contact export` never overwrites one\" — and `failure-text.ts` now holds the same knowledge in different words. Two places state one fact about the CLI, and a change to `flag: \"wx\"` would have to find both.",
+      "impact": "Prose drift, not a defect on this tree: both sentences are true and both name a cause rather than the cause. Left deliberately rather than deduplicated, because routing `stepHint` through `explain` was measured to BREAK a committed test: `main.registration.processDriven.test.ts:710` asserts the painted output contains \"already exists\" at 72 columns, where the checklist hint sits at column 24; the explanation's sentence begins with the 19-character code, which pushes \"already exists\" past column 72 and out of the frame. Deduplicating needs the hint to be laid out for the width it is painted at, which is a layout decision this dispatch has no mandate for.",
+      "suggested_fix": "Leave both until a task owns the checklist's layout. If they are merged then, the merged sentence has to fit the checklist's 24-column indent at MIN_VIEWPORT with the phrase an operator searches for inside the first 72 columns — which is what the current wording achieves and what a code-first sentence does not.",
+      "evidence": "profiles-pane.ts:96-100 and failure-text.ts's `BY_COMMAND[\"PERSISTENCE_FAILURE@5\"][\"contact export\"]`; the 72-column arithmetic is `STEP_GUTTER` (8) + `padOrClip(\"\", TITLE_WIDTH)` (16) = column 24, plus a 19-character code and a separator before the phrase begins.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "The outbox row now says, in words, that no command reports an outbox count. Should it keep saying that, or should the figure be added to `doctor`'s result so the row has something true to show?",
+      "why": "004-T23-tests Q-001 left this open and recommended keeping the row and rendering the absence, which is what was built: the row reads `outbox  no command reports an outbox count`, so an operator can see that the console has no view of its own outbox rather than assuming it has one. The third option is still open and is not this task's to take — adding a pending count to `doctor` changes a CLI command's output and belongs to a task about the CLI. Recorded here so the choice is deliberate rather than inherited.",
+      "options": [
+        { "id": "keep", "label": "Keep it as built: the row names the missing report", "recommended": true },
+        { "id": "drop", "label": "Drop the outbox row until a command reports one" },
+        { "id": "extend-doctor", "label": "Add a pending-outbox count to doctor's result — a separate task about the CLI's output" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q-002",
+      "question": "Is `inbox  3 received by the last poll` the right wording, given that the row's LABEL cannot change?",
+      "why": "004-T23-tests Q-002 recommended relabelling the row to name what the figure is. The label itself is pinned by two committed test files — `paneValue` matches `entry.label === \"inbox\"` and both frame readers match a row that starts with `inbox` — so the qualifier was put in the VALUE instead: the row reads `inbox  3 received by the last poll`, which names the quantity (`runtime/inbound.ts:27`: envelopes accepted and committed by that poll) without renaming the row. It reads slightly against the `last poll` row two lines below, which carries the timestamp for the same poll. Someone should say whether that is the wording they want.",
+      "options": [
+        { "id": "as-built", "label": "Keep it: the value names the quantity, the label stays what the tests pin", "recommended": true },
+        { "id": "shorter", "label": "Shorten to `3 received by that poll` and let the `last poll` row carry the rest" },
+        { "id": "relabel", "label": "Rename the row, which means changing what two committed test files match on" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_added": 1,
+    "source_files_modified": 4,
+    "test_files_changed": 0,
+    "documents_updated": 2,
+    "spec_files_run": {
+      "scope": "the four files named in the dispatch",
+      "files": 4,
+      "tests": 34,
+      "passed": 32,
+      "failed": 2,
+      "vitest_exit_code": 1,
+      "failures": [
+        "T23-AC2-A > RED — claims no outbox count on a console that has run nothing: expected +0 to be null",
+        "T23-AC2-A > RED — claims no inbox count on a console that has run nothing: expected +0 to be null"
+      ],
+      "load_1min": 13.14
+    },
+    "tui_scope_run": {
+      "scope": "apps/cli/src/tui",
+      "files_on_disk": 33,
+      "files_reported": 33,
+      "tests": 330,
+      "passed": 328,
+      "failed": 2,
+      "vitest_exit_code": 1,
+      "delta_from_T23": "33 files / 315 tests / 305 passed / 10 failed -> 33 / 330 / 328 / 2. +15 tests, all of them failure-text.test.ts's, which contributed 0 while the module did not exist.",
+      "load_1min_start": 15.74,
+      "load_1min_end": 21.68
+    },
+    "full_package_run": {
+      "scope": "apps/cli",
+      "files_on_disk": 73,
+      "files_reported": 73,
+      "tests": 501,
+      "passed": 499,
+      "failed": 2,
+      "failed_suites": 0,
+      "vitest_exit_code": 1,
+      "wall_clock_s": 237.5,
+      "test_time_s": 874.54,
+      "e2e": "all 7 files green: relay-tls 3, publication-claimability 1, init-relay-url 9, two-process 3, rewalk-crash-safety 4, prekey-pool-replenishment 1, flood-closure 9",
+      "load_1min_start": 13.14,
+      "load_1min_peak": 140.97,
+      "load_1min_end": 44.96,
+      "note": "73 reported against 73 counted on disk with a routed find, so vitest 3.0.8 lost no file's report despite the load reaching 141 mid-run. No file reported zero tests and there is no failed suite; the only two failures are the pair named in F-001."
+    },
+    "typecheck": {
+      "command": "npx tsc -p tsconfig.json --noEmit",
+      "exit_code": 0,
+      "errors": 0,
+      "detail": "Run twice: once with the implementation complete and once after the prose and document edits. The two `Cannot find module './failure-text'` errors the T23 record measured are gone, and widening `MailboxView`'s counts introduced none — `number` stays assignable to `number | null`, so the ten fixtures that construct a mailbox with literal zeros still compile untouched."
+    },
+    "prose_measurement": {
+      "method": "The module was bundled with the package's own esbuild and every cell walked in a script: the 32 matrix cells at both representative sets the two test files use, and all 23 reachable codes x 8 commands. For each, the composed activity line `${command} → ${code} (exit ${N})  ${sentence} ${action}` was measured against the 203-column viewport the specification measures at.",
+      "longest_composed_line": 200,
+      "longest_cell": "contact export / INVALID_CONTACT_CARD at exit 3",
+      "cells_over_203": 0,
+      "note": "Three entries were shortened after the first measurement found them at 205-213 columns, where the ACTION would have been clipped away at 203 while the sentence still fitted — a test that only reads the sentence would not have caught it. The same script re-checks every predicate the two test files assert, so the budget cannot be traded against correctness silently."
+    },
+    "machine_idle": false,
+    "load_note": "A 10-core machine carrying the operator's own Virtualization.framework VM and browser throughout; it was never idle, and the full-package run drove the 1-minute load from 13.1 to 140.9 before it settled at 45.0. Guards applied: every long run captured WHOLE to a file in the scratchpad and read afterwards, nothing piped through head or tail before the file was written; each exit code captured on the line immediately after its own command and never through a wrapper's trailing echo; reported file counts checked against files counted on disk for both long runs (33/33 and 73/73); rg match lists read from the raw log wherever the routed summary elided any.",
+    "not_implemented": [
+      "The registration checklist still prints the raw code and the exit number with its own one-line hint, and does not carry `explain`'s sentence. Measured, not assumed: routing `stepHint` through `explain` breaks main.registration.processDriven.test.ts:710, because at 72 columns the checklist's 24-column indent plus a code-first sentence pushes 'already exists' out of the frame. See F-002.",
+      "The activity line is one row and stays one row. A wrapped or two-row explanation would take a row from the pane body — the mechanism `composeRows` already uses — and at 72 columns a 170-character explanation wraps to three rows, which would push checklist steps off the frames that main.registration.processDriven.test.ts waits for. So the words are sized to fit one row at an ordinary width and are clipped at the minimum, which the specification's own MIN_VIEWPORT case accepts.",
+      "docs/STATUS_CURRENT.md's operator-TUI row was read and left alone: it says the console shows queues, history, rejections and relay health, which is still true. Nothing in it is falsified by this change."
+    ],
+    "routing_audit": {
+      "graph_used": "no — not-relevant: the dispatch named the four specification files and they named every module they touch; the one enumeration question (which sites write a mailbox count) was answered by a routed rg over the whole repository and read match by match, which is stronger than a graph query and is recorded in F-001's class_scope",
+      "wiki_used": "no — not-relevant: every question was 'what does this code actually return' and was settled by reading the CLI, the design note and the two verification records the dispatch named",
+      "ctx_used": "yes — keryx ctx run for every git, find and file listing, keryx ctx read for the schemas and every captured log, keryx ctx diff for the working tree, keryx ctx rg for every code search, with raw greps used only over captured vitest logs and marked with a stated reason each time",
+      "raw_rg_used": "no — no raw rg or grep over project code. Four raw greps were run over captured vitest logs in the scratchpad, each with a `# keryx:raw` marker and the reason: a routed reader elides the verbatim failure list, which is the one thing a test report must not lose.",
+      "testing_context_used": "no — the dispatch named the four files, forbade editing them, and the package's own scripts are the whole of what had to be run",
+      "memory_used": "no — not-relevant: 004-T23-tests carried the history this task needed and the dispatch named it"
+    }
+  },
+  "timestamp_utc": "2026-09-09T06:30:00Z"
+}
