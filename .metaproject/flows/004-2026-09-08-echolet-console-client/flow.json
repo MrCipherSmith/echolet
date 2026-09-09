@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T05:27:34.590Z",
+  "updatedAt": "2026-09-09T06:35:49.537Z",
   "source": {
     "type": "description",
     "ref": null
@@ -493,6 +493,85 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "RED tests: the outbox count must come from the store, and every exit class must be named in words",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T05:33:33.289Z",
+            "outcome": "started",
+            "detail": "AC2 and AC5, the two criteria this wave has recorded as NOT MET that do not depend on the user decisions. Opus: the only agent running tests."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T24",
+      "title": "Wave report: every criterion with its evidence, and what remains ordered by what it costs",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T05:33:33.381Z",
+            "outcome": "started",
+            "detail": "Sonnet: reads artifacts, writes one document, runs nothing. The wave has 24 tasks and six verification reports; a reader needs one place that says what holds and what does not."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T25",
+      "title": "Drive the console against the REAL cli.js and a real relay, and independently verify the escape fix",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T26",
+      "title": "Make the counts come from the store, and write the failure vocabulary",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T23"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T06:03:47.029Z",
+            "outcome": "started",
+            "detail": "Opus rather than sonnet: this writes operator-facing prose for 32 cells and changes a state invariant, and both are places where the cheaper answer shows."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -813,6 +892,56 @@
       "at": "2026-09-09T05:27:34.590Z",
       "event": "task-done",
       "detail": "T22: Close the reopened escape hole at foldSetup, the boundary its sibling already uses"
+    },
+    {
+      "at": "2026-09-09T05:33:24.808Z",
+      "event": "task-added",
+      "detail": "T23: RED tests: the outbox count must come from the store, and every exit class must be named in words"
+    },
+    {
+      "at": "2026-09-09T05:33:24.890Z",
+      "event": "task-added",
+      "detail": "T24: Wave report: every criterion with its evidence, and what remains ordered by what it costs"
+    },
+    {
+      "at": "2026-09-09T05:33:33.289Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — AC2 and AC5, the two criteria this wave has recorded as NOT MET that do not depend on the user decisions. Opus: the only agent running tests."
+    },
+    {
+      "at": "2026-09-09T05:33:33.381Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — Sonnet: reads artifacts, writes one document, runs nothing. The wave has 24 tasks and six verification reports; a reader needs one place that says what holds and what does not."
+    },
+    {
+      "at": "2026-09-09T05:41:18.774Z",
+      "event": "task-done",
+      "detail": "T24: Wave report: every criterion with its evidence, and what remains ordered by what it costs"
+    },
+    {
+      "at": "2026-09-09T05:41:18.858Z",
+      "event": "task-added",
+      "detail": "T25: Drive the console against the REAL cli.js and a real relay, and independently verify the escape fix"
+    },
+    {
+      "at": "2026-09-09T06:03:46.793Z",
+      "event": "task-done",
+      "detail": "T23: RED tests: the outbox count must come from the store, and every exit class must be named in words"
+    },
+    {
+      "at": "2026-09-09T06:03:46.938Z",
+      "event": "task-added",
+      "detail": "T26: Make the counts come from the store, and write the failure vocabulary"
+    },
+    {
+      "at": "2026-09-09T06:03:47.029Z",
+      "event": "task-attempt",
+      "detail": "T26: started (attempt 1) — Opus rather than sonnet: this writes operator-facing prose for 32 cells and changes a state invariant, and both are places where the cheaper answer shows."
+    },
+    {
+      "at": "2026-09-09T06:35:49.537Z",
+      "event": "task-done",
+      "detail": "T26: Make the counts come from the store, and write the failure vocabulary"
     }
   ]
 }
