@@ -1,0 +1,262 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-004-t12-verify",
+  "dispatch_id": "004-T12-verify",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent verification of the input-mode slice (19ecb54 / bcad71d / 1b2b2e6). The central hazard of the previous slice does NOT recur: the body cannot reach the argv or the environment of the one child the console spawns, and three separate mutations at the real spawn() in main.ts:174 are each killed by main.sendChild.test.ts. The implementer's two self-reported kills reproduce (the reducer filter kills 4 cases, not the 5 claimed, and leaves shell-chrome.input.test.ts 17/17 green; the paint-gate deletion kills 3 of 5). AC9 is verified from the outside: reverting only the seven source files of 1b2b2e6 to 1a2c003 reproduces the T10 dispatch's 28 failed / 28 passed exactly. Baselines on this tree, captured whole and read after: apps/cli 62 files / 345 tests, all passed, exit 0, tsc exit 0, with the 1-minute load rising 12.4 -> 45.7 across the run. Three things the implementer did not try, and each is a real gap. (1) Deleting `busy: true` from `input-submit` leaves all 174 src/tui tests green while a driven-shell probe shows a second child really is spawned against the same encrypted store while the send is in flight — AC6's one-command-in-flight decays silently on the new path. (2) `renderFrame` is NOT escape-free over arbitrary states: an ESC byte reaches a frame through an inbound message's plaintext, through the CLI's error code on the activity line, through a rejection's fields and through a trust-modal identifier — none of which pass the new reducer filter, and one of which is peer-controlled over the relay. (3) Fifteen frames tell the operator to press `q` to quit while `q` is text: whenever the key list is open at 96x28 or wider, the compose row and the key list are both on the screen, and `w` on the history pane opens the row without closing the list. `renderFrame` itself survived everything hostile I could give it — astral characters, combining marks, right-to-left and bidi-override text, lone surrogates, at eleven viewports including 0x0, -5x3 and 72.7x16.2 — staying total, exact, deterministic, non-mutating and notice-bearing. Every mutation was reverted in the same step and `git status` shows only the two flow files that were already modified when this dispatch began.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC1 — registration completed from inside the console alone, against a real driven CLI process",
+      "status": "not_applicable",
+      "evidence": "This slice builds no screen for it. `paneKeyIntent` binds p/d/r/h/w/i/c/t and nothing else; `init` and `contact export` have no key, and `submitRequest` (tui-shell.ts:326) returns undefined for all six non-`message` fields, so the four registration operands cannot be entered at all. NOT APPLICABLE YET rather than not met."
+    },
+    {
+      "criterion": "AC2 — a message composed and sent from the console, and what the console shows afterwards is what the store holds, not an optimistic echo",
+      "status": "partial",
+      "evidence": "The composing-and-sending half is now real and verified: tui-shell.inputViewport.test.ts drives the real `runTuiShell` and my own driven probe confirmed Enter produces one `send` whose `to` and `text` are the selected contact and the buffer. The second half is not met and is violated by construction: `applyOutcome`'s `send` case (tui-shell.ts:452-453) does `outboxPending: next.mailbox.outboxPending + 1` — a local increment the console computes itself and never reconciles against the store, which is exactly the optimistic echo the criterion forbids. No `history` follow-up runs (the implementer's F-005 and the T-5 run-sequence are not built). Also not demonstrated: a keystroke-to-real-child send. `main.sendChild.test.ts` drives a real spawned child but substitutes the shell, so `w` -> type -> Enter -> real process is covered by nothing."
+    },
+    {
+      "criterion": "AC3 — the plaintext body never appears in the argv or environment of any child the console spawns; send takes the body on stdin and only that path",
+      "status": "met",
+      "evidence": "Verified by mutation at the REAL spawn, which is the exact place the previous slice's gap lived. There is exactly one spawn site in non-test source (main.ts:174; routed rg over apps/cli/src excluding tests returns one match). M3, appending `...(request.command === \"send\" ? [\"--text\", request.text] : [])` to that spawn's argument list OUTSIDE buildArgv: killed (`expected [ 'send', '--to', ...(8) ] to deeply equal [ ...(6) ]`). M4, putting the body in the child's environment as ECHOLET_MUTANT_BODY and leaving argv untouched: killed independently (`the plaintext reached the spawned child's environment: expected [ 'ECHOLET_MUTANT_BODY' ] to deeply equal []`). M5, `child.stdin.end(request.text.trimEnd())`: killed on the byte-exactness assertion. The body reaches the child only through `child.stdin.end(request.text, \"utf8\")` at main.ts:223, and `submitRequest` builds only a `send` request, whose `text` `buildArgv` puts in no token."
+    },
+    {
+      "criterion": "AC4 — the address book lists every pinned correspondent with trust state and the four comparison values in full",
+      "status": "not_applicable",
+      "evidence": "No such pane exists. PANE_IDS is profiles/mailbox/history/rejections/health; there is no contacts or address-book pane and no key that names a contact. NOT APPLICABLE YET."
+    },
+    {
+      "criterion": "AC5 — every exit class presented accurately, proven over the command x exit-class matrix rather than sampled",
+      "status": "not_applicable",
+      "evidence": "Not built by this slice, and not proven anywhere: the only exit-class assertion in the package is one sampled case, main.processDriven.test.ts:290 (\"reports the exit class the CLI returned, and does not manufacture a persistence failure\"). Totality over commands x {2,3,4,5} does not exist. NOT APPLICABLE YET, with the sampling gap recorded."
+    },
+    {
+      "criterion": "AC6 — the flow 002/003 properties re-verified unchanged: renderFrame pure/total/deterministic/escape-free/exactly rows x cols; no key material in a frame or argv; the notice on every frame; one command in flight; the trust modal cannot confirm what was never painted",
+      "status": "not_met",
+      "evidence": "Four of six hold and two do not. HOLD: exactness/totality/determinism/purity — my probe drove renderFrame over 11 viewports (72x16, 96x28, 203x61, 0x0, 1x1, -5x3, 72.7x16.2, 5x200, 400x2, 71x16, 72x15) x 11 hostile buffers (300 astral code points, stacked combining marks, Arabic, U+202E override, bidi isolates, U+2028/U+2029, ZWJ/ZWSP/BOM, lone high and low surrogates, soft hyphen + NBSP, Hangul) and every frame was exactly rows x cols, threw nothing, was byte-identical on a second call, mutated no state and carried UNAUDITED_NOTICE. HOLD: no key material — no key opens the `store-key-env` field and `submitRequest` refuses it, and tui.keyMaterial.test.ts is green. HOLD: the notice. HOLD: the trust modal's painted-at gate (M2 kills 3 of 5 inputViewport cases; M15, deleting the reducer's `renderedAt === null` refusal, kills 4 across two files). FAILS: escape-free is not a property of `renderFrame`, only of the states the tests construct — see F-002. FAILS: one-command-in-flight is not covered on the submit path — see F-001."
+    },
+    {
+      "criterion": "AC7 — typed text cannot put a control character or an escape sequence into a frame, proven at the reducer boundary rather than inside the renderer",
+      "status": "met",
+      "evidence": "The placement claim is true and load-bearing. M1 (`const text = intent.text` in place of `withoutControlPoints(intent.text)`) turns tui-shell.input.test.ts red at 4 assertions (226, 237, 269, 276) and leaves shell-chrome.input.test.ts 17/17 GREEN — so the property lives in the state, and a renderer-side filter could not have satisfied it. The implementer reported 5 killed cases; the measured number is 4. The filter is also the only writer: a routed search for every assignment to `buffer` in non-test source returns exactly three sites — tui-shell.ts:243 (`buffer: \"\"` on open), :263 (insert, after the filter) and :272 (backspace, a subset of an already-clean buffer) — and `paint()` rewrites only `renderedAt`. M6 (opening with a seeded buffer) and M19 (narrowing `isControlPoint` to ESC alone) are both killed, so neither the empty-open nor the range coverage is decorative. Caveat recorded as F-004: the filter names C0, DEL and C1 only, so bidi and format characters reach the buffer."
+    },
+    {
+      "criterion": "AC8 — at any viewport and in any state, the key that quits is available or the console says why it is not",
+      "status": "met",
+      "evidence": "For the state this slice introduces, met and load-bearing. `inputKey` binds Ctrl-C first, `footerLine` prints `[ctrl-c] quit` on every composing frame and `tooSmallFrame` swaps its quit line for ctrl-c below the minimum; M7 (footer falls back to the global key list) and M8 (degraded frame always says `q`) are each killed by shell-chrome.input.test.ts. Availability therefore holds. Two honesty defects are recorded separately rather than folded in, because the criterion as worded is about availability: F-003 (fifteen frames still advertise `q` and eight other text keys as commands while composing) and F-005 (while the trust modal is open no key quits at all, and the frame does not say so — pre-existing, not introduced here)."
+    },
+    {
+      "criterion": "AC9 — no test weakened, skipped, narrowed or deleted; every fix lands after a test that failed for the right reason, provable from git history",
+      "status": "met",
+      "evidence": "Verified from the outside rather than from the reports. Reverting ONLY the seven source files of 1b2b2e6 to their 1a2c003 state (intents.ts, shell-chrome.ts, state.ts, text.ts, tui-shell.ts, runtime/outbound.ts, and deleting limits.ts) and re-running the four specification files reproduces `28 failed | 28 passed (56)` — the T10 dispatch's figure exactly, and the redness is in assertions, not in the loader. 1b2b2e6 touches no *.test.ts. bcad71d changes one expectation from an unsatisfiable value to the satisfiable one and is not a weakening: `\"1234567a\"` is still 8 bytes at maxBytes 8, so the case still asserts that an insertion landing exactly on the bound is accepted, and the refusal above it is untouched. Cosmetic only: bcad71d is timestamped 20 seconds before 1b2b2e6, so the working tree held the implementation before the correction was committed; the red specification 19ecb54 still precedes both."
+    },
+    {
+      "criterion": "AC10 — a live run against the real relay on the tailnet, both directions, recorded",
+      "status": "not_applicable",
+      "evidence": "Not attempted by this slice and not attemptable from it: AC1's registration keys do not exist, so a live run would still need a terminal outside the console for every step but the send. NOT APPLICABLE YET."
+    },
+    {
+      "criterion": "The implementer's own two self-mutations, re-run rather than believed",
+      "status": "partial",
+      "evidence": "Both reproduce in direction; one is misreported in size. Reducer filter deleted: 4 cases red in tui-shell.input.test.ts (the report says 5), shell-chrome.input.test.ts 17/17 green as claimed. Paint gate `&& !isBelowMinViewport(painted)` deleted from the input stamp: 3 of 5 inputViewport cases red, exactly as claimed, and tui-shell.trustViewport.test.ts stays green, so the two stamps are independently covered."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T12-verify-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This record.",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T12-verify#F-001",
+      "reviewer": "004-T12-verify",
+      "severity": "major",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 289,
+      "symbol": "reduce > input-submit",
+      "problem": "SURVIVING MUTATION. Replacing `return { state: { ...state, input: undefined, busy: true }, effects: [{ kind: \"run-cli\", request }] };` with `return { state: { ...state, input: undefined }, effects: [{ kind: \"run-cli\", request }] };` — that is, deleting `busy: true` from the submit — leaves the ENTIRE src/tui suite green: 22 files, 174 tests, 174 passed, vitest exit 0. The console's one-command-in-flight property (D-1, and AC6's fifth clause) is therefore uncovered on the path this slice added, in exactly the way flow 003 T25 measured the paint gate decaying.",
+      "impact": "Reachable and real, not theoretical. A driven-shell probe I wrote against the mutant — real `runTuiShell`, injected `runCli`, a `send` held unsettled so the child is still alive — pressed Enter and then `p`, and the mutant issued `['send', 'poll']` where the correct tree issues `['send']`. That is two children against one encrypted SQLite store, which is the precise mechanism flow 003 recorded as manufacturing PERSISTENCE_FAILURE (exit 5) out of key-mashing. The current tree is CORRECT — the same probe passes unmutated — so this is a missing test, not a live defect.",
+      "suggested_fix": "Add the assertion to tui-shell.inputViewport.test.ts or tui-shell.singleFlight.test.ts: after a submit at a supported viewport, `state.busy` is true, and a `p`/`d`/`r` keystroke before the send settles produces no second request. The driven shape already exists in both files; only the submit-then-command sequence is missing.",
+      "evidence": "Mutant run captured whole: `Test Files 22 passed (22) / Tests 174 passed (174) / exit=0`. Probe on the clean tree: 1 passed. Probe on the mutant: `a second child was spawned against the same encrypted store while the send was in flight: expected [ 'send', 'poll' ] to deeply equal [ 'send' ]`. A second, weaker mutation of the same shape also survives all 174: deleting `|| state.busy` from `input-submit`'s refusal at line 279 (unreachable today, because nothing can open the row while busy, but it is the reducer's own defence-in-depth half and its removal is invisible).",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:289",
+          "apps/cli/src/tui/tui-shell.ts:279"
+        ],
+        "enumeration_method": "Both `busy` operands that `input-submit` owns were mutated separately and both survived the whole src/tui suite. `run`'s equivalent operands (line 212 refusal, line 213 `busy: true`) are covered — tui-shell.singleFlight.test.ts and main.processDriven.test.ts exist for exactly that — so the class is the submit path only, and it has these two members."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T12-verify#F-002",
+      "reviewer": "004-T12-verify",
+      "severity": "major",
+      "file": "apps/cli/src/tui/shell-chrome.ts",
+      "line": 307,
+      "symbol": "renderFrame",
+      "problem": "`renderFrame` is not escape-free over arbitrary states. AC6 requires the property to be re-verified, and 1b2b2e6's commit message states that \"no escape sequence reaches a frame is now a property of the state\" — that is true of the COMPOSE BUFFER and of nothing else. Four other fields reach a frame unfiltered, and none of them passes the new reducer filter: an inbound message's `plaintext` (history-pane), the CLI's error `code` on the activity line, a rejection's `envelopeId`/`code`, and a trust-modal identifier. `fitLine`/`padOrClip`/`clipLine` count code points and filter nothing.",
+      "impact": "The first of the four is peer-controlled over the relay. A correspondent sends a body containing `ESC [ 2 J`, the operator presses `h`, and `styleFrame` writes it verbatim to the terminal — the console's one module allowed to emit ANSI hands a stranger's escape sequence to the screen. The second and third are relay- or CLI-controlled; the fourth is controlled by whoever authored the contact card, which is the one document the trust modal exists to make a human read. This is pre-existing (flows 002/003) and NOT a regression of this slice — the slice strictly improved the operator-typed path — but AC6's escape-free clause cannot be reported as re-verified when it holds only over states the tests construct.",
+      "suggested_fix": "Move `withoutControlPoints` (or the equivalent) to the boundaries where external text enters the state — `readHistoryEntries`, `readRejections`, `applyOutcome`'s note text and `readIdentifiers` — for the same reason the typed path filters at `reduce` rather than in the renderer: the property then belongs to the state. A renderer-side filter would satisfy a test and leave the state free to hold anything, which t35 §5 item 4 rejects. Pair it with a test that constructs each hostile state and asserts no ESC in the frame; four such assertions are enough.",
+      "evidence": "Probe, all four red on the clean tree: \"ESC reached the frame through the activity line\", \"...through an inbound message body\", \"...through a rejection\", \"...through a trust modal identifier\" — each `expected true to be false`. Reachability: `readHistoryEntries` (tui-shell.ts:386-402) accepts `plaintext` on a bare `typeof ... === \"string\"` check and `formatHistoryLines` renders it; `parseCliOutcome` (cli-bridge.ts:143) keeps `error.code` verbatim and `note()` interpolates it into `activity`.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:386",
+          "apps/cli/src/tui/tui-shell.ts:374",
+          "apps/cli/src/tui/tui-shell.ts:533",
+          "apps/cli/src/tui/main.ts:134"
+        ],
+        "enumeration_method": "Every field of OperatorState whose value originates outside the console was enumerated from state.ts and traced to its writer, then each was given an ESC-bearing value and rendered. Fields that cannot carry external text (numbers, booleans, enums, PANE_IDS) were excluded. ProfileView's label/relayUrl/profileDir come from the operator's own argv and are therefore not in the class."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T12-verify#F-003",
+      "reviewer": "004-T12-verify",
+      "severity": "major",
+      "file": "apps/cli/src/tui/shell-chrome.ts",
+      "line": 191,
+      "symbol": "HELP_LINES / paneLines",
+      "problem": "Fifteen frames advertise `q` as the way out while `q` is text. `footerLine` correctly replaces the global footer while composing, but the key list under `?` is painted into the PANE BODY by `paneLines`, which never consults `state.input`. So a frame with the compose row open and the key list open still carries `  q          quit (ctrl-c also quits)` — and, with it, `p`, `d`, `r`, `h`, `w`, `i`, `c`, `t` and `?`, every one of which is text while composing. shell-chrome.ts:125 states the rule this breaks: \"a footer that advertised an unbound key would be a lie.\"",
+      "impact": "Reachable in two keystrokes and asserted so: from the history pane with a contact selected, `?` opens the list and `w` opens the row (mapKey has no help precondition, and `reduce`'s `input-open` does not close the list). Measured at every pane, at 96x28, 120x40 and 203x61 — fifteen offending frames. At exactly 72x16 the list truncates by two rows and the `q` line is the one dropped, which is why the implementer's own F-002 observed the truncation without noticing what it was hiding. The operator's actual escape, ctrl-c, is also named on those frames, so this misinforms rather than traps; the harm is that the console tells the operator nine keys do things they do not do, one of which is quitting.",
+      "suggested_fix": "Either refuse `input-open` while `help === true` (or close the list when the row opens), or make `paneLines` swap the key list for the composing bindings while `state.input` is defined. The second is honest at no cost to the operator. A test belongs beside T10-J: no composing frame, at any pane, viewport or help state, matches /q\\s+quit|\\[q\\] quit|press q to quit/.",
+      "evidence": "Probe: `frames that advertise 'q' as the way out while 'q' is text: expected [ ...(15) ] to deeply equal []`, listing help=true x {profiles, mailbox, history, rejections, health} x {96x28, 120x40, 203x61}. Reachability asserted and PASSING in the same probe: with `pane: \"history\", help: true`, `mapKey(decodeKey(\"w\"))` returns `{ kind: \"input-open\", field: \"message\" }`, the reducer opens the row, and `help` stays `true`.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/shell-chrome.ts:191",
+          "apps/cli/src/tui/shell-chrome.ts:215"
+        ],
+        "enumeration_method": "Every string a frame can carry that names a key was enumerated: FOOTER_KEYS / FOOTER_KEYS_HELP_OPEN (footerLine, correctly input-aware), TRUST_MODAL_FOOTER (unreachable while composing, since a modal and the row cannot coexist), tooSmallFrame's quit line (correctly input-aware, M8 kills its removal) and HELP_LINES (not input-aware). Only the last is wrong, and it is wrong because paneLines at shell-chrome.ts:215 selects it without reading state.input. The 15 offending frames are the full cross-product of the 5 panes and the 3 viewports at which the list is not truncated; at 72x16 the q line is truncated away, so the class is exactly those 15."
+      }
+    },
+    {
+      "id": "F-004",
+      "global_id": "004-T12-verify#F-004",
+      "reviewer": "004-T12-verify",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 305,
+      "symbol": "isControlPoint",
+      "problem": "The filter names C0, DEL and C1 and nothing else, so seven display-steering format characters reach the compose buffer and therefore the frame: U+202E RIGHT-TO-LEFT OVERRIDE, U+2066 LEFT-TO-RIGHT ISOLATE, U+200B ZERO WIDTH SPACE, U+00AD SOFT HYPHEN, U+2028 LINE SEPARATOR, U+2029 PARAGRAPH SEPARATOR and U+FEFF BOM. U+202E is the Trojan-Source override: a body composed with it renders in a terminal in an order that is not the order it will be sent in, so the compose row can show the operator something other than what Enter will send — which is the premise the whole painted-at gate rests on.",
+      "impact": "Bounded and not an injection: the body travels on stdin, so nothing here reaches an argv, and `renderFrame` stays exactly rows by cols with all seven present (verified over 11 viewports). The exposure is that the operator's own preview can lie about their own message, and that U+2028/U+2029 are line separators some terminals honour. AC7 as frozen says \"a control character or an escape sequence\", and the design read that as C0/DEL/C1 plus ESC-led chunks, so the criterion as written is satisfied; this is the gap between that reading and the property the criterion is reaching for.",
+      "suggested_fix": "If the flow wants it closed, extend `isControlPoint` to the bidi controls (U+200E-U+200F, U+202A-U+202E, U+2066-U+2069) and the separators (U+2028, U+2029, U+FEFF), and add them to T10-B's exhaustive list. Leaving ZWSP and SOFT HYPHEN in is defensible — they are legitimate in real text — and the choice belongs to the user, not to a verifier.",
+      "evidence": "Probe: `format characters that reach the compose buffer: expected [ 'U+202E RTL OVERRIDE', 'U+2066 LRI', 'U+200B ZWSP', 'U+00AD SOFT HYPHEN', 'U+2028 LINE SEP', 'U+2029 PARA SEP', 'U+FEFF BOM' ] to deeply equal []`, each delivered as `a<char>b` through the real decodeKey -> mapKey -> reduce pipeline.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-005",
+      "global_id": "004-T12-verify#F-005",
+      "reviewer": "004-T12-verify",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/modal-host.ts",
+      "line": 152,
+      "symbol": "modalIntent",
+      "problem": "While the trust modal is open no key quits the program and the frame does not say so. `modalIntent` returns undefined for any `key.ctrl`, and `mapKey`'s modal branch returns undefined for anything that is not y/n/escape, so Ctrl-C is swallowed; the modal's footer reads `[y] trust  [n] reject  [esc] cancel` and names no way out of the console. AC8 requires the quitting key to be available or the console to say why it is not, in \"any state including ... a modal open\".",
+      "impact": "Pre-existing (flow 003), not introduced by this slice, and mitigated: Esc cancels the modal and `q` then quits, so the operator is two keystrokes from leaving rather than trapped. Recorded because AC8 is a criterion of THIS flow and the modal-open case is the one state the criterion names explicitly.",
+      "suggested_fix": "Either bind Ctrl-C in the modal branch of `mapKey` before `modalIntent` is consulted (the same shape `inputKey` uses), or add `esc cancels, then q quits` to the modal footer. The first is one line and matches what the composing row already does.",
+      "evidence": "modal-host.ts:153 `if (key.ctrl) return undefined;`; tui-shell.ts:74-79 returns undefined for every non-trust intent while a modal is open; TRUST_MODAL_FOOTER names y/n/esc only.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-006",
+      "global_id": "004-T12-verify#F-006",
+      "reviewer": "004-T12-verify",
+      "severity": "info",
+      "file": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T11-implement-result.json",
+      "line": 17,
+      "symbol": "acceptance[1].evidence",
+      "problem": "One measured number in the implementer's report is wrong. It states that deleting the reducer filter \"turns 5 cases in tui-shell.input.test.ts red\"; re-running the same mutation turns 4 red — the assertions at lines 226, 237, 269 and 276. Every other figure in that report that I re-measured is correct.",
+      "impact": "None on any conclusion: the direction of the kill, the 17/17 green of shell-chrome.input.test.ts, and therefore the AC7 placement argument are all confirmed. Recorded because a self-reported mutation count is the kind of number a later reader will quote.",
+      "suggested_fix": "None. The claim's substance stands.",
+      "evidence": "Captured run of the mutant over the two files: `❯ src/tui/tui-shell.input.test.ts (26 tests | 4 failed)`, `✓ src/tui/shell-chrome.input.test.ts (17 tests)`, `Tests 4 failed | 39 passed (43)`.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-007",
+      "global_id": "004-T12-verify#F-007",
+      "reviewer": "004-T12-verify",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 558,
+      "symbol": "runTuiShell > io.onTrustIdentifiers listener",
+      "problem": "The coexistence invariant is enforced only in `reduce`. The shell's trust listener assigns `current.modal` directly, without consulting `current.input`, so it is the one writer of `modal` that the T10-M invariant does not cover.",
+      "impact": "Unreachable today, and I could not construct a sequence that reaches it: the listener only fires from a `contact import` child's stderr, which requires `busy`, and both `paneKeyIntent`'s `w` case and `reduce`'s `input-open` refuse while `busy`. `busy` is cleared only in `apply()` after the child closes, and the listener cannot fire after that. So the trust gate does keep exactly one door, in both orders, including with a command in flight — verified structurally rather than by mutation. Recorded because the invariant's proof rests on a `busy` coupling two files apart rather than on the assignment itself.",
+      "suggested_fix": "If a later task makes the listener reachable from a state that can compose, route it through an intent so the invariant applies, rather than adding a second check.",
+      "evidence": "tui-shell.ts:558-564 sets `modal` outside `reduce`; tui-shell.ts:179 and :237 are the two refusals that make it unreachable; M9 (dropping the `busy` refusal) and M10 (dropping the `modal` refusal) are both killed by tui-shell.inputTrustExclusion.test.ts, so neither refusal is decorative.",
+      "confidence": "medium",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Should the escape-free property be closed at the four external-text boundaries (F-002) in this flow, or recorded as a residual for a later wave?",
+      "why": "It is a real hazard with a peer-controlled route — an inbound message body reaches the terminal verbatim — but it pre-dates this slice, it is four filter calls plus four assertions rather than a design change, and closing it inside a slice that was scoped to the input mode would put source changes under tests that were not written for them. AC6 cannot honestly be reported as met either way until it is closed.",
+      "options": [
+        { "id": "now", "label": "Add a task in this flow: filter at readHistoryEntries, readRejections, note() and readIdentifiers, tests first", "recommended": true },
+        { "id": "residual", "label": "Record it as a residual against AC6 and close the flow with the criterion explicitly not met", "recommended": false }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q2",
+      "question": "Should the compose buffer also refuse bidi and separator format characters (F-004), or is C0/DEL/C1 the bound AC7 intends?",
+      "why": "U+202E lets a composed body render in an order the operator did not type, which undercuts the premise of the painted-at gate; but ZWSP and SOFT HYPHEN are legitimate in real text and Cyrillic traffic, and widening the filter silently changes what a message may contain. The criterion says \"control character\", which the design read as C0/DEL/C1, so this is a scope decision rather than a defect call.",
+      "options": [
+        { "id": "bidi-only", "label": "Add the bidi controls (U+200E-200F, U+202A-202E, U+2066-2069) and U+2028/U+2029/U+FEFF; leave ZWSP and SOFT HYPHEN accepted", "recommended": true },
+        { "id": "keep", "label": "Keep C0/DEL/C1 as the whole rule and record the bidi exposure as a known limitation of an unaudited prototype", "recommended": false }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "mutations_applied": 16,
+    "mutations_killed": 14,
+    "mutations_survived": 2,
+    "surviving_mutations": [
+      "tui-shell.ts:289 input-submit drops `busy: true` (174/174 src/tui green; reachable second child proved by probe)",
+      "tui-shell.ts:279 input-submit drops `|| state.busy` from its refusal (174/174 src/tui green; unreachable today)"
+    ],
+    "probe_assertions_failing_on_the_clean_tree": 6,
+    "baseline_apps_cli_test_files_on_disk": 62,
+    "baseline_apps_cli_test_files_reported": 62,
+    "baseline_apps_cli_tests": 345,
+    "baseline_apps_cli_passed": 345,
+    "baseline_apps_cli_failed": 0,
+    "baseline_apps_cli_vitest_exit_code": 0,
+    "baseline_src_tui_files": 22,
+    "baseline_src_tui_tests": 174,
+    "typecheck_exit_code": 0,
+    "ac9_red_reproduction_failed": 28,
+    "ac9_red_reproduction_passed": 28,
+    "machine_idle": false,
+    "load_average_1min_at_dispatch_start": 23.46,
+    "load_average_5min_at_dispatch_start": 52.44,
+    "load_average_1min_full_suite_start": 12.39,
+    "load_average_1min_full_suite_end": 45.7,
+    "load_note": "10-core machine, never idle: the operator's own Virtualization.framework VM was at 91% CPU and three Chrome renderers at ~100% throughout. Guards against a lying run, given vitest 3.0.8's worker-RPC deadline: 62 test files exist on disk and 62 were reported by the full run; the full run finished green (exit 0) while the 1-minute load rose from 12.4 to 45.7, so it was measured UNDER load rather than on a quiet machine; every mutation result was reproduced from a whole captured log read after the fact, never piped through head or tail; and the two surviving mutations survived a run whose companion probe, executed seconds apart on the same tree, discriminated correctly between mutant and clean.",
+    "tree_restored": true,
+    "git_status_after": " M .metaproject/flows/004-2026-09-08-echolet-console-client/flow.json\n M .metaproject/flows/004-2026-09-08-echolet-console-client/journal.md"
+  },
+  "timestamp_utc": "2026-09-09T01:50:00Z"
+}
