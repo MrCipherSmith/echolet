@@ -1,0 +1,297 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "003",
+  "dispatch_id": "003-T17-tests",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Three of this task's starting premises were wrong; two were the task's and one was mine, and all three are corrected here. (1) ATTRIBUTION: the reported 2 failing files and five [vitest-worker]: Timeout calling \"onTaskUpdate\" errors are NOT in apps/cli/test/e2e/. A full verbose 52-file run reproduced them (Test Files 50 passed (52); Tests 252 passed (273); 6 errors) and vitest named the origin four times: src/runtime/inbound.test.ts and src/runtime/inbound.batchIsolation.test.ts. They did not assert-fail - ZERO '×' lines anywhere - their worker was torn down and 21 tests went unreported behind a summary that reads 'passed' twice. The ceiling is birpc's hard-coded DEFAULT_TIMEOUT = 6e4; createForksRpcOptions passes no timeout and vitest exposes no knob, so no timeout this repository owns can fix it. (2) The e2e timeout work had ALREADY been done upstream by T40, which extended T16's constants to all seven suites - but took the per-child watchdog from T16's measurement of `relay publish` in src/commands/ against an in-process mock relay. T40 measured e2e WHOLE-TEST durations properly (E2E_TEST_TIMEOUT_MS is sound and is left untouched) but never measured the e2e CHILDREN. That is the one real gap and it is what this change closes. (3) My own finding F-005 was WRONG and is withdrawn: I reported T16's fix as never committed because childProcessTimeouts.ts was absent and cli.test.ts still held its 15000 literal; both observations were true but the worktree base was 30 commits behind origin/main where the fix had landed long before, and every check I ran was local. The branch was reset onto origin/main and the change reduced to the real delta. MEASUREMENT (which survives all three corrections, because durations do not depend on the ceiling in place when they were taken): every command() helper in all seven suites instrumented, 932 real child durations across two loaded runs on a 10-core machine - p50 1588ms, p90 14066ms, p95 19459ms, p99 38855ms, max 69465ms. Against main's 45000ms wall, 8 children ran over: 2 outright breaches (`relay publish` in prekey-pool at 47889ms and 48025ms, routed through the base command() default) and 6 `poll` samples in flood-closure to 69465ms that survive only behind that file's private 120000ms literal on its own poll() helper - so whether a correct child lived or died depended on which helper routed it, which is the drift a shared constant exists to remove. REMEDY: E2E_CHILD_TIMEOUT_MS = 150000 (2.16x the measured worst e2e child, matching CLI_CHILD_TIMEOUT_MS's own 2.21x margin over its own worst case) and E2E_RELAY_READY_TIMEOUT_MS = 60000 (13x the measured worst readiness 4459ms), both added to the existing apps/cli/test/childProcessTimeouts.ts rather than a competing module. CLI_CHILD_TIMEOUT_MS stays 45000 and is still correct for src/commands/; the scopes stay separate because one number would mean either a wall test/e2e/ measurably breaches or a 150000ms wall for CLI suites whose worst child is 20.4s. 73 insertions / 27 deletions across 8 files, no new file, zero of the 932 measured children exceed the new wall. Typecheck clean. Nothing weakened, narrowed, skipped or deleted; nothing lowered (rewalk's 180000ms poll defaults and its 120000ms proxy-hold ceiling deliberately untouched). No product file under apps/*/src (excluding *.test.ts) or packages/ changed.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Identify exactly which e2e test(s) produced the 2 failures and 5 worker-RPC timeouts, re-running vitest run test/e2e with --reporter=verbose alone for clean attribution",
+      "status": "met",
+      "evidence": "Done, and the answer contradicts the task's hypothesis: no e2e test produced them. Step 1, `vitest run test/e2e --reporter=verbose` alone: 1 failed | 6 passed (7) files, 1 failed | 29 passed (30) tests, 375.83s, ZERO worker-RPC errors - the one failure being init-relay-url.test.ts > 'guard: an unreachable relay is not reported as a local persistence failure' 35110ms -> 'init E2E child timeout'. Step 2, whole package verbose: reproduced the reported symptom exactly (Test Files 50 passed (52); Tests 252 passed (273); Errors 6 errors, all '[vitest-worker]: Timeout calling \"onTaskUpdate\"'), with vitest's own 'This error originated in ...' lines naming src/runtime/inbound.test.ts (x2) and src/runtime/inbound.batchIsolation.test.ts (x2). Cross-checked three ways: grep -c '^ ×' over the whole run = 0; those two files reported 0 '✓' lines while every other file reported all of its own; they declare 11 and 8 tests and 273-252 = 21 went unreported. See t17-e2e-contention-report.md §1."
+    },
+    {
+      "criterion": "Reproduce under controlled CPU load rather than inferring from the task description",
+      "status": "met",
+      "evidence": "Reproduced three times. (a) Unforced: an e2e-only run failed on init-relay-url under the suite's own load (load1 194-204 on a 10-core Mac, census 7 concurrent `go build` + 6 relays + 5 CLI children). (b) The whole-package symptom reproduced under a 2s sampler recording 222 samples: mean load1 202.6, peak 386.4, peak census 7 relays + 8 CLI children + 6 Go toolchain processes. (c) Controlled: 30 CPU-bound busy-loops started once and NOT restarted between arms reproduced the identical 'init E2E child timeout' on the unmodified file and then passed on the fixed file at a HIGHER load (407 -> 529). See §1, §5."
+    },
+    {
+      "criterion": "Measure real per-child/per-process/whole-test durations directly; do not guess",
+      "status": "met",
+      "evidence": "932 child invocations measured across two loaded runs. Instrumentation wrote to a file OUTSIDE the repository - deliberately a file rather than console/stderr, because vitest routes console output through the very worker RPC channel under investigation. Distribution p50 1588 / p90 14066 / p95 19459 / p99 38855 / max 69465ms. Per command: poll max 69465 (mean 13180, n=159), relay publish max 48025 (mean 19010, n=138), send 20401, init 12476, contact export 8912, contact import 5972, history 4293. Relay lifecycle: relayReady max 4459ms (n=18), teardown max 519ms (n=20), one go build max 6623ms under six concurrent builds. Whole-test figures from the verbose reporter, and they AGREE with T40's where they overlap (heavy suites 124826-152610ms vs T40's 124217ms), which is what makes the per-child disagreement credible. Instrumentation reverted with `git checkout -- apps/cli/test/e2e` before any real edit. See §2."
+    },
+    {
+      "criterion": "Do not reuse T16's CLI_CHILD_TIMEOUT_MS/CLI_TEST_TIMEOUT_MS without re-measuring - those numbers may be wrong for this scope",
+      "status": "met",
+      "evidence": "This turned out to be the crux, because upstream HAD already reused it: T40 extended CLI_CHILD_TIMEOUT_MS (45000, derived from a 20352ms worst `relay publish` in src/commands/ against an in-process mock relay) to all seven e2e suites. Measuring the e2e children showed the number is wrong for this scope by 7-54%: e2e `relay publish` reaches 48025ms (2.4x the src/commands figure for the same command NAME, because the workload is a real Go relay process over real loopback HTTP, with TLS and multi-process orchestration) and `poll` on a flooded mailbox reaches 69465ms. A separate E2E_CHILD_TIMEOUT_MS = 150000 was derived from this scope's own worst case at the same 2.16x margin, and CLI_CHILD_TIMEOUT_MS was left untouched at 45000 for src/commands/. See §3, §4."
+    },
+    {
+      "criterion": "Decide - and justify with the numbers - between raising specific timeouts, reducing self-inflicted contention, or both",
+      "status": "met",
+      "evidence": "Decided: raise, with the contention reduction identified, measured and deliberately deferred with a stated reason. For raising: 2 direct breaches of main's wall plus a 6-sample class surviving only behind one file's private literal, i.e. a correct child's fate depended on which helper routed it. Zero of the 932 children exceed the new 150000ms. Against contention reduction being the fix HERE: the two sources were quantified - six concurrent `go build` of the identical relay binary (4259-6623ms each, all at run start) and seven-way e2e file parallelism (peak 7 relays + 8 CLI children on 10 cores) - but the dominant contributor is EXTERNAL, load1 600-790 with three other agents running this same suite against ~200 from the suite alone, so no within-package fix could have prevented the observed starvation. Both fixes also carry a specific hazard needing its own verification pass: moving the relay build into globalSetup makes the Go toolchain a hard dependency of `vitest run src/commands`, and a project-scoped fileParallelism:false on vitest 3.0.8 needs a vitest.workspace.ts whose per-project globalSetup would rebuild dist/cli.js concurrently, reintroducing the race globalSetup.ts exists to prevent. See §6."
+    },
+    {
+      "criterion": "Weaken, skip, narrow or delete nothing; only raise ceilings or restructure how contention is generated",
+      "status": "met",
+      "evidence": "No .skip, no .only, no assertion, test name, control flow or spawn argument changed. 73 insertions / 27 deletions across 8 files, every changed line a ceiling raise or a literal moved onto a measured constant. Nothing lowered: rewalk's 180000ms pollOnce/interruptPollAtPage defaults were left alone precisely because unifying them on 150000 would have NARROWED them, and its 120000ms holdPollAfter was left because it is a proxy-hold ceiling and not a child watchdog at all; E2E_TEST_TIMEOUT_MS, the 4000/6000ms teardown ceilings, the beforeAll go-build hooks and relay-tls's 3000ms HTTPS ceilings all keep their values, each with the measurement that justifies it recorded in §4. The patch script asserts an expected hit count per file and re-asserts every must-not-touch site afterwards, so a silent miss or accidental narrowing could not pass."
+    },
+    {
+      "criterion": "Change no product file under apps/*/src (excluding *.test.ts) or packages/; test files and test configuration only",
+      "status": "met",
+      "evidence": "git diff attributes exactly these paths: apps/cli/test/childProcessTimeouts.ts (test helper) and the seven apps/cli/test/e2e/*.test.ts suites. No file under apps/*/src (excluding *.test.ts) or packages/ was opened for writing. `tsc -p apps/cli/tsconfig.json --noEmit` clean."
+    },
+    {
+      "criterion": "Do not touch the relays on geekom or depr",
+      "status": "met",
+      "evidence": "Neither host was contacted. Every relay here is a locally built binary under $TMPDIR executed by the suites themselves and bound to loopback on an OS-assigned port. The only relay processes signalled were locally orphaned ones reparented to pid 1, recorded before being killed; other agents' live runs and their children were left strictly alone."
+    },
+    {
+      "criterion": "Do not print or record any store key, private key, plaintext or HTTP request body",
+      "status": "met",
+      "evidence": "No such value was read, printed or hashed. The instrumentation logged only a label built from the first four argv entries with absolute paths replaced by '<path>'; store keys travel in the environment (ECHOLET_E2E_KEY), never in argv, and were never read. The only content hashed is the SHA-256 of changed test source files (§8). Loopback addresses are written [REDACTED:ip] throughout; both artifacts pass `keryx security check-output`."
+    },
+    {
+      "criterion": "Route searches through keryx ctx rg, and commands/logs through keryx ctx run / keryx ctx read",
+      "status": "met",
+      "evidence": "Every in-repo text/pattern search used `keryx ctx rg`; repository file reads and repository commands used `keryx ctx read` / `keryx ctx run`; findings were recorded through `keryx memory new`/`index`/`check` and both artifacts scanned with `keryx security check-output`. Raw shell was used only with an explicit escape marker and a stated reason, in four classes keryx ctx does not cover: live-growing test logs in the session scratchpad outside the repository; exact node_modules source lines establishing birpc's timeout; cross-ref blob comparison against origin/main; and process censuses (ps/pgrep), which read no repository content. Recorded as raw_rg_used: no in the report's routing audit."
+    },
+    {
+      "criterion": "Produce a report and a subagent-result JSON validated against the subagent-result schema, mirroring t16-contention-report.md and 003-T16-tests-result.json in shape and rigor",
+      "status": "met",
+      "evidence": "t17-e2e-contention-report.md mirrors T16's structure (headline, attribution, measurement, the gap, remedy with derivations, verification and its limits, what was deliberately not done, cost, SHA-256 identity table, files changed, method notes, routing audit) and this document mirrors 003-T16-tests-result.json. Validated with `keryx skills contracts validate <path> --schema subagent-result`. The five findings are additionally recorded as accepted project memory entries so they outlive the flow."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t17-e2e-contention-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Attribution of the reported failures to src/runtime/inbound*.test.ts and to vitest's unconfigurable 60s worker-RPC ceiling; the 932-sample child measurement; the T40 inherited-constant gap and its closure; identical-load before/after with its limits stated; measured contention sources and why they were deferred; SHA-256 identity table. Also records the withdrawal of this task's own finding F-005.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/memory/",
+      "kind": "memory",
+      "exists": true,
+      "summary": "Five accepted project memory entries so the findings outlive the flow: two constraints (the unconfigurable worker-RPC ceiling; how the e2e contention fix may and may not be done), one known-mistake (relays orphaned even on passing runs), one decision (the measured-worst-case x ~2.2 convention and why each scope must measure its own children), one lesson (check the base branch before concluding earlier work was lost).",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/dispatches/003-T17-tests-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This document.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/test/childProcessTimeouts.ts",
+      "change": "modified - adds E2E_CHILD_TIMEOUT_MS (150000) and E2E_RELAY_READY_TIMEOUT_MS (60000) with the T17 derivation, the 932-sample distribution and the breach analysis documented in place; corrects the one sentence made stale by the change ('6.7x above CLI_CHILD_TIMEOUT_MS' -> '2x above E2E_CHILD_TIMEOUT_MS'). CLI_CHILD_TIMEOUT_MS (45000), CLI_TEST_TIMEOUT_MS (90000) and E2E_TEST_TIMEOUT_MS (300000) keep their values. sha256/16 before:1b77fa94bf93241d after:5b8797c84d129713"
+    },
+    {
+      "path": "apps/cli/test/e2e/flood-closure.test.ts",
+      "change": "modified - three child sites moved off CLI_CHILD_TIMEOUT_MS (command, runRaw, run), two nested literals raised (poll and killPollAfterPages, 120000 -> E2E_CHILD_TIMEOUT_MS - this is the file whose private 120000 was the only reason six 48899-69465ms poll children survived), relayReady's 10000ms window onto the shared constant. No assertion changed. sha256/16 before:b2820f880b24f9f8 after:c544969aab514b69"
+    },
+    {
+      "path": "apps/cli/test/e2e/init-relay-url.test.ts",
+      "change": "modified - one child site onto E2E_CHILD_TIMEOUT_MS. This is the suite whose failure was attributed in the clean e2e-only run and reproduced in the held-load before/after. No relay process in this suite, so no relayReady change. No assertion changed. sha256/16 before:2ea56ff49a81e233 after:d8d765e0f339f67b"
+    },
+    {
+      "path": "apps/cli/test/e2e/prekey-pool-replenishment.test.ts",
+      "change": "modified - one child site onto E2E_CHILD_TIMEOUT_MS (this is the suite carrying the two directly measured breaches of 45000: relay publish at 47889ms and 48025ms), relayReady onto the shared constant. beforeAll (150000) and its it() ceiling (600000) untouched. No assertion changed. sha256/16 before:166756488f732f8b after:cb2ca75ed2c7e1ea"
+    },
+    {
+      "path": "apps/cli/test/e2e/publication-claimability.test.ts",
+      "change": "modified - one child site onto E2E_CHILD_TIMEOUT_MS, relayReady onto the shared constant. E2E_TEST_TIMEOUT_MS usage and beforeAll (150000) untouched. No assertion changed. sha256/16 before:d5720d9444fd90d2 after:6f847269aaf19328"
+    },
+    {
+      "path": "apps/cli/test/e2e/relay-tls.test.ts",
+      "change": "modified - one child site onto E2E_CHILD_TIMEOUT_MS. Its two 3000ms httpsGet/servedFingerprint ceilings (HTTPS requests, not child processes, and not instrumented - flagged as the thinnest un-measured ceiling remaining) and its 10000ms 'Relay did not exit' ceiling untouched. No assertion changed. sha256/16 before:7095fbf536aebdf5 after:454e4493074ed67e"
+    },
+    {
+      "path": "apps/cli/test/e2e/rewalk-crash-safety.test.ts",
+      "change": "modified - one child site onto E2E_CHILD_TIMEOUT_MS, two nested literals raised (runRaw and run, 60000 -> 150000), relayReady onto the shared constant. Its 180000ms pollOnce/interruptPollAtPage defaults were left alone because unifying them would have NARROWED them, and holdPollAfter (120000) because it is a proxy-hold ceiling rather than a child watchdog. No assertion changed. sha256/16 before:1cb6dae3aad473ae after:5ca408e2058fcd0f"
+    },
+    {
+      "path": "apps/cli/test/e2e/two-process.test.ts",
+      "change": "modified - one child site onto E2E_CHILD_TIMEOUT_MS, relayReady onto the shared constant. E2E_TEST_TIMEOUT_MS usage and beforeAll (150000) untouched. No assertion changed. sha256/16 before:40e93d55558c0a7f after:751223c0bba7a249"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "003-T17-tests#F-001",
+      "reviewer": "003-T17-tests",
+      "severity": "major",
+      "repo": null,
+      "file": "apps/cli/src/runtime/inbound.test.ts",
+      "line": null,
+      "problem": "The '2 failed test files' and the '[vitest-worker]: Timeout calling \"onTaskUpdate\"' errors reported against apps/cli are not in apps/cli/test/e2e/ and are not assertion failures. In a full verbose 52-file run, ZERO tests assert-failed ('grep -c ^ ×' = 0), yet the summary read 'Test Files 50 passed (52); Tests 252 passed (273); Errors 6 errors'. The two unreported files are src/runtime/inbound.test.ts (11 tests) and src/runtime/inbound.batchIsolation.test.ts (8 tests), named four times by vitest's own 'This error originated in ...' lines. Their worker was torn down when its onTaskUpdate RPC to a CPU-starved main process timed out, so their results never arrived. The ceiling is birpc's hard-coded DEFAULT_TIMEOUT = 6e4 (vitest/dist/chunks/index.68735LiX.js:1, applied at line 19) and createForksRpcOptions (vitest/dist/chunks/utils.Cn0zI1t3.js:29) passes no timeout, so vitest exposes NO configuration option for it.",
+      "impact": "A green-looking summary can hide 21 tests that never ran, and no timeout this repository controls (testTimeout, hookTimeout, any per-child watchdog) can prevent it. Under saturation the suite silently under-reports coverage rather than failing loudly, which is a worse failure mode than a red test. It also means T16's finding F-001 was misdirected at test/e2e/: the timeout work delivered here is real and necessary, but it does not and cannot address this symptom.",
+      "suggested_fix": "Two independent directions, neither a ceiling change. (1) Make the under-report loud: fail the run when reported test count < collected test count, so a starved worker cannot be mistaken for a pass. (2) Reduce peak saturation so the 60s round trip is met (see F-002). Note the dominant contributor measured here was external - load1 600-790 with three other agents running this same suite - so (1) matters more than (2).",
+      "evidence": "Full instrumented verbose run: 'Test Files 50 passed (52); Tests 252 passed (273); Errors 6 errors', all six 'Error: [vitest-worker]: Timeout calling \"onTaskUpdate\"'; four carry 'This error originated in \"src/runtime/inbound.test.ts\"' (x2) and '\"src/runtime/inbound.batchIsolation.test.ts\"' (x2). Cross-checks: 0 occurrences of '^ ×'; 0 '✓' lines for either file; 273-252 = 21 unreported against 11+8 declared. Contrast: the e2e-only verbose run had 0 RPC errors.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/runtime/inbound.test.ts (11 tests, reported 0)",
+          "apps/cli/src/runtime/inbound.batchIsolation.test.ts (8 tests, reported 0)",
+          "node_modules/.../vitest/dist/chunks/rpc.TVf73xOu.js:61 (raises the message; createRuntimeRpc passes no timeout)",
+          "node_modules/.../vitest/dist/chunks/index.68735LiX.js:1,19 (bundled birpc: DEFAULT_TIMEOUT = 6e4)",
+          "node_modules/.../vitest/dist/chunks/utils.Cn0zI1t3.js:29 (createForksRpcOptions returns serialize/deserialize/post/on only)",
+          "node_modules/.../vitest/dist/workers/forks.js:20 (getRpcOptions() -> createForksRpcOptions(v8), the only call site for the pool this package uses)",
+          "apps/cli/vitest.config.ts (the config that COULD carry such a knob, and cannot)"
+        ],
+        "enumeration_method": "The affected test files were enumerated exhaustively rather than sampled: every '(src|test)/**.test.ts' path in the verbose log was extracted and diffed against `npx vitest list --filesOnly` (52 = 52, so no file was missing from the run), then per-file '✓ <file> >' counts were compared with each file's declared test count, isolating exactly the two files that reported nothing. Independently, `grep -c '^ ×'` returned 0, ruling out assertion failure anywhere. The vitest-internal chain was walked call site by call site with `keryx ctx rg` from the error string to its birpc default, confirming no `timeout` is set on any path."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "003-T17-tests#F-002",
+      "reviewer": "003-T17-tests",
+      "severity": "minor",
+      "repo": null,
+      "file": "apps/cli/test/e2e",
+      "line": null,
+      "problem": "Two measured, self-inflicted contention sources remain in test/e2e/, both deliberately not changed by this task. (a) Six of the seven suites each run their own `go build` of the IDENTICAL relay binary from their own beforeAll - measured at 4259, 5398, 5471, 5519, 6496 and 6623ms, all firing simultaneously at run start, which is exactly when the worker RPC channel is most congested. (b) All seven e2e files run in parallel by default, peaking at 7 relay processes + 8 CLI children + 6 Go toolchain processes on a 10-core machine, driving load1 to 194-204 from the suite alone.",
+      "impact": "Raises the probability of the unconfigurable worker-RPC starvation in F-001 and inflates every measured child duration, which is in turn what forces the harness ceilings to be as large as they are. Neither is a correctness defect; both are wasted machine.",
+      "suggested_fix": "Handle in a change whose verification is about pool and setup semantics rather than ceilings, because both natural fixes carry a specific hazard. For (a) the precedent already in this package is to build once in test/globalSetup.ts (as dist/cli.js already is, for the documented 'partially rewritten bundle' race) - but doing so unconditionally makes the Go toolchain a hard dependency of every `vitest run`, including `vitest run src/commands`, which needs no relay; it therefore needs a conditional or per-project globalSetup. For (b) a project-scoped `fileParallelism: false` for test/e2e/** is the right lever, but on vitest 3.0.8 that means a vitest.workspace.ts (test.projects is 3.2+), and a naive two-project split runs globalSetup per project and would rebuild dist/cli.js concurrently, reintroducing precisely the race globalSetup.ts exists to prevent.",
+      "evidence": "Instrumented `go build` durations from the whole-package run: 6496, 5471, 5519, 5398, 4259, 6623ms (plus 281 and 477ms for relay-tls's two further beforeAll children). Sampler census during that run: peak 7 relays, 8 dist/cli.js children, 6 Go toolchain processes, mean load1 202.6 / peak 386.4 over 222 samples on a 10-core machine. A parallel-vs---fileParallelism=false comparison was attempted to price (b) and abandoned unmeasured: ambient load1 rose from 163 to 578 during the parallel arm (2206s) because other agents started their own runs, so the arms were not comparable.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/test/e2e/flood-closure.test.ts (go build in beforeAll, 180000ms child ceiling, hook 240000)",
+          "apps/cli/test/e2e/rewalk-crash-safety.test.ts (go build, 180000ms, hook 240000)",
+          "apps/cli/test/e2e/relay-tls.test.ts (go build, 180000ms, hook 240000)",
+          "apps/cli/test/e2e/prekey-pool-replenishment.test.ts (go build, 120000ms, hook 150000)",
+          "apps/cli/test/e2e/publication-claimability.test.ts (go build, 120000ms, hook 150000)",
+          "apps/cli/test/e2e/two-process.test.ts (go build, 120000ms, hook 150000)",
+          "apps/cli/test/e2e/init-relay-url.test.ts (the one suite that builds no relay - so six builds, not seven)",
+          "apps/cli/vitest.config.ts (where a project-scoped fileParallelism would have to live; vitest 3.0.8 needs a vitest.workspace.ts)",
+          "apps/cli/test/globalSetup.ts (the existing build-once precedent for dist/cli.js, and the file whose per-project duplication is the hazard)"
+        ],
+        "enumeration_method": "Every `go build` call site was enumerated by searching the whole directory for the build invocation and its enclosing hook ceiling, reading the complete raw match log rather than the compacted summary, so all seven files were accounted for and init-relay-url was positively confirmed as the one with no relay. The concurrency claim is not inferred from the file count: a 2s sampler counted the actual concurrent relay, dist/cli.js and Go-toolchain processes throughout a whole-package run (222 samples), and each build's real duration came from the per-child instrumentation, so both the count and the cost are measured."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "003-T17-tests#F-003",
+      "reviewer": "003-T17-tests",
+      "severity": "minor",
+      "repo": null,
+      "file": "apps/cli/test/e2e/flood-closure.test.ts",
+      "line": null,
+      "problem": "The e2e suites orphan real relay processes, and not only when a worker is killed. Four relay processes from earlier runs were found alive and listening on loopback ports at the start of this task, 55-60 minutes old, from prekey-pool and rewalk-crash temp directories; six were alive after the whole-package run. Most tellingly, a FULLY PASSING e2e run (7 files, 30/30 tests, exit 0) still left two relay processes reparented to pid 1 - from flood-closure and prekey-pool-replenishment - with their $TMPDIR data directories intact. So at least one relay in those suites is reachable by a path that never runs through stop().",
+      "impact": "Leaked relays hold loopback ports and memory indefinitely and add background load to every subsequent run on the same machine, which is itself a contributor to the contention measured here. Because it happens on a passing run, it is invisible in CI output and accumulates silently across runs on a developer machine.",
+      "suggested_fix": "Audit the relay lifecycle helpers in flood-closure.test.ts and prekey-pool-replenishment.test.ts for a spawn path that bypasses stop(), and make teardown unconditional: track every relay the suite spawns in a list and kill all of them from afterEach/afterAll rather than relying on the happy path. Note relay-tls.test.ts also has a startRelay() helper, separate from its stop(), that spawns relays outside the single-relay pattern the other suites use. This is a suite-teardown change, not a ceiling change, which is why it was left out of this task's timeout-scoped diff.",
+      "evidence": "At task start: 4 relay processes at 55-60 minutes elapsed, listening on loopback ports, from echolet-prekey-pool-e2e-* and echolet-rewalk-crash-e2e-* temp directories. After the whole-package run: 6 alive. After the fully passing e2e run: 2 with ppid 1, from echolet-flood-closure-e2e-AQafFj and echolet-prekey-pool-e2e-rHgvxL, aged 41 and 30 minutes, matching that run's window. All were recorded and killed; other agents' live runs were left alone.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/test/e2e/flood-closure.test.ts (has stop(); leaked on a fully PASSING run)",
+          "apps/cli/test/e2e/prekey-pool-replenishment.test.ts (has stop(); leaked on a fully PASSING run)",
+          "apps/cli/test/e2e/rewalk-crash-safety.test.ts (has stop(); leaked in earlier runs found at task start)",
+          "apps/cli/test/e2e/publication-claimability.test.ts (has stop(); leaked during the whole-package run)",
+          "apps/cli/test/e2e/relay-tls.test.ts (has stop() AND a separate startRelay() that spawns relays outside the single-relay pattern)",
+          "apps/cli/test/e2e/two-process.test.ts (has stop())",
+          "apps/cli/test/e2e/init-relay-url.test.ts (no relay; cannot leak one)"
+        ],
+        "enumeration_method": "Not inferred from reading teardown code: the leak was observed directly and attributed by process ancestry and timing. `ps -Ao pid,ppid,etime,command` filtered to relay binaries under $TMPDIR was taken at four points - before any run, during, after the whole-package run, and after the final all-passing run - and each survivor was attributed to a specific suite by its mkdtemp directory prefix and to a specific run by comparing its elapsed time against that run's recorded start time. Foreign agents' relays were excluded by checking ppid against live vitest process trees rather than by assumption. Every stop() and relay spawn site in the directory was then located so the list of suites that CAN leak is complete, not just those seen leaking."
+      }
+    },
+    {
+      "id": "F-004",
+      "global_id": "003-T17-tests#F-004",
+      "reviewer": "003-T17-tests",
+      "severity": "info",
+      "repo": null,
+      "file": "apps/cli/test/e2e/flood-closure.test.ts",
+      "line": null,
+      "problem": "Two harness ceilings left alone by this task ran close to their limits under the heaviest load observed: the heaviest flood-closure volume took 644155ms and the heaviest rewalk-crash-safety test 582903ms, against their existing 900000ms it() ceilings - a 1.4-1.5x margin. Separately, relay-tls's httpsGet/servedFingerprint helpers keep 3000ms ceilings that were never instrumented, because they time an HTTPS request rather than a child process.",
+      "impact": "If load of that kind becomes normal on developer machines, these are the next ceilings that will start producing false failures, by the same mechanism fixed one layer down here.",
+      "suggested_fix": "No change now: both are already above the E2E_TEST_TIMEOUT_MS floor, neither was observed failing, and unlike the literals unified here these are individually justified in place rather than copied between files. Revisit if a false failure appears, and instrument the two 3000ms HTTPS ceilings before touching them so any change is derived rather than guessed.",
+      "evidence": "Full e2e run started at load1 443 with three foreign vitest runs live: slowest test durations 644155ms and 582903ms, both passing, against 900000ms ceilings; next three 121075, 115768, 103800ms.",
+      "confidence": "medium",
+      "class_scope": {
+        "sites": [
+          "apps/cli/test/e2e/flood-closure.test.ts volumes table (scenario ceilings 300000/420000/900000; the 900000 one measured at 644155ms)",
+          "apps/cli/test/e2e/flood-closure.test.ts RED-4 (600000ms) and RED-7 (420000ms) it() ceilings",
+          "apps/cli/test/e2e/rewalk-crash-safety.test.ts three 900000ms it() ceilings (one measured at 582903ms)",
+          "apps/cli/test/e2e/rewalk-crash-safety.test.ts pollOnce/interruptPollAtPage child defaults (180000ms; above the new watchdog, untouched)",
+          "apps/cli/test/e2e/rewalk-crash-safety.test.ts holdPollAfter (120000ms; a proxy-hold ceiling, not a child watchdog)",
+          "apps/cli/test/e2e/relay-tls.test.ts httpsGet and servedFingerprint (timeoutMs = 3000, never instrumented)",
+          "apps/cli/test/e2e/relay-tls.test.ts 'Relay did not exit' (10000ms)",
+          "apps/cli/test/e2e/*.test.ts stop() teardown ceilings (4000ms x4, 6000ms x3; worst measured 519ms, 8-11x margin)"
+        ],
+        "enumeration_method": "Every numeric ceiling in the directory was enumerated exhaustively before deciding which to touch, by reading the complete raw match log (not the compacted summary) of a search covering all four syntactic forms these ceilings take - timeoutMs defaults on both the base command() and its nested helpers, `}, N);` it()/hook closers, explicit call-site arguments, and scenario-table timeoutMs entries - then classifying each by hand as child watchdog, test ceiling, hook ceiling, HTTP-request ceiling or proxy-hold ceiling by reading the helper it belongs to. That classification is what revealed the nested helpers override the base default, which is why six 48899-69465ms poll children survived main's 45000ms wall while two 47889/48025ms relay publish children did not. The residual margins listed here are what remained after that pass, each with the measurement that justified leaving it."
+      }
+    },
+    {
+      "id": "F-005",
+      "global_id": "003-T17-tests#F-005",
+      "reviewer": "003-T17-tests",
+      "severity": "info",
+      "repo": null,
+      "file": "scripts/gate",
+      "line": null,
+      "problem": "CORRECTION AND WITHDRAWAL of this task's own earlier finding. An earlier revision of this document reported that T16's fix 'was never committed', on the evidence that apps/cli/test/childProcessTimeouts.ts was absent and apps/cli/src/commands/cli.test.ts still carried its original 15000 literal. Both observations were true and the conclusion was wrong: the worktree's base was 30 commits behind origin/main, where T16's fix had landed long before - along with T40's extension of it to test/e2e/. Every check run was local (ls, a literal search, `git status --short`), so none could reveal the remote state. A whole change was built on that stale base and had to be reset onto origin/main and reduced to the genuine delta.",
+      "impact": "The wasted work was recoverable, but two things are worth keeping. First, a follow-up task that trusts a predecessor's 'staged for review' note instead of checking the remote will misattribute its own reproduction. Second, the pre-push gate's failure mode is misleading here: it blocked with 'scripts/gate/suites.sh is missing from the work tree' and advised `git checkout -- scripts/gate`, which cannot help, because that script was never in this base at all - the gate script list lives in the tree, so a stale base fails the gate for reasons that look like tree damage.",
+      "suggested_fix": "Before editing, run `git fetch origin` then `git rev-list --left-right --count origin/main...HEAD` and `git ls-tree --name-only origin/main <path>` for anything believed missing. For the gate: consider distinguishing 'gate step absent because your base predates it' from 'gate step deleted from your tree' by comparing against origin/main, so the remediation advice matches the cause. Recorded as an accepted project memory lesson (memory/lessons/check-the-base-branch-before-concluding-earlier-work-was-lost.md).",
+      "evidence": "`git rev-list --left-right --count origin/main...HEAD` = 30 behind / 2 ahead. `git ls-tree --name-only origin/main apps/cli/test/` lists childProcessTimeouts.ts. `git ls-tree --name-only origin/main scripts/gate/` lists five scripts including suites.sh and pushed-range.sh, of which the stale base had three. All seven origin/main e2e suites already import the shared constants and carry no old literal defaults.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "scripts/gate/suites.sh and scripts/gate/pushed-range.sh (present on origin/main, absent from the stale base - the two that blocked the push)",
+          ".githooks/pre-push (its required-step list; core.hooksPath points at the main checkout, so the hook is shared across worktrees while the scripts it requires are versioned per branch)",
+          "apps/cli/test/childProcessTimeouts.ts (the file whose absence was misread as lost work)",
+          "apps/cli/src/commands/cli.test.ts (the 15000 literal that was misread as an unfixed watchdog)",
+          "apps/cli/test/e2e/*.test.ts (all seven already carried T40's shared constants on origin/main)"
+        ],
+        "enumeration_method": "The correction was established against the remote rather than the local tree: `git fetch origin`, then `git rev-list --left-right --count origin/main...HEAD` for the divergence, `git ls-tree --name-only origin/main <path>` for each file believed missing, and a per-file check of all seven e2e suites on origin/main for both the old literal defaults (0 hits) and the shared-constant import (7 hits). The gate's requirement list was read directly from .githooks/pre-push and compared against `git ls-files scripts/gate` in both trees, which is what identified the two scripts the stale base lacked."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "base_commit": "860005bcd4639f95f5403642046812dbf2e59e00",
+    "children_measured": 932,
+    "child_duration_p50_ms": 1588,
+    "child_duration_p90_ms": 14066,
+    "child_duration_p95_ms": 19459,
+    "child_duration_p99_ms": 38855,
+    "child_duration_max_ms": 69465,
+    "worst_relay_publish_ms": 48025,
+    "worst_poll_ms": 69465,
+    "worst_relay_ready_ms": 4459,
+    "worst_relay_teardown_ms": 519,
+    "worst_go_build_ms": 6623,
+    "children_over_main_45000_wall": 8,
+    "children_over_main_45000_that_were_real_breaches": 2,
+    "children_over_new_150000_wall": 0,
+    "e2e_child_timeout_ms_chosen": 150000,
+    "e2e_relay_ready_timeout_ms_chosen": 60000,
+    "e2e_test_timeout_ms_unchanged": 300000,
+    "cli_child_timeout_ms_left_alone": 45000,
+    "machine_cores": 10,
+    "sampled_load1_mean": 202.6,
+    "sampled_load1_peak": 386.4,
+    "peak_concurrent_relays": 7,
+    "peak_concurrent_cli_children": 8,
+    "peak_concurrent_go_builds": 6,
+    "attribution_e2e_alone": "1 failed | 29 passed (30), 375.83s, 0 worker-RPC errors; failure = init-relay-url.test.ts 'guard: an unreachable relay...' -> init E2E child timeout",
+    "attribution_whole_package": "Test Files 50 passed (52); Tests 252 passed (273); 6 errors, all [vitest-worker] onTaskUpdate; 0 assertion failures; unreported files = src/runtime/inbound.test.ts, src/runtime/inbound.batchIsolation.test.ts",
+    "before_after_held_load": "before (stale-base 30000ms watchdog): 1 failed | 8 passed (9), exit 1, 104s at load1 407, failing test 44161ms; after: 9 passed (9), exit 0, 139s at load1 529, same test 59175ms",
+    "before_after_limitation": "the arms ran on the stale base where that suite's watchdog was 30000ms, not main's 45000ms; they prove the per-child watchdog decides this test's fate, while the direct evidence against 45000 is the two measured 47889/48025ms relay publish children in prekey-pool-replenishment",
+    "full_e2e_on_stale_base": "7 passed (7), 30 passed (30), exit 0, 1250.96s, load1 443 at start with 3 foreign vitest runs live",
+    "diff_size": "73 insertions, 27 deletions across 8 files, no new file",
+    "typecheck": "clean (tsc -p apps/cli/tsconfig.json --noEmit)",
+    "memory_entries_recorded": 5
+  },
+  "timestamp_utc": "2026-09-09T05:40:00Z"
+}
