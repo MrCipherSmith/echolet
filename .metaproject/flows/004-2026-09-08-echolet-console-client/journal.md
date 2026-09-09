@@ -74,3 +74,11 @@
 - 2026-09-09T06:03:46.938Z - task-added: T26: Make the counts come from the store, and write the failure vocabulary
 - 2026-09-09T06:03:47.029Z - task-attempt: T26: started (attempt 1) — Opus rather than sonnet: this writes operator-facing prose for 32 cells and changes a state invariant, and both are places where the cheaper answer shows.
 - 2026-09-09T06:35:49.537Z - task-done: T26: Make the counts come from the store, and write the failure vocabulary
+- 2026-09-09T06:40:38.869Z - task-attempt: T25: started (attempt 1) — The two gaps the wave report named about this orchestration: no independent verification ran after the escape fix, breaking the pattern every other slice followed; and the console has never been driven against the real cli.js or a real relay - every driven test spawns a fake command the test itself writes.
+- 2026-09-09T07:06:56.080Z - task-done: T25: Drive the console against the REAL cli.js and a real relay, and independently verify the escape fix
+- 2026-09-09T07:06:56.162Z - task-added: T27: RED tests: a received message must be readable, and launch arguments must not reach a frame unfiltered
+- 2026-09-09T07:07:04.032Z - task-attempt: T27: started (attempt 1) — Two live defects found by the real-CLI run. The reading one is what the wave exists for: a message arrives, decrypts, commits and cannot be read, because a message id takes half the row. The argv one is the eighth escape route, and it has no boundary at all - the earlier no-eighth answer was scoped to one function and I relayed it as if it covered the console.
+- 2026-09-09T07:35:40.683Z - task-done: T27: RED tests: a received message must be readable, and launch arguments must not reach a frame unfiltered
+- 2026-09-09T07:35:40.767Z - task-added: T28: Make a received message readable, and filter the launch arguments
+- 2026-09-09T07:35:40.849Z - task-attempt: T28: started (attempt 1) — Owner decision on Q-001: the requirement is that a 51-character message - the length this wave actually measured - is readable somewhere in the console without leaving it. Which layout achieves that is the implementer choice, but eliding it and saying so does not satisfy the criterion this wave exists for.
+- 2026-09-09T07:56:01.711Z - task-done: T28: Make a received message readable, and filter the launch arguments

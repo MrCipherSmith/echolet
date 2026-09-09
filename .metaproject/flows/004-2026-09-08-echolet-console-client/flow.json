@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T06:35:49.537Z",
+  "updatedAt": "2026-09-09T07:56:01.711Z",
   "source": {
     "type": "description",
     "ref": null
@@ -540,15 +540,22 @@
       "id": "T25",
       "title": "Drive the console against the REAL cli.js and a real relay, and independently verify the escape fix",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T06:40:38.869Z",
+            "outcome": "started",
+            "detail": "The two gaps the wave report named about this orchestration: no independent verification ran after the escape fix, breaking the pattern every other slice followed; and the console has never been driven against the real cli.js or a real relay - every driven test spawns a fake command the test itself writes."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T26",
@@ -565,6 +572,52 @@
             "at": "2026-09-09T06:03:47.029Z",
             "outcome": "started",
             "detail": "Opus rather than sonnet: this writes operator-facing prose for 32 cells and changes a state invariant, and both are places where the cheaper answer shows."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T27",
+      "title": "RED tests: a received message must be readable, and launch arguments must not reach a frame unfiltered",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T25"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T07:07:04.031Z",
+            "outcome": "started",
+            "detail": "Two live defects found by the real-CLI run. The reading one is what the wave exists for: a message arrives, decrypts, commits and cannot be read, because a message id takes half the row. The argv one is the eighth escape route, and it has no boundary at all - the earlier no-eighth answer was scoped to one function and I relayed it as if it covered the console."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T28",
+      "title": "Make a received message readable, and filter the launch arguments",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T27"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T07:35:40.849Z",
+            "outcome": "started",
+            "detail": "Owner decision on Q-001: the requirement is that a 51-character message - the length this wave actually measured - is readable somewhere in the console without leaving it. Which layout achieves that is the implementer choice, but eliding it and saying so does not satisfy the criterion this wave exists for."
           }
         ]
       },
@@ -942,6 +995,46 @@
       "at": "2026-09-09T06:35:49.537Z",
       "event": "task-done",
       "detail": "T26: Make the counts come from the store, and write the failure vocabulary"
+    },
+    {
+      "at": "2026-09-09T06:40:38.869Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — The two gaps the wave report named about this orchestration: no independent verification ran after the escape fix, breaking the pattern every other slice followed; and the console has never been driven against the real cli.js or a real relay - every driven test spawns a fake command the test itself writes."
+    },
+    {
+      "at": "2026-09-09T07:06:56.080Z",
+      "event": "task-done",
+      "detail": "T25: Drive the console against the REAL cli.js and a real relay, and independently verify the escape fix"
+    },
+    {
+      "at": "2026-09-09T07:06:56.162Z",
+      "event": "task-added",
+      "detail": "T27: RED tests: a received message must be readable, and launch arguments must not reach a frame unfiltered"
+    },
+    {
+      "at": "2026-09-09T07:07:04.032Z",
+      "event": "task-attempt",
+      "detail": "T27: started (attempt 1) — Two live defects found by the real-CLI run. The reading one is what the wave exists for: a message arrives, decrypts, commits and cannot be read, because a message id takes half the row. The argv one is the eighth escape route, and it has no boundary at all - the earlier no-eighth answer was scoped to one function and I relayed it as if it covered the console."
+    },
+    {
+      "at": "2026-09-09T07:35:40.683Z",
+      "event": "task-done",
+      "detail": "T27: RED tests: a received message must be readable, and launch arguments must not reach a frame unfiltered"
+    },
+    {
+      "at": "2026-09-09T07:35:40.767Z",
+      "event": "task-added",
+      "detail": "T28: Make a received message readable, and filter the launch arguments"
+    },
+    {
+      "at": "2026-09-09T07:35:40.849Z",
+      "event": "task-attempt",
+      "detail": "T28: started (attempt 1) — Owner decision on Q-001: the requirement is that a 51-character message - the length this wave actually measured - is readable somewhere in the console without leaving it. Which layout achieves that is the implementer choice, but eliding it and saying so does not satisfy the criterion this wave exists for."
+    },
+    {
+      "at": "2026-09-09T07:56:01.711Z",
+      "event": "task-done",
+      "detail": "T28: Make a received message readable, and filter the launch arguments"
     }
   ]
 }
