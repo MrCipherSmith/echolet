@@ -3,8 +3,8 @@ import { buildMailboxSnapshot, formatMailboxLines } from "./mailbox-pane";
 import { renderModal, resolveModalPanelSize } from "./modal-host";
 import { fitPane } from "./pane-fit";
 import { buildProfilesSnapshot, formatProfilesLines } from "./profiles-pane";
-import { PANE_IDS, type Frame, type OperatorState, type PaneId, type Viewport } from "./state";
-import { clipLine, codePoints, padOrClip } from "./text";
+import { PANE_IDS, type Frame, type InputState, type OperatorState, type PaneId, type Viewport } from "./state";
+import { clipLine, codePoints, padOrClip, utf8Bytes } from "./text";
 
 /**
  * The frame renderer: a pure function from state to plain text lines.
@@ -125,7 +125,46 @@ function fitFooter(entries: readonly FooterKey[], cols: number): string {
 /** Names exactly what `mapKey` binds. A footer that advertised an unbound key would be a lie. */
 function footerLine(state: OperatorState, cols: number): string {
   if (state.modal !== undefined) return "[y] trust  [n] reject  [esc] cancel";
+  const input = state.input;
+  if (input !== undefined) {
+    /*
+     * While composing, `q` is TEXT and every command key with it, so the global footer would be
+     * ten lies at once. These three are what `inputKey` actually binds — and `[ctrl-c] quit` is
+     * AC8's way out, named rather than assumed, on every frame the operator can type into.
+     *
+     * `[enter] send` appears only for the field whose submit builds a request today; the other six
+     * are operands of steps that do not exist yet, and a footer promising to send one would be the
+     * same lie in a smaller hat.
+     */
+    const submit = input.field === "message" ? "[enter] send  " : "";
+    return `${submit}[esc] cancel  [ctrl-c] quit`;
+  }
   return fitFooter(state.help === true ? FOOTER_KEYS_HELP_OPEN : FOOTER_KEYS, cols);
+}
+
+/**
+ * The row the operator types into, and the one body row it spends (t35 §5 item 5).
+ *
+ * It shows the TAIL of the buffer when the buffer is wider than the row, because that is where the
+ * next keystroke lands: a compose row that showed the head would leave the operator typing into a
+ * part of their own message they cannot see. Width is code points, like everything else here, so a
+ * body containing combining marks or East Asian wide characters is exactly `cols` code points and
+ * visually ragged — the trade §5 item 3 records and takes deliberately.
+ *
+ * It filters nothing. `buffer` cannot hold a control character, because `reduce` refuses to put one
+ * there; making the renderer defensive here would move AC7's property off the state, which is the
+ * one thing t35 §5 item 4 says it must not be.
+ */
+function composeLine(input: InputState, cols: number): string {
+  const label = `${input.field} ▸ `;
+  const used = utf8Bytes(input.buffer);
+  // §2.2: the counter appears once past half, so the room left is visible before it runs out and a
+  // short message is not decorated with a number nobody needs.
+  const counter = used * 2 > input.maxBytes ? `  ${String(used)}/${String(input.maxBytes)} bytes` : "";
+  const room = Math.max(0, Math.floor(cols) - codePoints(label).length - codePoints(counter).length);
+  const points = codePoints(input.buffer);
+  const shown = points.length <= room ? input.buffer : points.slice(points.length - room).join("");
+  return `${label}${shown}${counter}`;
 }
 
 /**
@@ -156,6 +195,7 @@ const HELP_LINES: readonly string[] = [
   "  d          doctor",
   "  r          relay publish",
   "  h          history for the selected contact",
+  "  w          write a message (history pane, with a contact selected)",
   "  i          import the contact card named at startup",
   "  c          next contact",
   "  t          next profile",
@@ -221,16 +261,23 @@ function paneLines(state: OperatorState, pane: PaneId, width: number, bodyRows: 
  * and never did. Everything else on this frame is what the operator needs in order to leave it.
  */
 function tooSmallFrame(state: OperatorState, cols: number, rows: number): string[] {
+  const composing = state.input !== undefined;
   const lines = [
     ...wrapToWidth(UNAUDITED_NOTICE, cols),
     "",
     ...wrapToWidth(`${String(cols)}x${String(rows)} — this console needs ${String(MIN_VIEWPORT.cols)}x${String(MIN_VIEWPORT.rows)}`, cols),
-    ...wrapToWidth("resize, or press q to quit", cols),
+    // While a buffer is open `q` is text, so naming it here would be the lie `footerLine` refuses.
+    // Ctrl-C is the binding that survives composing, so it is the one this frame offers.
+    ...wrapToWidth(composing ? "resize, or press ctrl-c to quit" : "resize, or press q to quit", cols),
   ];
   // A trust decision cannot be answered here, because the identifiers cannot be shown here, and the
   // reducer will refuse a confirmation for a modal that was never painted. Saying so is the
   // difference between a refusal and a console that appears to have stopped responding.
   if (state.modal !== undefined) lines.push("", ...wrapToWidth("a trust decision is waiting — resize to answer it", cols));
+  // The same courtesy for the same reason: the body cannot be shown here, so the reducer will
+  // refuse to send it, and a console that silently ignored Enter would be indistinguishable from a
+  // hung one. The body itself is deliberately NOT painted — that is what the refusal is about.
+  if (composing) lines.push("", ...wrapToWidth("a message is being composed — resize to see and send it", cols));
   return lines;
 }
 
@@ -271,8 +318,15 @@ export function renderFrame(state: OperatorState, viewport: Viewport): Frame {
   const tail = [activityLine(state), footerLine(state, cols)].slice(0, Math.max(0, Math.min(TAIL_ROWS, rows - head.length)));
 
   const bodyRows = Math.max(0, rows - head.length - tail.length);
-  const body = paneLines(state, state.pane, cols, bodyRows).slice(0, bodyRows);
-  while (body.length < bodyRows) body.push("");
+  // The compose row spends one BODY row while it is open (§5 item 5): at `MIN_VIEWPORT` the pane
+  // gets 10 rows instead of 11. The notice, header, rule, activity line and footer are untouched,
+  // so an operator composing a message still sees the warning first and the way out last.
+  const input = state.input;
+  const composeRows = input !== undefined && bodyRows > 0 ? 1 : 0;
+  const paneRows = bodyRows - composeRows;
+  const body = paneLines(state, state.pane, cols, paneRows).slice(0, paneRows);
+  while (body.length < paneRows) body.push("");
+  if (input !== undefined && composeRows === 1) body.push(composeLine(input, cols));
 
   const frame = [...head, ...body, ...tail].map((line) => fitLine(line, cols));
   return state.modal === undefined ? frame : overlayModal(frame, state, { cols, rows });

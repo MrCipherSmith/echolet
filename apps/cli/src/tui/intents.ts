@@ -1,5 +1,5 @@
 import type { CliRequest } from "./cli-bridge";
-import type { OperatorState, PaneId } from "./state";
+import type { InputField, OperatorState, PaneId } from "./state";
 
 /**
  * The input model's vocabulary, kept in its own module so `state.ts`, `cli-bridge.ts` and
@@ -19,6 +19,20 @@ export type Intent =
   | { readonly kind: "toggle-help" }
   | { readonly kind: "trust-confirm" }
   | { readonly kind: "trust-cancel" }
+  /**
+   * The input mode (t35 §3.1). Five members, no more: opening the row, one insertion, one deletion,
+   * abandoning the buffer and submitting it.
+   *
+   * `input-insert` carries the RAW chunk the terminal delivered (`key.sequence`) and not a cleaned
+   * one, because the filter belongs to `reduce`: an intent that arrived from anywhere — a paste, a
+   * resize race, a future scripted mode — must meet the same boundary. Nothing here is a decision
+   * about trust, which is why none of them is a `Modal`.
+   */
+  | { readonly kind: "input-open"; readonly field: InputField }
+  | { readonly kind: "input-insert"; readonly text: string }
+  | { readonly kind: "input-backspace" }
+  | { readonly kind: "input-cancel" }
+  | { readonly kind: "input-submit" }
   | { readonly kind: "quit" };
 
 export type Effect =

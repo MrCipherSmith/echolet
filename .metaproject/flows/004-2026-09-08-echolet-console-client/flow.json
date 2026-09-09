@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T00:45:06.759Z",
+  "updatedAt": "2026-09-09T01:01:26.994Z",
   "source": {
     "type": "description",
     "ref": null
@@ -197,7 +197,7 @@
       "id": "T10",
       "title": "RED tests for the compose surface: an input mode, control-character filtering, frame exactness while typing",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9"
       ],
@@ -208,6 +208,29 @@
             "at": "2026-09-09T00:45:06.759Z",
             "outcome": "started",
             "detail": "Third wall: decodeKey collapses every chunk to one lower-cased character, so no operand can be typed. Tests first, pure layer, by a fresh agent. The orchestrator writes none of them."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Implement the input mode and the send key: make the console able to write a message",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T01:01:26.994Z",
+            "outcome": "started",
+            "detail": "A different agent from the one that wrote the tests, and not the orchestrator. It may not edit a test; the 28 currently-vacuous cases must become non-vacuous by the implementation, not by adjusting them."
           }
         ]
       },
@@ -324,6 +347,21 @@
       "at": "2026-09-09T00:45:06.759Z",
       "event": "task-attempt",
       "detail": "T10: started (attempt 1) — Third wall: decodeKey collapses every chunk to one lower-cased character, so no operand can be typed. Tests first, pure layer, by a fresh agent. The orchestrator writes none of them."
+    },
+    {
+      "at": "2026-09-09T01:01:19.413Z",
+      "event": "task-done",
+      "detail": "T10: RED tests for the compose surface: an input mode, control-character filtering, frame exactness while typing"
+    },
+    {
+      "at": "2026-09-09T01:01:21.877Z",
+      "event": "task-added",
+      "detail": "T11: Implement the input mode and the send key: make the console able to write a message"
+    },
+    {
+      "at": "2026-09-09T01:01:26.994Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — A different agent from the one that wrote the tests, and not the orchestrator. It may not edit a test; the 28 currently-vacuous cases must become non-vacuous by the implementation, not by adjusting them."
     }
   ]
 }
