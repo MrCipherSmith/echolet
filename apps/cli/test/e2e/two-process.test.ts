@@ -11,13 +11,13 @@ import { EncryptedSqliteStore } from "@echolet/session-node";
 import { createIdentityProfile } from "@echolet/client-core";
 import { decodeBase64Url, signUtf8Message } from "@echolet/crypto-core";
 import { LIMITS } from "@echolet/protocol";
-import { CLI_CHILD_TIMEOUT_MS, E2E_TEST_TIMEOUT_MS } from "../childProcessTimeouts";
+import { E2E_CHILD_TIMEOUT_MS, E2E_RELAY_READY_TIMEOUT_MS, E2E_TEST_TIMEOUT_MS } from "../childProcessTimeouts";
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const suite = mkdtempSync(join(tmpdir(), "echolet-real-e2e-"));
 const binary = join(suite, "relay"), cli = join(project, "apps/cli/dist/cli.js");
 interface Result { code: number | null; stdout: string; stderr: string }
-function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = CLI_CHILD_TIMEOUT_MS): Promise<Result> {
+function command(executable: string, args: string[], env: Record<string, string> = {}, timeoutMs = E2E_CHILD_TIMEOUT_MS): Promise<Result> {
   return new Promise((done, reject) => {
     const child = spawn(executable, args, { cwd: project, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "";
@@ -54,7 +54,7 @@ async function close(server: Server) {
   });
 }
 async function relayReady(url: string, child: ChildProcess) {
-  const end = Date.now() + 10000;
+  const end = Date.now() + E2E_RELAY_READY_TIMEOUT_MS;
   while (Date.now() < end) {
     if (child.exitCode !== null || child.signalCode !== null) throw new Error("Relay exited during startup");
     try { if ((await fetch(`${url}/health`, { signal: AbortSignal.timeout(500) })).ok) return; } catch { /* bounded startup retry */ }

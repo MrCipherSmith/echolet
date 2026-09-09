@@ -69,8 +69,8 @@
  * uses (`flood-closure`'s 4x49 volume), so no new magnitude enters the tree. It is bounded above by
  * the requirement that a genuinely stuck end-to-end test still fail within five minutes. It is the
  * FLOOR for every per-test ceiling under `test/e2e/`; the tests that already declare more
- * (300000-900000ms) keep the numbers their own recorded measurements justify. It stays 6.7x above
- * `CLI_CHILD_TIMEOUT_MS`, which fires first and reports the specific, actionable "E2E child
+ * (300000-900000ms) keep the numbers their own recorded measurements justify. It stays 2x above
+ * `E2E_CHILD_TIMEOUT_MS`, which fires first and reports the specific, actionable "E2E child
  * timeout" rather than vitest's generic per-test timeout.
  *
  * `CLI_TEST_TIMEOUT_MS` also covers the two `src/runtime/` suites that publish a full pool
@@ -81,7 +81,60 @@
  *
  * T40 measurements and the load samples behind them:
  * `.metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t40-suite-regression-report.md`.
+ *
+ * T17 (flow 003) closed the one gap T40 left open. T40 extended `CLI_CHILD_TIMEOUT_MS` to the
+ * `test/e2e/` per-child watchdogs on the strength of T16's measurement of `relay publish` — but
+ * that measurement was taken in `src/commands/`, against an in-process mock relay. T40 measured
+ * e2e WHOLE-TEST durations (which is why `E2E_TEST_TIMEOUT_MS` exists and is sound); it never
+ * measured the e2e CHILDREN themselves. T17 did: every `command()` helper in all seven suites was
+ * instrumented and 932 real child durations were recorded across two loaded runs on this 10-core
+ * machine.
+ *
+ *   p50 1588ms   p90 14066ms   p95 19459ms   p99 38855ms   max 69465ms
+ *
+ * Eight of those 932 children ran past 45000ms. Two are outright breaches of the shared wall:
+ * `relay publish` in `prekey-pool-replenishment` at 47889ms and 48025ms, which goes through the
+ * base `command()` default and so was being SIGKILLed mid-flight while doing genuine work. The
+ * other six are `poll` in `flood-closure` (48899-69465ms), which survived only because that file
+ * happens to keep a larger private literal on its own `poll()` helper — 120000ms, reached 58% of the
+ * way — while every other child in the same file sat behind 45000ms. That split is precisely the
+ * drift a shared constant is supposed to remove: whether a correct child lives or dies depended on
+ * which helper it was routed through, not on what it does.
+ *
+ *   poll (on a mailbox flooded with poison)   max 69465ms   mean 13180ms   n=159
+ *   relay publish                             max 48025ms   mean 19010ms   n=138
+ *
+ * The e2e `relay publish` is 2.4x the 20352ms T16 measured for the same command name, because the
+ * workload is not the same command: a real Go relay process over real loopback HTTP (and TLS in
+ * `relay-tls`), with several suites orchestrating multiple processes at once. For scale, 45000ms sat
+ * at about the p99 of correct behaviour in this directory and the pre-T40 literals (20000/30000ms)
+ * sat at about the p95. T17's own whole-test figures agree with T40's where they overlap (heavy
+ * suites 124826-152610ms against T40's 124217ms), which is why `E2E_TEST_TIMEOUT_MS` is unchanged;
+ * the disagreement is only about the per-child number T40 inherited rather than measured.
+ *
+ * `E2E_CHILD_TIMEOUT_MS` carries 2.16x the worst measured single e2e child (69465ms) — the same
+ * margin `CLI_CHILD_TIMEOUT_MS` carries over its own worst case (2.21x), applied to this scope's
+ * own number instead of borrowing another scope's. The margin has to be a real multiple rather than
+ * a snug fit because the quantity is not a property of the code: the worst case rose from 48025ms
+ * to 69465ms purely because other agents started their own test runs on the same machine.
+ *
+ * Scopes stay separate deliberately. `CLI_CHILD_TIMEOUT_MS` is unchanged and still correct for
+ * `src/commands/`; folding the two into one constant would mean either a 45000ms wall that this
+ * directory measurably breaches, or a 150000ms wall for CLI-only suites whose worst child is 20.4s.
+ *
+ * `E2E_RELAY_READY_TIMEOUT_MS` replaces the 10000ms `/health` polling window each relay-bearing
+ * suite hard-coded in its own `relayReady()`. It is 13x the worst measured readiness (4459ms). It
+ * was not observed failing; at 10000ms it carried the thinnest margin (2.2x) of any relay-lifecycle
+ * ceiling in these suites and was demonstrably the next one to start firing. The teardown ceilings
+ * in `stop()` (4000/6000ms) are deliberately left alone: worst measured teardown was 519ms, an
+ * 8-11x margin, and a relay that will not exit should still be reported quickly.
+ *
+ * T17 measurements, the attribution of the failures that prompted it, and the contention sources it
+ * deliberately did not restructure:
+ * `.metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t17-e2e-contention-report.md`.
  */
 export const CLI_CHILD_TIMEOUT_MS = 45_000;
 export const CLI_TEST_TIMEOUT_MS = 90_000;
+export const E2E_CHILD_TIMEOUT_MS = 150_000;
 export const E2E_TEST_TIMEOUT_MS = 300_000;
+export const E2E_RELAY_READY_TIMEOUT_MS = 60_000;
