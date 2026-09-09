@@ -1,0 +1,198 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "004-T32-implement-2026-09-09",
+  "dispatch_id": "004-T32-implement",
+  "status": "DONE",
+  "summary": "Both 004-T30 red specifications are green with the source changes the dispatch itself pointed at, and nothing wider moved: `git status --short -- apps/cli/src/tui docs/STATUS_CURRENT.md` lists exactly `shell-chrome.ts`, `tui-shell.ts` and `docs/STATUS_CURRENT.md`, no test file. DEFECT ONE (a frame naming a dead key): three places paint a key name and none of them asked who owns the keyboard. `footerLine`'s modal branch now appends `[ctrl-c] quit` to the y/n/esc row rather than touching `TRUST_MODAL_FOOTER` (modal-host.ts), which stays exactly `[\"y\",\"n\",\"esc\"]` because those are answers to the trust QUESTION and the frame's last row is a different string. `tooSmallFrame` now asks about the modal as well as the compose row before choosing between 'press q to quit' and 'press ctrl-c to quit' -- the sharp case (a trust modal below 72x16) no longer claims a dead `q`. The key list's own quit row is no longer the static `HELP_LINES` constant; `helpLines(state)` computes it from the same ownership rule (`  ctrl-c     quit` under a modal or an open compose row, the old `  q          quit (ctrl-c also quits)` otherwise), which also fixes the 004-T29 F-003 truncation case -- rendered and read back at 120x40 and 200x60, the shortened line now sits entirely left of the modal panel and is never cut. The false comment at `tui-shell.ts` (the one asserting `TRUST_MODAL_FOOTER`'s pin forecloses naming the way out in the footer) is removed and replaced with what is actually true: the footer is a different string in a different file and both now agree. `tui-shell.namedWayOut.test.ts` went from 18 dead-key rows and 31 silent-with-room rows, over 170 combinations, to 0 of either -- 3 of 3 tests green, first try. DEFECT TWO (an interrupted command leaves the operator misinformed): `runTuiShell` now tracks the in-flight command's name (set/cleared around the `run-cli` effect's own await) and `finish()` -- made idempotent, which also removes the 004-T30 F-003 second alternate-screen restore as a side effect -- writes one line after `ALTERNATE_SCREEN_OFF`, clipped to `viewport().cols` with `clipLine` and no trailing newline, naming the command still running (e.g. `relay publish is still running`) whenever one is. The shell still resolves and hands back the terminal without awaiting the child -- the dispatch's own measured rejection of that shape was not revisited. `tui-shell.quitWithChildInFlight.test.ts` is 3 of 3 green, including the real-child, real-`main.ts`-bundle half. Verified against a directly rendered frame (not only the test) that the shortened help-list line is not truncated by the modal overlay at 120x40 or 200x60. Test evidence, in the required order, each captured whole to a scratchpad log and read back, never piped through head/tail, exit code appended in the same shell invocation: (1) the two specification files -- 2 files, 6 tests, 792ms, exit 0; (2) the whole `src/tui` -- 38 files on disk and 38 reported, 351 tests, 2.89s, exit 0; (3) the whole `apps/cli` package including `test/e2e` -- 79 files on disk and 79 reported, 523 tests, 228.12s, exit 0, 0 `×` failure markers in the raw log (grep, not a gdctx summary header). `tsc --noEmit` exit 0 both before and after. The machine was never idle: 1-minute load average 10.88 just before the whole-package run started, 30-32 immediately after it finished (the operator's own VM, browser and this run competing for the same 10 cores).",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Every frame a state/viewport combination can produce names a working key, and every frame with room to name one does",
+      "status": "met",
+      "evidence": "`tui-shell.namedWayOut.test.ts`, both red tests, now green: 'never names a key that does not quit in that state' (was 18 of 170 red) and 'names a working way out on every frame that has room for one' (was 31 of 170 red). The anti-vacuity self-test stayed green throughout, so the zero is a real zero and not a scanner gone blind. Full run: `npx vitest run src/tui/tui-shell.namedWayOut.test.ts` -> 3 tests, 3 passed, exit 0."
+    },
+    {
+      "criterion": "The comment at tui-shell.ts asserting the modal footer cannot name the way out is corrected, not left standing beside a change that disproves it",
+      "status": "met",
+      "evidence": "`apps/cli/src/tui/tui-shell.ts`, the `mapKey` modal branch comment (was around line 91-93: 'This is also the only one of the verifier's two suggested fixes the existing tests permit... so naming the way out in the footer instead is not available.'). Replaced with a comment stating what is actually true on this tree: `TRUST_MODAL_FOOTER` stays pinned to y/n/esc because those are the trust question's answers, and the frame's own last row -- a separate string in `shell-chrome.ts`'s `footerLine` -- now names Ctrl-C there instead, per 004-T30-tests F-001."
+    },
+    {
+      "criterion": "An interrupted command must not leave the operator misinformed: terminal returns at once, one line on the real screen names the still-running command, and the process outlives the child",
+      "status": "met",
+      "evidence": "`tui-shell.quitWithChildInFlight.test.ts`, all 3 tests green (both in-process cases and the real-child, real-bundled-`main.ts` case). `runTuiShell` does not await the child before resolving -- the shell's own promise still settles and `io.stdout` still receives `ALTERNATE_SCREEN_OFF` synchronously off the quit keystroke's own effect chain, proven by the same test measuring the restore before the child is released. The notice line lands strictly after that sequence in the write log, names the exact command (`relay publish`), and uses one of the fixture's own WAITING_WORDS ('still running'). The process-level test's `operator.order` equals `['the child finished', 'the console process closed']`, so the process did not close first."
+    },
+    {
+      "criterion": "The line is clipped to the terminal width with no trailing newline, because a helper elsewhere treats every chunk as a painted frame",
+      "status": "met",
+      "evidence": "`finish()` writes `clipLine(\\`${inFlightCommand} is still running\\`, viewport().cols)` with a single `io.stdout.write`, no `\\n`/`\\r\\n` appended. `tui-shell.wayOut.test.ts` (unedited) stayed green in every run, including its 60s all-viewport sweep down to 1x1, which is the file whose `frames()` helper this constraint protects."
+    },
+    {
+      "criterion": "No test file edited",
+      "status": "met",
+      "evidence": "`git status --short -- apps/cli/src/tui docs/STATUS_CURRENT.md` lists exactly `shell-chrome.ts`, `tui-shell.ts` and `docs/STATUS_CURRENT.md`. Neither `tui-shell.namedWayOut.test.ts` nor `tui-shell.quitWithChildInFlight.test.ts` (nor any other `*.test.ts`) appears."
+    },
+    {
+      "criterion": "Run the two specification files, then the whole apps/cli/src/tui, then the whole apps/cli package",
+      "status": "met",
+      "evidence": "In that order, each captured whole to a scratchpad log file and read back afterward, exit code appended by `>>` in the same shell invocation: (1) 2 files, 6 tests, 6 passed, 792ms, exit 0; (2) 38 files, 351 tests, 351 passed, 2.89s, exit 0; (3) 79 files, 523 tests, 523 passed, 228.12s, exit 0."
+    },
+    {
+      "criterion": "Reported file counts checked against files on disk",
+      "status": "met",
+      "evidence": "`find apps/cli/src apps/cli/test -name '*.test.ts' -type f | wc -l` (routed through `keryx ctx run`) returned 79, matching vitest's 'Test Files 79 passed (79)' for the whole-package run. `ls apps/cli/src/tui | grep -c '\\.test\\.ts$'` returned 38, matching the src/tui run's 'Test Files 38 passed (38)'."
+    },
+    {
+      "criterion": "A keryx ctx rg summary can truncate or over-report; counts taken from the raw log",
+      "status": "met",
+      "evidence": "The whole-package failure count came from `grep -c ×` against the raw captured log file directly (0), not from any gdctx summary header."
+    },
+    {
+      "criterion": "Update any document describing what the console advertises",
+      "status": "met",
+      "evidence": "`docs/STATUS_CURRENT.md` gained a dated 'flow 004, T32' delta describing both fixes in the document's own language and delta form: the frame no longer names a dead quit key anywhere the sweep checked, and Ctrl-C during a running command now prints one clipped line naming it after the terminal is restored, with the process still not closing before the child. Searched `docs/requirements/echolet-cli-prototype/*` for 'quit'/'Ctrl-C'/'way out'/'footer' first (via `keryx ctx rg`) -- no matches, so `STATUS_CURRENT.md` was the only document that needed the update."
+    },
+    {
+      "criterion": "State the machine's load with any duration figure",
+      "status": "met",
+      "evidence": "Recorded in `metrics.load_note` below: 1-minute load average 10.88 immediately before the whole-package run, 30.18-31.81 immediately after it finished, on a 10-core machine running the operator's own VM and browser throughout."
+    },
+    {
+      "criterion": "Commit nothing",
+      "status": "met",
+      "evidence": "No `git add`, `git commit`, or `git stash` was run at any point in this dispatch."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T32-implement-result.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/shell-chrome.ts",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Three places that paint a key name now ask who owns the keyboard: `footerLine`'s modal branch adds `[ctrl-c] quit`; `tooSmallFrame` now asks about the modal, not only the compose row, before choosing 'press q'/'press ctrl-c to quit'; `HELP_LINES` is replaced by `helpLines(state)`/`helpQuitLine(state)`, which name `ctrl-c` instead of `q` under the same ownership rule. `TRUST_MODAL_FOOTER` (modal-host.ts) is untouched.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.ts",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "`runTuiShell` tracks the in-flight command name around the `run-cli` effect and `finish()` -- now idempotent -- writes one line naming it after `ALTERNATE_SCREEN_OFF`, clipped to the terminal width with no trailing newline. The false comment in `mapKey`'s modal branch about `TRUST_MODAL_FOOTER` foreclosing a footer fix is corrected.",
+      "hash": null
+    },
+    {
+      "path": "docs/STATUS_CURRENT.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "A dated flow-004 T32 delta covering both fixes, in the document's existing delta form.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/tui/shell-chrome.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/tui-shell.ts", "change": "modified" },
+    { "path": "docs/STATUS_CURRENT.md", "change": "modified" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T32-implement#F-001",
+      "reviewer": "004-T32-implement",
+      "severity": "info",
+      "file": "apps/cli/src/tui/shell-chrome.ts",
+      "line": 222,
+      "symbol": "HELP_LINES_HEAD",
+      "problem": "The key list's `?  close this list` row has the same shape of defect this dispatch fixed for `quit`, and is not fixed: while a trust modal is open, `mapKey` swallows a bare `?` (only Ctrl-C and y/n/esc reach anything), and while the compose row is open a bare `?` is TEXT (`inputKey` inserts it into the buffer) rather than toggling help. In both cases a key list already open still advertises `?` as the way to close itself, and pressing it does something else entirely (nothing, or inserts a character into a message).",
+      "impact": "Not reachable by this dispatch's tests: `tui-shell.namedWayOut.test.ts`'s scanner vocabulary is deliberately just `quit`/`quits` (004-T30-tests F-004), so a dead `?` binding is invisible to it by design. Left alone rather than fixed, because widening the fix here would be a second, unrequested decision (state-dependent wording for a second key, or removing the row while composing/modal) with no red test to prove it against.",
+      "suggested_fix": "If this is judged worth closing: give `?` the same state-dependent treatment `quit` just got, or drop the `?` row from `helpLines(state)` while a modal or the compose row owns the keyboard, and add it to a future named-way-out-shaped property (or widen this dispatch's own scanner's vocabulary, which its own F-004 already flags as a deliberate limit).",
+      "evidence": "Read from `mapKey` (`tui-shell.ts`): under `state.modal !== undefined`, only ctrl-c and `modalIntent` (y/n/esc) return an intent; under `state.input !== undefined`, `inputKey` returns `input-insert` for any non-control character including `?`. `paneLines` paints the help list whenever `state.help === true` regardless of `state.modal`/`state.input`, confirmed by the 'trust modal open, key list open' and 'compose row open, key list open' fixtures in `tui-shell.namedWayOut.test.ts`.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T32-implement#F-002",
+      "reviewer": "004-T32-implement",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 947,
+      "symbol": "runTuiShell.finish",
+      "problem": "004-T30-tests F-003 (finish() runs a second time when a forgotten child settles after Ctrl-C already quit, writing a second ALTERNATE_SCREEN_OFF) was not directly required by either red test, but was fixed anyway: `finish` now guards itself with a `finished` boolean so a second call is a no-op.",
+      "impact": "None negative -- recorded because it is a behaviour change beyond the letter of the two specification files, done because an idempotent `finish` was the simplest way to make the new notice line trustworthy (a non-idempotent `finish` could in principle be reached twice with different `inFlightCommand` readings) and because 004-T30-tests's own suggested_fix for F-003 named exactly this as one of two acceptable repairs.",
+      "suggested_fix": "None; recorded for traceability rather than as an open item.",
+      "evidence": "`apps/cli/src/tui/tui-shell.ts`, `finish` now begins `if (finished) return; finished = true;`. All 523 whole-package tests remained green with this change in place, including every suite that drives `runTuiShell` or the shipped `main.ts` bundle to completion.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_changed": 2,
+    "documents_changed": 1,
+    "test_files_changed": 0,
+    "typecheck_exit_code": 0,
+    "resolved_decisions": {
+      "modal_footer_names_ctrl_c": "yes, in shell-chrome.ts footerLine, not in TRUST_MODAL_FOOTER -- matches 004-T30-tests's own decision and F-001",
+      "help_list_quit_row": "state-dependent (004-T30-tests Q-002's recommended option), computed the same way footerLine and tooSmallFrame already decide who owns the keyboard",
+      "interrupted_command_notice_wording": "names the command and says it is still running; no escalation offer (004-T30-tests Q-001's recommended option 'name-the-command-only', since no signal handler exists to back a promised second Ctrl-C)"
+    },
+    "runs": [
+      {
+        "scope": "src/tui/tui-shell.namedWayOut.test.ts + src/tui/tui-shell.quitWithChildInFlight.test.ts",
+        "files": "2 passed (2)",
+        "tests": "6 passed (6)",
+        "duration_ms": 792,
+        "vitest_exit_code": 0
+      },
+      {
+        "scope": "src/tui",
+        "files_on_disk": 38,
+        "files_reported": 38,
+        "files": "38 passed (38)",
+        "tests": "351 passed (351)",
+        "duration_s": 2.89,
+        "vitest_exit_code": 0
+      },
+      {
+        "scope": "apps/cli (full package, including test/e2e)",
+        "files_on_disk": 79,
+        "files_reported": 79,
+        "files": "79 passed (79)",
+        "tests": "523 passed (523)",
+        "duration_s": 228.12,
+        "vitest_exit_code": 0,
+        "failure_markers_in_raw_log": 0,
+        "e2e_included": "yes -- no vitest.config.ts exclude for test/e2e, so 'vitest run' covers it; flood-closure.test.ts alone ran 227.3s of the total"
+      },
+      {
+        "scope": "tsc -p tsconfig.json --noEmit",
+        "exit_code": 0,
+        "ran": "before and after the source edits"
+      }
+    ],
+    "named_way_out_verification": {
+      "sweep_before": { "combinations": 170, "dead_key_named": 18, "no_working_key_named_where_there_is_room": 31 },
+      "sweep_after": { "combinations": 170, "dead_key_named": 0, "no_working_key_named_where_there_is_room": 0 },
+      "direct_frame_check": "Rendered 'trust modal open, key list open' at 120x40 and 200x60 outside the test runner (esbuild-free, via tsx against the real renderFrame) and read the rows containing 'quit'/'ctrl-c' back: at 120x40 the help-list row reads '  ctrl-c     quit   ' intact, with the modal panel's own text starting well to its right on the same row; at 200x60 the row is untouched by any overlay. Confirms the 004-T29 F-003 truncation ('  q          quit (c') cannot recur, because the shortened line now ends before the panel's left edge rather than because the sweep happened not to hit it."
+    },
+    "machine_idle": false,
+    "load_note": "10 cores, never idle: the operator's own VM and browser ran throughout. 1-minute load average 10.88 immediately before the whole-package run started; 31.81 and then 30.18 in the two readings taken immediately after it finished (the tsc re-run and the full-package vitest run had both just completed). Every duration in this report was measured with the machine in that state, not on an idle host.",
+    "discipline": "Every vitest and tsc invocation was redirected whole to a scratchpad log file with `>` and read back afterward; the exit code was appended with `echo \"EXIT=$?\" >>` on the line immediately after the command, in the same shell invocation, never through a wrapper whose own last command would report its own status. Nothing was piped through head or tail during or after a run; the full-package log (233 lines) was read via the Read tool, not truncated. Both file counts came from a routed `find`/`ls` over the working tree and were compared against vitest's own summary line; the whole-package failure-marker count came from `grep -c` against the raw captured log rather than from a `keryx ctx rg` summary header.",
+    "routing_audit": {
+      "graph_used": "no -- not-relevant: the dispatch and 004-T30-tests's result named the exact files and line ranges to change (shell-chrome.ts footerLine/tooSmallFrame/HELP_LINES, tui-shell.ts mapKey's comment and finish/apply). No blast-radius question needed a dependency graph; the full-package run answered any that might have existed.",
+      "wiki_used": "no -- not-relevant: the two red specification files and 004-T30-tests's own result carried the architecture (keyboard-owner order, the trust gate, the D-1 single-flight gate) needed to make the changes.",
+      "ctx_used": "yes -- keryx ctx rg for every source and doc search (footer/quit/HELP_LINES/frames/ALTERNATE_SCREEN_OFF text, and a documentation sweep for 'quit'/'Ctrl-C'/'way out'/'footer' across docs/requirements/echolet-cli-prototype and STATUS_CURRENT.md), keryx ctx run for every find/ls/git-status/grep-count, keryx ctx diff --stat for the final change summary.",
+      "raw_rg_used": "no",
+      "testing_context_used": "no -- not-relevant: the dispatch named the exact two specification files and the three run scopes, in order; no test-selection question existed.",
+      "memory_used": "no -- not-relevant: 004-T30-tests's result (measured experiments E1/E2/E3, both rejected and accepted shapes, and Q-001/Q-002's recommended options) carried every design constraint this implementation had to respect."
+    }
+  },
+  "timestamp_utc": "2026-09-09T10:26:00Z"
+}
