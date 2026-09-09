@@ -1,0 +1,232 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-004-t16-implement",
+  "dispatch_id": "004-T16-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "The six-step registration checklist is implemented on the existing profiles pane and all 72 tests of the frozen red specification pass: profiles-pane.setup.test.ts 29/29, tui-shell.registration.test.ts 40/40, main.registration.processDriven.test.ts 3/3 including the hostile-environment probe, which records only Node's own spawn copy and no read by the console. Five source files changed, no test file touched, typecheck exits 0. Two implementation facts are worth the reader's attention. First, step 0 is decided at exactly one site — `Object.hasOwn(process.env, profile.storeKeyEnv)` in main.ts, the composition root — and a raw search proves `src/tui` contains only two executable mentions of `process.env` at all: that one and the `env: process.env` handed to `spawn`, which is the road the key travels to the child. Second, a defect the specification uncovered had to be fixed to satisfy it: a pipe delivers two keystrokes written back to back as ONE chunk, and `decodeKey(\"\\r?\")` read that as Ctrl-M, losing both — measured directly with a standalone probe, then fixed by splitting a chunk into keystrokes in the impure shell (never while the compose row is open, so a paste stays one insertion and an escape sequence stays one refused key). The concern: implementing t35 §2.1's startup `doctor`, which all three driven cases require as their first child, breaks two tests in the committed main.processDriven.test.ts, which asserts the console's COMPLETE child list as [\"poll\",\"doctor\"] and [\"relay publish\",\"poll\",\"relay publish\"]. Two committed test files now contradict each other on whether the console may run one command unasked. I did not touch either. T15-Q1 asked the flow owner this exact question and marked it not resolvable by an agent; what T15 did not record is that answering it (a) invalidates four assertions in a file from flow 003.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC1 — a person completes registration from inside the console alone, demonstrated against a real driven CLI process",
+      "status": "met",
+      "evidence": "main.registration.processDriven.test.ts 3/3 green in 812 ms against the shipped bundle. Case 1 drives the whole of AC1 from keystrokes: startup doctor, then Enter → the relay URL typed into the compose row → `init`, Enter → `relay publish`, Enter → the offered export path accepted → `contact export`, Enter → the card path typed → `contact import` with the modal painted from the CHILD's identifiers and `y\\n` written to the child's own prompt, Enter → a confirming `doctor`, after which the pane turns into the ordinary detail rows and paints the identity. The announcement list behind the process-exit barrier is exactly [doctor, init, relay publish, contact export, contact import, doctor], no child concurrent, no child unanswered, and every argv pinned token by token."
+    },
+    {
+      "criterion": "Step 0 is enforced as a security boundary: presence tested with Object.hasOwn, never by reading the value",
+      "status": "met",
+      "evidence": "One site: `Object.hasOwn(process.env, profile.storeKeyEnv)` in `withStoreKeyPresence` (main.ts:153), which runs once per profile in the composition root and yields a BOOLEAN onto `ProfileView.storeKeyPresent`. `keryx ctx rg 'process\\.env' apps/cli/src/tui --glob '!*.test.ts'` returns seven matches whose raw log shows five in prose and exactly two in code: main.ts:153 and main.ts:201 (`env: process.env` handed to spawn). Measured rather than argued: case 1's probe records reads whose caller frames are all `node:child_process` and at least one of them, and case 2 — the key absent — records ZERO reads while `probe.trapped > 0`, which is the sharpest form the detector takes and is armed by the startup doctor's own spawn."
+    },
+    {
+      "criterion": "The two rejected designs stay rejected",
+      "status": "met",
+      "evidence": "The console generates no key: `storeKeyRecipe` (profiles-pane.ts) prints `export <NAME>=\"$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=')\"`, whose longest unbroken [A-Za-z0-9_-] run is the variable name itself, and both the pure and the driven KEY_SHAPED assertions over every line containing `export ` pass. The console writes no file: the only new writes anywhere are to a child's stdin, unchanged from before."
+    },
+    {
+      "criterion": "The order the checklist enforces, by keying rather than by disabling",
+      "status": "met",
+      "evidence": "`nextSetupStep` (state.ts) returns `undefined` while `storeKeyPresent !== true`, so step 0 gates step 1 at the key and the driven case 2 spawns nothing but the startup doctor. `Enter` is refused outright while `busy`, because half the steps open an operand row rather than a `run` and the D-1 gate only sees `run`. Publication gates every send at both layers: `paneKeyIntent`'s `w` and `submitRequest`'s `message` case both require `profile.published === true`, paired with the positive case so the refusal cannot be met by a console that can never send."
+    },
+    {
+      "criterion": "Exit-class handling: a failed step shows the code and the exit class the CLI returned, and no other",
+      "status": "met",
+      "evidence": "The 5x4 matrix passes at both layers — 20 rendering cases in profiles-pane.setup.test.ts (the code appears, `exit N` appears, no other `exit M` appears anywhere on the pane) and 20 folding cases in tui-shell.registration.test.ts (`setup[step]` deep-equals `{failed, exitCode}` and every later step is `pending`). `foldSetup` keeps both halves of a failure because `INVALID_CONTACT_CARD` at exit 2 and at exit 3 are two different things to do."
+    },
+    {
+      "criterion": "Everything flows 002 and 003 paid for, re-verified with a step painted",
+      "status": "partial",
+      "evidence": "Re-proved: the frame stays exactly rows by cols, escape-free and notice-bearing at 72x16, 120x40 and 203x61 with three checklist states painted; no key material in any frame or child argv, over real argvs; the trust modal keeps its single door (tui-shell.inputTrustExclusion.test.ts green); AC8's Ctrl-C quits from every state, including with an operand row open, which is how the driven harness leaves. The whole apps/cli package is 453/455 with 68 of 68 files reported. PARTIAL for one reason only: the two remaining failures are `main.processDriven.test.ts`'s exact child-list assertions, which the startup `doctor` this slice adds now contradicts. Single-flight itself is unbroken — the new driven test asserts it from the announcements, and no child in any run was concurrent."
+    },
+    {
+      "criterion": "No test file edited, weakened, skipped or narrowed",
+      "status": "met",
+      "evidence": "`git status --porcelain` lists five modified files, all under apps/cli/src/tui, none a test. `git diff --stat` shows 576 insertions and 32 deletions across main.ts, profiles-pane.ts, shell-chrome.ts, state.ts and tui-shell.ts, plus the flow bookkeeping that was already modified when this dispatch started."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/src/tui/state.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The three fields t35 §2.1 puts on `ProfileView` (`state`, `storeKeyPresent`, `setup`), all OPTIONAL so that every surface built before registration existed still describes itself; `observedAtMs` on `OperatorState`; and three total predicates — `setupIsComplete`, `profileIsInSetup`, `nextSetupStep` — that are the single definition of what the pane paints and what Enter starts.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/profiles-pane.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "`ProfilesSnapshot.setupLines`, and the checklist that replaces the detail rows while the profile is still registering: six steps in order, each naming the command it runs, step 0 printing the shell command the operator runs themselves, a failed step carrying the CLI's own code beside exactly the exit code it returned, and the one hint exit 5 on `contact export` has earned. It reads no environment: step 0 renders from a boolean.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Enter on the profiles pane starts the next incomplete step; `initialBuffer` gives the export row a timestamped default from `observedAtMs` so a second export never meets `contact export`'s `wx`; `submitRequest` grows the three registration operands; `foldSetup` folds one outcome onto the checklist and moves `state` only on what a result proves; `splitKeystrokes` fixes a measured chunk-coalescing defect; `runTuiShell` folds the clock and runs the one unasked-for `doctor`.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/shell-chrome.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "`submitLabel` — the compose footer now names what Enter does on each of the four fields whose submit builds a request, and stays silent on the three whose submit is a refusal, which is the same honesty rule the pane footer already keeps. The key list gains the Enter binding.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/main.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "`withStoreKeyPresence` — the ONE place this program asks anything about the store key, and it asks with `Object.hasOwn`. Profiles are born `state: \"unknown\"` with a pending checklist, which is what makes the startup `doctor` run for them and for nothing else.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T15-tests-result.json",
+      "kind": "context",
+      "exists": true,
+      "summary": "The specification this dispatch implements, its three open questions, and the environment probe that decides step 0.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/tui/state.ts", "change": "modified — registration fields, observedAtMs, and the three setup predicates" },
+    { "path": "apps/cli/src/tui/profiles-pane.ts", "change": "modified — the six-step checklist replaces the detail rows until registration is done" },
+    { "path": "apps/cli/src/tui/tui-shell.ts", "change": "modified — Enter starts the next step, operand defaults and submits, the outcome fold, keystroke splitting, the startup doctor" },
+    { "path": "apps/cli/src/tui/shell-chrome.ts", "change": "modified — the compose footer names Enter per field; the key list names Enter" },
+    { "path": "apps/cli/src/tui/main.ts", "change": "modified — Object.hasOwn decides step 0; profiles start unknown with a pending checklist; usage names Enter" }
+  ],
+  "findings": [
+    {
+      "id": "T16-F-001",
+      "reviewer": "task-implementer",
+      "severity": "major",
+      "file": "apps/cli/src/tui/main.processDriven.test.ts",
+      "line": 286,
+      "symbol": "D-1 > announcements.map(entry => entry.command)",
+      "problem": "Two committed test files now contradict each other about whether the console may run a command the operator did not press. main.registration.processDriven.test.ts requires a startup `doctor` as the FIRST child in all three of its cases; main.processDriven.test.ts asserts the console's COMPLETE child list as [\"poll\",\"doctor\"] (:286) and [\"relay publish\",\"poll\",\"relay publish\"] (:325), that no child was unreserved (:285, :324), and that no frame ever says PERSISTENCE_FAILURE (:287, :330) — which a startup doctor arriving before the test's first reservation earns from that harness's control plane. No implementation satisfies both.",
+      "impact": "Two tests that passed on the clean tree now fail (measured: 3/3 before, 1/3 after). Everything else in apps/cli is green, so this is the entire delta: 453/455. Left unresolved, the package's test run stays red and the next agent cannot tell a real regression from this one.",
+      "suggested_fix": "The flow owner answers T15-Q1. If the startup doctor stays — which is what t35 §2.1 and §5 item 6 specify, what all three driven cases are written for, and what arms the environment probe in case 2 — then main.processDriven.test.ts needs four assertions updated to include the leading `doctor`, plus a `reserveNextChild()` before the console starts so the startup child is not refused as a second writer. That is an edit to a test file and is deliberately NOT made here. If instead the startup doctor is dropped, the three driven cases in the T15 specification have to be rewritten to tolerate a console that starts knowing nothing, and AC1's end-to-end demonstration goes with them.",
+      "evidence": "Baseline before any source change: `npx vitest run src/tui/main.processDriven.test.ts` → 3 passed, exit 0. After: `spawns no second child while a command is in flight` times out waiting for a reserved poll child, and `reports the exit class the CLI returned` fails with `expected [ 'doctor' ] to deeply equal []` at :324. Whole package after: 68 of 68 files reported, 453 passed, 2 failed, both in this file.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/main.processDriven.test.ts:285-287 (test 1: unreserved list, complete child list, no PERSISTENCE_FAILURE)",
+          "apps/cli/src/tui/main.processDriven.test.ts:324-330 (test 2: same three, plus the reported-class sweep)"
+        ],
+        "enumeration_method": "The file has three tests; the third spawns the console with --help and counts nothing. Both remaining tests were run and both fail, so the class is exactly its two members and the four assertion sites above."
+      }
+    },
+    {
+      "id": "T16-F-002",
+      "reviewer": "task-implementer",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "symbol": "runTuiShell / stdin 'data'",
+      "problem": "A pipe — and a terminal under a fast typist — delivers more than one keystroke in one chunk, and the console lost both. `decodeKey` requires a chunk to be EXACTLY \"\\r\" to read it as Return, so the chunk \"\\r?\" fell through to the control-character branch and decoded as Ctrl-M, which nothing binds: the Enter and the `?` both vanished with no frame painted, which is indistinguishable from a hung console.",
+      "impact": "Measured, not theoretical: a standalone probe wrote `\\r` then `?` to the real console binary back to back and the help list never appeared; the same two writes 300 ms apart worked. This is the failure T15's driven case 2 catches, and it would hit any operator pressing `1` and `p` together.",
+      "suggested_fix": "Fixed here, in the impure shell only: `splitKeystrokes` cuts a chunk into code points, keeping everything from an ESC onward as ONE keystroke so a bare Escape is still a cancel and an arrow is still a single refused key rather than three pasted letters. Splitting is skipped entirely while the compose row is open, where a chunk is the operator's text and a paste must stay one insertion. Single-flight is untouched: `reduce` sets `busy` synchronously, so the second key of a burst meets a busy console and is refused exactly as a later keystroke would be.",
+      "evidence": "Probe: two `child.stdin.write()` calls in one tick reach a plain reader as two chunks but reach the console as one — measured both ways in the scratchpad. Before the fix, main.registration.processDriven.test.ts case 2 timed out after 45.1 s waiting for \"key bindings\"; after it, all three cases pass in 812 ms.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "T16-F-003",
+      "reviewer": "task-implementer",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "symbol": "foldSetup / SETUP_STEP_OF.doctor",
+      "problem": "The startup `doctor` is indistinguishable, at `applyOutcome`, from the `doctor` the operator runs as step 5 or presses `d` for: it is the same `CliRequest`. So a startup doctor that fails paints `step 5  confirm  doctor  INVALID_CONFIGURATION (exit 2)` on a checklist where step 5 has not been attempted.",
+      "impact": "Cosmetic and self-correcting — the first successful step resets every later step to `pending` — but for the first frames of a fresh profile the last line of the checklist reports a failure of a step the operator has not reached. Nothing asserts against it, and the spec's own driven case 1 renders exactly this frame.",
+      "suggested_fix": "Leave it, or give the startup probe its own request identity (a flag on the request, or a separate effect) so `foldSetup` can tell an unprompted observation from an operator's step. The second is a change to `CliRequest`, which is a shape two test files pin by value, so it belongs to a task that can edit them.",
+      "evidence": "Rendered and read at 72x16 from the real binary: the checklist's step 5 line carries the startup doctor's INVALID_CONFIGURATION while steps 1-4 are `pending`.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "T16-Q1",
+      "question": "T15-Q1, now with its price attached: the startup `doctor` is implemented as t35 §2.1 specifies, and it invalidates four assertions in main.processDriven.test.ts. Keep it and update that file, or drop it and rewrite the three driven cases?",
+      "why": "T15 raised the question and marked it not resolvable by an agent, but recorded it as a choice between implementing and deferring — not as a choice that costs a flow-003 test file. It does. I implemented it because all three driven cases are written for it, because the design pays for it explicitly in §5 item 6, and because it is what arms the environment probe in the store-key-absent case; but the decision, and the edit to the older test, are the owner's.",
+      "options": [
+        { "id": "a", "label": "Keep it; update the four assertions in main.processDriven.test.ts to include the leading doctor and reserve it", "recommended": true },
+        { "id": "b", "label": "Drop it; the T15 driven cases are rewritten to tolerate a console that starts knowing nothing, and AC1's end-to-end demonstration is rewritten with them" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T16-Q2",
+      "question": "Should `contact export`'s exit-5 hint be the first entry in `failure-text.ts` (t35 §4.1, T-9) rather than a line the profiles pane owns?",
+      "why": "The driven specification requires the existing-file cause to be NAMED on a failed export, and `failure-text.ts` does not exist yet. I put one sentence on the pane rather than build the table this slice was not asked for; when T-9 lands, this line should move rather than be duplicated.",
+      "options": [
+        { "id": "a", "label": "Leave it on the pane until failure-text.ts exists, then move it", "recommended": true },
+        { "id": "b", "label": "Build failure-text.ts now" }
+      ],
+      "can_be_resolved_by_agent": true
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_changed": 5,
+    "test_files_changed": 0,
+    "typecheck_exit_code": 0,
+    "specification_tests_total": 72,
+    "specification_tests_passing": 72,
+    "specification_run": {
+      "profiles-pane.setup.test.ts": "29 passed",
+      "tui-shell.registration.test.ts": "40 passed",
+      "main.registration.processDriven.test.ts": "3 passed, 812 ms"
+    },
+    "tui_directory_run": {
+      "files_on_disk": 28,
+      "files_reported": 28,
+      "tests": 284,
+      "passed": 282,
+      "failed": 2,
+      "failed_names": [
+        "main.processDriven.test.ts > D-1 > spawns no second child while a command is in flight",
+        "main.processDriven.test.ts > D-1 > reports the exit class the CLI returned, and does not manufacture a persistence failure"
+      ],
+      "duration_s": 21.15,
+      "load_1min_start": 10.81,
+      "load_1min_end": 16.39
+    },
+    "package_run": {
+      "files_on_disk": 68,
+      "files_reported": 68,
+      "tests": 455,
+      "passed": 453,
+      "failed": 2,
+      "failed_names": [
+        "main.processDriven.test.ts > D-1 > spawns no second child while a command is in flight",
+        "main.processDriven.test.ts > D-1 > reports the exit class the CLI returned, and does not manufacture a persistence failure"
+      ],
+      "duration_s": 225.06,
+      "vitest_exit_code": 1,
+      "load_1min_start": 13.21,
+      "load_1min_end": 52.56
+    },
+    "baseline_before_any_change": {
+      "main.processDriven.test.ts": "3 passed, exit 0, 408 ms, load 1-min 10.8"
+    },
+    "process_env_uses_in_src_tui_excluding_tests": [
+      "apps/cli/src/tui/main.ts:153 — Object.hasOwn(process.env, profile.storeKeyEnv), the only question this program asks about the key",
+      "apps/cli/src/tui/main.ts:201 — env: process.env, handed to spawn, which is the road the key travels to the child"
+    ],
+    "new_millisecond_literals": 0,
+    "machine_idle": false,
+    "load_note": "10-core host running the operator's own VM and browser throughout; the 1-minute load ranged 10.8 to 52.6 across this dispatch and 52.6 was measured at the end of the 225 s package run, so every duration here is a loaded duration. Guards against a lying run: file counts were checked against files on disk for BOTH long runs (28/28 and 68/68 reported, so no file's report was lost); the two failures are the same two named tests in both runs and are deterministic assertion failures rather than timeouts in the package run; the baseline for those two tests was measured green on the clean tree before any edit; every log was redirected whole to a file and read afterwards, and no exit code was read through a wrapper's echo.",
+    "routing_audit": {
+      "graph_used": "no — not-relevant: the surface is one directory named by the dispatch and reachable by direct import from the specification's own citations; the graph also predates this session's edits",
+      "wiki_used": "no — not-relevant: t35 §10 records the wiki as consulted and empty for this surface",
+      "ctx_used": "yes — keryx ctx rg for every code search, keryx ctx run for git, keryx ctx read for logs and manifests",
+      "raw_rg_used": "no",
+      "testing_context_used": "no — no test was written or changed; the specification was frozen and read verbatim",
+      "memory_used": "no — not-relevant: the flow's own dispatch result and t35 carried the history this task needed"
+    }
+  },
+  "timestamp_utc": "2026-09-09T03:30:00Z"
+}

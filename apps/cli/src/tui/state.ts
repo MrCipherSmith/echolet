@@ -33,6 +33,32 @@ export interface KeyEvent {
 }
 
 /**
+ * What the console has OBSERVED about whether this profile exists (t35 §2.1).
+ *
+ * `"unknown"` until something is observed — which is why the console asks `doctor` once at startup
+ * rather than beginning with `"(run doctor)"` in place of an identity. `"absent"` is what an
+ * `INVALID_CONFIGURATION` at exit 2 proves and all it proves; `"ready"` is what an `init` or a
+ * `doctor` that returned an `identity_id` proves.
+ */
+export type ProfileState = "unknown" | "absent" | "ready";
+
+/**
+ * One registration step's outcome, derived from an observed CLI result and from nothing else.
+ *
+ * A failure keeps BOTH the CLI's own code and the exit code it came with, because
+ * `INVALID_CONTACT_CARD` is returned at exit 2 for a file that would not parse and at exit 3 for a
+ * card that parsed and failed validation — one code, two different things to do about it
+ * (t35 §4.1). Flattening either half would make the console report a class the CLI did not return.
+ */
+export type StepOutcome = "pending" | "ok" | { readonly failed: string; readonly exitCode: number };
+
+/** Step 0 plus the five child-spawning steps (t35 §2.1). */
+export const SETUP_STEPS = 6;
+
+/** A registration nothing has been observed about yet. */
+export const PENDING_SETUP: readonly StepOutcome[] = ["pending", "pending", "pending", "pending", "pending", "pending"];
+
+/**
  * One local profile as the operator sees it.
  *
  * `storeKeyEnv` is the environment variable NAME. There is deliberately no field for its value.
@@ -47,6 +73,23 @@ export interface ProfileView {
   /** `contact_count` as last reported by `doctor`; the authority on how many contacts are pinned. */
   readonly contactCount: number;
   readonly published: boolean;
+  /**
+   * What the console has observed about this profile's existence. Optional, and absent means the
+   * profile predates the registration checklist: such a profile is never shown a checklist and
+   * never folds a step outcome, so every surface built before this field still describes itself.
+   */
+  readonly state?: ProfileState;
+  /**
+   * Whether the 32-byte store key's variable is PRESENT in this console's environment.
+   *
+   * A BOOLEAN, and the only thing about the key that may exist in this process. It is decided once,
+   * in the composition root, with `Object.hasOwn(process.env, storeKeyEnv)` — which cannot produce
+   * the value — and never with `process.env[name] !== undefined`, which reads it into a comparison.
+   * There is no field here, and no code path anywhere in `src/tui`, that could hold the value.
+   */
+  readonly storeKeyPresent?: boolean;
+  /** One `StepOutcome` per registration step. Absent means "this profile has no checklist". */
+  readonly setup?: readonly StepOutcome[];
   /**
    * The contact card this session may import, if the operator named one at startup.
    *
@@ -200,6 +243,43 @@ export function inputMaxBytes(field: InputField): number {
   }
 }
 
+/**
+ * True when every registration step this profile has is done.
+ *
+ * Step 0 is decided by `storeKeyPresent` rather than by `setup[0]`, because presence is the only
+ * authority on it: no child is spawned for step 0 and no outcome can be folded into it.
+ */
+export function setupIsComplete(profile: ProfileView): boolean {
+  const setup = profile.setup;
+  if (setup === undefined || profile.storeKeyPresent !== true) return false;
+  for (let step = 1; step < SETUP_STEPS; step += 1) if (setup[step] !== "ok") return false;
+  return true;
+}
+
+/**
+ * True while the profiles pane shows the checklist instead of the ordinary detail rows.
+ *
+ * A profile that declares no `setup` is one built before registration existed — a scripted session,
+ * or any of the surfaces flows 002 and 003 pinned — and it keeps the detail rows it has always had.
+ */
+export function profileIsInSetup(profile: ProfileView): boolean {
+  return profile.setup !== undefined && !setupIsComplete(profile);
+}
+
+/**
+ * The next step `Enter` would start, or `undefined` when there is none.
+ *
+ * Step 0 GATES step 1 rather than disabling it: with the store key absent this returns `undefined`,
+ * so `Enter` builds nothing at all. A console that spawned `init` anyway would earn
+ * `INVALID_CONFIGURATION` at exit 2 — one code for six causes — and teach the operator nothing.
+ */
+export function nextSetupStep(profile: ProfileView): number | undefined {
+  const setup = profile.setup;
+  if (setup === undefined || profile.storeKeyPresent !== true) return undefined;
+  for (let step = 1; step < SETUP_STEPS; step += 1) if (setup[step] !== "ok") return step;
+  return undefined;
+}
+
 export interface ActivityLine {
   readonly at: number;
   readonly text: string;
@@ -236,6 +316,14 @@ export interface OperatorState {
    * not a modal: it decides nothing, and Ctrl-C still leaves.
    */
   readonly input?: InputState;
+  /**
+   * A clock reading folded into the state at startup and after every settled command (t35 §2.3).
+   *
+   * It exists so that a PURE reducer can build a timestamped default — step 3's export path — while
+   * `renderFrame` and `reduce` still read no clock of their own. Optional, and absent reads as the
+   * epoch: a state constructed before this field existed still produces a well-formed path.
+   */
+  readonly observedAtMs?: number;
 }
 
 /**

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildArgv, parseCliOutcome, type CliOutcome, type CliRequest } from "./cli-bridge";
-import { createInitialState, type ProfileView, type TrustIdentifiers } from "./state";
+import { PENDING_SETUP, createInitialState, type ProfileView, type StepOutcome, type TrustIdentifiers } from "./state";
 import { runTuiShell, type TuiIo } from "./tui-shell";
 
 /**
@@ -63,8 +63,9 @@ const USAGE = [
   "  --cli <path>           the CLI bundle to drive (default: cli.js beside this file)",
   "  --help                 print this and exit",
   "",
-  "Keys: [1-5] pane  [p] poll  [d] doctor  [r] publish  [h] history  [i] import",
-  "      [c] contact  [t] profile  [?] help  [q] quit",
+  "Keys: [1-5] pane  [enter] next registration step  [p] poll  [d] doctor",
+  "      [r] publish  [h] history  [i] import  [c] contact  [t] profile",
+  "      [?] help  [q] quit",
 ].join("\n");
 
 const HELP_FLAGS = new Set(["--help", "-h"]);
@@ -118,6 +119,11 @@ function parseOptions(argv: readonly string[]): Options {
         deviceId: "(run doctor)",
         contactCount: 0,
         published: false,
+        // Nothing has been observed about this profile yet, which is what makes the startup
+        // `doctor` the one command the console runs unasked, and what puts the checklist on the
+        // pane until a result says otherwise.
+        state: "unknown",
+        setup: PENDING_SETUP,
       });
     } else if (flag === "--cli") {
       cliPath = resolve(value);
@@ -128,6 +134,26 @@ function parseOptions(argv: readonly string[]): Options {
 
   if (profiles.length === 0) throw new Error("at least one --profile <dir> is required");
   return { profiles, cliPath };
+}
+
+/**
+ * Step 0, and the only line in this program that asks anything about the store key.
+ *
+ * `Object.hasOwn` answers whether the variable EXISTS. It cannot produce the value: it consults the
+ * property descriptor and never invokes a read. `process.env[name] !== undefined` returns the same
+ * boolean and would paint the same frame, and it is forbidden — it pulls 32 secret bytes into this
+ * process's frames on its way to a comparison. So is every spelling that reaches the same place by
+ * another road: a spread, `Object.entries`, a destructure, `JSON.stringify(process.env)`.
+ *
+ * The result is a BOOLEAN and `ProfileView` has nowhere to put anything else. The key itself
+ * reaches the CLI exactly as the runbook passes it — in the inherited environment, named by
+ * `--store-key-env` — and this process never holds it.
+ */
+function withStoreKeyPresence(profile: ProfileView): ProfileView {
+  const present = Object.hasOwn(process.env, profile.storeKeyEnv);
+  const setup = (profile.setup ?? PENDING_SETUP).map((outcome, step): StepOutcome =>
+    (step === 0 ? (present ? "ok" : "pending") : outcome));
+  return { ...profile, storeKeyPresent: present, setup };
 }
 
 /** The four identifiers `contact import` prints on stderr while it waits at its own prompt. */
@@ -233,7 +259,7 @@ async function main(): Promise<number> {
     onTrustIdentifiers: (listener) => { trustListener = listener; },
   };
 
-  return runTuiShell(io, createInitialState({ profiles: options.profiles }));
+  return runTuiShell(io, createInitialState({ profiles: options.profiles.map(withStoreKeyPresence) }));
 }
 
 main().then(

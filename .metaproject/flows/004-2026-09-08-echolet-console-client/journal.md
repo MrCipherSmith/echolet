@@ -36,3 +36,7 @@
 - 2026-09-09T02:23:51.426Z - task-done: T14: Close the escape-sequence hole at the six narrowing boundaries, and keep the submit path single-flight
 - 2026-09-09T02:28:41.759Z - task-added: T15: RED tests for registration from inside the console: the six-step checklist on the profiles pane
 - 2026-09-09T02:28:57.618Z - task-attempt: T15: started (attempt 1) — Registration is the user's stated goal and does not depend on the pane-removal decision they still hold: the design renders it on the existing profiles pane, costing no ordinal. Step 0 is the security boundary - presence of the store key tested with Object.hasOwn, never by reading the value.
+- 2026-09-09T03:02:04.034Z - task-added: T16: Implement registration from inside the console, keeping the store key out of the process
+- 2026-09-09T03:02:10.361Z - task-attempt: T16: started (attempt 1) — A fresh agent. The store-key boundary is enforced by a probe that records every read of the environment and its calling frame, so an implementation that reads the value instead of testing presence fails by name.
+- 2026-09-09T03:31:53.998Z - task-added: T17: Reconcile the flow-003 driven test with the startup profile probe, without weakening it
+- 2026-09-09T03:31:56.076Z - task-attempt: T17: started (attempt 1) — Owner decision: the startup probe stays - the design requires it, all three registration cases rest on it, and it arms the store-key probe. The flow-003 test's complete-list assertions are corrected, not relaxed; its three properties must survive intact.
