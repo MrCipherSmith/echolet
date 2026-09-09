@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T01:01:26.994Z",
+  "updatedAt": "2026-09-09T01:23:30.949Z",
   "source": {
     "type": "description",
     "ref": null
@@ -220,7 +220,7 @@
       "id": "T11",
       "title": "Implement the input mode and the send key: make the console able to write a message",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T10"
       ],
@@ -236,7 +236,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -362,6 +363,11 @@
       "at": "2026-09-09T01:01:26.994Z",
       "event": "task-attempt",
       "detail": "T11: started (attempt 1) — A different agent from the one that wrote the tests, and not the orchestrator. It may not edit a test; the 28 currently-vacuous cases must become non-vacuous by the implementation, not by adjusting them."
+    },
+    {
+      "at": "2026-09-09T01:23:30.949Z",
+      "event": "task-done",
+      "detail": "T11: Implement the input mode and the send key: make the console able to write a message"
     }
   ]
 }
