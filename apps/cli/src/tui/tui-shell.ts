@@ -710,7 +710,7 @@ function foldSetup(state: OperatorState, request: CliRequest, outcome: CliOutcom
 
     const value: StepOutcome = outcome.ok
       ? (stepSucceeded(request, outcome) ? "ok" : "pending")
-      : { failed: outcome.code, exitCode: outcome.exitCode };
+      : { failed: paintable(outcome.code), exitCode: outcome.exitCode };
     const folded = setup.map((previous, at): StepOutcome => (at === step ? value : at > step ? "pending" : previous));
     return { ...profile, state: profileState, setup: folded };
   });
