@@ -178,9 +178,12 @@ function rejectUnexpectedMissing(command: string, values: CliValues): void {
     "contact export": ["out"],
     "contact import": ["from"],
     "relay publish": [],
-    // `text` is deliberately absent: `send`'s body may arrive on stdin instead of in argv, and this
-    // check runs before stdin has been read. The emptiness rule that used to live here now lives in
-    // `resolveSendBody`, which is the only place that knows about both sources.
+    // `text` is deliberately absent: `send`'s body may arrive on stdin instead of in argv, so a
+    // missing `--text` is not by itself a missing argument. What this list can no longer express is
+    // the difference between absent and supplied-but-empty, and that difference is the whole rule —
+    // so BOTH emptiness rules now live in `resolveSendBody`, the only place that knows about both
+    // sources: an explicitly supplied empty `--text` is refused there, and so is an empty stdin
+    // body. `required` is not weaker here, it is inapplicable; it cannot see which source was used.
     send: ["to"],
     poll: [],
     history: ["with"],
@@ -230,25 +233,39 @@ async function readStdinBody(): Promise<string> {
  * to stdin is an open question for the operator; until it is answered, both doors are open and only
  * the console is required to use the safer one.
  *
- * Supplying BOTH is resolved by precedence: `--text` wins and stdin is never read. Refusing the
+ * Supplying BOTH is resolved by precedence: `--text` wins and stdin is not read. Refusing the
  * ambiguity was specified first and reverted — see the comment in the body, which explains why the
  * refusal cannot be implemented without making some callers hang.
+ *
+ * `--text` is SUPPLIED whenever the parser saw it, empty value included; `undefined` is the only
+ * absence. A supplied but empty `--text` is `INVALID_ARGUMENTS`, not a fall-through to stdin — see
+ * the comment in the body. So "stdin is not read when `--text` is supplied" holds for every
+ * supplied value, including the empty one, and the refusal decides on `values.text` alone.
  *
  * A TTY on stdin with no `--text` is refused rather than waited on, so a mistyped command reports a
  * missing body instead of hanging with no prompt while it looks like it is working.
  */
 async function resolveSendBody(values: CliValues): Promise<string> {
   const flagBody = values.text;
-  const hasFlagBody = typeof flagBody === "string" && flagBody.length > 0;
-  // `--text` wins outright, and stdin is NOT read when it is present. This looks like a weaker rule
-  // than refusing the ambiguity, and it was: the orchestrator asked for the refusal, and the
+  // `--text` wins outright, and stdin is NOT read when it is supplied. This looks like a weaker
+  // rule than refusing the ambiguity, and it was: the orchestrator asked for the refusal, and the
   // refusal is unimplementable without a hang. Detecting "both sources supplied" means reading
   // stdin to EOF even when `--text` was given, and a caller whose stdin is an inherited pipe that
   // nobody closes — a service, a `docker exec` without a TTY, the wrapper driving the second user
   // on `depr` — would then wait forever instead of sending. A silent precedence is a worse failure
   // than a loud one only while both are survivable; a hang is not. The design (t35 §6 P-1) said
   // `--text` wins, and it was right.
-  if (hasFlagBody) return flagBody;
+  if (typeof flagBody === "string") {
+    // Supplied and empty is refused, and refused HERE, before stdin is touched. Treating it as
+    // "absent" and falling through to stdin was a live defect: `--text "$*"` is the ordinary shell
+    // shape and the shape of the operator's own wrapper, so calling that wrapper with no message
+    // turned an immediate exit 2 into a read of stdin — a hang, in any context without a TTY and
+    // without a writer that closes. The presence test is `typeof`, never `length`, and the emptiness
+    // test never reads stdin, so this restores the pre-flow-004 refusal without reopening the hang
+    // the precedence rule above exists to avoid.
+    if (flagBody.length === 0) throw inputFailure();
+    return flagBody;
+  }
   // With no `--text`, a terminal has nothing to give: refuse rather than wait for a human who was
   // never told to type.
   if (process.stdin.isTTY === true) throw inputFailure();

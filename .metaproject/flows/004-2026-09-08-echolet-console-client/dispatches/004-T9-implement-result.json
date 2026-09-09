@@ -1,0 +1,167 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-004-t9-implement",
+  "dispatch_id": "004-T9-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "One source defect fixed, three false claims corrected, one unsound test claim withdrawn without touching an assertion. `resolveSendBody` now tests `--text` for PRESENCE with `typeof flagBody === \"string\"` instead of `flagBody.length > 0`, and refuses a supplied-but-empty value with INVALID_ARGUMENTS exit 2 inside that branch — so the refusal is decided from `values.text` alone and stdin is never touched. cli.sendEmptyText.test.ts, RED before this change (2 of 3 cases hanging to the 45s watchdog), is green: 3/3 in 927ms wall, the two refusal cases at 330ms and 303ms against a stdin pipe the test never closes, which is the causal proof that no read to EOF happened. Full apps/cli suite 58 files / 289 tests passed, RECORDED_EXIT=0, typecheck exit 0. One of the orchestrator's own premises is itself false and is corrected here rather than propagated: the runbook does NOT contain exactly one `--text` invocation. It contains five (lines 106, 142, 153, 154, 198) and four of them are BELOW the note, so 'every step below still uses it' was loose, not fabricated. The verification's '4 matches' came from a gdctx rg summary that truncates its match list; the raw log for the same command shows 9. The placement defect was real and is fixed: the note now sits above the §6 command block, and that block's recorded JSON output is adjacent to it again.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "`send --text \"\"` is INVALID_ARGUMENTS, exit 2, with stdin not read at all",
+      "status": "met",
+      "evidence": "apps/cli/src/commands/cli.ts resolveSendBody: `if (typeof flagBody === \"string\") { if (flagBody.length === 0) throw inputFailure(); return flagBody; }`. The presence test is `typeof`, so an empty value is SUPPLIED rather than absent; the refusal is inside that branch, above the TTY guard and above `readStdinBody()`, so no code path from an empty `--text` reaches stdin. Measured: `npx vitest run src/commands/cli.sendEmptyText.test.ts` -> 'Test Files 1 passed (1) / Tests 3 passed (3)', RECORDED_EXIT=0, file total 927ms. The two cases the test author wrote to hang on a drain-then-refuse implementation returned in 330ms and 303ms against a stdin pipe the harness never closes; a CLI that read stdin at all could not have returned, and before this change both spent a full CLI_CHILD_TIMEOUT_MS and were SIGKILLed. 1-minute load 8.67 at build, 8.85 at the end of this run."
+    },
+    {
+      "criterion": "No regression elsewhere in the CLI",
+      "status": "met",
+      "evidence": "`npx vitest run` over apps/cli: 'Test Files 58 passed (58) / Tests 289 passed (289)', duration 218.16s, RECORDED_EXIT=0 read from the recorded line, not from a pipeline's exit status. `npm run typecheck` (tsc --noEmit) RECORDED_EXIT=0. 1-minute load 9.68 at the start of the suite run and 44.38 at its end (5-minute 46.80, 15-minute 34.62) on a 10-core machine that also carries the operator's VM and browser — so this figure is a green under heavy contention, which is the direction that matters: Vitest 3.0.8's known failure under load is a lost report and a spurious exit 1, not a spurious pass."
+    },
+    {
+      "criterion": "runbook.md: the false sentence and the broken transcript placement corrected",
+      "status": "met",
+      "evidence": "The `--text` exposure note moved from between the §6 command block and its JSON output to ABOVE the command block, so the recorded output is adjacent to the command that produced it again. 'every step below still uses it' became 'every `send` in this runbook uses it — the one directly below, the reply in §7, both retries in §8 and the unsolicited send under \"Failure paths\"', which is the enumerated truth. The `--text \"\"` refusal is stated in the same note."
+    },
+    {
+      "criterion": "specification.md: the overstated rule and the false 'Unchanged from earlier releases' corrected",
+      "status": "met",
+      "evidence": "The prose above the table now says `--text` counts as supplied whenever it appears, empty value included, and that the decision is made from the flag alone. The `--text <text>` row is narrowed to 'non-empty' and keeps 'stdin is not read, not even to check', which is now true as written. A new `--text \"\"` row states INVALID_ARGUMENTS exit 2, that stdin is still not read, and names what actually changed during flow 004 and what the change cost (`--text \"$*\"` with no message turning from a failure into a hang)."
+    },
+    {
+      "criterion": "Code comments: `rejectUnexpectedMissing`, the `resolveSendBody` docblock and its inline comment, and main.ts",
+      "status": "met",
+      "evidence": "The `rejectUnexpectedMissing` comment no longer claims a relocation: it says the list cannot express the difference between absent and supplied-but-empty, that BOTH emptiness rules now live in resolveSendBody, and that `required` is inapplicable here rather than merely unused. The resolveSendBody docblock states the presence rule explicitly and that 'stdin is not read when `--text` is supplied' holds for every supplied value including the empty one. The inline comment inside the branch says why the refusal is placed before any read. main.ts's stdin comment now says the CLI does not read stdin when the flag is supplied at all, that an empty value is INVALID_ARGUMENTS, and that passing the flag alongside a stdin body can only lose."
+    },
+    {
+      "criterion": "The superseded assertion in cli.doctorContacts.test.ts reconciled without weakening anything",
+      "status": "met",
+      "evidence": "No assertion was changed, removed or weakened. The unsound claim did not live in an assertion at all — it lived in the test's NAME ('stays offline and leaks no key material ...') and in the comment arguing that a clean exit 0 against an unreachable relay proves no network access. The name is now 'leaks no key material while enumerating pinned contacts' and the comment records why the old inference was invalid, that a swallowed fetch defeated it, and that the offline property is proven directly in cli.doctorOffline.test.ts. The five assertions in the body (contacts is an array, length 1, and `redacted`) are byte-identical and still pass; `redacted` is the half the verifier's control mutation M8 confirmed sound. This is the single narrow test edit permitted by the dispatch; no other test file was touched."
+    },
+    {
+      "criterion": "No commit; change left in the working tree",
+      "status": "met",
+      "evidence": "`git status --porcelain` lists five modified files from this dispatch and nothing staged or committed: apps/cli/src/commands/cli.doctorContacts.test.ts, apps/cli/src/commands/cli.ts, apps/cli/src/tui/main.ts, docs/requirements/echolet-cli-prototype/runbook.md, docs/requirements/echolet-cli-prototype/specification.md. (Also modified in the tree, not by this dispatch: two .metaproject/data/gdgraph artifacts and the flow's own flow.json and journal.md.)"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T9-implement-result.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "This record.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/commands/cli.ts", "change": "modified" },
+    { "path": "apps/cli/src/tui/main.ts", "change": "modified" },
+    { "path": "apps/cli/src/commands/cli.doctorContacts.test.ts", "change": "modified" },
+    { "path": "docs/requirements/echolet-cli-prototype/specification.md", "change": "modified" },
+    { "path": "docs/requirements/echolet-cli-prototype/runbook.md", "change": "modified" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T9-implement#F-001",
+      "reviewer": "004-T9-implement",
+      "severity": "major",
+      "file": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T7-verify-result.json",
+      "line": 203,
+      "symbol": "F-005 --text exposure note",
+      "problem": "The verification's F-005, and the dispatch that quoted it to this implementer, state that 'there is exactly one --text invocation in the entire runbook and it is at line 106, ABOVE the note'. There are five: lines 106, 142 (§7 reply), 153 and 154 (§8 retries) and 198 (the unsolicited-send failure path). Four are below the note. The orchestrator's original sentence 'every step below still uses it' was therefore loose — not every step below is a send — but not the fabrication F-005 describes, and the correction F-005 recommends ('reword to the step above still uses it') would have introduced a NEW false statement into the runbook.",
+      "impact": "A verification finding that is itself wrong in the direction of over-accusation, on a document whose whole value is literal followability. Acting on its suggested fix verbatim would have made the runbook less true than the text it replaced. It also means the class F-005 enumerates is wrong, so any later reader trusting that enumeration will mis-count the exposure sites.",
+      "suggested_fix": "Fixed here by enumeration rather than by either wording: the note now names the sends that use --text (below, §7, §8, Failure paths). Separately, and this is the reusable lesson: `keryx ctx rg` prints a TRUNCATED match list under a 'Matches: N' header — the header said 9 while the list showed 4 — so a claim of the form 'there is exactly one X' must be read from the raw log the summary points at, never from the summary's visible lines. F-005's '4 matches' is exactly the count of lines the summary chose to display.",
+      "evidence": "`keryx ctx rg -n -e '\\-\\-text' docs/requirements/echolet-cli-prototype/runbook.md` reports 'Matches: 9' and displays 4 (106, 110, 113, 122). Its raw log, read via `keryx ctx read ... --mode compact`, lists all 9: 106, 110, 113, 122, 124, 142, 153, 154, 198. A second search for `send ` over the same file returns 8 lines and confirms every send invocation other than the stdin example inside the note carries --text.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "docs/requirements/echolet-cli-prototype/runbook.md:130 (§6 send, was 106)",
+          "docs/requirements/echolet-cli-prototype/runbook.md:142 (§7 reply)",
+          "docs/requirements/echolet-cli-prototype/runbook.md:153-154 (§8 byte-identical retry, twice)",
+          "docs/requirements/echolet-cli-prototype/runbook.md:198 (Failure paths, unsolicited send)"
+        ],
+        "enumeration_method": "rg for `--text` and for `send ` over the whole runbook, both read from the raw gdctx log rather than from the truncated summary, then a line-numbered read of §6-§8 and the Failure paths block to classify each hit as invocation or prose."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "site-check",
+        "evidence": "Raw gdctx log of the rg run lists all nine --text hits with their lines; a read of runbook.md:139-199 shows the four invocations below the note in their own command blocks.",
+        "verifier": "004-T9-implement"
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T9-implement#F-002",
+      "reviewer": "004-T9-implement",
+      "severity": "minor",
+      "file": "apps/cli/src/commands/cli.test.ts",
+      "line": 109,
+      "symbol": "keeps doctor/history offline",
+      "problem": "The pre-existing 'keeps doctor/history offline' test in cli.test.ts rests on exactly the inference 004-T7 F-003 invalidated — an unreachable relay plus a clean exit 0 taken as proof of no network access — and the verifier recorded that it did not catch the swallowed-fetch mutation either. Only the doctorContacts copy was in this dispatch's scope, so the cli.test.ts one still names a property it cannot prove.",
+      "impact": "Low and bounded: cli.doctorOffline.test.ts now proves the property directly for doctor and history, so the guarantee is covered. What remains is a test whose name over-claims, which is the same reading hazard that let the unsound proof stand for a slice.",
+      "suggested_fix": "Either rename it the way cli.doctorContacts.test.ts was renamed here, or fold its case into cli.doctorOffline.test.ts's recording relay. Not done here: the dispatch permitted exactly one narrow test edit and named the other file.",
+      "evidence": "004-T7 F-003 class_scope names both sites and records that mutation M7 was run against the whole apps/cli/src/commands directory, so this test had its chance to fail and did not; all 7 files passed.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T9-implement#F-003",
+      "reviewer": "004-T9-implement",
+      "severity": "info",
+      "file": "apps/cli/src/commands/cli.ts",
+      "line": 259,
+      "symbol": "resolveSendBody",
+      "problem": "004-T7 F-007 remains live and untouched by this fix: with no `--text` and a stdin that is an inherited pipe nobody closes, `send` waits forever with no timeout and no diagnostic. The TTY guard cannot see a pipe. This fix removes the hang only from the shape that produced it in practice (`--text \"$*\"` with an empty expansion).",
+      "impact": "Low today — the console always ends its child's stdin and the prototype call sites all pass --text — but the runbook now recommends the stdin form 'for a real message', and that form has no guard.",
+      "suggested_fix": "Leave the code alone; the guard, if wanted, belongs on the reading side rather than on the precedence rule. What is cheap and not done here is saying so where the rule is documented — the specification's stdin row and the runbook note both describe the read to EOF without saying it will wait indefinitely for a writer that never closes.",
+      "evidence": "F-007's measurement stands: without --text and with an unclosed stdin pipe the CLI did not exit within 20000ms and had to be SIGKILLed. Nothing in this change alters the no-flag path — `readStdinBody` and the TTY guard are unmodified.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "004-T7 F-006 asks for a test pinning the both-sources-supplied precedence (`--text` wins, stdin discarded silently). Should that test be commissioned now?",
+      "why": "The precedence is now the only silent discard left on the send path, and it is what makes a reinstated `--text` on a spawned argv send correctly instead of failing loudly. It is still covered by no test, so it remains an accident rather than a decision. This dispatch could not write it — the tests are not mine to author.",
+      "options": [
+        { "id": "now", "label": "Commission it as a test-only dispatch before this slice closes", "recommended": true },
+        { "id": "next", "label": "Book it against AC3's re-verification on the final tree" }
+      ]
+    },
+    {
+      "id": "Q2",
+      "question": "Should the residual hang (004-T7 F-007) be documented in the specification's stdin row and the runbook note, given the runbook now recommends the stdin form for a real message?",
+      "why": "F-003 above. It is a documentation-only change and this dispatch's remit was the three named false claims, so it was not made unilaterally.",
+      "options": [
+        { "id": "document", "label": "Add one sentence to both: the stdin read waits indefinitely for a writer that never closes", "recommended": true },
+        { "id": "leave", "label": "Leave it; the console and every prototype call site are unaffected" }
+      ]
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_changed": 2,
+    "doc_files_changed": 2,
+    "test_files_changed": 1,
+    "test_assertions_changed": 0,
+    "full_suite_files": 58,
+    "full_suite_tests": 289,
+    "full_suite_recorded_exit": 0,
+    "typecheck_recorded_exit": 0,
+    "targeted_recorded_exit": 0,
+    "machine_idle": false,
+    "load_average_1min_at_build": 8.67,
+    "load_average_1min_at_emptytext_run_end": 8.85,
+    "load_average_1min_at_full_run_start": 9.68,
+    "load_average_1min_at_full_run_end": 44.38,
+    "load_average_15min_at_full_run_end": 34.62,
+    "load_note": "10-core machine, never idle: the operator's own VM and browser hold roughly half of it throughout. The 1-minute load climbed from 9.68 to 44.38 across the 218s full run because vitest's own workers pile onto that baseline. Every figure reported here is a GREEN measured under that contention, and Vitest 3.0.8's known failure mode under load is a lost file report with a spurious exit 1, not a spurious pass — so contention cannot have manufactured these results, only hidden them. No run was read from a pipeline's exit status; every exit is the RECORDED_EXIT line written into the captured log after the command returned."
+  },
+  "timestamp_utc": "2026-09-09T00:40:00Z"
+}

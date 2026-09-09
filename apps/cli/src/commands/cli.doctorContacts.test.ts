@@ -135,13 +135,18 @@ describe("doctor enumerates the profile's pinned correspondents", () => {
     CLI_TEST_TIMEOUT_MS,
   );
 
-  it("stays offline and leaks no key material while enumerating pinned contacts", async () => {
-    // init() defaults to an unreachable relay (http://127.0.0.1:1 — nothing listens there). If
-    // `doctor` ever tried to reach the relay to build the contacts array it would fail (connection
-    // refused) rather than succeed, so a clean exit 0 that ALSO carries the contacts array is itself
-    // the proof of no network access. (`cli.test.ts`'s existing "keeps doctor/history offline" test
-    // already established this for contact_count alone; re-asserted here so the new `contacts` field
-    // is proven not to have been implemented as a relay-side contact directory lookup.)
+  it("leaks no key material while enumerating pinned contacts", async () => {
+    // WHAT THIS TEST DOES NOT PROVE, corrected in flow 004 T9 from verification 004-T7 F-003. It
+    // used to be titled "stays offline and ..." and argued that because init() defaults to an
+    // unreachable relay (http://127.0.0.1:1), a clean exit 0 that also carries the contacts array is
+    // itself proof of no network access. That inference only holds if any relay request would be
+    // FATAL, and a best-effort or fire-and-forget request is invisible to it: the verifier inserted
+    // exactly such a swallowed `fetch()` into `doctor` and all three tests in this file still passed.
+    // Nothing here was weakened to fix that — no assertion was touched, only the claim the name and
+    // this comment made. The offline property is now proven directly, by a relay that records what it
+    // receives, in `cli.doctorOffline.test.ts`; the assertions below stand on their own as what they
+    // always were: the `contacts` field is built locally-shaped and readable, and no key material
+    // appears in the output (`redacted`, the half the verifier's control mutation confirmed sound).
     const owner = fixture(); await init(owner);
     const bob = fixture(); await init(bob);
     const card = await exportCard(bob);

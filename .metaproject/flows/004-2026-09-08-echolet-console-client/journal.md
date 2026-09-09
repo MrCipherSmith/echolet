@@ -16,3 +16,6 @@
 - 2026-09-09T00:14:14.682Z - task-done: T7: Independent verification of the first slice, including the parts the orchestrator authored
 - 2026-09-09T00:14:16.570Z - task-added: T8: RED tests for the three gaps verification found: the real spawn argv, the console's stdin write, and an empty --text
 - 2026-09-09T00:14:22.101Z - task-attempt: T8: started (attempt 1) — Three mutations survived verification (M5, M6, M7) and one behavioural claim by the orchestrator was false. Tests first, by a fresh agent; the orchestrator writes none of them this time.
+- 2026-09-09T00:28:29.632Z - task-done: T8: RED tests for the three gaps verification found: the real spawn argv, the console's stdin write, and an empty --text
+- 2026-09-09T00:28:31.528Z - task-added: T9: Fix the empty --text defect and the orchestrator's three false claims
+- 2026-09-09T00:28:36.727Z - task-attempt: T9: started (attempt 1) — Dispatched to a fresh agent rather than fixed by the orchestrator, who wrote both the defect and the false claims and must not be the one to sign them off. It also reconciles the now-superseded unsound doctor offline test.
