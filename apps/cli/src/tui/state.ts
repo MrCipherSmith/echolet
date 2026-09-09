@@ -114,9 +114,37 @@ export interface ContactView {
   readonly displayName?: string;
 }
 
+/**
+ * The two mailbox counts, and the one rule that governs both.
+ *
+ * **A count is a figure some command result carried, verbatim, or it is the absence of one.** The
+ * console holds no store key and cannot open `cli:outbox:*` itself (see the header of this file), so
+ * the only honest source for either number is what a command reported. There is no third option: no
+ * arithmetic, no accumulation across results, and no initial zero standing in for a report nobody
+ * made.
+ *
+ * `null` is that absence, and it is spelled the way `lastPolledAtMs` below already spells "never
+ * checked" — an operator standing up a profile needs to tell "nothing has said" from "it said zero",
+ * and a zero that means both tells them neither.
+ *
+ * Which of the two is ever a number is decided by the frozen eight-command surface, not by taste:
+ *
+ * - `inboxReceived` is `poll`'s own `received` (`runtime/inbound.ts:27`) — the envelopes accepted
+ *   and committed BY THAT POLL. It is that poll's figure and never a running total, because summing
+ *   per-poll deltas produces a number that diverges from the store the first time a result does not
+ *   arrive, and nothing ever brings it back.
+ * - `outboxPending` is `null` after every command, because no command reports one. `doctor`'s
+ *   `diagnostics()` returns `profile_id`, `identity_id`, `device_id`, `contact_count`, `contacts`,
+ *   `storage` and `runtime` — and no outbox figure. A successful `send` is not evidence either: it
+ *   writes its outbox record as `"delivered"` (`runtime/outbound.ts:289`) and returns
+ *   `status: "delivered"` (`:46`), while "pending" is derived from the records still marked
+ *   `"pending"` (`:294`) — so incrementing on success moves the figure the opposite way from the
+ *   store. The field stays on this interface, and the pane keeps its row, so that the missing report
+ *   is visible rather than quietly dropped.
+ */
 export interface MailboxView {
-  readonly outboxPending: number;
-  readonly inboxReceived: number;
+  readonly outboxPending: number | null;
+  readonly inboxReceived: number | null;
   /** The relay's remaining-work signal from the last `poll`. */
   readonly more: boolean;
   readonly lastPolledAtMs: number | null;
@@ -333,6 +361,9 @@ export interface OperatorState {
  * contact roster, no history, no rejections, and a relay whose health is `"unknown"` rather than
  * assumed. `unknown` is deliberately distinct from `"unreachable"`; an operator standing up a
  * remote relay needs to tell "never checked" from "refused the connection".
+ *
+ * The two mailbox counts start `null` for the same reason and not as a placeholder: before a command
+ * has run, "0 pending" is a claim about an encrypted store this process has never opened.
  */
 export function createInitialState(input: { readonly profiles: readonly ProfileView[] }): OperatorState {
   const profiles = [...input.profiles];
@@ -342,7 +373,7 @@ export function createInitialState(input: { readonly profiles: readonly ProfileV
     activeProfile: 0,
     contacts: [],
     selectedContactId: null,
-    mailbox: { outboxPending: 0, inboxReceived: 0, more: false, lastPolledAtMs: null },
+    mailbox: { outboxPending: null, inboxReceived: null, more: false, lastPolledAtMs: null },
     rejections: [],
     history: [],
     health: { relayUrl: first?.relayUrl ?? "", status: "unknown", uptimeMs: null, checkedAtMs: null },

@@ -18,6 +18,18 @@ export interface MailboxRow {
   readonly value: string;
 }
 
+/**
+ * A count no command reported, rendered as words rather than as a digit or as a sentinel.
+ *
+ * Both failures here have been shipped by real programs: printing the sentinel (`${null} pending` is
+ * "null pending", which reads as a bug rather than as an absence) and printing a digit that came
+ * from nowhere. `0` is a figure a command really can report — a poll that accepted nothing reports
+ * exactly that — so it renders as `0` and is never conflated with silence.
+ */
+function countedValue(count: number | null, unit: string, absent: string): string {
+  return count === null ? absent : `${String(count)} ${unit}`;
+}
+
 export interface MailboxSnapshot {
   readonly rows: readonly MailboxRow[];
   readonly rejectionLines: readonly string[];
@@ -30,8 +42,16 @@ export function buildMailboxSnapshot(source: {
 }): MailboxSnapshot {
   const { mailbox, rejections } = source;
   const rows: MailboxRow[] = [
-    { label: "outbox", value: `${mailbox.outboxPending} pending` },
-    { label: "inbox", value: `${mailbox.inboxReceived} received` },
+    // Two rows, two different silences, and each says which one it is.
+    //
+    // The outbox row is empty because the frozen eight-command surface has nothing that reports a
+    // pending count (see `MailboxView`), so the row names the gap rather than disappearing: an
+    // operator who cannot see that the console has no view of its own outbox will assume it has one.
+    // The inbox row is empty only until the first poll, which is a different sentence.
+    { label: "outbox", value: countedValue(mailbox.outboxPending, "pending", "no command reports an outbox count") },
+    // "received" is what the LAST poll accepted and committed, not a session or store total, so the
+    // row says which poll it is talking about. The `last poll` row below carries when that was.
+    { label: "inbox", value: countedValue(mailbox.inboxReceived, "received by the last poll", "no poll has reported yet") },
     // The relay's remaining-work signal is what tells the operator to poll again; a pane that hid
     // it would make a partially drained mailbox look empty.
     { label: "more", value: mailbox.more ? "yes — poll again" : "no" },

@@ -1,4 +1,5 @@
-import type { CliOutcome, CliRequest } from "./cli-bridge";
+import type { CliCommand, CliOutcome, CliRequest } from "./cli-bridge";
+import { explain } from "./failure-text";
 import type { Effect, Intent, Step } from "./intents";
 import { modalIntent, trustModalIsComplete } from "./modal-host";
 import { MIN_VIEWPORT, isBelowMinViewport, renderFrame, styleFrame } from "./shell-chrome";
@@ -20,7 +21,7 @@ import {
   type TrustModal,
   type Viewport,
 } from "./state";
-import { utf8Bytes } from "./text";
+import { paintable, utf8Bytes } from "./text";
 
 /**
  * The shell, after the reference TUI's `tui-shell.ts`.
@@ -416,63 +417,6 @@ export function reduce(state: OperatorState, intent: Intent): Step {
 }
 
 /**
- * True for every code point that can make a frame say something other than what the state holds.
- *
- * Two classes, together because the property is one property and two boundaries with two predicates
- * would be one more thing to keep in agreement than a security property should have.
- *
- * CONTROL POINTS — C0 (U+0000..U+001F), DEL (U+007F), C1 (U+0080..U+009F). ESC starts a sequence the
- * terminal executes; a C1 byte IS a control sequence with no ESC in front of it.
- *
- * DISPLAY-STEERING POINTS — none of these is a control character and none can start an escape
- * sequence, so AC7 as frozen does not name them; they are here because each one makes the same lie
- * possible by other means:
- *
- * - THE BIDI CONTROLS (U+200E, U+200F, U+202A..U+202E, U+2066..U+2069) reorder the rest of the line.
- *   `formatHistoryLines` (history-pane.ts:41) paints `sequence  direction  messageId  plaintext` on
- *   ONE line, so an override inside a correspondent's plaintext reorders the fields painted before
- *   it, and a stranger can make their own inbound message render with `outbound` where the operator
- *   reads the direction. In the trust modal the damage is more direct: an identifier that renders in
- *   an order it was not written in cannot be compared out of band, which is the one thing the modal
- *   exists to let a human do. On the compose row it defeats the painted-at gate itself.
- * - THE SEPARATORS (U+2028, U+2029) are line terminators some terminals honour, so a frame's
- *   exactly-rows-by-cols promise would hold in the value and break on the screen — the one place it
- *   was made.
- * - U+FEFF is zero-width, so it can sit inside a base64url identifier and make two different
- *   identifiers paint identically.
- *
- * DELIBERATELY ABSENT, and this is an enumeration of what STEERS A DISPLAY rather than of Unicode's
- * `Cf` category for exactly this reason: U+200B ZERO WIDTH SPACE and U+00AD SOFT HYPHEN are
- * invisible but reorder nothing, terminate no line, and are legitimate in prose. U+200D ZERO WIDTH
- * JOINER is excluded for a stronger reason still — it is load-bearing inside emoji sequences, so
- * refusing it would corrupt ordinary message bodies rather than defend them.
- *
- * A numeric predicate rather than a regular expression with literal bytes, for the same reason `ESC`
- * below is built from a character code: an invisible literal in a source file is a character no
- * reviewer can see and no diff can show, and searching the pure layer for one has to stay a
- * meaningful check.
- */
-function steersTheDisplay(point: string): boolean {
-  const code = point.codePointAt(0) ?? 0;
-  if (code <= 0x1f || code === 0x7f || (code >= 0x80 && code <= 0x9f)) return true;
-  if (code === 0x200e || code === 0x200f) return true;
-  if (code >= 0x202a && code <= 0x202e) return true;
-  if (code >= 0x2066 && code <= 0x2069) return true;
-  return code === 0x2028 || code === 0x2029 || code === 0xfeff;
-}
-
-/**
- * `text` with every steering point removed, iterated by code point so an astral pair survives.
- *
- * A FILTER, not a rejection and not a placeholder: the printable remainder is kept, because an
- * inbound body the operator never sees is a worse outcome than one with two characters missing, and
- * a console that dropped the entry would also hide the fact that a correspondent tried this at all.
- */
-function paintable(text: string): string {
-  return [...text].filter((point) => !steersTheDisplay(point)).join("");
-}
-
-/**
  * The four trust identifiers, filtered where they ENTER the state.
  *
  * Absent stays absent: `trustModalIsComplete` refuses a confirmation while any of the four is
@@ -716,6 +660,17 @@ function foldSetup(state: OperatorState, request: CliRequest, outcome: CliOutcom
   });
 }
 
+/**
+ * The figure a result carried for a mailbox count, or the last one that was carried.
+ *
+ * A result that reports nothing about a count is not evidence that the count is zero, and it is not
+ * evidence that the previous report has stopped being true either: it is silence. So the previous
+ * value stands, which is what keeps an unreadable child from erasing what a readable one said.
+ */
+function reportedCount(value: unknown, previous: number | null): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : previous;
+}
+
 export function applyOutcome(state: OperatorState, request: CliRequest, outcome: CliOutcome, atMs: number): OperatorState {
   const health = outcome.ok
     ? { ...state.health, status: "healthy" as const, checkedAtMs: atMs }
@@ -723,7 +678,26 @@ export function applyOutcome(state: OperatorState, request: CliRequest, outcome:
       ? { ...state.health, status: "unreachable" as const, checkedAtMs: atMs }
       : state.health;
   const touchedRelay = request.command === "poll" || request.command === "relay publish" || request.command === "send";
-  const next: OperatorState = { ...state, health: touchedRelay ? health : state.health, profiles: foldSetup(state, request, outcome) };
+  const next: OperatorState = {
+    ...state,
+    health: touchedRelay ? health : state.health,
+    profiles: foldSetup(state, request, outcome),
+    /*
+     * The outbox figure, decided once for every command and every outcome, refusals included.
+     *
+     * No command in the frozen eight reports one (`MailboxView` enumerates what `doctor` does
+     * report), so the figure a result carried is always the absence of one — there is no earlier
+     * report here for a refusal to erase, which is why this is written unconditionally rather than
+     * carried forward the way `inboxReceived` is. The day a command does report a pending count,
+     * this line becomes `reportedCount(that field, state.mailbox.outboxPending)` and the rest of the
+     * rule is already in place.
+     *
+     * What must never come back is the increment that stood here: `outboxPending + 1` on a
+     * SUCCESSFUL send, which does not merely guess — it guesses in the direction opposite to the one
+     * the store moved, since a delivered message leaves the pending set rather than joining it.
+     */
+    mailbox: { ...state.mailbox, outboxPending: null },
+  };
 
   if (!outcome.ok) return next;
   const data = outcome.data;
@@ -753,7 +727,11 @@ export function applyOutcome(state: OperatorState, request: CliRequest, outcome:
         ...next,
         mailbox: {
           outboxPending: next.mailbox.outboxPending,
-          inboxReceived: next.mailbox.inboxReceived + asNumber(data.received, 0),
+          // `received` VERBATIM, and never added to what a previous poll reported: it is "envelopes
+          // accepted and committed by this poll" (`runtime/inbound.ts:27`), so a second poll that
+          // accepts none honestly reports `0`. A result that carries no number at all reports
+          // nothing, and the last poll's figure stands.
+          inboxReceived: reportedCount(data.received, next.mailbox.inboxReceived),
           more: data.more === true,
           lastPolledAtMs: atMs,
         },
@@ -765,7 +743,15 @@ export function applyOutcome(state: OperatorState, request: CliRequest, outcome:
       return { ...next, profiles };
     }
     case "send":
-      return { ...next, mailbox: { ...next.mailbox, outboxPending: next.mailbox.outboxPending + 1 } };
+      /*
+       * A send changes no count on this surface, and that is the whole of the case.
+       *
+       * `send`'s success result is `{ messageId, envelopeId, status }` (`runtime/outbound.ts:46`)
+       * and carries no mailbox figure at all, so there is nothing here to read verbatim. The state
+       * that did move is the conversation, and the console learns it the only way it can: by running
+       * `history`, which returns what the store holds.
+       */
+      return next;
     case "history":
       return { ...next, history: readHistoryEntries(data) };
     default:
@@ -781,6 +767,29 @@ export function applyOutcome(state: OperatorState, request: CliRequest, outcome:
  * executes the effects they describe and does nothing else, which is why the interaction model can
  * be driven end to end by a test with no process and no terminal.
  */
+/**
+ * What one settled command becomes on the activity line.
+ *
+ * The head is unchanged and stays first, deliberately: `${command} → ${code} (exit ${N})` is what an
+ * operator quotes in a bug report, and it is what survives when the line is clipped at a narrow
+ * terminal — at `MIN_VIEWPORT` the activity line is one 72-column row and the words have nowhere to
+ * go. So the sentence is an ADDITION beside the code, never a replacement for it.
+ *
+ * The code therefore appears twice on a wide terminal: once as the value, and once inside the
+ * sentence that explains it. That is the cost of `explain` returning text that is complete on its
+ * own — a caller that trimmed the repetition would be composing the module's prose for it, and this
+ * is the one line where the two obligations meet.
+ *
+ * Nothing is composed for a success: a console that named a class on every frame would tell the
+ * operator a successful poll failed.
+ */
+function outcomeLine(command: CliCommand, outcome: CliOutcome): string {
+  const head = `${command} → ${outcome.code} (exit ${String(outcome.exitCode)})`;
+  if (outcome.ok) return head;
+  const text = explain(command, outcome.code, outcome.exitCode);
+  return `${head}  ${text.sentence} ${text.action}`;
+}
+
 export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
   // The first of the two moments a clock reading is folded in (t35 §2.3). It is done HERE, in the
   // one impure function, so that `reduce` can build a timestamped export path without reading a
@@ -863,7 +872,7 @@ export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
     switch (effect.kind) {
       case "run-cli": {
         const outcome = await io.runCli(effect.request);
-        note(`${effect.request.command} → ${outcome.code} (exit ${outcome.exitCode})`);
+        note(outcomeLine(effect.request.command, outcome));
         // The second moment the clock is read into the state, for the reason above.
         current = { ...applyOutcome(current, effect.request, outcome, io.now()), busy: false, observedAtMs: io.now() };
         if (effect.request.command === "contact import") {
