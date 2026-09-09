@@ -64,3 +64,13 @@
 - 2026-09-09T05:03:43.599Z - task-added: T22: Close the reopened escape hole at foldSetup, the boundary its sibling already uses
 - 2026-09-09T05:03:47.012Z - task-attempt: T22: started (attempt 1) — Owner decision on the test author's Q-001: the filter goes at foldSetup, not inside parseCliOutcome. The principle established last night is that filtering belongs at the narrowing functions that WRITE external text into the state; foldSetup is such a writer, the parser is not, and the parser's verbatim contract exists so the console reports the code the CLI returned.
 - 2026-09-09T05:27:34.590Z - task-done: T22: Close the reopened escape hole at foldSetup, the boundary its sibling already uses
+- 2026-09-09T05:33:24.808Z - task-added: T23: RED tests: the outbox count must come from the store, and every exit class must be named in words
+- 2026-09-09T05:33:24.890Z - task-added: T24: Wave report: every criterion with its evidence, and what remains ordered by what it costs
+- 2026-09-09T05:33:33.289Z - task-attempt: T23: started (attempt 1) — AC2 and AC5, the two criteria this wave has recorded as NOT MET that do not depend on the user decisions. Opus: the only agent running tests.
+- 2026-09-09T05:33:33.381Z - task-attempt: T24: started (attempt 1) — Sonnet: reads artifacts, writes one document, runs nothing. The wave has 24 tasks and six verification reports; a reader needs one place that says what holds and what does not.
+- 2026-09-09T05:41:18.774Z - task-done: T24: Wave report: every criterion with its evidence, and what remains ordered by what it costs
+- 2026-09-09T05:41:18.858Z - task-added: T25: Drive the console against the REAL cli.js and a real relay, and independently verify the escape fix
+- 2026-09-09T06:03:46.793Z - task-done: T23: RED tests: the outbox count must come from the store, and every exit class must be named in words
+- 2026-09-09T06:03:46.938Z - task-added: T26: Make the counts come from the store, and write the failure vocabulary
+- 2026-09-09T06:03:47.029Z - task-attempt: T26: started (attempt 1) — Opus rather than sonnet: this writes operator-facing prose for 32 cells and changes a state invariant, and both are places where the cheaper answer shows.
+- 2026-09-09T06:35:49.537Z - task-done: T26: Make the counts come from the store, and write the failure vocabulary
