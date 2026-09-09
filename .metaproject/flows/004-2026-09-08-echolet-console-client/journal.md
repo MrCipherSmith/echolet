@@ -82,3 +82,9 @@
 - 2026-09-09T07:35:40.767Z - task-added: T28: Make a received message readable, and filter the launch arguments
 - 2026-09-09T07:35:40.849Z - task-attempt: T28: started (attempt 1) — Owner decision on Q-001: the requirement is that a 51-character message - the length this wave actually measured - is readable somewhere in the console without leaving it. Which layout achieves that is the implementer choice, but eliding it and saying so does not satisfy the criterion this wave exists for.
 - 2026-09-09T07:56:01.711Z - task-done: T28: Make a received message readable, and filter the launch arguments
+- 2026-09-09T08:01:01.351Z - task-added: T29: Close what does not need the operator: the viewport sweep, the console against the tailnet relay, and a stale comment
+- 2026-09-09T08:01:01.499Z - task-attempt: T29: started (attempt 1) — AC8 has not been re-measured since flow 002/003 and the console has changed a great deal; AC10 half is reachable because the tailnet relays are live and answering. The address book stays blocked on the pane decision, which is the users.
+- 2026-09-09T08:31:36.065Z - task-done: T29: Close what does not need the operator: the viewport sweep, the console against the tailnet relay, and a stale comment
+- 2026-09-09T08:31:36.150Z - task-added: T30: Stop naming a key that does nothing, and stop leaving a child alive after the operator quits
+- 2026-09-09T09:01:20.919Z - task-added: T31: The gate must finish its verdict when vitest loses a report, not refuse it
+- 2026-09-09T09:01:28.309Z - task-attempt: T31: started (attempt 1) — Measured three times identically: 75 of 77 files reported, 496 of 517 tests, six RPC timeouts, zero failing tests. Serial execution reports all 77 and 517 in 504s against 296s, so the loss is a starved worker rather than noise - and the gate now blocks every push. The repair must keep the parallel run, because it is also the only thing that stresses cross-file interference.

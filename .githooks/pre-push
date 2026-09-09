@@ -45,7 +45,8 @@
 #   4. documentation freshness                        (warns; blocks on a broken pin)       ~1 s
 #
 # Steps 2 and 3 are the same suites (scripts/gate/suites.sh: the Go relay suite
-# race-enabled, then the JavaScript/TypeScript suite) against two different
+# race-enabled, then the JavaScript/TypeScript suite in scripts/gate/js-suite.sh,
+# which also completes a run that lost worker reports) against two different
 # trees. When the working tree IS the commit being pushed — no tracked file
 # modified, no untracked file a suite could read, HEAD equal to the single
 # pushed tip — one run answers both questions and only one run happens. That is
@@ -111,6 +112,7 @@ cd "$ECHOLET_REPO_ROOT" 2>/dev/null || true
 # quietly remove half the gate, so name it rather than let it surface as a shell
 # error. A missing step is a blocked push, never a skipped one.
 for _echolet_step in scripts/gate/go-tests.sh scripts/gate/suites.sh \
+                     scripts/gate/js-suite.sh \
                      scripts/gate/pushed-range.sh scripts/gate/docs-freshness.sh; do
   if [ ! -f "$ECHOLET_REPO_ROOT/$_echolet_step" ]; then
     echo "push gate: FAILED — $_echolet_step is missing from the work tree." >&2

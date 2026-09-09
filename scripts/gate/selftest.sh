@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Echolet push gate — self-test (flow 003 / T23, T24, T32).
+# Echolet push gate — self-test (flow 003 / T23, T24, T32, T38; flow 004 / T31).
 #
 # The gate's state table, executable. Every row that the hardening report claims
 # — a failing test blocks, a missing runner blocks, a Go defect is caught, a
@@ -13,7 +13,7 @@
 #
 #   pnpm run gate:selftest
 #
-# 44 rows, about 2 minutes: three throwaway Go modules to compile, and the P
+# 60 rows, about 2-3 minutes: three throwaway Go modules to compile, and the P
 # rows each check a commit out and run a suite against it. A row
 # whose toolchain is genuinely absent is reported SKIP, never OK: a self-test
 # that goes green because it could not run is the same class of lie as a gate
@@ -76,17 +76,20 @@ mkrepo() { # mkrepo <name>
   cp "$SRC/.githooks/keryx-blocks.sha256" "$d/.githooks/keryx-blocks.sha256"
   cp "$SRC/scripts/gate/go-tests.sh" "$d/scripts/gate/"
   cp "$SRC/scripts/gate/suites.sh" "$d/scripts/gate/"
+  cp "$SRC/scripts/gate/js-suite.sh" "$d/scripts/gate/"
   cp "$SRC/scripts/gate/pushed-range.sh" "$d/scripts/gate/"
   cp "$SRC/scripts/gate/docs-freshness.sh" "$d/scripts/gate/"
   cp "$SRC/scripts/gate/selftest.sh" "$d/scripts/gate/"
   cp "$SRC/scripts/hooks/install.sh" "$d/scripts/hooks/"
   cp "$SRC/scripts/hooks/verify.sh" "$d/scripts/hooks/"
-  # The scratch repo's own copy of suites.sh gets the same treatment as the hook
-  # (see neutralise_tool_paths): it carries the `$HOME/.local/bin/keryx`
-  # fallback, which no PATH can hide. Without this, every "no keryx" row would
-  # quietly find keryx there and stop exercising the fallback route it claims to
-  # exercise. Done before the commit, so the scratch tree stays clean.
+  # The scratch repo's own copies of the JS step get the same treatment as the
+  # hook (see neutralise_tool_paths): js-suite.sh carries the
+  # `$HOME/.local/bin/keryx` fallback, which no PATH can hide. Without this,
+  # every "no keryx" row would quietly find keryx there and stop exercising the
+  # fallback route it claims to exercise. Done before the commit, so the scratch
+  # tree stays clean.
   neutralise_tool_paths "$d/scripts/gate/suites.sh"
+  neutralise_tool_paths "$d/scripts/gate/js-suite.sh"
   chmod +x "$d/.githooks/pre-push" "$d/scripts/gate/"*.sh "$d/scripts/hooks/"*.sh
   ( cd "$d" && git init -q . && git config user.email t@e.st && git config user.name T )
   echo "$d"
@@ -381,9 +384,9 @@ else
   failn=$((failn + 1))
 fi
 
-# the two steps T38 added are steps like any other: deleting one blocks
-for _step in suites.sh pushed-range.sh; do
-  case "$_step" in suites.sh) id=S2 ;; *) id=S3 ;; esac
+# the steps T38 and T31 added are steps like any other: deleting one blocks
+for _step in suites.sh pushed-range.sh js-suite.sh; do
+  case "$_step" in suites.sh) id=S2 ;; pushed-range.sh) id=S3 ;; *) id=S4 ;; esac
   d="$(mk_js_repo "js-nostep-$id" "echo hi")"
   rm -f "$d/scripts/gate/$_step"
   P="$(pmbin "$d")"
@@ -597,6 +600,285 @@ if [ "$rc" -ne 0 ] && case "$out" in *"SUITE RAN: side-red"*) true ;; *) false ;
   pass=$((pass + 1))
 else
   echo "WRONG P6  exit=$rc  only the first pushed ref was verified"
+  failn=$((failn + 1))
+fi
+fi
+
+# ===========================================================================
+# LOST REPORTS vs REAL FAILURES (T31)
+# ===========================================================================
+# The state these rows exist for: vitest 3.0.8's worker->main RPC deadline
+# expires on a starved worker, whole test files never report, the run exits 1
+# with ZERO failing tests, and from outside that is indistinguishable from a
+# hidden failure unless something goes and looks. The gate now completes such a
+# run by re-running precisely the unreported files, serially.
+#
+# The rows come in opposed pairs on purpose, and the pairing is the whole point:
+# L1 fails if the gate stops completing a lost-report run, and L2/L3/L4 fail if
+# completion ever swallows a real failure. No single edit satisfies both — which
+# is what stops this fix from being a bypass with extra steps.
+#
+# Each row drives the WHOLE hook, not the parser, so a row can only go green by
+# the gate actually behaving that way end to end.
+mk_lost_repo() { # mk_lost_repo <name> <files.txt body> <suite.sh body> <rerun.sh body>
+  d="$(mkrepo "$1")"
+  printf '{"name":"scratch","private":true,"scripts":{"test":"sh ./suite.sh"}}\n' > "$d/package.json"
+  printf '# status\n<!-- status-pin: 0000000 -->\n' > "$d/docs/STATUS_CURRENT.md"
+  printf '%s\n' "$2" > "$d/files.txt"
+  printf '%s\n' "$3" > "$d/suite.sh"
+  printf '%s\n' "$4" > "$d/rerun.sh"
+  # A stand-in for vitest that answers the only two questions the completion
+  # step asks it: which test files exist, and what happens when these ones are
+  # run on their own. It is created before the commit, so the row still takes
+  # the one-tree path (an untracked node_modules would make the working tree
+  # differ from the push and quietly change what the row measures).
+  mkdir -p "$d/node_modules/.bin"
+  cat > "$d/node_modules/.bin/vitest" <<'FAKEVITEST'
+#!/usr/bin/env sh
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+cmd="${1:-}"
+shift 2>/dev/null || true
+case "$cmd" in
+  list)
+    sed '/^[[:space:]]*$/d' "$root/files.txt"
+    ;;
+  run)
+    args=""
+    for a in "$@"; do
+      case "$a" in -*) : ;; *) args="$args $a" ;; esac
+    done
+    # shellcheck disable=SC2086
+    sh "$root/rerun.sh" $args
+    ;;
+  *)
+    echo "fake vitest: unexpected invocation: $cmd $*" >&2
+    exit 2
+    ;;
+esac
+FAKEVITEST
+  chmod +x "$d/node_modules/.bin/vitest"
+  commit_all "$d" c1 >/dev/null 2>&1
+  sha="$( cd "$d" && git rev-parse HEAD )"
+  printf '# status\n<!-- status-pin: %s -->\n' "$sha" > "$d/docs/STATUS_CURRENT.md"
+  commit_all "$d" c2 >/dev/null 2>&1
+  neutralise_path "$d"
+  echo "$d"
+}
+
+L_FILES='src/a.test.ts
+src/b.test.ts
+src/c.test.ts'
+
+# A parallel run that lost src/c.test.ts to the worker-RPC deadline: three files
+# on disk, two reported, no failing test, one recognised error, exit 1.
+L_SUITE_LOST='echo " RUN  v3.0.8 /scratch"
+echo " ✓ src/a.test.ts (5 tests) 10ms"
+echo " ✓ src/b.test.ts (5 tests) 10ms"
+echo "⎯⎯ Unhandled Errors ⎯⎯"
+echo "Error: [vitest-worker]: Timeout calling \"onTaskUpdate\""
+echo " Test Files  2 passed (3)"
+echo "      Tests  10 passed (15)"
+echo "     Errors  1 errors"
+exit 1'
+
+# Writes the hook's combined output to a file rather than returning it through a
+# command substitution: a substitution runs in a subshell, so an exit code set
+# inside one never reaches the caller, and a row that reads the wrong exit code
+# is a row that proves nothing.
+run_hook() { # run_hook <repo> <PATH>  -> $ROOT/hook.out, returns the hook's code
+  ( cd "$1" && REFS_STDIN "$( git rev-parse HEAD )" |
+      env PATH="$2" sh "$(nopath_hook "$1")" origin url ) > "$ROOT/hook.out" 2>&1
+}
+
+expect_contains() { # expect_contains <id> <haystack> <needle> <note>
+  case "$2" in
+    *"$3"*) echo "OK    $1  $4"; pass=$((pass + 1)) ;;
+    *)      echo "WRONG $1  $4"; failn=$((failn + 1)) ;;
+  esac
+}
+expect_absent() { # expect_absent <id> <haystack> <needle> <note>
+  case "$2" in
+    *"$3"*) echo "WRONG $1  $4"; failn=$((failn + 1)) ;;
+    *)      echo "OK    $1  $4"; pass=$((pass + 1)) ;;
+  esac
+}
+
+if [ "$HAVE_NPM" = "no" ]; then
+  for _id in L1 L1b L1c L2 L3 L3b L4 L4b L5 L6 L6b L7 L8 L8b L9; do
+    skip "$_id" "no npm on this machine"
+  done
+  unset _id
+else
+
+# --- L1: a lost report is COMPLETED, not refused -----------------------------
+d="$(mk_lost_repo lost-completed "$L_FILES" "$L_SUITE_LOST" \
+'echo "COMPLETION RAN: $*"
+echo " ✓ src/c.test.ts (5 tests) 12ms"
+echo " Test Files  1 passed (1)"
+echo "      Tests  5 passed (5)"
+exit 0')"
+P="$(pmbin "$d")"
+run_hook "$d" "$P"; rc=$?; out="$(cat "$ROOT/hook.out")"
+check L1 $rc 0 "run lost a report, the lost file is green on its own -> ALLOWED"
+expect_contains L1b "$out" "COMPLETION RAN" "the completion pass really ran the unreported file"
+expect_contains L1c "$out" "COMPLETION RAN: src/c.test.ts" "and it ran PRECISELY that file, not the whole suite"
+
+# --- L2: ... and only if the completion is green -----------------------------
+d="$(mk_lost_repo lost-red "$L_FILES" "$L_SUITE_LOST" \
+'echo "COMPLETION RAN: $*"
+echo " ❯ src/c.test.ts (5 tests | 1 failed) 12ms"
+echo " Test Files  1 failed (1)"
+echo "      Tests  1 failed | 4 passed (5)"
+exit 1')"
+P="$(pmbin "$d")"
+run_hook "$d" "$P"; rc=$?; out="$(cat "$ROOT/hook.out")"
+if [ "$rc" -ne 0 ]; then
+  echo "OK    L2  exit=$rc (non-zero)  the unreported file is RED on its own -> BLOCKS"
+  pass=$((pass + 1))
+else
+  echo "WRONG L2  exit=0  a red file was completed into a pass"
+  failn=$((failn + 1))
+fi
+
+# --- L3: a real failure in a COMPLETE run still blocks, untouched ------------
+# This is the row that stops the fix being a bypass: nothing about a failing
+# test may reach the completion machinery at all.
+d="$(mk_lost_repo real-failure "$L_FILES" \
+'echo " ✓ src/a.test.ts (5 tests) 10ms"
+echo " ✓ src/b.test.ts (5 tests) 10ms"
+echo " ❯ src/c.test.ts (5 tests | 1 failed) 11ms"
+echo " Test Files  1 failed | 2 passed (3)"
+echo "      Tests  1 failed | 14 passed (15)"
+exit 1' \
+'echo "COMPLETION RAN: $*"; exit 0')"
+P="$(pmbin "$d")"
+run_hook "$d" "$P"; rc=$?; out="$(cat "$ROOT/hook.out")"
+if [ "$rc" -ne 0 ]; then
+  echo "OK    L3  exit=$rc (non-zero)  a genuinely failing test BLOCKS"
+  pass=$((pass + 1))
+else
+  echo "WRONG L3  exit=0  a failing test was allowed through"
+  failn=$((failn + 1))
+fi
+expect_absent L3b "$out" "COMPLETION RAN" "and no completion pass was attempted for it"
+
+# --- L4: a failure that ALSO lost a report is still a failure ----------------
+d="$(mk_lost_repo failure-and-loss "$L_FILES" \
+'echo " ✓ src/a.test.ts (5 tests) 10ms"
+echo " ❯ src/b.test.ts (5 tests | 1 failed) 11ms"
+echo "Error: [vitest-worker]: Timeout calling \"onTaskUpdate\""
+echo " Test Files  1 failed | 1 passed (3)"
+echo "      Tests  1 failed | 9 passed (15)"
+echo "     Errors  1 errors"
+exit 1' \
+'echo "COMPLETION RAN: $*"; exit 0')"
+P="$(pmbin "$d")"
+run_hook "$d" "$P"; rc=$?; out="$(cat "$ROOT/hook.out")"
+if [ "$rc" -ne 0 ]; then
+  echo "OK    L4  exit=$rc (non-zero)  a failure alongside a lost report still BLOCKS"
+  pass=$((pass + 1))
+else
+  echo "WRONG L4  exit=0  a failure was hidden behind a lost report"
+  failn=$((failn + 1))
+fi
+expect_absent L4b "$out" "COMPLETION RAN" "and the failure short-circuited before any completion"
+
+# --- L5: the completion pass itself loses a report ---------------------------
+# There is one completion pass and no second chance: a serial re-run that also
+# cannot report is indistinguishable from a hidden failure.
+d="$(mk_lost_repo completion-lost "$L_FILES" "$L_SUITE_LOST" \
+'echo "COMPLETION RAN: $*"
+echo "Error: [vitest-worker]: Timeout calling \"onTaskUpdate\""
+echo " Test Files  0 passed (1)"
+echo "     Errors  1 errors"
+exit 0')"
+P="$(pmbin "$d")"
+run_hook "$d" "$P"; rc=$?; out="$(cat "$ROOT/hook.out")"
+if [ "$rc" -ne 0 ]; then
+  echo "OK    L5  exit=$rc (non-zero)  a completion pass that also loses a report BLOCKS"
+  pass=$((pass + 1))
+else
+  echo "WRONG L5  exit=0  an unreported file was passed twice over"
+  failn=$((failn + 1))
+fi
+
+# --- L6: the ordinary push is untouched and costs nothing --------------------
+d="$(mk_lost_repo all-reported "$L_FILES" \
+'echo " ✓ src/a.test.ts (5 tests) 10ms"
+echo " ✓ src/b.test.ts (5 tests) 10ms"
+echo " ✓ src/c.test.ts (5 tests) 10ms"
+echo " Test Files  3 passed (3)"
+echo "      Tests  15 passed (15)"
+exit 0' \
+'echo "COMPLETION RAN: $*"; exit 0')"
+P="$(pmbin "$d")"
+run_hook "$d" "$P"; rc=$?; out="$(cat "$ROOT/hook.out")"
+check L6 $rc 0 "a complete, green run -> ALLOWED"
+expect_absent L6b "$out" "did not obviously report everything" \
+  "and the completeness machinery never spent a subprocess on it"
+
+# --- L7: a failing run the gate cannot explain ------------------------------
+# Every file reported, nothing failed, and the suite still did not pass. The
+# gate has no story here, so it tells none.
+d="$(mk_lost_repo unexplained "$L_FILES" \
+'echo " ✓ src/a.test.ts (5 tests) 10ms"
+echo " ✓ src/b.test.ts (5 tests) 10ms"
+echo " ✓ src/c.test.ts (5 tests) 10ms"
+echo " Test Files  3 passed (3)"
+echo "      Tests  15 passed (15)"
+exit 1' \
+'echo "COMPLETION RAN: $*"; exit 0')"
+P="$(pmbin "$d")"
+run_hook "$d" "$P"; rc=$?; out="$(cat "$ROOT/hook.out")"
+if [ "$rc" -ne 0 ]; then
+  echo "OK    L7  exit=$rc (non-zero)  exit 1 with everything reported and nothing red -> BLOCKS"
+  pass=$((pass + 1))
+else
+  echo "WRONG L7  exit=0  the gate invented an explanation for a failure"
+  failn=$((failn + 1))
+fi
+
+# --- L8: a lost report next to an error the gate does not recognise ----------
+# The completion path is only for the worker-RPC report loss. Any other error —
+# an unhandled rejection out of product code, a crashed setup file — blocks
+# exactly as it did before this step existed.
+d="$(mk_lost_repo foreign-error "$L_FILES" \
+'echo " ✓ src/a.test.ts (5 tests) 10ms"
+echo " ✓ src/b.test.ts (5 tests) 10ms"
+echo "Error: [vitest-worker]: Timeout calling \"onTaskUpdate\""
+echo "Error: connection closed by the relay under test"
+echo " Test Files  2 passed (3)"
+echo "      Tests  10 passed (15)"
+echo "     Errors  2 errors"
+exit 1' \
+'echo "COMPLETION RAN: $*"; exit 0')"
+P="$(pmbin "$d")"
+run_hook "$d" "$P"; rc=$?; out="$(cat "$ROOT/hook.out")"
+if [ "$rc" -ne 0 ]; then
+  echo "OK    L8  exit=$rc (non-zero)  an unrecognised error alongside the loss -> BLOCKS"
+  pass=$((pass + 1))
+else
+  echo "WRONG L8  exit=0  an unexplained error was completed away"
+  failn=$((failn + 1))
+fi
+expect_absent L8b "$out" "COMPLETION RAN" "and no completion pass was attempted for it"
+
+# --- L9: a completion pass that never ran what it was asked to run -----------
+# vitest's positional arguments are filename FILTERS, not paths. A filter that
+# selects nothing produces a green, complete, entirely irrelevant run.
+d="$(mk_lost_repo completion-wrong-file "$L_FILES" "$L_SUITE_LOST" \
+'echo "COMPLETION RAN: $*"
+echo " ✓ src/a.test.ts (5 tests) 9ms"
+echo " Test Files  1 passed (1)"
+echo "      Tests  5 passed (5)"
+exit 0')"
+P="$(pmbin "$d")"
+run_hook "$d" "$P"; rc=$?; out="$(cat "$ROOT/hook.out")"
+if [ "$rc" -ne 0 ]; then
+  echo "OK    L9  exit=$rc (non-zero)  a completion pass that never reported the asked-for file BLOCKS"
+  pass=$((pass + 1))
+else
+  echo "WRONG L9  exit=0  a green run of the wrong file counted as completion"
   failn=$((failn + 1))
 fi
 fi
