@@ -1,0 +1,84 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-004-t19-docs",
+  "dispatch_id": "004-T19-docs",
+  "status": "DONE",
+  "summary": "Reconciled documentation against the tree flow 004 (T5-T17) produced. Read source directly for all six changes: send's stdin/--text precedence (cli.ts:210-274), doctor's new contacts array (profile.ts:476-479), the console's new input mode ('w' opens a compose row on the history/conversation pane, Enter submits, Escape cancels, Ctrl-C quits even while composing — tui-shell.ts:154-207), the six-step registration checklist on the profiles pane plus the startup doctor (state.ts:56 SETUP_STEPS=6, tui-shell.ts:241-263), control-character and 14-code-point display-steering filtering at the frame boundary (tui-shell.ts:418-472), and Ctrl-C now quitting while the trust modal is open (tui-shell.ts:78-97). Checked docs/requirements/echolet-cli-prototype/{specification,README,prd,runbook,deployment-runbook,metrics-and-validation,implementation-plan}.md, docs/STATUS_CURRENT.md, the rest of docs/, the Metaproject wiki, and apps/cli for any markdown describing the console's keys/panes/command surface. Found exactly one document out of date: docs/STATUS_CURRENT.md, which predated all six changes (it could not have contradicted them; the base was written before flow 004 started). Added one new dated delta paragraph following the file's own base-plus-deltas convention (matching the existing T28/T40 deltas), named T19 in the header's delta list, and touched nothing else in the base — confirmed by `git diff --stat` showing 11 insertions / 1 deletion (the 1 deletion is the header line being extended with ', T19 на 860005b', not content removed). specification.md was found already correct (evidently reconciled earlier in flow 004 for the two CLI prerequisites) and needed no change. No test suite and no build were run, per the hard constraint that a concurrent dispatch (T18) is measuring the suite on this machine.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Every document that now says something the tree contradicts is found and corrected against the tree",
+      "status": "met",
+      "evidence": "Searched docs/requirements/echolet-cli-prototype/* (7 files), docs/STATUS_CURRENT.md, the rest of docs/ (30+ files), .metaproject/wiki/, and apps/cli (no markdown files) for TUI/console/send/doctor terms via keryx ctx rg, reading each raw log rather than the truncated summary. Only docs/STATUS_CURRENT.md lacked tonight's changes; every other file either already matched the tree (specification.md) or never discussed these specifics (README/prd/runbook/deployment-runbook/metrics-and-validation/implementation-plan, historical docs, wiki stubs)."
+    },
+    {
+      "criterion": "Corrections are made against the tree, never against another document",
+      "status": "met",
+      "evidence": "Every fact in the added STATUS_CURRENT.md delta was verified by reading the source files directly (cli.ts, profile.ts, tui-shell.ts, state.ts), with file:line citations in the reconciliation report, not copied from another document's claim."
+    },
+    {
+      "criterion": "docs/STATUS_CURRENT.md: pin not moved, base not rewritten, dated delta added for tonight",
+      "status": "met",
+      "evidence": "git diff --stat docs/STATUS_CURRENT.md shows 11 insertions(+), 1 deletion(-); the one deletion is the header sentence being extended (', T19 на `860005b`' appended to the existing T28/T40 list), not a rewrite of base content. The pin '4346e2b' and all base prose (lines 15-174) are untouched. The new delta sits in its own paragraph plus a bullet list, dated 2026-09-09, flow 004, T19, HEAD 860005b, following the same style as the existing T28 delta."
+    },
+    {
+      "criterion": "Where a document and the tree disagree, believe the tree and say so",
+      "status": "not_applicable",
+      "evidence": "No document was found asserting something the tree actively contradicted (STATUS_CURRENT.md's base simply predated the change rather than describing it differently, and specification.md already matched). This is recorded in the report's 'Where tree and document disagreed' section as none found, per the instruction to report this even when empty."
+    },
+    {
+      "criterion": "No test suite and no build run; change no source file and no test file",
+      "status": "met",
+      "evidence": "Only two files were written: the STATUS_CURRENT.md delta (docs) and this task's own report/result artifacts (.metaproject/flows/004.../t19-reconciliation-report.md, dispatches/004-T19-docs-result.json). git status confirms no file under apps/, packages/, or any *.test.ts was touched. No `pnpm test`, `vitest`, `tsc`, or build command was run at any point in this dispatch."
+    },
+    {
+      "criterion": "Every count asserted comes from the raw log a keryx ctx rg summary points at, not a truncated display",
+      "status": "met",
+      "evidence": "Read the raw log at .metaproject/data/gdctx/raw/2026-09-09T04-09-40-559Z_rg.log directly (22 matches for the send/stdin search in cli.ts, only 4 of which the summary displayed) before asserting anything about that file's --text/stdin handling; every other rg-based claim in the report was similarly checked against its raw log or its exit-code/match-count header, not just the displayed list."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "docs/STATUS_CURRENT.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Added a dated delta (flow 004, T19, 2026-09-09, HEAD 860005b) naming the six console/CLI changes tonight's tree carries, following the file's existing base-plus-deltas convention. Pin (4346e2b) untouched; no existing sentence rewritten or removed.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/t19-reconciliation-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "This dispatch's report: what changed in the tree (with file:line citations), which documents were checked and their disposition, what was left alone and why, and the routing audit.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "docs/STATUS_CURRENT.md",
+      "change": "modified — +11/-1. One line extended (header's dated-delta list gains ', T19 на `860005b`'); one new paragraph plus five bullets and a closing paragraph added after the existing T28 delta, before the '## Что реализовано и проверено локально' header. No other line touched."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "docs_checked": 40,
+    "docs_changed": 1,
+    "source_files_changed": 0,
+    "test_files_changed": 0,
+    "routing_audit": {
+      "graph_used": "no — not-relevant: files in question were named by the dispatch or found via keryx ctx rg; the graph predates this session's commits regardless",
+      "wiki_used": "yes — checked .metaproject/wiki/ for any page describing the console; found only draft component stubs, no contradiction",
+      "ctx_used": "yes — keryx ctx read for every file read, keryx ctx rg for every search, keryx ctx run for every shell command (find, git log, git status, git diff --stat, git merge-base)",
+      "raw_rg_used": "no",
+      "testing_context_used": "no — not-relevant: no test was written, changed, or run",
+      "memory_used": "no — not-relevant: the flow's own T5-T17 dispatch results carried the history this task needed"
+    }
+  },
+  "timestamp_utc": "2026-09-09T04:20:00Z"
+}
