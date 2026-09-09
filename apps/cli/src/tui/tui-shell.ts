@@ -72,6 +72,20 @@ export interface TuiIo {
  */
 export function mapKey(key: KeyEvent, state: OperatorState): Intent | undefined {
   if (state.modal !== undefined) {
+    /*
+     * AC8, in the one state the criterion names explicitly (004-T12-verify, F-005). `modalIntent`
+     * refuses every modified key, so before this line no key at all left the console while the modal
+     * was up and the modal's footer said nothing about it: the operator's only exit was to cancel a
+     * decision they may not have wanted to cancel, and a console that cannot be left is worse than a
+     * lost draft.
+     *
+     * Bound HERE rather than in `modalIntent` on purpose. `modal-host.ts` refuses modified keys so
+     * that the one irreversible decision on this surface is not reachable by a near miss such as
+     * Ctrl-Y, and that rule stays exactly as it is. This is also the only one of the verifier's two
+     * suggested fixes the existing tests permit: `TRUST_MODAL_FOOTER` is pinned to exactly y/n/esc,
+     * so naming the way out in the footer instead is not available.
+     */
+    if (key.ctrl) return key.name.toLowerCase() === "c" ? { kind: "quit" } : undefined;
     const intent = modalIntent(key);
     if (intent === "trust-confirm") return { kind: "trust-confirm" };
     if (intent === "trust-cancel") return { kind: "trust-cancel" };
@@ -248,13 +262,18 @@ export function reduce(state: OperatorState, intent: Intent): Step {
       const input = state.input;
       if (input === undefined || state.modal !== undefined) return { state, effects: [] };
       /*
-       * AC7, at the boundary. Every code point of U+0000..U+001F, U+007F and U+0080..U+009F is
-       * dropped here, so a paste carrying an escape sequence inserts its printable remainder and
-       * nothing else, and no later renderer change can reintroduce the byte. The property belongs
-       * to the state: `renderFrame` filters nothing, and the test that proves this does not import
-       * it (t35 §5 item 4).
+       * AC7, at the boundary. Every control point and every display-steering point is dropped here,
+       * so a paste carrying an escape sequence inserts its printable remainder and nothing else, and
+       * no later renderer change can reintroduce the byte. The property belongs to the state:
+       * `renderFrame` filters nothing, and the test that proves this does not import it (t35 §5
+       * item 4).
+       *
+       * The compose row uses the SAME predicate as the six inbound boundaries, and not a narrower
+       * one, because what the operator composes becomes a correspondent's inbound plaintext on the
+       * other side of the relay: a console that refuses to paint a stranger's right-to-left override
+       * and cheerfully sends one exports the hazard it declines to import.
        */
-      const text = withoutControlPoints(intent.text);
+      const text = paintable(intent.text);
       if (text === "") return { state, effects: [] };
       const buffer = input.buffer + text;
       // Refused, not truncated: silently dropping the tail loses part of a message the operator
@@ -296,20 +315,77 @@ export function reduce(state: OperatorState, intent: Intent): Step {
 }
 
 /**
- * True for the three ranges no frame may be able to carry: C0, DEL and C1.
+ * True for every code point that can make a frame say something other than what the state holds.
  *
- * A numeric predicate rather than a regular expression with literal control bytes, for the same
- * reason `ESC` below is built from a character code: a literal control byte in a source file is
- * invisible in review, and searching the pure layer for one has to stay a meaningful check.
+ * Two classes, together because the property is one property and two boundaries with two predicates
+ * would be one more thing to keep in agreement than a security property should have.
+ *
+ * CONTROL POINTS — C0 (U+0000..U+001F), DEL (U+007F), C1 (U+0080..U+009F). ESC starts a sequence the
+ * terminal executes; a C1 byte IS a control sequence with no ESC in front of it.
+ *
+ * DISPLAY-STEERING POINTS — none of these is a control character and none can start an escape
+ * sequence, so AC7 as frozen does not name them; they are here because each one makes the same lie
+ * possible by other means:
+ *
+ * - THE BIDI CONTROLS (U+200E, U+200F, U+202A..U+202E, U+2066..U+2069) reorder the rest of the line.
+ *   `formatHistoryLines` (history-pane.ts:41) paints `sequence  direction  messageId  plaintext` on
+ *   ONE line, so an override inside a correspondent's plaintext reorders the fields painted before
+ *   it, and a stranger can make their own inbound message render with `outbound` where the operator
+ *   reads the direction. In the trust modal the damage is more direct: an identifier that renders in
+ *   an order it was not written in cannot be compared out of band, which is the one thing the modal
+ *   exists to let a human do. On the compose row it defeats the painted-at gate itself.
+ * - THE SEPARATORS (U+2028, U+2029) are line terminators some terminals honour, so a frame's
+ *   exactly-rows-by-cols promise would hold in the value and break on the screen — the one place it
+ *   was made.
+ * - U+FEFF is zero-width, so it can sit inside a base64url identifier and make two different
+ *   identifiers paint identically.
+ *
+ * DELIBERATELY ABSENT, and this is an enumeration of what STEERS A DISPLAY rather than of Unicode's
+ * `Cf` category for exactly this reason: U+200B ZERO WIDTH SPACE and U+00AD SOFT HYPHEN are
+ * invisible but reorder nothing, terminate no line, and are legitimate in prose. U+200D ZERO WIDTH
+ * JOINER is excluded for a stronger reason still — it is load-bearing inside emoji sequences, so
+ * refusing it would corrupt ordinary message bodies rather than defend them.
+ *
+ * A numeric predicate rather than a regular expression with literal bytes, for the same reason `ESC`
+ * below is built from a character code: an invisible literal in a source file is a character no
+ * reviewer can see and no diff can show, and searching the pure layer for one has to stay a
+ * meaningful check.
  */
-function isControlPoint(point: string): boolean {
+function steersTheDisplay(point: string): boolean {
   const code = point.codePointAt(0) ?? 0;
-  return code <= 0x1f || code === 0x7f || (code >= 0x80 && code <= 0x9f);
+  if (code <= 0x1f || code === 0x7f || (code >= 0x80 && code <= 0x9f)) return true;
+  if (code === 0x200e || code === 0x200f) return true;
+  if (code >= 0x202a && code <= 0x202e) return true;
+  if (code >= 0x2066 && code <= 0x2069) return true;
+  return code === 0x2028 || code === 0x2029 || code === 0xfeff;
 }
 
-/** `text` with every control point removed, iterated by code point so an astral pair survives. */
-function withoutControlPoints(text: string): string {
-  return [...text].filter((point) => !isControlPoint(point)).join("");
+/**
+ * `text` with every steering point removed, iterated by code point so an astral pair survives.
+ *
+ * A FILTER, not a rejection and not a placeholder: the printable remainder is kept, because an
+ * inbound body the operator never sees is a worse outcome than one with two characters missing, and
+ * a console that dropped the entry would also hide the fact that a correspondent tried this at all.
+ */
+function paintable(text: string): string {
+  return [...text].filter((point) => !steersTheDisplay(point)).join("");
+}
+
+/**
+ * The four trust identifiers, filtered where they ENTER the state.
+ *
+ * Absent stays absent: `trustModalIsComplete` refuses a confirmation while any of the four is
+ * missing, and turning a missing identifier into an empty string would satisfy that refusal with
+ * nothing for the operator to compare.
+ */
+function paintableIdentifiers(identifiers: TrustIdentifiers): TrustIdentifiers {
+  const clean = (value: string | undefined): string | undefined => (value === undefined ? undefined : paintable(value));
+  return {
+    identity_id: clean(identifiers.identity_id),
+    device_id: clean(identifiers.device_id),
+    device_pubkey: clean(identifiers.device_pubkey),
+    signal_identity_key: clean(identifiers.signal_identity_key),
+  };
 }
 
 /**
@@ -378,8 +454,12 @@ function readRejections(value: unknown): RejectionView[] {
     const envelopeId = entry.envelopeId;
     const code = entry.code;
     // Read by name, never spread: whatever else a relay or sender put on this object stays off the
-    // operator's screen and out of the state.
-    return typeof envelopeId === "string" && typeof code === "string" ? [{ envelopeId, code }] : [];
+    // operator's screen and out of the state. `paintable` is the same act on the BYTES of the two
+    // fields that are kept — a rejected envelope is by definition one an untrusted or hostile sender
+    // put in the mailbox, which is the ground `formatRejectionLine` already refuses to widen on.
+    return typeof envelopeId === "string" && typeof code === "string"
+      ? [{ envelopeId: paintable(envelopeId), code: paintable(code) }]
+      : [];
   });
 }
 
@@ -390,12 +470,23 @@ function readHistoryEntries(value: unknown): HistoryEntryView[] {
     const { sequence, contactIdentityId, messageId, direction, plaintext, createdAtMs } = entry;
     if (typeof contactIdentityId !== "string" || typeof messageId !== "string" || typeof plaintext !== "string") return [];
     if (direction !== "inbound" && direction !== "outbound") return [];
+    /*
+     * `plaintext` is the decrypted body of a message a CORRESPONDENT wrote, which makes this the one
+     * route in the class whose bytes are chosen by someone outside this machine entirely. It is
+     * filtered here, where the field is written, rather than in the renderer: `renderFrame` is not
+     * the only reader of history, and a renderer that defended itself would leave the STATE free to
+     * hold an escape sequence and would need re-auditing the day a second reader appeared.
+     *
+     * The two identifiers are filtered for the same reason and on the same line of the same pane
+     * (history-pane.ts:41): a filter applied to the body alone would leave that line exactly as
+     * steerable as it was.
+     */
     return [{
       sequence: asNumber(sequence, 0),
-      contactIdentityId,
-      messageId,
+      contactIdentityId: paintable(contactIdentityId),
+      messageId: paintable(messageId),
       direction,
-      plaintext,
+      plaintext: paintable(plaintext),
       createdAtMs: asNumber(createdAtMs, 0),
     }];
   });
@@ -424,10 +515,14 @@ export function applyOutcome(state: OperatorState, request: CliRequest, outcome:
   switch (request.command) {
     case "doctor": {
       if (!isRecord(data)) return next;
+      // `label`, `relayUrl` and `profileDir` come from the operator's own argv and are outside this
+      // class. These two do NOT: they are overwritten from the child's JSON on every `doctor`, and
+      // `formatProfilesLines` (profiles-pane.ts:72-73) repaints them as the `identity` and `device`
+      // rows on every subsequent frame the profiles pane is on.
       const profiles = next.profiles.map((profile, index) => index !== next.activeProfile ? profile : {
         ...profile,
-        identityId: typeof data.identity_id === "string" ? data.identity_id : profile.identityId,
-        deviceId: typeof data.device_id === "string" ? data.device_id : profile.deviceId,
+        identityId: typeof data.identity_id === "string" ? paintable(data.identity_id) : profile.identityId,
+        deviceId: typeof data.device_id === "string" ? paintable(data.device_id) : profile.deviceId,
         contactCount: asNumber(data.contact_count, profile.contactCount),
       });
       return { ...next, profiles };
@@ -505,8 +600,17 @@ export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
     }
   };
 
+  /**
+   * The activity line, and the boundary for the CLI's own error `code`.
+   *
+   * `parseCliOutcome` keeps `error.code` verbatim, deliberately: the refusals the CLI reports under
+   * the relay's own name have to stay distinguishable. Keeping the NAME distinguishable does not
+   * require keeping the BYTES paintable, and `activityLine` puts the newest entry on every frame.
+   * Filtering the whole composed line rather than the interpolated code covers every caller of
+   * `note`, present and future, at the one place the text becomes state.
+   */
   const note = (text: string): void => {
-    current = { ...current, activity: [...current.activity, { at: io.now(), text }].slice(-64) };
+    current = { ...current, activity: [...current.activity, { at: io.now(), text: paintable(text) }].slice(-64) };
   };
 
   /**
@@ -518,6 +622,12 @@ export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
    */
   let confirmed: TrustModal | undefined;
 
+  /*
+   * The identifiers are already paintable when they get here: the only modal this can be handed is
+   * one the trust listener above wrote, and that is where they were filtered. A second filter on
+   * this copy would be a second place to keep in agreement with the first, and would hide the fact
+   * that the guarantee belongs to the state rather than to each of its readers.
+   */
   const observeContact = (modal: TrustModal): void => {
     const { identity_id: identityId, device_id: deviceId, device_pubkey: devicePubkey, signal_identity_key: signalIdentityKey } = modal.identifiers;
     if (identityId === undefined || deviceId === undefined || devicePubkey === undefined || signalIdentityKey === undefined) return;
@@ -555,10 +665,22 @@ export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
     io.stdin.resume();
     io.stdout.write(ALTERNATE_SCREEN_ON);
 
+    /*
+     * The boundary for the contact card's four identifiers, and it is HERE rather than in the modal
+     * or in `renderModal` because this listener is the sole writer of `modal`: `reduce` only ever
+     * clears it, and `createInitialState` starts it undefined. The card was authored by whoever is
+     * asking to be trusted, and the modal is the one document this surface exists to make a human
+     * read.
+     *
+     * Filtering at the writer is also what closes the ROSTER route: `observeContact` copies these
+     * four out of the confirmed modal into `state.contacts`, where the profiles pane repaints them
+     * for the rest of the session, long after the panel that carried them is gone. It inherits the
+     * guarantee from here instead of holding a second copy of it.
+     */
     io.onTrustIdentifiers?.((input) => {
       current = {
         ...current,
-        modal: { kind: "trust", cardPath: input.cardPath, profileLabel: input.profileLabel, identifiers: { ...input.identifiers }, renderedAt: null },
+        modal: { kind: "trust", cardPath: input.cardPath, profileLabel: input.profileLabel, identifiers: paintableIdentifiers(input.identifiers), renderedAt: null },
       };
       paint();
     });
