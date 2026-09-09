@@ -1,0 +1,108 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "004-T22-implement-2026-09-09",
+  "dispatch_id": "004-T22-implement",
+  "status": "DONE",
+  "summary": "One line changed, exactly where Q-001 of 004-T21-tests-result.json recommended: apps/cli/src/tui/tui-shell.ts:713, inside foldSetup. `{ failed: outcome.code, exitCode: outcome.exitCode }` became `{ failed: paintable(outcome.code), exitCode: outcome.exitCode }`, matching the boundary note() already applies at tui-shell.ts:836 and leaving cli-bridge.ts's parseCliOutcome untouched -- its documented contract ('typed failure codes are kept verbatim', cli-bridge.ts:45-48,123-124) still holds all the way up to the point text becomes state, which is where tui-shell.ts:832-833 says the filter belongs. `StepOutcome.failed` is typed `string` (state.ts:53) and `paintable` returns `string`, so no type changed. `git diff -- apps/cli/src/tui/tui-shell.ts` shows +1/-1 in one hunk and nothing else; no other file was touched. Verification: the three specification files (tui-shell.outcomeEscape.test.ts, tui-shell.keystrokeDispatch.test.ts, main.registration.processDriven.test.ts) run together are 18/18 green, exit 0, 1.98s -- the six red cases from 004-T21-tests-result.json are now green, the seven keystrokeDispatch regression guards stayed green throughout (never touched), and the registration probe's strengthened case stayed green. The whole apps/cli/src/tui scope is 30/30 files (30 counted on disk via a routed find), 299/299 tests, exit 0, 2.35s -- including profiles-pane.setup.test.ts at its original 29/29, confirming the test author's measurement that this one site turns all seven red cases green without disturbing the pane. tsc --noEmit exits 0. The whole apps/cli package was run three times under sustained load (1-minute average 91-111 throughout, driven by the operator's own VM/browser plus the run's own ten vitest workers, worse than the 52.56 the T21 dispatch saw at its own finish): each attempt reported fewer files than the 70 a routed find counts on disk (69/70, then 68/70, then 68/70) and vitest exited 1, but every one of the three logs was checked for an actual failure marker (`✗`/`✖`) and found none -- the only errors present are `[vitest-worker]: Timeout calling \"onTaskUpdate\"` RPC timeouts (2, then 4, then 6 of them), which is the vitest 3.0.8 report-loss-under-load failure mode this dispatch's own brief named in advance, not a test failure produced by this change. The dropped reports were in src/runtime (inbound.test.ts, inbound.batchIsolation.test.ts), not in src/tui. Nothing beyond tui-shell.ts:713 needed touching: cli-bridge.ts's parseCliOutcome, the pane, and the renderer were left exactly as the dispatch instructed, and the spec files' own passing confirms that decision was sufficient. Commit: none, per instruction.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Apply the filter at foldSetup (tui-shell.ts:713), matching note(); do not touch parseCliOutcome, the pane, or the renderer",
+      "status": "met",
+      "evidence": "The only diff in the tree is `git diff -- apps/cli/src/tui/tui-shell.ts` showing one hunk, +1/-1, at line 713: `failed: outcome.code` -> `failed: paintable(outcome.code)`. cli-bridge.ts, profiles-pane.ts and the renderer are unmodified (git status shows no changes to them). paintable is the same function note() already calls at tui-shell.ts:836."
+    },
+    {
+      "criterion": "The red specification (tui-shell.outcomeEscape.test.ts, 6/7 red) goes green without widening the change",
+      "status": "met",
+      "evidence": "`npx vitest run` over the three specification files together: 3 files passed (3), 18 tests passed (18), exit 0, 1.98s. tui-shell.outcomeEscape.test.ts alone: 7/7 passed."
+    },
+    {
+      "criterion": "The keystrokeDispatch regression guards (7 cases) and the strengthened registration probe stay green",
+      "status": "met",
+      "evidence": "tui-shell.keystrokeDispatch.test.ts: 7/7 passed inside the same 18/18 run. main.registration.processDriven.test.ts: 4/4 passed, including 'the environment probe reaches every spelling of a read, including the descriptor' seen in the full-package run."
+    },
+    {
+      "criterion": "profiles-pane.setup.test.ts stays 29/29, as the test author measured",
+      "status": "met",
+      "evidence": "src/tui scope run: `✓ src/tui/profiles-pane.setup.test.ts (29 tests)`, inside a 30/30-file, 299/299-test, exit-0 run."
+    },
+    {
+      "criterion": "Run the three specification files, then the whole apps/cli/src/tui, then the whole apps/cli package",
+      "status": "met",
+      "evidence": "All three scopes were run in that order. Spec files: 18/18, exit 0. src/tui: 30 files on disk (routed find), 30 reported, 299/299 tests, exit 0. Full package: 70 files on disk (routed find over src+test), reported 69/70 then 68/70 then 68/70 across three attempts under 1-minute load 91-111; every attempt's log was checked for `✗`/`✖` and none was found -- zero real test failures in any attempt, only vitest-3.0.8 report loss under load (RPC 'onTaskUpdate' timeouts), which is the exact failure class this dispatch's own brief pre-identified. See metrics.full_package_runs for all three."
+    },
+    {
+      "criterion": "Commit nothing",
+      "status": "met",
+      "evidence": "No git commit was made. `git status` still shows tui-shell.ts as the only modified source file relative to the pre-existing working tree changes already present at session start."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T22-implement-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The fix. foldSetup's `failed` field now reads `paintable(outcome.code)` instead of the raw `outcome.code`, at line 713. One line changed in the whole file.",
+      "hash": "015fabf400086438d78d1d9706682e769946648555679d59a4c332de63518baa"
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/tui/tui-shell.ts", "change": "modified" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_changed": 1,
+    "test_files_changed": 0,
+    "typecheck_exit_code": 0,
+    "spec_files_run": {
+      "scope": "apps/cli/src/tui/tui-shell.outcomeEscape.test.ts, tui-shell.keystrokeDispatch.test.ts, main.registration.processDriven.test.ts",
+      "tests": 18,
+      "passed": 18,
+      "failed": 0,
+      "vitest_exit_code": 0,
+      "duration_s": 1.98
+    },
+    "tui_scope_run": {
+      "scope": "apps/cli/src/tui",
+      "files_on_disk": 30,
+      "files_reported": 30,
+      "tests": 299,
+      "passed": 299,
+      "failed": 0,
+      "vitest_exit_code": 0,
+      "duration_s": 2.35,
+      "note": "profiles-pane.setup.test.ts: 29/29, unchanged from its pre-fix count."
+    },
+    "full_package_runs": [
+      { "attempt": 1, "files_on_disk": 70, "files_reported": 69, "tests_reported_total": 470, "tests_passed": 460, "vitest_exit_code": 1, "unhandled_rpc_timeout_errors": 2, "actual_test_failures": 0, "duration_s": 294.32, "load_1min_at_finish": 102.99 },
+      { "attempt": 2, "files_on_disk": 70, "files_reported": 68, "tests_reported_total": 470, "tests_passed": 449, "vitest_exit_code": 1, "unhandled_rpc_timeout_errors": 4, "actual_test_failures": 0, "duration_s": 303.99, "load_1min_at_finish": 75.48 },
+      { "attempt": 3, "files_on_disk": 70, "files_reported": 68, "tests_reported_total": 470, "tests_passed": 449, "vitest_exit_code": 1, "unhandled_rpc_timeout_errors": 6, "actual_test_failures": 0, "duration_s": 347.24, "load_1min_at_finish": 60.05 },
+      { "attempt": "reconciliation", "note": "All three logs searched for `✗`/`✖` (a routed rg over the captured log files, not the truncated summary): zero matches in any of them beyond the substring 'FAILURE' inside passing test names like PERSISTENCE_FAILURE. Every failure vitest reports is an unhandled 'onTaskUpdate' RPC timeout, which the dispatch brief named in advance as vitest 3.0.8's known report-loss mode under load, not a test that ran and failed. The two files vitest lost a report for across attempts 2 and 3 were src/runtime/inbound.test.ts and src/runtime/inbound.batchIsolation.test.ts -- outside src/tui and outside anything this change touches. A fourth attempt was not made: load stayed at 60-111 across all three tries with no clear downward trend, and the src/tui-scoped run (the actual surface of this change) already completed cleanly at 30/30 files and 299/299 tests, exit 0." }
+    ],
+    "machine_idle": false,
+    "load_note": "1-minute load average at each measurement, in order: 16.84 (before spec run) -> 16.53 (before tui-scope run) -> 15.19 (after tui-scope run) -> 13.57 (before full attempt 1) -> 102.99 (after attempt 1, the run's own ten workers plus the operator's VM/browser) -> 91.72 (before attempt 2) -> 75.48 (after attempt 2) -> 56.44 (before attempt 3) -> 60.05 (after attempt 3). The machine was never idle at any measurement; the full-package run itself is the dominant contributor to its own load spike.",
+    "discipline": "Every vitest and tsc run was redirected whole to a scratchpad log file and read back with the Read tool; nothing was piped through head or tail. Every exit code was captured with `echo \"EXIT_X=$?\"` appended by `>>` on the line immediately following the command in the same shell invocation, never through a wrapper whose own final command could report its own status. Reported file counts (18 spec tests needed no count; 30 for src/tui; 70 for the package) were checked against `find ... -name '*.test.ts' -o -name '*.test.mjs'` run through the routed command wrapper, not assumed from the vitest summary line. Every code search (`paintable`, `StepOutcome`, failure markers in the captured logs) went through the routed rg wrapper, with the raw log read directly for the `paintable` search because its summary showed 4 of 15 matches.",
+    "routing_audit": {
+      "graph_used": "no -- not-relevant: the commissioning dispatch and the T18/T21 results named the exact file and line (tui-shell.ts:713) and the exact function (foldSetup); no navigation question existed",
+      "wiki_used": "no -- not-relevant: the question was 'does one filter call turn seven red cases green without disturbing 29 pane cases', settled by execution",
+      "ctx_used": "yes -- keryx ctx run for git diff/status and for every find/uptime/date command, keryx ctx rg for every code and log search",
+      "raw_rg_used": "no",
+      "testing_context_used": "no -- the dispatch named the exact three scopes to run in the exact order; no test-selection question existed",
+      "memory_used": "no -- not-relevant: the flow's own 004-T21-tests-result.json and 004-T18-verify-result.json carried the full history and the resolved Q-001 this task needed"
+    }
+  },
+  "timestamp_utc": "2026-09-09T05:24:55Z"
+}
