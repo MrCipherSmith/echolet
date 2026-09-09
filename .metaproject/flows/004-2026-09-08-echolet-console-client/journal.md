@@ -88,3 +88,4 @@
 - 2026-09-09T08:31:36.150Z - task-added: T30: Stop naming a key that does nothing, and stop leaving a child alive after the operator quits
 - 2026-09-09T09:01:20.919Z - task-added: T31: The gate must finish its verdict when vitest loses a report, not refuse it
 - 2026-09-09T09:01:28.309Z - task-attempt: T31: started (attempt 1) — Measured three times identically: 75 of 77 files reported, 496 of 517 tests, six RPC timeouts, zero failing tests. Serial execution reports all 77 and 517 in 504s against 296s, so the loss is a starved worker rather than noise - and the gate now blocks every push. The repair must keep the parallel run, because it is also the only thing that stresses cross-file interference.
+- 2026-09-09T09:43:02.713Z - task-done: T31: The gate must finish its verdict when vitest loses a report, not refuse it

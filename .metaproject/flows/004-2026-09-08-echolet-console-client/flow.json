@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T09:01:28.309Z",
+  "updatedAt": "2026-09-09T09:43:02.713Z",
   "source": {
     "type": "description",
     "ref": null
@@ -665,7 +665,7 @@
       "id": "T31",
       "title": "The gate must finish its verdict when vitest loses a report, not refuse it",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -679,7 +679,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -1120,6 +1121,11 @@
       "at": "2026-09-09T09:01:28.309Z",
       "event": "task-attempt",
       "detail": "T31: started (attempt 1) — Measured three times identically: 75 of 77 files reported, 496 of 517 tests, six RPC timeouts, zero failing tests. Serial execution reports all 77 and 517 in 504s against 296s, so the loss is a starved worker rather than noise - and the gate now blocks every push. The repair must keep the parallel run, because it is also the only thing that stresses cross-file interference."
+    },
+    {
+      "at": "2026-09-09T09:43:02.713Z",
+      "event": "task-done",
+      "detail": "T31: The gate must finish its verdict when vitest loses a report, not refuse it"
     }
   ]
 }
