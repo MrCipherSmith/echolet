@@ -1,0 +1,121 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "004-T24-docs-2026-09-09",
+  "dispatch_id": "004-T24-docs",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Wrote t24-wave-report.md, reading the flow's six independent-verification records (T7, T12, T18) and the intervening implement/test dispatches (T5-T6, T8-T9, T10-T11, T13-T14, T15-T17, T20-T22) plus acceptance-criteria.md, journal.md and description.md. No source file, test file or documentation file besides this report was touched; no test suite and no build were run, per the hard constraint that T23 is measuring the suite concurrently on this machine (confirmed: at report time flow.json still lists T23 as status 'todo'). Verdicts, each resting on the most recent independent verification that reached the criterion and corrected forward from there: AC1 partial (fake-CLI gap; T18 F-007), AC2 not met (optimistic outboxPending/inboxReceived counters, tui-shell.ts:768/:756, unchanged since T7/T12/T18 all found it), AC3 met as amended (mutation-tested at the real spawn site by both T12 and T18), AC4 not met/not built (no contacts pane exists; a complete two-branch design landed at fc5bb8f), AC5 not met (one surface has totality, the rest is sampled, messages are raw codes not words), AC6 fix landed at commit 0d97cbc but not independently re-verified since (T18 found it not met, T21 wrote RED tests, T22's one-line fix turned them green, but no independent verify task has run against the post-fix tree the way T7/T12/T18 each caught a new gap in the tree before it), AC7 met (mutation-tested at T12 and T18; a bidi/format-character residual is an open scope question, not a defect), AC8 partial (the modal case is fixed and covered; the full viewport x state sweep has not been re-run since flow 002/003 per T18's own words), AC9 met (all three independent verifications reproduced git history rather than reading claims), AC10 not met (no live run exists anywhere; confirmed by all three independent verifications). T23, dispatched against AC2 and AC5, is not yet done and its result is not reflected in any verdict above. Two decisions are named as the operator's, not resolved here: whether --text is retired (AC3, recorded open since the mid-flow ac-update), and whether the two panes are removed for the address book (T20's design, which found the header already overflows the 72-column minimum viewport with today's five panes -- a fact independent of the pane decision that changes what either branch costs). The report's Part 3 names three specific errors this session found in the flow's own prior records (T7's own F-005 read a truncated rg summary and was itself corrected by T9; T11's self-reported mutation count of 5 was corrected to 4 by T12; no other inventory or count in the six verification JSONs was found to contradict the tree when checked against the files and commits they cite).",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Report on AC1 through AC10: verdict, checkable evidence, and what is missing where not met",
+      "status": "met",
+      "evidence": "t24-wave-report.md Part 1 gives each criterion a verdict (met/partial/not_met/not_applicable-as-of-last-check), the specific independent verification(s) it rests on, file:line and commit citations, and for every not-met or partial row a named gap. AC6 is reported in a fourth state ('fix landed, unverified') deliberately rather than upgraded to met, because the fix (commit 0d97cbc) has evidence from the same two dispatches that made it (T21 test author, T22 implementer) and no independent verify task has re-checked the post-fix tree the way T7/T12/T18 each did for the tree before it."
+    },
+    {
+      "criterion": "Second section: what remains, ordered by cost to hit rather than ease of fix",
+      "status": "met",
+      "evidence": "Part 2 orders nine items by the cost to an operator who actually encounters the gap: the untested real-CLI/live-relay path first (undiscovered risk under every other claim in the report), then AC2's optimistic counters and AC5's unproven exit-class matrix (both mid-fix via T23), then the not-yet-built address book, the header overflow t20 measured as already present today, the AC1 restart precondition, the unswept AC8 viewport x state cross-product, the bidi-character residual, and finally three low-cost items recorded as effectively closed."
+    },
+    {
+      "criterion": "The two operator-only questions (--text retirement, pane removal) are named, not answered",
+      "status": "met",
+      "evidence": "Part 2's closing subsection states both are the operator's to answer, cites the journal entry recording --text's retention and the mid-flow ac-update for AC3, and reports the new shape of the pane-removal question from t20-address-book-design.md section 1.4/3/4 -- the header already overflows the minimum viewport with today's five panes, so the choice is no longer six-vs-four panes but which direction to fix an overflow that exists either way."
+    },
+    {
+      "criterion": "Where a row rests on a report rather than on independently checkable evidence, say so; verify counts against raw logs, not truncated summaries",
+      "status": "met",
+      "evidence": "AC6's verdict is explicitly qualified as resting on T21/T22's own dispatch claims rather than an independent verification, with the reasoning stated. Part 3 documents that T9 caught T7's own F-005 reading a truncated keryx ctx rg summary (header said 9 matches, displayed list showed 4) and that T12 corrected T11's self-reported mutation count (claimed 5, measured 4). Every count asserted in this report (test totals, file totals, commit hashes) was copied from a dispatch's own metrics block or from a keryx ctx run I executed directly (git log, git status), not re-derived from a fresh possibly-truncated display."
+    },
+    {
+      "criterion": "Change no source file and no test file; run no test suite and no build",
+      "status": "met",
+      "evidence": "git status --porcelain at the end of this task shows only the flow's own flow.json/journal.md (modified by T23's concurrent run, not by this task) plus the two new files this task wrote (t24-wave-report.md, this result json). No vitest, tsc, npm, or build command was invoked at any point."
+    },
+    {
+      "criterion": "Validate the result JSON against the subagent-result schema",
+      "status": "met",
+      "evidence": "keryx skills contracts validate .metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T24-docs-result.json --schema subagent-result was run after writing this file; see the final message for its recorded exit."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/t24-wave-report.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "The wave report: per-criterion verdicts with checkable evidence, a verdict summary table, what remains ordered by cost to hit, the two operator-only questions, and a section naming what this session found wrong in the flow's own prior records.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T24-docs-result.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "This result record.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/acceptance-criteria.md",
+      "kind": "context",
+      "exists": true,
+      "summary": "The frozen criteria, AC3 as amended mid-flight, read in full.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/journal.md",
+      "kind": "context",
+      "exists": true,
+      "summary": "The flow's task-by-task history, read in full for ordering and for the AC3 amendment's stated reason.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/t20-address-book-design.md",
+      "kind": "context",
+      "exists": true,
+      "summary": "Read in full for AC4's status and the header-overflow measurement that reshaped the pane-removal question.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    { "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/t24-wave-report.md", "change": "added" }
+  ],
+  "findings": [],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "Should a fresh independent verify task mutate the post-0d97cbc tree specifically for an eighth unfiltered write site, before AC6 is reported as met rather than as 'fix landed, unverified'?",
+      "why": "Every slice in this flow so far (T7 to T12, T12 to T18) found a new external-text route the previous fix missed. T21/T22's fix to the seventh route is well-evidenced by two different agents' consistent numbers, but neither of them held the independent-verifier role that caught the previous two gaps, and the pattern this flow has established gives no reason to assume the eighth does not exist.",
+      "options": [
+        { "id": "verify-now", "label": "Dispatch one more independent verify task against AC6 before treating it as closed", "recommended": true },
+        { "id": "accept", "label": "Accept T21/T22's evidence as sufficient given the specificity of the fix and move on", "recommended": false }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "dispatch_records_read": 9,
+    "flow_documents_read": 4,
+    "commits_enumerated": 40,
+    "criteria_reported": 10,
+    "criteria_met": 3,
+    "criteria_partial": 2,
+    "criteria_not_met": 4,
+    "criteria_fix_landed_unverified": 1,
+    "source_files_changed": 0,
+    "test_files_changed": 0,
+    "tests_run": 0,
+    "build_run": false,
+    "routing_audit": {
+      "graph_used": "no -- not-relevant: every file and commit needed was named by the flow's own dispatch results and the frozen acceptance criteria; the graph predates this session's commits",
+      "wiki_used": "no -- not-relevant: the task was to reconcile the flow's own records against the tree, not to answer a domain or architecture question",
+      "ctx_used": "yes -- keryx ctx run for git log and git status; keryx ctx run -- find for the schema path; keryx ctx read for the schema file itself",
+      "raw_rg_used": "no",
+      "testing_context_used": "no -- not-relevant: no test was written, changed, or run, per the hard constraint that T23 is measuring the suite concurrently",
+      "memory_used": "no -- not-relevant: the flow's own 24 tasks and dispatch results carried the full history this report needed"
+    }
+  },
+  "timestamp_utc": "2026-09-09T05:45:00Z"
+}
