@@ -42,3 +42,10 @@
 - 2026-09-09T03:31:56.076Z - task-attempt: T17: started (attempt 1) — Owner decision: the startup probe stays - the design requires it, all three registration cases rest on it, and it arms the store-key probe. The flow-003 test's complete-list assertions are corrected, not relaxed; its three properties must survive intact.
 - 2026-09-09T03:43:51.579Z - task-done: T16: Implement registration from inside the console, keeping the store key out of the process
 - 2026-09-09T03:43:53.537Z - task-done: T17: Reconcile the flow-003 driven test with the startup profile probe, without weakening it
+- 2026-09-09T04:05:11.585Z - task-done: T13: RED tests: peer-controlled escape sequences must not reach a frame, and the submit path must hold the single-flight rule
+- 2026-09-09T04:05:13.783Z - task-done: T15: RED tests for registration from inside the console: the six-step checklist on the profiles pane
+- 2026-09-09T04:05:20.689Z - task-done: T17: Reconcile the flow-003 driven test with the startup profile probe, without weakening it
+- 2026-09-09T04:05:22.772Z - task-done: T1: Collect remaining context
+- 2026-09-09T04:05:22.882Z - task-done: T2: Implement per plan
+- 2026-09-09T04:05:22.967Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-09T04:05:23.071Z - task-done: T4: Self-review and prepare draft PR

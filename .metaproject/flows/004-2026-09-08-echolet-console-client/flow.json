@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T03:43:53.537Z",
+  "updatedAt": "2026-09-09T04:05:23.071Z",
   "source": {
     "type": "description",
     "ref": null
@@ -25,7 +25,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -33,14 +33,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Boilerplate created by flow init; this wave is driven by the T5-T17 chain and never used these."
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -48,14 +50,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Boilerplate created by flow init; this wave is driven by the T5-T17 chain and never used these."
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -63,14 +67,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Boilerplate created by flow init; this wave is driven by the T5-T17 chain and never used these."
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -78,7 +84,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Boilerplate created by flow init; this wave is driven by the T5-T17 chain and never used these."
     },
     {
       "id": "T5",
@@ -266,7 +274,7 @@
       "id": "T13",
       "title": "RED tests: peer-controlled escape sequences must not reach a frame, and the submit path must hold the single-flight rule",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T12"
       ],
@@ -282,7 +290,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
@@ -311,7 +320,7 @@
       "id": "T15",
       "title": "RED tests for registration from inside the console: the six-step checklist on the profiles pane",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T14"
       ],
@@ -327,7 +336,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T16",
@@ -584,6 +594,41 @@
       "at": "2026-09-09T03:43:53.537Z",
       "event": "task-done",
       "detail": "T17: Reconcile the flow-003 driven test with the startup profile probe, without weakening it"
+    },
+    {
+      "at": "2026-09-09T04:05:11.585Z",
+      "event": "task-done",
+      "detail": "T13: RED tests: peer-controlled escape sequences must not reach a frame, and the submit path must hold the single-flight rule"
+    },
+    {
+      "at": "2026-09-09T04:05:13.783Z",
+      "event": "task-done",
+      "detail": "T15: RED tests for registration from inside the console: the six-step checklist on the profiles pane"
+    },
+    {
+      "at": "2026-09-09T04:05:20.689Z",
+      "event": "task-done",
+      "detail": "T17: Reconcile the flow-003 driven test with the startup profile probe, without weakening it"
+    },
+    {
+      "at": "2026-09-09T04:05:22.772Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-09T04:05:22.882Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-09T04:05:22.967Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-09T04:05:23.071Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }
