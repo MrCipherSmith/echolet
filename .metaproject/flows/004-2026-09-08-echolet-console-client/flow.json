@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T01:48:39.845Z",
+  "updatedAt": "2026-09-09T02:06:42.763Z",
   "source": {
     "type": "description",
     "ref": null
@@ -283,6 +283,28 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Close the escape-sequence hole at the six narrowing boundaries, and keep the submit path single-flight",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T02:06:42.763Z",
+            "outcome": "started",
+            "detail": "A fresh agent, not the test author and not the orchestrator. Six narrowing functions, not the renderer; the zero-width joiner must survive, which catches a strip-every-format-character fix."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -438,6 +460,16 @@
       "at": "2026-09-09T01:48:39.845Z",
       "event": "task-attempt",
       "detail": "T13: started (attempt 1) — Security first: a peer controls the plaintext of an inbound message, and it reaches a frame unfiltered. Three other paths do too. Second, the single-flight rule on the submit path, whose mutation survived and is reachable in two keystrokes."
+    },
+    {
+      "at": "2026-09-09T02:06:37.104Z",
+      "event": "task-added",
+      "detail": "T14: Close the escape-sequence hole at the six narrowing boundaries, and keep the submit path single-flight"
+    },
+    {
+      "at": "2026-09-09T02:06:42.763Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — A fresh agent, not the test author and not the orchestrator. Six narrowing functions, not the renderer; the zero-width joiner must survive, which catches a strip-every-format-character fix."
     }
   ]
 }

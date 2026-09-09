@@ -1,0 +1,217 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-004-t14-implement",
+  "dispatch_id": "004-T14-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "One source file changed, apps/cli/src/tui/tui-shell.ts, and no test file touched. ONE predicate and ONE filter serve every route: `steersTheDisplay` (C0/DEL/C1 plus the fourteen display-steering points) and `paintable`, applied at five write sites — `readHistoryEntries`, `readRejections`, `applyOutcome`'s doctor case, `note`, and the shell's trust listener — and inherited by the sixth, `observeContact`, because the listener is the sole writer of `state.modal` and the roster is copied out of a modal that is already clean. `reduce`'s compose-buffer filter now calls the same `paintable` instead of the narrower `withoutControlPoints`, so the two boundaries hold one predicate rather than two that have to be kept in agreement. The routes needed no different treatment, which is the measurable shape of the defect: it was never six defects but one missing narrowing act repeated at six writers of external-origin fields, and the six functions were already narrowing by FIELD and simply not by BYTE. A SECOND, smaller source change was forced by the specification and is reported rather than hidden: T13-H's first test ends by pressing Ctrl-C with the trust modal open, and on the pre-existing tree no key at all leaves the console from that state (004-T12-verify F-005), so with the security assertions passing the test stopped failing and started TIMING OUT at 30 s. Ctrl-C is now bound in `mapKey`'s modal branch, ahead of `modalIntent`, which is the fix F-005 itself recommends and the only one of its two options the existing tests permit — `modal-host.test.ts` pins TRUST_MODAL_FOOTER to exactly y/n/esc, so naming the way out in the footer instead is not available, and `modalIntent`'s refusal of every modified key is untouched. Measured on a 10-core host that was never idle, whole logs captured to files and read after the fact, never piped through head or tail: the three specification files 38/38 passed (exit 0) at 1-min load 15.9; the whole src/tui directory 25 files / 212 tests passed (exit 0) at load 15.8, against the 22/174 baseline plus this dispatch's 3 files and 38 tests; the whole apps/cli package 65 files / 383 tests passed (exit 0) in 240 s with the 1-min load at 47.7 when it finished, against a 62/345 baseline and 65 *.test.ts files counted on disk, so no file lost its report; `tsc -p apps/cli --noEmit` exit 0 at load 39.6. Three self-mutations were applied and each was killed, then reverted in the same step.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "No text originating outside the console can put a control, escape or display-steering code point into a frame — all six routes, not the four the verification listed",
+      "status": "met",
+      "evidence": "All 38 assertions of the three specification files pass, 24 + 6 of which were red on af196f1. Routes 1 and 2 (an inbound message's plaintext plus its two identifiers; a rejection's envelopeId and code) are filtered in `readHistoryEntries` and `readRejections`; route 5 (doctor's identity_id/device_id, the route the verification excluded) in `applyOutcome`'s doctor case; route 3 (the CLI's error code) inside `note`, which covers every caller present and future rather than the one interpolation; route 4 (the trust identifiers) in the shell's `onTrustIdentifiers` listener; route 6 (the roster) by inheritance from route 4. Mutation D below proves the inheritance is real rather than assumed."
+    },
+    {
+      "criterion": "The filtering is at the narrowing functions that WRITE each external-origin field, not in the renderer",
+      "status": "met",
+      "evidence": "No file outside `tui-shell.ts` is touched: `shell-chrome.ts`, `history-pane.ts`, `profiles-pane.ts`, `mailbox-pane.ts`, `modal-host.ts` and `text.ts` are unchanged, so no renderer defends itself and `renderFrame` still filters nothing. The 24 state-level assertions in tui-shell.externalText.test.ts, which deliberately do not import `renderFrame`, are green — the outcome a renderer-side fix cannot produce. The filter also stayed in `tui-shell.ts` rather than moving to the `text.ts` leaf because all six writers live in this one file; the day a seventh lives elsewhere is the day it earns a move."
+    },
+    {
+      "criterion": "The zero-width joiner survives; the fourteen display-steering points do not",
+      "status": "met",
+      "evidence": "`steersTheDisplay` is an enumeration of what steers a display and explicitly not the Unicode `Cf` category: U+200E, U+200F, U+202A-U+202E, U+2066-U+2069, U+2028, U+2029, U+FEFF are refused, and U+200B, U+00AD, U+200D are not named in either direction. T13-E's positive assertion — an emoji ZWJ sequence still composes — passes, and mutation A (narrowing the predicate back to C0/DEL/C1) is killed by 20 assertions, so neither half is decorative. The filter iterates by code point, so an astral pair is never split; the benign control case asserts a Cyrillic/emoji/CJK body byte-for-byte unchanged, and the purity case asserts the parsed JSON handed to `applyOutcome` is not written back through."
+    },
+    {
+      "criterion": "Edit no test file",
+      "status": "met",
+      "evidence": "`git status --porcelain apps/` reports exactly one changed path, `apps/cli/src/tui/tui-shell.ts`; `git diff --stat apps/` reports one file, 146 insertions and 24 deletions. The three specification files are the committed af196f1 versions, untouched. The one test that could not pass against the source as it stood is reported as a finding and closed in the source, not edited."
+    },
+    {
+      "criterion": "Run the three specification files, then src/tui, then the whole apps/cli package",
+      "status": "met",
+      "evidence": "In that order, whole logs captured to files: 3 files / 38 tests passed, exit 0; 25 files / 212 tests passed, exit 0; 65 files / 383 tests passed, exit 0, 240.56 s. Guards against a lying run under load: the reported file count equals the 65 *.test.ts files counted on disk; both smaller runs were re-executed after the mutation work and reproduced 212/212 on the restored tree; and each of the three mutations discriminated correctly between mutant and clean on the same tree within seconds."
+    },
+    {
+      "criterion": "Commit nothing",
+      "status": "met",
+      "evidence": "No git command that writes was run. The working tree carries the one source change plus the flow files that were already modified when this dispatch began."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/src/tui/tui-shell.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The whole change. `steersTheDisplay` / `paintable` / `paintableIdentifiers` replace `isControlPoint` / `withoutControlPoints`; the filter is applied at five write sites and inherited at the sixth; `mapKey`'s modal branch binds Ctrl-C ahead of `modalIntent`.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T14-implement-result.json",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "This record.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/tui/tui-shell.ts",
+      "change": "modified"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T14-implement#F-001",
+      "reviewer": "004-T14-implement",
+      "severity": "major",
+      "file": "apps/cli/src/tui/tui-shell.externalTextViewport.test.ts",
+      "line": 251,
+      "symbol": "T13-H > does not write an escape sequence that arrived as a trust identifier",
+      "problem": "The specification cannot pass without also closing 004-T12-verify's F-005, and it does not say so. That test's last two lines are `shell.press(CTRL_C); await shell.finished;` while the trust modal is still open — the sibling test reaches the same lines with the modal already cleared by `y`, which is why only this one is affected. On the pre-existing tree `mapKey`'s modal branch consults `modalIntent`, which returns undefined for every `key.ctrl`, so Ctrl-C is swallowed, `runTuiShell` never settles and the test does not fail — it TIMES OUT at 30 s. On af196f1 that was invisible: the test was already red at its first assertion, so it never reached the teardown.",
+      "impact": "Reported rather than fixed silently, because it puts a source change outside this dispatch's stated class. Measured before the second change: `Test Files 1 failed | 2 passed (3) / Tests 1 failed | 37 passed (38)`, the one failure being `Test timed out in 30000ms`, and the run taking 30.56 s instead of 0.86 s. The security assertions of that very test all passed at that point, so the escape-free property was met and the file was red anyway.",
+      "suggested_fix": "Taken: Ctrl-C is bound in `mapKey`'s modal branch, ahead of `modalIntent`, which is verbatim what F-005 recommends and the same shape `inputKey` already uses. It is also the only one of F-005's two options the existing tests permit — `modal-host.test.ts:131` pins `TRUST_MODAL_FOOTER` to exactly y/n/esc, so adding `esc cancels, then q quits` to the footer would have turned a green test red. `modalIntent` is untouched, so `modal-host.test.ts:125`'s near-miss rule (Ctrl-Y is not a confirmation) still holds, and `tui-shell.test.ts:89`'s exclusive-control assertion is unaffected because it tests no modified key. AC8's modal-open clause is closed as a side effect. If the flow judges this out of scope, the alternative is to leave the file red and record why; there is no third option that does not edit the test.",
+      "evidence": "Before: the timing-out run above. After: 38/38 passed, exit 0, 0.86 s. The whole package stayed green, so nothing pinned the swallowed Ctrl-C.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:74"
+        ],
+        "enumeration_method": "Every key path out of an open modal was traced. `mapKey`'s modal branch is the only decision point: `modalIntent` (modal-host.ts:153) refuses all modified keys, and mapKey returns undefined for anything that is not y/n/escape, so no other binding could have quit. The change adds exactly one key in exactly one state and leaves `modalIntent` and every footer unchanged."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T14-implement#F-002",
+      "reviewer": "004-T14-implement",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 680,
+      "symbol": "runTuiShell > io.onTrustIdentifiers listener",
+      "problem": "Two strings a frame carries are still unfiltered by deliberate choice, and both are named here so the exclusion is a decision rather than an oversight: the trust modal's `cardPath` and `profileLabel`. They are painted by `renderModal`, and they are excluded on the same ground 004-T12-verify excluded ProfileView's label/relayUrl/profileDir — they come from the operator's own argv (`--card`, `--label`), so the only actor who can steer the terminal with them is the operator, at their own keyboard.",
+      "impact": "None today. It becomes real the moment a card path or a profile label arrives from anywhere but argv — a config file, a discovered card directory, a scripted mode — at which point they join the class and need the same one-line treatment. The same is true of `ProfileView.label`, `.relayUrl`, `.profileDir` and `.storeKeyEnv`.",
+      "suggested_fix": "No change now. If a later task makes any of those five values arrive from outside the operator's own command line, wrap them in `paintable` at whatever narrows them, which for argv is `parseOptions` (main.ts:111-126).",
+      "evidence": "`parseOptions` is the sole writer of all five; `applyOutcome`'s doctor case is the only writer of a ProfileView string from outside the process, and it writes exactly identityId and deviceId, both now filtered.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T14-implement#F-003",
+      "reviewer": "004-T14-implement",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 631,
+      "symbol": "runTuiShell > observeContact",
+      "problem": "The roster route is closed by inheritance rather than by its own filter, which is a deliberate choice with a stated precondition: the trust listener is the SOLE writer of `state.modal` (`reduce` only ever clears it, `createInitialState` starts it undefined), and `observeContact` is only ever handed a modal that listener wrote. A second writer of `modal` would reopen the roster route without touching `observeContact`.",
+      "impact": "None today and proved rather than asserted: mutation D — restoring `identifiers: { ...input.identifiers }` at the listener and changing nothing else — turns BOTH T13-H tests red, including the roster one, whose failure lists the hostile U+001B, U+0007 and U+202E on frames painted after the modal closed. So the roster really does inherit, and the inheritance really does depend on that single writer.",
+      "suggested_fix": "None. The precondition is written into the code at both ends — the listener says the roster inherits from it, `observeContact` says it inherits and why a second filter would be worse. 004-T12-verify's F-007 already recommends routing that listener through an intent if it ever becomes reachable from a composing state; doing so would keep this property by construction.",
+      "evidence": "Mutation D: `Tests 2 failed | 5 passed (7)`, the roster assertion failing at externalTextViewport.test.ts:288 with the three foreign points listed. Reverted in the same step; the restored tree runs 212/212.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-004",
+      "global_id": "004-T14-implement#F-004",
+      "reviewer": "004-T14-implement",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 354,
+      "symbol": "steersTheDisplay",
+      "problem": "What a hostile correspondent can still do, stated so it is not mistaken for nothing. The filter removes code points; it does not make a body honest. A correspondent can still send text that IMPERSONATES the console's chrome — a plaintext reading `q          quit (ctrl-c also quits)`, or one shaped like an activity line or a pane header — because those are ordinary printable characters and no filter can tell them from prose. They can still send U+200B, U+00AD and U+200D, which this specification deliberately leaves alone; a run of ZWJ or soft hyphens is invisible padding that can push text within a line. They can still send homoglyphs — Cyrillic а for Latin a in an identifier — which is a comparison hazard the trust modal does not address. And a body is still clipped to the pane width by code point, so a wide CJK or combining-mark body renders at a width the frame did not intend, which flow 002 recorded as out of scope for this prototype.",
+      "impact": "None of these executes anything or steers the terminal: the class this dispatch closes — the terminal ACTING on bytes it was handed — is closed at all six routes. What remains is the class where the operator misreads honest characters, which is a rendering and provenance problem rather than an injection one.",
+      "suggested_fix": "Nothing here. If the flow wants the impersonation half addressed, the seam is the pane formatters, which could mark peer-supplied text as such rather than paint it in the same column as the console's own labels; that is a design decision and a separate task.",
+      "evidence": "By construction of `steersTheDisplay`, which is an enumeration of fourteen display-steering points plus C0/DEL/C1 and nothing else, and by the T13-D control case, which requires a benign body to survive byte-for-byte.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Is binding Ctrl-C in the trust modal (F-001) accepted as part of this dispatch, or should it be split into its own task against AC8?",
+      "why": "It is a source change outside the escape-filtering class, and it was forced by the specification rather than chosen: the T13-H route-4 test times out without it, and the test may not be edited. It is one line, it is verbatim 004-T12-verify's F-005 suggested fix, it breaks nothing in the 383-test package, and it closes AC8's modal-open clause. But it does widen what this dispatch changed, and the flow may prefer that recorded separately.",
+      "options": [
+        {
+          "id": "keep",
+          "label": "Keep it here: the specification cannot go green without it and no test pinned the old behaviour",
+          "recommended": true
+        },
+        {
+          "id": "split",
+          "label": "Revert it, leave the route-4 test timing out, and raise AC8's modal-open clause as its own task",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q2",
+      "question": "004-T13-tests' Q1 and Q2 are still open and this implementation answered both by following the tests. Should either answer be revisited?",
+      "why": "The tests as written specify `keep` for T13's Q1 (one predicate at both boundaries, so the compose buffer now refuses the same fourteen points the inbound routes do) and `silent` for its Q2 (the offending points are removed and the printable remainder kept, with no visible marker). Both are the recommended options and both are now implemented; recording them here so that neither is treated as having been decided by an implementer's default. If a marker is wanted in place of a removed point, that is a further assertion plus a design decision, not a defect in what landed.",
+      "options": [
+        {
+          "id": "as-specified",
+          "label": "Leave both as the tests specify: one predicate at both boundaries, silent removal",
+          "recommended": true
+        },
+        {
+          "id": "revisit",
+          "label": "Reopen either question, which changes the tests first and then this filter",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_changed": 1,
+    "test_files_changed": 0,
+    "filter_predicates": 1,
+    "filter_write_sites": 5,
+    "routes_closed": 6,
+    "routes_closed_by_inheritance": 1,
+    "display_steering_points_refused": 14,
+    "format_characters_deliberately_left_alone": 3,
+    "spec_files_tests": 38,
+    "spec_files_passed": 38,
+    "spec_files_vitest_exit_code": 0,
+    "src_tui_files": 25,
+    "src_tui_tests": 212,
+    "src_tui_passed": 212,
+    "src_tui_vitest_exit_code": 0,
+    "apps_cli_files_reported": 65,
+    "apps_cli_files_on_disk": 65,
+    "apps_cli_tests": 383,
+    "apps_cli_passed": 383,
+    "apps_cli_failed": 0,
+    "apps_cli_vitest_exit_code": 0,
+    "apps_cli_duration_s": 240.56,
+    "typecheck_exit_code": 0,
+    "lint_available": false,
+    "mutations_applied": 3,
+    "mutations_killed": 3,
+    "mutations_survived": 0,
+    "mutation_detail": [
+      "A — `steersTheDisplay` narrowed back to C0/DEL/C1 alone: killed by 20 of the 34 assertions in the two external-text files (`Tests 20 failed | 14 passed (34)`), so the fourteen display-steering points are load-bearing at both boundaries",
+      "B — `paintable` removed from `note`: killed by 4 of the 7 driven assertions (`Tests 4 failed | 3 passed (7)`), the four T13-G cases, so route 3 is covered by more than one payload shape",
+      "D — `paintableIdentifiers` removed from the trust listener, `observeContact` untouched: killed by BOTH T13-H tests (`Tests 2 failed | 5 passed (7)`), including the roster assertion at externalTextViewport.test.ts:288, which proves route 6 genuinely inherits from route 4's site rather than needing its own"
+    ],
+    "tree_restored_after_mutations": true,
+    "machine_idle": false,
+    "load_average_1min_at_first_spec_run": 11.79,
+    "load_average_1min_at_green_spec_run": 15.92,
+    "load_average_1min_at_src_tui_run": 15.82,
+    "load_average_1min_at_apps_cli_run_end": 47.7,
+    "load_average_1min_at_typecheck": 39.59,
+    "load_note": "A 10-core host carrying the operator's own VM and browser, never idle: the 1-minute load ranged from 11.8 to 47.7 across the measurements, and the whole-package run finished green while the 1-minute load stood at 47.7, so it was measured UNDER load rather than on a quiet machine. Guards against vitest 3.0.8 losing a file's report and exiting 1 with zero failures: the package run reported 65 files against 65 *.test.ts counted on disk with `find`, and 383 tests against a 345 baseline plus this dispatch's 38; every figure came from a whole log captured to a file and read after the fact, never piped through head or tail; the src/tui run was executed twice, before and after the mutation work, and reproduced 25/212 both times; and all three mutations discriminated correctly between mutant and clean on the same tree seconds apart. The one 30 s figure in this report is a real Ctrl-C hang, not a load artefact — it reproduced deterministically and disappeared the moment the key was bound.",
+    "git_status_after_apps": " M apps/cli/src/tui/tui-shell.ts"
+  },
+  "timestamp_utc": "2026-09-09T02:25:00Z"
+}

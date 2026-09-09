@@ -31,3 +31,5 @@
 - 2026-09-09T01:48:31.182Z - task-done: T12: Independent verification of the input mode: is the console's send path real, and are the old properties intact
 - 2026-09-09T01:48:33.215Z - task-added: T13: RED tests: peer-controlled escape sequences must not reach a frame, and the submit path must hold the single-flight rule
 - 2026-09-09T01:48:39.845Z - task-attempt: T13: started (attempt 1) — Security first: a peer controls the plaintext of an inbound message, and it reaches a frame unfiltered. Three other paths do too. Second, the single-flight rule on the submit path, whose mutation survived and is reachable in two keystrokes.
+- 2026-09-09T02:06:37.104Z - task-added: T14: Close the escape-sequence hole at the six narrowing boundaries, and keep the submit path single-flight
+- 2026-09-09T02:06:42.763Z - task-attempt: T14: started (attempt 1) — A fresh agent, not the test author and not the orchestrator. Six narrowing functions, not the renderer; the zero-width joiner must survive, which catches a strip-every-format-character fix.
