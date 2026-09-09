@@ -1,0 +1,246 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "004-T27-tests-2026-09-09",
+  "dispatch_id": "004-T27-tests",
+  "status": "DONE",
+  "summary": "Two test files, twelve cases, nine of them red for the two defects 004-T25-verify measured and three of them green as the pairs that kill a degenerate repair. No source file was changed: `git diff --stat -- apps packages docs deploy` is empty and `git status --short` shows exactly two untracked additions, both test files. DEFECT ONE (F-001, the message that arrives and cannot be read): apps/cli/src/tui/history-pane.readable.test.ts pins the property AT ANY SUPPORTED WIDTH, THE MESSAGE BODY GETS AT LEAST HALF THE ROW, stated as a function of the width rather than as a table, and the failure message reproduces the verifier's own measurement to the character -- `showed 20 of 36 characters at 72x16`. Half, because the metadata on that row exists to DESCRIBE the message and describing may not cost more than the thing described; the id keeps a place because `runtime/inbound.ts:267` keys the inbox by it, `runtime/outbound.ts:284` retries by it and the runbook's Section 9 comparison is performed on it, but it does not keep 36 of 72 columns. Three cases red at 72 and 80 (the 120 and 203 legs pass and are the pair that kills a body capped at a constant), plus an over-long body that must be marked as elided rather than silently stopping. Two cases green: the id must survive as at least an 8-character prefix (which kills `drop-id`-shaped repairs and a constant placeholder), and the direction and sequence must stay on the row. DEFECT TWO (F-002, the eighth escape route): apps/cli/src/tui/main.argvEscape.test.ts drives the real bundle over real argv, real children and real keystrokes, because `parseOptions` is not exported and `main.ts` runs `main()` on import. It reproduces the verifier's count exactly -- `8 clears over 4 paints` for `--label` -- and pins `--relay-url` (4), `--card` inside the trust modal (1) and a FIFTH field no verification had measured, `--store-key-env` in the step-0 recipe (6). A sixth case pins that a repair must FILTER rather than reject or blank, and a seventh -- green today -- pins that `renderFrame` filters nothing, so a repair applied in the renderer turns it red and only a filter in `parseOptions` passes all seven. THE NINTH ROUTE: yes, such a test is possible, and it is written. The console's output has a CLOSED VOCABULARY -- alternate screen on, alternate screen off, `HOME`, and three SGR runs -- so the entire stream is PARSED against that grammar rather than searched for known-bad fields: every byte is either one of those six sequences or a frame row of exactly `cols` printable code points. It enumerates no field, no flag and no channel. Driven through the whole console (checklist, both argv-prefilled compose rows, the trust modal, all five panes, the help list, a settled result from every command) with every external string hostile at once -- five argv flags, two children's stdout, one child's stderr and the operator's own keystrokes -- it reports 91 violations across 45 painted frames, on exactly six distinct rows, and every one of them is argv-sourced: rows 1 (header/label), 3 (profile row), 4 (relay row and the modal's `card:` line), 9 (directory row), 11 and 13 (health line and the compose row). NOT ONE violation came from a child's stdout, a child's stderr or a keystroke, which independently re-confirms that the seven filtered boundaries hold. What the grammar cannot cover is stated in the file: a screen the drive never paints, stderr and the exit path, a frame that LIES without steering a display, and the console's own vocabulary growing. Measurements: full package 76 files reported against 76 counted on disk with a routed find, 514 tests (502 before plus my 12), 505 passed, 9 failed, all nine `x` markers in my two files, 234.83s, exit 1 as intended. `tsc -p tsconfig.json --noEmit` exit 0. Every timeout is imported from apps/cli/test/childProcessTimeouts.ts and no millisecond literal is introduced. The machine was never idle -- the operator's own VM and browser run throughout; 1-minute load averages at each measurement, in order: 12.61 (session start) -> 14.55 (history file) -> 13.22 (argv file) -> 13.47 (src/tui scope) -> 11.82 rising to 62.05 across the 234.83s full-package run.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "Specify what an operator must be able to see in a conversation row, decide what earns the columns at 72 and say why",
+      "status": "met",
+      "evidence": "apps/cli/src/tui/history-pane.readable.test.ts, header section 'WHAT EARNS THE COLUMNS, AND WHY'. The decision: the body gets at least half the row at any supported width -- `bodyBudget(cols) = Math.floor(cols / 2)`, a function rather than a table so a width added later inherits the rule. The reason is stated from what the row is FOR: the sequence, direction and id exist to DESCRIBE the message, and describing a thing may not cost more than the thing described. The id is not deleted, and the reason it cannot be is cited to code rather than asserted -- `runtime/inbound.ts:267` keys the inbox by `message_id`, `runtime/outbound.ts:284` retries by it, THREAT-08 sections 272-273 require deduplication by it, and the runbook's Section 9 side-by-side comparison reads it. It keeps a floor of an 8-character prefix, justified by `commands/cli.ts:431` minting a UUIDv4, so the first eight hex characters are 32 bits of randomness rather than the timestamp prefix a UUIDv7 would give."
+    },
+    {
+      "criterion": "The current layout fails, and a layout that merely truncates the id differently also fails if it still cannot show a message",
+      "status": "met",
+      "evidence": "RED, with the arithmetic in the failure message: `the console's only surface for reading a message showed 20 of 36 characters at 72x16`. The half-row rule is what makes the second half true: at 72 columns an id truncated to 20 characters leaves 35 columns and still fails, while an 8-character prefix leaves 48 and passes. All three of Q-001's repairs clear the floor; the file deliberately does not choose between them, and names the residual instead -- the two real bodies the verifier measured were 50 and 51 characters, which `short-id` still cannot show whole at 72 while `drop-id` and `continuation` can."
+    },
+    {
+      "criterion": "Pin behaviour at more than one width, including the minimum viewport and a wide one",
+      "status": "met",
+      "evidence": "Four viewports in one sweep: MIN_VIEWPORT 72x16 (the narrowest supported terminal and the size every piped session falls back to, tui-shell.ts:810), 80x24 (the terminal an operator most likely has), 120x40 and 203x61. The sweep runs the whole Section 9 conversation shape -- the same message as `outbound` on one screen and `inbound` on the other. RED at 72 and 80; the 120 and 203 legs pass today and are named in the header as the pair that kills a repair which caps the body at a constant instead of spending the row it has."
+    },
+    {
+      "criterion": "Pin what happens to a body longer than the row",
+      "status": "met",
+      "evidence": "A 5000-character body at MIN_VIEWPORT, which 11 body rows x 72 columns cannot hold at any layout. Two assertions, both RED: the frame must carry U+2026 -- the character this codebase already spends a row on for exactly this purpose (`truncationMarker`, pane-fit.ts:49) -- and SOME contiguous half-row window of the body must survive, so a repair cannot satisfy the marker by painting an ellipsis and nothing else. Today the frame carries no U+2026 at all: `clipLine` cuts the row at 72 and says nothing, which is flow 003 AC7's rule broken on this pane."
+    },
+    {
+      "criterion": "Pin the argv route: --label, --relay-url and --card reach frames verbatim",
+      "status": "met",
+      "evidence": "apps/cli/src/tui/main.argvEscape.test.ts, four RED cases, each reproducing the verifier's own counting argument (every paint writes exactly one `ESC[H` immediately followed by one `ESC[2J`, so surplus clears arrived from elsewhere): `--label` 8 clears over 4 paints (the verifier's exact figure), `--relay-url` 4 injected, `--card` 1 injected measured on the frame carrying the trust modal itself, `--store-key-env` 6 injected. A fifth RED case pins the FIX's shape -- the printable remainder `A[2JB` must be painted, because `paintable` is documented as a filter and not a rejection or a placeholder (text.ts:99-105) -- and a sixth, GREEN today, pins that `renderFrame` filters nothing, so a repair applied in the renderer turns it red and only `parseOptions` passes all seven."
+    },
+    {
+      "criterion": "--card is the sharp one: it is a filename a correspondent chose, painted inside the trust modal",
+      "status": "met",
+      "evidence": "A dedicated case drives `[i]`, waits for the frame carrying `Trust these contact identifiers?`, and measures the injected clears on THAT captured prefix rather than on the whole session -- so the assertion is about the modal frame and not about the run. It is 1 today. The case's comment records why this is the sharp one: `renderModal` paints `card: ${modal.cardPath}` on the line directly above four identifiers a human is being asked to compare out of band (modal-host.ts:120), the four identifiers beside it ARE filtered (`paintableIdentifiers`, tui-shell.ts:427), and the console's own compose row filters that same path when the operator types it (tui-shell.ts:371) while the launch flag does not."
+    },
+    {
+      "criterion": "Answer whether a test can catch a ninth route without anyone thinking of it first; write it if it can, or say plainly why not",
+      "status": "met",
+      "evidence": "It can, and it is written: `frameStreamViolations` plus the walk in the second describe block. The reason it is possible is a property of this console specifically -- its output has a closed vocabulary and `renderFrame`'s contract is literal ('Exactly `viewport.rows` lines, each exactly `viewport.cols` columns, containing no ESC byte', shell-chrome.ts:319-321) -- so the whole stream can be PARSED against a grammar instead of searched for known-bad fields. It enumerates no field, flag or channel. Measured red: 91 violations across 45 painted frames, on six distinct rows, ALL argv-sourced, with nothing from the child stdout, child stderr or keystroke routes -- so the walk is red for the eighth route and is simultaneously a passing re-verification of the seven closed ones. The four things it cannot do are written into the function's own doc comment rather than left implied."
+    },
+    {
+      "criterion": "Change no source file",
+      "status": "met",
+      "evidence": "`git diff --stat -- apps packages docs deploy` prints nothing. `git status --short` lists four entries: the flow's own flow.json and journal.md, both already modified before this dispatch began and untouched by it, and the two untracked test files this dispatch added. No test was weakened, skipped, narrowed or deleted (AC9): the src/tui scope reports 33 files passed of 35, and the 33 are every file that existed before, with 330 of their tests passing exactly as before."
+    },
+    {
+      "criterion": "Every timeout from apps/cli/test/childProcessTimeouts.ts; no new millisecond literal",
+      "status": "met",
+      "evidence": "history-pane.readable.test.ts takes none and says why: nothing in it spawns a process, reads a clock or touches a store. main.argvEscape.test.ts imports CLI_CHILD_TIMEOUT_MS (every frame wait) and CLI_TEST_TIMEOUT_MS (the esbuild hook and every per-test ceiling) and introduces no millisecond literal of its own. The only numeric literals in either file are viewport dimensions, code-point counts, string lengths and one epoch `createdAtMs` in test data."
+    },
+    {
+      "criterion": "Reported file counts checked against files on disk",
+      "status": "met",
+      "evidence": "A routed find over `src test` for `*.test.ts`/`*.test.mjs` counts 76 files; vitest reported `Test Files 2 failed | 74 passed (76)`. A routed find over `src/tui` counts 35; the scoped run reported `2 failed | 33 passed (35)`. The raw log was searched for the `x` failure marker and returned exactly 9, matching `Tests 9 failed | 505 passed (514)`, and all nine `FAIL` lines name one of the two new files. Nothing was lost this run."
+    },
+    {
+      "criterion": "Where a case would pass vacuously today, pair it with a red case and say which is which",
+      "status": "met",
+      "evidence": "Both file headers carry an explicit 'WHICH CASES ARE RED, AND WHICH ARE THE PAIRS' section naming each case. Three cases pass today and each is a pair with a stated victim: 'keeps the message id recoverable' kills a `drop-id` repair and a constant placeholder; 'keeps the direction and the sequence' kills buying the body's columns from the two fields Section 9 also reads; 'renderFrame filters nothing' kills a repair applied in the renderer. The 120 and 203 legs of the width sweep are the fourth, inside a case that is red at 72 and 80. Every other case is red on this tree and the header says on which assertion."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T27-tests-result.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/history-pane.readable.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The conversation row. Five cases, three red: a received body must be readable at MIN_VIEWPORT, the body gets at least half the row at four widths, and an over-long body must be marked as elided. Two green pairs: the message id survives as at least an 8-character prefix, and the direction and sequence stay on the row. Pure; takes no timeout.",
+      "hash": "d4d2d99318f1dc71920a33238b649e72451a59b2c7357d6d4fe55379c85bd78e"
+    },
+    {
+      "path": "apps/cli/src/tui/main.argvEscape.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The eighth argv route and the ninth-route walk. Seven cases, six red: --label, --relay-url, --card in the trust modal, --store-key-env in the step-0 recipe, the filter-not-discard remainder, and the whole-output grammar walk. One green pair: renderFrame filters nothing, which forces the repair into parseOptions. Drives the real bundle over real argv, children and keystrokes; every timeout imported.",
+      "hash": "600acbf95989c6fa9a7cc660095f50afc83ae4ad30a4be34556e8fc24034494f"
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/cli/src/tui/history-pane.readable.test.ts", "change": "added" },
+    { "path": "apps/cli/src/tui/main.argvEscape.test.ts", "change": "added" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T27-tests#F-001",
+      "reviewer": "004-T27-tests",
+      "severity": "major",
+      "file": "apps/cli/src/tui/main.ts",
+      "line": 98,
+      "symbol": "parseOptions",
+      "problem": "004-T25-verify's F-002 enumerated four unfiltered `parseOptions` fields and measured two. There is a FIFTH, and it was not measured: `--store-key-env`. With the store key absent, step 0 of the checklist NAMES the variable (profiles-pane.ts:122) and then prints a shell line for the operator to run containing the same name a second time (profiles-pane.ts:124, `storeKeyRecipe`), so the flag's bytes are painted twice on the one frame whose whole purpose is to get the operator to type a command into their own shell.",
+      "impact": "Measured, not reasoned about: 6 injected screen-clear sequences over a four-frame session, which is the largest per-frame count of any of the five fields -- more than `--label`'s two per frame -- because the name is painted twice per frame rather than once. It is also the field with the least excuse: the frame it lands on is an instruction the operator is being asked to copy, and a display-steering point on that frame can reorder or hide part of a shell command. The severity is F-002's, not a new one; what is new is that the class has five members rather than four, so a repair that filtered the three fields the verifier named would leave two open.",
+      "suggested_fix": "None separate from F-002's: filter every `parseOptions` string through `paintable` at the one place these values become state. The point of this finding is the ENUMERATION -- `label`, `relayUrl`, `storeKeyEnv`, `contactCardPath` and `profileDir`, five fields, not three.",
+      "evidence": "apps/cli/src/tui/main.argvEscape.test.ts, case 'does not let --store-key-env steer the step-0 recipe': launched with `--store-key-env 'ECHOLET_<ESC>[2J_KEY'` and the variable absent from the environment, the shipped bundle emitted 6 more `ESC[2J` sequences than it wrote `ESC[H`+`ESC[2J` paint prefixes. The whole-output walk in the same file independently reports the `profileDir` route as violations on frame row 3 (the `profile` detail row), row 4 (the `relay` row and the modal's `card:` line) and row 9 (the `directory` row), which is the fifth and fourth fields showing up without anyone naming them.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/main.ts:96 (--label -> ProfileView.label, painted in the header on every frame)",
+          "apps/cli/src/tui/main.ts:97 (--relay-url -> ProfileView.relayUrl, painted on the health line and the relay row)",
+          "apps/cli/src/tui/main.ts:98 (--store-key-env -> ProfileView.storeKeyEnv, painted twice in the step-0 recipe and once on the profiles pane)",
+          "apps/cli/src/tui/main.ts:99 (--card -> ProfileView.contactCardPath, painted in the trust modal and prefilled into the compose row)",
+          "apps/cli/src/tui/main.ts:115 (--profile -> ProfileView.profileDir, painted on the directory row and prefilled into the step-3 compose row)",
+          "apps/cli/src/tui/state.ts createInitialState (health.relayUrl, copied from the first profile)"
+        ],
+        "enumeration_method": "Not derived by reading the writers this time but MEASURED by walking the output: the whole-console drive in main.argvEscape.test.ts poisons every argv string at once and parses every painted frame against the console's own output grammar, which reported violations on exactly six distinct frame rows. Each row was then mapped back to its writer -- row 1 the header (label), rows 3/4/9 the profiles detail rows (label, relayUrl, profileDir), row 4 also the modal's `card:` line, rows 11 and 13 the health line and the compose row. The list is exhaustive for the routes this drive paints, and the drive visits the checklist, both compose rows, the modal, all five panes and the help list."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T27-tests#F-002",
+      "reviewer": "004-T27-tests",
+      "severity": "info",
+      "file": "apps/cli/src/tui/history-pane.ts",
+      "line": 41,
+      "symbol": "buildHistorySnapshot",
+      "problem": "004-T25-verify's Q-001 marks `short-id` (an 8-character message-id prefix) as the recommended repair for F-001. It clears the floor this dispatch pins -- 8 characters of id leave 48 columns at MIN_VIEWPORT against the 36 owed -- but it does NOT show the bodies that verification actually measured: the two real messages were 50 and 51 characters, and 48 columns cannot hold either of them whole at 72.",
+      "impact": "Latent and specific to one of three options, which is why this is info rather than a defect. If `short-id` is chosen, the console will still elide a message of the length the flow's own end-to-end test sends, at the width every piped or 72-column session gets -- and it will elide it by three characters, which is the worst kind of nearly-working. `drop-id` (58 columns) and `continuation` (a body row of its own) both clear it. The tests do not pre-empt the choice, and this finding exists so the choice is made with the number in front of it.",
+      "suggested_fix": "None from this dispatch: Q-001 is the user's and stays theirs. If `short-id` is chosen, consider that a 6-character prefix (50 columns) is still 24 bits of a UUIDv4 and does clear the measured bodies -- or pair `short-id` with the continuation row for bodies that do not fit, which is what the elision-marker case in the new file already requires of every repair.",
+      "evidence": "Arithmetic over the measured row, stated in the new file's header: prefix at MIN_VIEWPORT is 2 + sequence + 2 + direction + 2 + id + 2, so an 8-character id costs 24 columns for an `inbound` row and leaves 48 of 72. 004-T25-verify's own captured bodies were `CONSOLE_E2E_OUT_<uuid>` and `CONSOLE_E2E_IN_<uuid>`, 51 and 50 characters.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T27-tests#F-003",
+      "reviewer": "004-T27-tests",
+      "severity": "info",
+      "file": "apps/cli/src/tui/main.argvEscape.test.ts",
+      "problem": "The walk's guarantee is bounded by its drive, and that bound is a maintenance obligation rather than a one-off. The grammar catches a byte from any source at all, but only in a frame the driving session causes to be painted -- so a pane, modal or state added later and not added to the drive is outside it, silently.",
+      "impact": "It is the one way this file could become the thing it exists to replace: a test that looks total and covers eight of nine routes. It is stated in the function's own doc comment rather than left implied, along with the three other limits -- stderr and the exit path are not frames; a frame that LIES without steering a display is invisible to the grammar; and a fifth control sequence added to `paint()` must be added to the vocabulary or the walk reports it (which is the failure direction the file prefers).",
+      "suggested_fix": "When a pane, modal or compose field is added to this console, add it to the walk's drive in the same change. The drive is a linear script of awaited keystrokes and reads as a checklist, which is deliberate.",
+      "evidence": "The drive currently paints 45 frames covering the checklist, both argv-prefilled compose rows, the trust modal, all five panes, the help list, the operator's own compose row, and a settled result from init, relay publish, contact export, contact import, doctor, poll and history.",
+      "confidence": "high"
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "Is U+2026 the right form for 'this message did not fit', or should the pane spend a whole row on the count the way `truncationMarker` does?",
+      "why": "The over-long-body case pins that the frame must carry U+2026 when a body is cut, on the precedent of pane-fit.ts:49 -- the character this codebase already spends a row on for exactly this purpose. That is a convention chosen by the test rather than one the codebase had already fixed for a WITHIN-ROW elision, and a repair that wrapped the body onto continuation rows would satisfy it through `fitPane`'s row marker rather than through a marker of its own. Either is honest; the implementer should know which the test will accept before choosing a layout.",
+      "options": [
+        { "id": "ellipsis", "label": "A U+2026 wherever a body is cut, which is what the test asserts today", "recommended": true },
+        { "id": "row-marker", "label": "Wrap the body and let `fitPane`'s existing row marker carry the disclosure" },
+        { "id": "both", "label": "Wrap up to the pane's rows, then a U+2026 on the last one" }
+      ],
+      "can_be_resolved_by_agent": true
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_changed": 0,
+    "test_files_changed": 2,
+    "tests_added": 12,
+    "tests_red": 9,
+    "tests_green_as_pairs": 3,
+    "typecheck_exit_code": 0,
+    "runs": [
+      {
+        "scope": "src/tui/history-pane.readable.test.ts",
+        "files": "1 failed (1)",
+        "tests": "3 failed | 2 passed (5)",
+        "duration_s": 0.64,
+        "vitest_exit_code": 1,
+        "note": "First run of the file. The red message carries the measurement: 'showed 20 of 36 characters at 72x16'."
+      },
+      {
+        "scope": "src/tui/main.argvEscape.test.ts",
+        "files": "1 failed (1)",
+        "tests": "6 failed | 1 passed (7)",
+        "duration_s": 1.66,
+        "vitest_exit_code": 1,
+        "note": "Second run. The first run had two HARNESS failures rather than product failures and both were fixed rather than worked around: a needle clipped at 72 columns, and a coalesced pipe write -- while a compose row is open a chunk is inserted WHOLE, so an unawaited cancel was typed instead of obeyed and every later key went into a message. The harness now marks the output and awaits between presses."
+      },
+      {
+        "scope": "src/tui",
+        "files_on_disk": 35,
+        "files_reported": 35,
+        "files": "2 failed | 33 passed (35)",
+        "tests": "9 failed | 333 passed (342)",
+        "duration_s": 2.86,
+        "vitest_exit_code": 1,
+        "note": "The 33 passing files are every file that existed before this dispatch, with all 330 of their tests passing exactly as before. 342 = 330 + 12."
+      },
+      {
+        "scope": "apps/cli (full package)",
+        "files_on_disk": 76,
+        "files_reported": 76,
+        "files": "2 failed | 74 passed (76)",
+        "tests": "9 failed | 505 passed (514)",
+        "duration_s": 234.83,
+        "vitest_exit_code": 1,
+        "failure_markers_in_raw_log": 9,
+        "note": "514 = 004-T25-verify's 502 plus 12. All nine failure markers and all nine FAIL lines are in the two new files. No report was lost."
+      }
+    ],
+    "argv_escape_measurements": {
+      "method": "Every paint writes exactly one `ESC[H` immediately followed by one `ESC[2J` (tui-shell.ts:492, :816), so injected = count(ESC[2J) - count(ESC[H ESC[2J). This is a COUNT and not a pattern match, because an injected clear is byte-identical to a legitimate one.",
+      "label": "8 clears over 4 paints, 4 injected -- the verifier's own figure, reproduced",
+      "relay_url": "4 injected",
+      "card_in_trust_modal": "1 injected, measured on the captured prefix ending at the modal frame rather than on the whole session",
+      "store_key_env": "6 injected -- the fifth field, previously unmeasured",
+      "printable_remainder": "`A[2JB` absent from the output, so the fix must filter rather than reject or blank"
+    },
+    "ninth_route_walk": {
+      "possible": true,
+      "mechanism": "The console's output is parsed against a closed grammar: alternate screen on, then N frames each prefixed by `HOME`, then alternate screen off; each frame exactly `rows` rows split on CRLF; each row, after the three SGR runs are removed, exactly `cols` code points and carrying no display-steering point. It enumerates no field, flag or channel.",
+      "frames_painted": 45,
+      "violations": 91,
+      "distinct_rows": 6,
+      "violation_rows": "1 (header/label), 3 (profile row), 4 (relay row and the modal's card: line), 9 (directory row), 11 (health line on the checklist), 13 (health line and the compose row)",
+      "all_argv_sourced": true,
+      "note": "NOT ONE violation came from a child's stdout, a child's stderr or a keystroke, though all three were poisoned in the same run -- so the walk is simultaneously red for the eighth route and a passing re-verification of the seven closed ones.",
+      "cannot_cover": [
+        "a pane, modal or state the driving session never paints -- coverage is the drive's, not the grammar's",
+        "stderr and the exit path, which are not frames",
+        "a route that makes a frame LIE without steering a display (a mislabelled direction is invisible to it)",
+        "the console's own vocabulary growing: a fifth control sequence added to paint() must be added here, and until it is the walk reports it"
+      ]
+    },
+    "machine_idle": false,
+    "load_note": "10 cores, never idle: the operator's own VM and browser run throughout. 1-minute load averages at each measurement, in order: 12.61 (session start) -> 14.55 (history-pane run) -> 13.22 (first argv run) -> 13.75 (walk-only run) -> 13.47 (src/tui scope) -> 11.82 at the start of the full-package run, 62.05 at its end. Every figure quoted above was taken with the machine in that state.",
+    "discipline": "Every vitest and tsc invocation was redirected whole to a scratchpad log file and read back; nothing was piped through head or tail. Every exit code was captured with `echo \"EXIT_...=$?\"` appended by `>>` on the line immediately after the command in the same shell invocation, never through a wrapper whose own last command could report its own status. Both file counts were taken from a routed find over the working tree and compared against vitest's own summary. The `^export ` search over tui-shell.ts whose gdctx summary listed 4 of an accurate 7 matches was re-read from the raw log, which is where the three missing exports (`decodeKey`, `applyOutcome`, `runTuiShell`) came from.",
+    "routing_audit": {
+      "graph_used": "no -- not-relevant: the dispatch named both defect sites (history-pane.ts:41 and main.ts parseOptions) and the verification result named every collaborator; every other file was reached from those two by reading the module each imports.",
+      "wiki_used": "no -- not-relevant: the two questions were 'how many columns does this row spend' and 'which bytes reach a painted frame', both settled by measurement rather than by architecture. The one architectural claim made -- that the message id has a real purpose -- was settled from code (runtime/inbound.ts:267, runtime/outbound.ts:284) and from docs/THREAT-08_MODEL.md rather than from the wiki.",
+      "ctx_used": "yes -- keryx ctx run for every git, find, shasum and grep over a log; keryx ctx read for the two contract schemas, package.json, vitest.config.ts, limits.ts and the captured run logs; keryx ctx rg for every code search.",
+      "raw_rg_used": "no",
+      "testing_context_used": "no -- not-relevant: the dispatch named the directory, the timeout module, and the two existing suites whose harness shape this work extends (main.processDriven.test.ts, main.registration.processDriven.test.ts); no test-selection question existed.",
+      "memory_used": "no -- not-relevant: 004-T25-verify's result carried the measurements, and the two defects' own source files carried the design decisions each test had to respect."
+    }
+  },
+  "timestamp_utc": "2026-09-09T07:31:25Z"
+}
