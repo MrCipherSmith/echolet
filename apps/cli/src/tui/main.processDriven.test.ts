@@ -41,6 +41,20 @@ import { UNAUDITED_NOTICE } from "./shell-chrome";
 // writer — so no child is ever left hanging and the barrier above always closes. Every wait in this
 // file is on an event: a socket announcement, a substring of a painted frame, or a process exit.
 // Nothing sleeps, and no store, key, relay, plaintext or HTTP body is involved at any point.
+//
+// ── The one child the operator did not press ─────────────────────────────────────────────────
+//
+// Flow 004 T16 added the startup `doctor` this console runs on its way in (t35 §2.1, §5 item 6), so
+// that it does not begin with an unknown profile and an empty roster. It is a child like any other:
+// it goes through `reduce`, sets `busy`, and is subject to the same single-flight rule. So it is
+// RESERVED like any other — by the same counter, before the console is spawned, since a reservation
+// made after `spawn` returns would race that child to the socket. Reserving it is what keeps the
+// "no child was refused as a second concurrent writer" claim below meaning exactly what it meant:
+// were the console to run this child concurrently with anything, or to run a second unasked-for
+// one, that child would find the counter at zero and appear in the refused list. Each test releases
+// it — with the class the CLI itself returns for a profile directory that does not exist — and
+// waits for its outcome before pressing the first key, so that the console is idle and every
+// announcement below is ordered by an await rather than by hope.
 
 const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 // A private bundle, for the reason `cli.processFailures.test.ts` keeps one: vitest may run this
@@ -49,6 +63,10 @@ const entry = join(packageDir, "dist", `tui.red-${String(process.pid)}.js`);
 
 const PERSISTENCE_ENVELOPE = JSON.stringify({ ok: false, error: { code: "PERSISTENCE_FAILURE" } });
 const RELAY_UNAVAILABLE_ENVELOPE = JSON.stringify({ ok: false, error: { code: "RELAY_UNAVAILABLE" } });
+// What the CLI returns for the profile directory this harness names and never creates. Deliberately
+// not `ok`: the startup outcome must not satisfy a frame wait a later, pressed command owns.
+const INVALID_CONFIGURATION_ENVELOPE = JSON.stringify({ ok: false, error: { code: "INVALID_CONFIGURATION" } });
+const STARTUP_OUTCOME = "doctor → INVALID_CONFIGURATION (exit 2)";
 const WAIT_MS = 20_000;
 
 /**
@@ -137,7 +155,9 @@ async function startConsole(): Promise<Harness> {
   const announcements: Announcement[] = [];
   const waiters: Waiter[] = [];
   const chunks: Buffer[] = [];
-  let reserved = 0;
+  // One reservation is standing before the console is spawned: the startup `doctor`. Same counter,
+  // same `held` path, same release — see the header. Nothing else is reserved in advance.
+  let reserved = 1;
 
   const painted = (): string => Buffer.concat(chunks).toString("utf8");
 
@@ -258,6 +278,10 @@ describe("D-1: the console runs one command at a time, over real child processes
     const operator = await startConsole();
     await operator.awaitFrame(UNAUDITED_NOTICE);
 
+    // The startup child, reserved before the spawn and settled before the first keystroke.
+    operator.release(await operator.awaitReservedChild("doctor"), INVALID_CONFIGURATION_ENVELOPE, 2);
+    await operator.awaitFrame(STARTUP_OUTCOME);
+
     operator.reserveNextChild();
     operator.press("p");
     const poll = await operator.awaitReservedChild("poll");
@@ -283,13 +307,18 @@ describe("D-1: the console runs one command at a time, over real child processes
     // Counted behind the barrier: the console has closed, so nothing it spawned is still on its way.
     // A refused child is exactly one that met the store as a second concurrent writer.
     expect(operator.announcements.filter((entry) => !entry.held).map((entry) => entry.command)).toEqual([]);
-    expect(operator.announcements.map((entry) => entry.command)).toEqual(["poll", "doctor"]);
+    expect(operator.announcements.map((entry) => entry.command)).toEqual(["doctor", "poll", "doctor"]);
     expect(operator.painted()).not.toContain("PERSISTENCE_FAILURE");
   }, 90_000);
 
   it("reports the exit class the CLI returned, and does not manufacture a persistence failure", async () => {
     const operator = await startConsole();
     await operator.awaitFrame(UNAUDITED_NOTICE);
+
+    // The startup child, reserved before the spawn and settled before anything else announces, so
+    // the control run below is still the second child on the socket and not a racer with the first.
+    operator.release(await operator.awaitReservedChild("doctor"), INVALID_CONFIGURATION_ENVELOPE, 2);
+    await operator.awaitFrame(STARTUP_OUTCOME);
 
     // The control: what `relay publish` reports on its own against a relay that is not answering.
     // Exit 4 — temporary relay/network, retry — is the class the console must not upgrade.
@@ -322,7 +351,7 @@ describe("D-1: the console runs one command at a time, over real child processes
     // class other than the one the CLI returned. A result that arrives after the operator has quit
     // is noted and never painted, so the painted assertions below cannot carry this on their own.
     expect(operator.announcements.filter((entry) => !entry.held).map((entry) => entry.command)).toEqual([]);
-    expect(operator.announcements.map((entry) => entry.command)).toEqual(["relay publish", "poll", "relay publish"]);
+    expect(operator.announcements.map((entry) => entry.command)).toEqual(["doctor", "relay publish", "poll", "relay publish"]);
 
     const reported = [...operator.painted().matchAll(/relay publish → ([A-Z_]+) \(exit (\d+)\)/g)]
       .map((match) => `${String(match[1])} exit ${String(match[2])}`);
