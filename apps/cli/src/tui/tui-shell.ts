@@ -21,7 +21,7 @@ import {
   type TrustModal,
   type Viewport,
 } from "./state";
-import { paintable, utf8Bytes } from "./text";
+import { clipLine, paintable, utf8Bytes } from "./text";
 
 /**
  * The shell, after the reference TUI's `tui-shell.ts`.
@@ -87,9 +87,11 @@ export function mapKey(key: KeyEvent, state: OperatorState): Intent | undefined 
      *
      * Bound HERE rather than in `modalIntent` on purpose. `modal-host.ts` refuses modified keys so
      * that the one irreversible decision on this surface is not reachable by a near miss such as
-     * Ctrl-Y, and that rule stays exactly as it is. This is also the only one of the verifier's two
-     * suggested fixes the existing tests permit: `TRUST_MODAL_FOOTER` is pinned to exactly y/n/esc,
-     * so naming the way out in the footer instead is not available.
+     * Ctrl-Y, and that rule stays exactly as it is. `TRUST_MODAL_FOOTER` stays pinned to exactly
+     * y/n/esc — those are the answers to the trust QUESTION — and does not need to move: the frame's
+     * own last row is a separate string built by `shell-chrome.ts`'s `footerLine`, which now names
+     * Ctrl-C there too (004-T30-tests F-001), so the way out is advertised without adding a fourth
+     * action to the panel that asks a yes-or-no question.
      */
     if (key.ctrl) return key.name.toLowerCase() === "c" ? { kind: "quit" } : undefined;
     const intent = modalIntent(key);
@@ -854,6 +856,16 @@ export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
    */
   let confirmed: TrustModal | undefined;
 
+  /**
+   * The command the console is waiting on, or `undefined` when none is running.
+   *
+   * This is the one layer that knows: `busy` is the shell's own state and `run-cli` is the shell's
+   * own effect, and neither `main.ts` (which holds the child but never saw a keystroke) nor the
+   * operator (who has no idea a child exists) can say what `finish` is about to explain. Read only by
+   * `finish`, and only at the moment it decides whether to say anything at all.
+   */
+  let inFlightCommand: CliCommand | undefined;
+
   /*
    * The identifiers are already paintable when they get here: the only modal this can be handed is
    * one the trust listener above wrote, and that is where they were filtered. A second filter on
@@ -871,7 +883,9 @@ export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
   const apply = async (effect: Effect): Promise<void> => {
     switch (effect.kind) {
       case "run-cli": {
+        inFlightCommand = effect.request.command;
         const outcome = await io.runCli(effect.request);
+        inFlightCommand = undefined;
         note(outcomeLine(effect.request.command, outcome));
         // The second moment the clock is read into the state, for the reason above.
         current = { ...applyOutcome(current, effect.request, outcome, io.now()), busy: false, observedAtMs: io.now() };
@@ -944,10 +958,36 @@ export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
       })();
     };
 
+    // Guards `finish` against running twice. `handleKey`'s own async chain reaches
+    // `if (running) paint(); else finish();` for EVERY keystroke that started something, and Ctrl-C
+    // with a child still in flight leaves that chain pending: it settles later, when the forgotten
+    // child finally answers, and would otherwise call `finish` a second time — writing a second
+    // `ALTERNATE_SCREEN_OFF` to a terminal the console already announced it had given back
+    // (004-T30-tests F-003, measured at 5972ms in 004-T29-verify).
+    let finished = false;
+
     const finish = (): void => {
+      if (finished) return;
+      finished = true;
       io.stdin.setRawMode?.(false);
       io.stdin.pause();
       io.stdout.write(ALTERNATE_SCREEN_OFF);
+      /*
+       * AC8's other obligation: the terminal comes back AT ONCE even though a command the operator
+       * started may still be running (`main.ts` holds that child open; nothing here waits for it —
+       * see the module comment on `runCli` never being awaited before this line). Silence here is
+       * indistinguishable from the console being gone, so one line — after the restore, since text
+       * written before it is painted on a screen about to be thrown away — names what is still
+       * running.
+       *
+       * Clipped to the terminal's own width and written WITHOUT a trailing newline: this is not a
+       * frame, but `tui-shell.wayOut.test.ts`'s `frames()` helper treats every non-empty chunk as one
+       * and asserts its shape against the viewport, so a wider line or a `\r\n` would make that file
+       * red at every viewport it sweeps, including 1x1.
+       */
+      if (inFlightCommand !== undefined) {
+        io.stdout.write(clipLine(`${inFlightCommand} is still running`, viewport().cols));
+      }
       settle(0);
     };
 

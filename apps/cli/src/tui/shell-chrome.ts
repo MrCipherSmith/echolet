@@ -124,7 +124,15 @@ function fitFooter(entries: readonly FooterKey[], cols: number): string {
 
 /** Names exactly what `mapKey` binds. A footer that advertised an unbound key would be a lie. */
 function footerLine(state: OperatorState, cols: number): string {
-  if (state.modal !== undefined) return "[y] trust  [n] reject  [esc] cancel";
+  /*
+   * AC8's second clause: the modal answers the trust QUESTION with y/n/esc, and none of those three
+   * leaves the console — so the way out has to be named separately from the trust answers. This row
+   * is the frame's own last row, built here and nowhere near `TRUST_MODAL_FOOTER` (modal-host.ts),
+   * which is the panel's list of answers to the trust question and stays exactly `["y", "n", "esc"]`.
+   * `mapKey` already binds Ctrl-C while the modal owns the keyboard (`tui-shell.ts`); this only makes
+   * the frame say so.
+   */
+  if (state.modal !== undefined) return "[y] trust  [n] reject  [esc] cancel  [ctrl-c] quit";
   const input = state.input;
   if (input !== undefined) {
     /*
@@ -207,7 +215,7 @@ function activityLine(state: OperatorState): string {
  * operator, and this is it. It replaces the pane body rather than floating over it, so it inherits
  * the frame's shape, the notice and the escape-free guarantee without a second layout to audit.
  */
-const HELP_LINES: readonly string[] = [
+const HELP_LINES_HEAD: readonly string[] = [
   "key bindings",
   "  1-5        select pane",
   "  enter      start the next registration step (profiles pane, while one is left)",
@@ -220,8 +228,26 @@ const HELP_LINES: readonly string[] = [
   "  c          next contact",
   "  t          next profile",
   "  ?          close this list",
-  "  q          quit (ctrl-c also quits)",
 ];
+
+/**
+ * The list's own quit row, named by who actually owns the keyboard (`mapKey`'s own order: modal,
+ * compose row, panes) rather than by a constant that cannot ask.
+ *
+ * MEASURED (004-T30-tests F-005): a static `q` row was dead wherever the compose row or a modal owned
+ * the keyboard, and `overlayModal` — which has no idea what it is covering — could truncate the row
+ * to just the dead half (F-003). Asking here is the same fix `footerLine` already makes for the same
+ * reason.
+ */
+function helpQuitLine(state: OperatorState): string {
+  return state.modal !== undefined || state.input !== undefined
+    ? "  ctrl-c     quit"
+    : "  q          quit (ctrl-c also quits)";
+}
+
+function helpLines(state: OperatorState): readonly string[] {
+  return [...HELP_LINES_HEAD, helpQuitLine(state)];
+}
 
 /**
  * The lines of the pane the operator has selected, laid out into the `bodyRows` the frame has.
@@ -232,7 +258,10 @@ const HELP_LINES: readonly string[] = [
  * drop, and from which end, is a fact about that pane — see `pane-fit.ts`.
  */
 function paneLines(state: OperatorState, pane: PaneId, width: number, bodyRows: number): string[] {
-  if (state.help === true) return fitPane({ head: [HELP_LINES[0] ?? ""], rows: HELP_LINES.slice(1), keep: "head" }, bodyRows, width);
+  if (state.help === true) {
+    const lines = helpLines(state);
+    return fitPane({ head: [lines[0] ?? ""], rows: lines.slice(1), keep: "head" }, bodyRows, width);
+  }
 
   const profile = state.profiles[state.activeProfile];
   switch (pane) {
@@ -282,13 +311,20 @@ function paneLines(state: OperatorState, pane: PaneId, width: number, bodyRows: 
  */
 function tooSmallFrame(state: OperatorState, cols: number, rows: number): string[] {
   const composing = state.input !== undefined;
+  // `q` is a way out only while the panes own the keyboard (`mapKey`'s own order): a modal takes it
+  // first, and a compose row takes it second. MEASURED (004-T30-tests F-002/F-005): this line used to
+  // ask only about the compose row, so a trust modal below `MIN_VIEWPORT` said "press q to quit" while
+  // `q` was dead — the sharp case, and the only one where the frame both claims a decision is waiting
+  // AND tells the operator to press a key that does nothing.
+  const ctrlCOnly = state.modal !== undefined || composing;
   const lines = [
     ...wrapToWidth(UNAUDITED_NOTICE, cols),
     "",
     ...wrapToWidth(`${String(cols)}x${String(rows)} — this console needs ${String(MIN_VIEWPORT.cols)}x${String(MIN_VIEWPORT.rows)}`, cols),
-    // While a buffer is open `q` is text, so naming it here would be the lie `footerLine` refuses.
-    // Ctrl-C is the binding that survives composing, so it is the one this frame offers.
-    ...wrapToWidth(composing ? "resize, or press ctrl-c to quit" : "resize, or press q to quit", cols),
+    // While a buffer is open `q` is text, and while a modal is open `q` answers nothing, so naming it
+    // here would be the lie `footerLine` refuses. Ctrl-C is the binding that survives both, so it is
+    // the one this frame offers.
+    ...wrapToWidth(ctrlCOnly ? "resize, or press ctrl-c to quit" : "resize, or press q to quit", cols),
   ];
   // A trust decision cannot be answered here, because the identifiers cannot be shown here, and the
   // reducer will refuse a confirmation for a modal that was never painted. Saying so is the
