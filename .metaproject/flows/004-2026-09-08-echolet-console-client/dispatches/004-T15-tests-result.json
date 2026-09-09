@@ -1,0 +1,253 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-004-t15-tests",
+  "dispatch_id": "004-T15-tests",
+  "status": "DONE",
+  "summary": "RED specification for registration from inside the console: three new test files, 72 tests, 62 failing on the clean tree and 10 passing (every one of the 10 a deliberately vacuous case paired, in the same file, with the red case that kills the degenerate implementation). Two pure files pin the six-step checklist on the existing profiles pane — what it says, what each keystroke starts, the order it enforces, and how a step's outcome is folded back — and one driven file spawns the real console binary against a fake CLI and counts the real children, which is what AC1 asks for. Step 0 is enforced rather than described: the console is started under a preload that replaces its process.env with a Proxy whose get trap records the frame that asked for the store key's value, so `process.env[name] !== undefined` is detected and `Object.hasOwn(process.env, name)` is not. The detector was measured in both directions on this tree — clean HEAD records only Node's own spawn-argument copy, and an injected `process.env.ECHOLET_TUI_REG_KEY !== undefined` in the console's own code was caught and named by file and line. No source file was changed; typecheck exits 0; every timeout comes from apps/cli/test/childProcessTimeouts.ts.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC1 — a person completes registration from inside the console alone, demonstrated against a real driven CLI process",
+      "status": "met",
+      "evidence": "apps/cli/src/tui/main.registration.processDriven.test.ts drives the shipped bundle (real main(), real parseOptions, real buildArgv, real spawn(), real trust handshake over a child's stderr and stdin) with real keystrokes on a real pipe: a startup doctor reports the profile absent, then Enter drives init (relay URL typed into the compose row, because t35 §2.1 gives it no default), relay publish, contact export (default path accepted), contact import (modal painted from the CHILD's identifiers, `y` written to the child's own prompt, `y\\n` asserted as the bytes the child received) and a confirming doctor with contact_count 1, after which the pane turns into the ordinary detail rows. Behind the process-exit barrier the announcement list is asserted exactly: [doctor, init, relay publish, contact export, contact import, doctor], no child concurrent with another, no child left unanswered, and every argv pinned token by token against t35 §2.1. RED today at the first wait: `timed out waiting for the console to spawn doctor` — §2.1's one unasked-for command does not exist."
+    },
+    {
+      "criterion": "Step 0 is enforced as a security boundary, not described: presence tested with Object.hasOwn and never by reading the value",
+      "status": "met",
+      "evidence": "The console is spawned with `--import <env-probe.mjs>`, which replaces process.env with a Proxy over a plain copy (so the key still reaches every child) whose `get` trap records the IMMEDIATE CALLER FRAME. Object.hasOwn triggers getOwnPropertyDescriptor and never get; `env[name]`, `{...env}`, Object.entries(env), a destructure and JSON.stringify(env) all trigger get — measured directly, all five shapes, before the test was written. Node refuses an accessor descriptor on process.env (`'process.env' does not accept an accessor(getter/setter) descriptor`), which is why the whole object is replaced. The one legitimate read is Node's own normalizeSpawnArguments copying the inherited environment into a child; it is told apart by its caller frame being in node:child_process. Both directions asserted: with the key present, every recorded read comes from node:child_process AND there is at least one (proving the probe was armed); with the key absent there are no recorded reads at all, because a missing property is never copied into a child."
+    },
+    {
+      "criterion": "The detector actually fires on the forbidden road, rather than being a claim about a Proxy",
+      "status": "met",
+      "evidence": "Measured on this tree with a throwaway copy of the harness (deleted; git status proves it). Against clean HEAD the harness passes in 768ms — announcement, argv, activity line, the trust modal painted in full at the 72-column fallback, `y\\n` reaching the child, the child exiting, Ctrl-C quit, and probe.reads all from node:child_process. With `globalThis.__forbidden = process.env.ECHOLET_TUI_REG_KEY !== undefined` injected into the console bundle's own banner, the same assertion failed and named the offender: `[\"at file:///…/apps/cli/dist/tui.sanity-29171.js:3:38\"]`."
+    },
+    {
+      "criterion": "The two rejected designs are pinned against, not merely argued against",
+      "status": "met",
+      "evidence": "The console generating the key: profiles-pane.setup.test.ts asserts that every line of the pane containing `export ` carries no 32+ character base64url run, and main.registration.processDriven.test.ts asserts the same over every frame the real console painted — a console that minted 32 bytes and printed them, or handed them to init, puts a key-shaped literal on exactly that line. The console writing a key file: no new file is written by any path this specification drives, and the driven test asserts the complete argv of every child, so a key reaching a file would have to reach an argv or the pane first. The `init` argv is pinned token by token and carries `--store-key-env <NAME>` and no value."
+    },
+    {
+      "criterion": "The order the checklist enforces, by keying rather than by disabling",
+      "status": "met",
+      "evidence": "tui-shell.registration.test.ts: Enter builds `init` only when storeKeyPresent is true (step 0 gates step 1); Enter builds nothing while busy, and `reduce` refuses a `run` that arrives from anywhere while busy; `w` opens no compose row for a profile that has never published and `reduce` builds no `send` from a hand-made message buffer for one, paired with the positive case for a published profile so the refusal cannot be satisfied by a console that can never send. The driven test's third case proves the same at the process level: a `contact export` that returns PERSISTENCE_FAILURE exit 5 does not let the next keystroke walk into step 4 — the announcement list ends [.., contact export, contact export] and contains no `contact import`."
+    },
+    {
+      "criterion": "Exit-class handling for each step, including that a failed step shows the code and exit class the CLI returned",
+      "status": "met",
+      "evidence": "Totality over the matrix rather than a sample: 5 child-spawning steps × 4 failure classes = 20 rendering cases in profiles-pane.setup.test.ts (the code appears, `exit N` appears, and no OTHER exit code appears anywhere on the pane — AC5's 'never reports a class the CLI did not return'), and the same 20 at the fold layer in tui-shell.registration.test.ts (`setup[step]` deep-equals `{ failed: code, exitCode }` and every later step stays `pending`). Plus INVALID_CONFIGURATION at exit 2 setting the profile to `absent` for all five commands, and a successful init reporting an identity setting it to `ready`."
+    },
+    {
+      "criterion": "Everything flows 002 and 003 paid for, re-asserted with the checklist painted",
+      "status": "met",
+      "evidence": "profiles-pane.setup.test.ts renders three checklist states at 72×16, 120×40 and 203×61 and asserts exactly rows lines of exactly cols code points, UNAUDITED_NOTICE present, no ESC byte, no store key — and, so the case cannot pass vacuously, that a `step ` really is on those frames. The driven test asserts one child at a time from the announcements themselves (a child announced while an earlier one is unanswered is recorded as concurrent), no store key in any argv or any painted frame, no `--yes` in any argv, and that the store key still REACHES every child (each child reports Object.hasOwn on its own environment), so the security assertion cannot be satisfied by a console that broke the feature."
+    },
+    {
+      "criterion": "No source file changed; no new millisecond literal; whole logs captured and read after the fact",
+      "status": "met",
+      "evidence": "git status shows three untracked test files under apps/cli/src/tui and nothing else outside .metaproject flow bookkeeping. `npx tsc -p tsconfig.json --noEmit` exits 0. The driven file imports CLI_CHILD_TIMEOUT_MS (every wait) and CLI_TEST_TIMEOUT_MS (the esbuild hook and every per-test ceiling) from apps/cli/test/childProcessTimeouts.ts and contains no millisecond literal of its own; the pure files spawn nothing and declare no timeout. Every run was redirected whole to a file in the scratchpad and read afterwards — nothing was piped through head or tail, and no exit code was read through a wrapper's echo."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/src/tui/profiles-pane.setup.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "PURE, 29 tests / 25 failing. What the checklist SAYS. Six steps in order while the profile is not ready, each naming the command it runs; the ordinary detail rows once it is; step 0's shell command printed with the variable NAME and no key-shaped literal on it; identical rendering with and without the value in the environment; the 5×4 step-by-exit-class matrix showing the CLI's own code and exactly the exit code it returned and no other; and the frame staying exactly rows by cols, escape-free and carrying the notice at three viewports with the checklist painted. The 4 passing cases are named in the file header as vacuous-today and each is paired with a red one.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.registration.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "PURE, 40 tests / 34 failing. What the checklist DOES. Enter on the profiles pane starts the next incomplete step and builds exactly the argv t35 §2.1 tabulates for steps 1, 2, 3, 4 and 5; the relay URL is asked for only when the profile has none; the export path opens pre-filled with <profileDir>/card-…json (shape, not instant) and submits to `contact export --out <that buffer>`; the card path imports without `--yes`. Order: step 0 gates step 1, busy gates every step, publication gates every send (with the positive pair). Folding: the 5×4 matrix onto `setup`, `ready` on an identity, `absent` on INVALID_CONFIGURATION. The 6 passing cases are named in the file header as vacuous-today and each is paired with a red one.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/main.registration.processDriven.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "DRIVEN, 3 tests / 3 failing. The real console binary, a real control socket, real children, and a hostile process.env. Case 1 is AC1 end to end and pins the exact command sequence, every argv, one child at a time, `y\\n` on the import child's stdin, no key in any argv or frame, the key still reaching every child, and the env probe's two-sided verdict. Case 2 is the store key absent: the pane prints the command with no key material on it, Enter spawns nothing (announcements are exactly [doctor]), and the probe records ZERO reads, which is the sharpest form the detector takes. Case 3 is a failed step: exit 5 on `contact export` is shown with its code and class, names the existing-file cause, and the next keystroke retries step 3 rather than walking into step 4.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t35-console-client-design.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "§2.1 is what this dispatch specifies: the six steps, the invocation each drives, the completion condition for each, the step-0 boundary and its two rejected designs, the manual advance, and the operand defaults.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/acceptance-criteria.md",
+      "kind": "context",
+      "exists": true,
+      "summary": "AC1 is the criterion served; AC5, AC6 and AC8 are re-asserted where the new surface touches them.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/tui/profiles-pane.setup.test.ts",
+      "change": "added (test only)"
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.registration.test.ts",
+      "change": "added (test only)"
+    },
+    {
+      "path": "apps/cli/src/tui/main.registration.processDriven.test.ts",
+      "change": "added (test only)"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T15-F-001",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t35-console-client-design.md",
+      "symbol": "§2.1 operand defaults",
+      "problem": "§2.1 says the relay URL has 'no default', but `main.ts --relay-url` already puts one on `ProfileView.relayUrl`, and the health line paints it. Taken literally, a console launched exactly as the runbook launches it would ask the operator to retype a URL it is already displaying.",
+      "impact": "Two implementations are equally defensible and only one passes a test that assumes the other, which is precisely the kind of ambiguity that costs an implementer a round trip.",
+      "suggested_fix": "Read as: the console invents no default; a relay URL supplied at launch is the profile's own and is used directly, and an empty one opens the row. Both readings are pinned as separate cases in tui-shell.registration.test.ts, and the driven test launches WITHOUT `--relay-url` so the typed path is the one exercised end to end.",
+      "evidence": "apps/cli/src/tui/main.ts:112-121 (relayUrl from argv); t35 §2.1 'relay URL — no default'; tui-shell.registration.test.ts cases 'step 1 — creates the profile' and 'step 1 — asks for the relay URL first when the profile has none'.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          ".metaproject/flows/003-2026-09-07-echolet-residuals-and-tui/t35-console-client-design.md §2.1 'Operands come from the input row, pre-filled with an honest default' (four operands: relay URL, profile dir, store-key variable name, export path)"
+        ],
+        "enumeration_method": "The design lists its operand defaults in one bulleted block of four; three of the four name their source explicitly (the launch --profile, the launch --store-key-env, a generated instant) and only the relay URL says 'no default' while main.ts:112-121 already carries one. The class therefore has one member by construction."
+      }
+    },
+    {
+      "id": "T15-F-002",
+      "reviewer": "tests-creator",
+      "severity": "info",
+      "file": "apps/cli/src/tui/main.ts",
+      "line": 224,
+      "symbol": "runCli / child.stdin",
+      "problem": "`contact import` is the one command whose child stdin is deliberately left OPEN so the trust answer can be written when it arrives. A child that merely pauses its stdin after answering never exits, and the console therefore never reports the outcome.",
+      "impact": "Not a product defect — it is the intended handshake — but it is a trap for anyone writing a fake CLI for this path, and it cost one 45-second timeout to find.",
+      "suggested_fix": "A fake `contact import` child must destroy its stdin, not pause it, once it has read the answer. Done, and commented, in main.registration.processDriven.test.ts's FAKE_CLI.",
+      "evidence": "Measured: with `process.stdin.pause()` the harness timed out waiting for `contact import → ok (exit 0)` after `y\\n` had provably reached the child; with `process.stdin.destroy()` the same harness passed in 768ms.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/main.ts:223-224 — the only two branches that decide a child's stdin: `send` is handed the body and closed, `contact import` is left open, everything else is closed empty"
+        ],
+        "enumeration_method": "Read at the single writer of child stdin in the composition root (main.ts's runCli). It is one if/else-if with a stated third case, so the set of commands whose stdin stays open is exactly {contact import}."
+      }
+    }
+  ],
+  "questions": [
+    {
+      "id": "T15-Q1",
+      "question": "Is the startup `doctor` (t35 §2.1, 'the console runs exactly one command it was not asked for') in scope for this slice, or should the driven test tolerate its absence?",
+      "why": "It is load-bearing for a deterministic driven test rather than merely nice: it sets `busy` at startup, so a test that ignored it would press Enter into a busy console and be refused. All three driven cases therefore require it as the first child, and all three currently fail on exactly that wait.",
+      "options": [
+        {
+          "id": "a",
+          "label": "Implement it in this slice, as the design specifies — the driven cases are written for it",
+          "recommended": true
+        },
+        {
+          "id": "b",
+          "label": "Defer it and rewrite the driven cases to tolerate a console that starts knowing nothing"
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T15-Q2",
+      "question": "Should the checklist's exit-class VOCABULARY ('input/configuration', 'trust/protocol', 'relay/network', 'persistence') be pinned here, or does it belong to `failure-text.ts`?",
+      "why": "t35 §4.1 puts the sentences in a separate pure module with its own test (T-9), so pinning the words here would fix an interface that task owns.",
+      "options": [
+        {
+          "id": "a",
+          "label": "As written: pin the CLI's own code, the exact `exit N`, and that no other class appears — leave the words to failure-text.ts",
+          "recommended": true
+        },
+        {
+          "id": "b",
+          "label": "Pin the four class words on the checklist now"
+        }
+      ],
+      "can_be_resolved_by_agent": true
+    },
+    {
+      "id": "T15-Q3",
+      "question": "Two mechanisms the checklist needs are additions the design implies rather than states: `input-open` must be able to open a PRE-FILLED buffer (step 3's default export path), and a clock reading must be on the state (`observedAtMs`, t35 §2.3) for a pure reducer to build a timestamped path.",
+      "why": "`reduce` has no clock and `input-open` currently always opens an empty buffer, so neither is reachable today. The tests assert the path's SHAPE (`<profileDir>/card-….json`) and not its instant, so any source for the instant satisfies them.",
+      "options": [
+        {
+          "id": "a",
+          "label": "Fold `observedAtMs` at startup and after every settled command, as §2.3 proposes, and let `input-open` carry an initial buffer",
+          "recommended": true
+        },
+        {
+          "id": "b",
+          "label": "Compute the default in the impure shell and hand it to the reducer as part of the intent"
+        }
+      ],
+      "can_be_resolved_by_agent": true
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "test_files_created": 3,
+    "tests_added": 72,
+    "tests_failing_on_the_clean_tree": 62,
+    "tests_passing_on_the_clean_tree": 10,
+    "vitest_exit_code_on_the_clean_tree": 1,
+    "typecheck_exit_code": 0,
+    "source_files_changed": 0,
+    "pure_tests": 69,
+    "driven_tests": 3,
+    "exit_class_matrix_cases": 40,
+    "vacuous_today_cases_named_and_paired": 10,
+    "new_millisecond_literals": 0,
+    "final_run_duration_s": 135.88,
+    "env_read_shapes_measured": [
+      "Object.hasOwn(env, name) — getOwnPropertyDescriptor only, no get trap (permitted)",
+      "name in env — has trap only, no get trap (permitted)",
+      "Object.keys(env).includes(name) — ownKeys only, no get trap (permitted)",
+      "env[name] !== undefined — get trap, caller frame is the console (refused)",
+      "{ ...env } — get trap, caller frame is the console (refused)",
+      "Object.entries(env) — get trap (refused)",
+      "const { NAME } = env — get trap, caller frame is the console (refused)",
+      "JSON.stringify(env) — get trap (refused)"
+    ],
+    "detector_validation": [
+      "clean HEAD, harness copy driving only bindings that exist today: PASS in 768ms; probe.trapped > 0, probe.reads.length > 0, and every read's caller frame in node:child_process",
+      "mutant: `globalThis.__forbidden = process.env.ECHOLET_TUI_REG_KEY !== undefined` injected into the console bundle's banner — CAUGHT, the assertion failing with [\"at file:///…/apps/cli/dist/tui.sanity-29171.js:3:38\"]",
+      "Object.defineProperty(process.env, name, { get }) is not available: Node answers `TypeError: 'process.env' does not accept an accessor(getter/setter) descriptor`, which is why the whole object is replaced by a Proxy instead"
+    ],
+    "harness_sanity_file": "created, run against HEAD, and DELETED — git status carries no trace of it",
+    "tree_restored": true,
+    "machine_idle": false,
+    "load_average_1min_at_dispatch_start": 27.62,
+    "load_average_1min_at_pure_run": 10.19,
+    "load_average_1min_at_final_run_start": 10.83,
+    "load_average_1min_at_final_run_end": 13.5,
+    "load_note": "10-core host, never idle: the operator's own VM and browser ran throughout and the 1-minute load ranged 10.2 to 27.6 across the session, so every duration here is a loaded duration. Guards against a lying run: the two pure files spawn nothing and cannot be timeout artefacts; the driven file's three failures are all the SAME first wait (`timed out waiting for the console to spawn doctor`), which is a missing feature and not contention — the identical harness completes the same waits in 768ms against a binding that does exist; every figure was taken from a whole captured log read after the fact and never piped through head or tail; and the ten passing cases are enumerated by name in each file's header before the run, not explained after it.",
+    "git_status_after": " M .metaproject/flows/004-2026-09-08-echolet-console-client/flow.json\n M .metaproject/flows/004-2026-09-08-echolet-console-client/journal.md\n?? apps/cli/src/tui/main.registration.processDriven.test.ts\n?? apps/cli/src/tui/profiles-pane.setup.test.ts\n?? apps/cli/src/tui/tui-shell.registration.test.ts",
+    "routing_audit": {
+      "graph_used": "no — not-relevant: the surface is one directory named by the dispatch and reachable by direct import from t35 §2.1's own citations; the graph also predates this session's new files",
+      "wiki_used": "no — not-relevant: t35 §10 records the wiki as consulted and empty for this surface (sixteen generated draft pages, no architecture or decision page)",
+      "ctx_used": "yes — keryx ctx rg for every code search and keryx ctx run for git log",
+      "raw_rg_used": "no",
+      "testing_context_used": "yes — .metaproject/data/testing/context.md read before writing any test",
+      "memory_used": "no — not-relevant: the flow's own journal, t35 and the frozen criteria carried the history this task needed"
+    },
+    "per_file_pass_fail": {
+      "apps/cli/src/tui/profiles-pane.setup.test.ts": "29 tests, 25 failing, 4 passing",
+      "apps/cli/src/tui/tui-shell.registration.test.ts": "40 tests, 34 failing, 6 passing",
+      "apps/cli/src/tui/main.registration.processDriven.test.ts": "3 tests, 3 failing, 0 passing"
+    }
+  },
+  "timestamp_utc": "2026-09-09T03:00:00Z"
+}

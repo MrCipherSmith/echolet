@@ -34,3 +34,5 @@
 - 2026-09-09T02:06:37.104Z - task-added: T14: Close the escape-sequence hole at the six narrowing boundaries, and keep the submit path single-flight
 - 2026-09-09T02:06:42.763Z - task-attempt: T14: started (attempt 1) — A fresh agent, not the test author and not the orchestrator. Six narrowing functions, not the renderer; the zero-width joiner must survive, which catches a strip-every-format-character fix.
 - 2026-09-09T02:23:51.426Z - task-done: T14: Close the escape-sequence hole at the six narrowing boundaries, and keep the submit path single-flight
+- 2026-09-09T02:28:41.759Z - task-added: T15: RED tests for registration from inside the console: the six-step checklist on the profiles pane
+- 2026-09-09T02:28:57.618Z - task-attempt: T15: started (attempt 1) — Registration is the user's stated goal and does not depend on the pane-removal decision they still hold: the design renders it on the existing profiles pane, costing no ordinal. Step 0 is the security boundary - presence of the store key tested with Object.hasOwn, never by reading the value.
