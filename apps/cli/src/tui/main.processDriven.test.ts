@@ -6,6 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { CLI_TEST_TIMEOUT_MS } from "../../test/childProcessTimeouts";
 import { UNAUDITED_NOTICE } from "./shell-chrome";
 
 // Flow 003 T5 — D-1, at the level the defect actually lives on: real child processes.
@@ -358,6 +359,110 @@ describe("D-1: the console runs one command at a time, over real child processes
     expect([...new Set(reported)]).toEqual(["RELAY_UNAVAILABLE exit 4"]);
     expect(operator.painted()).not.toContain("PERSISTENCE_FAILURE");
   }, 90_000);
+});
+
+/*
+ * Flow 004 T23 — AC2, against real child processes.
+ *
+ * AC2 says "what the console shows afterwards is what the store holds — not an optimistic local
+ * echo. Demonstrated against a real driven process." The pure and shell-driven halves of that
+ * property are `tui-shell.storeTruth.test.ts`; this is the half the criterion's last sentence
+ * asks for, and it is here rather than in a harness of its own because this file already owns one
+ * that drives the shipped console binary over real children.
+ *
+ * Two counts, one defect each, both measured twice by the flow's own verifications:
+ *
+ *   004-T12-verify  AC2 partial   `applyOutcome`'s send case increments `outboxPending` locally
+ *                                 and never reconciles it — "exactly the optimistic echo the
+ *                                 criterion forbids"
+ *   004-T18-verify  AC2 not_met   unchanged at tui-shell.ts:768, and `inboxReceived` accumulates
+ *                                 poll deltas the same way at tui-shell.ts:756
+ *
+ * `poll` reports `received`, which `runtime/inbound.ts:27` defines as "envelopes accepted and
+ * committed BY THIS POLL". It is a per-poll figure, not a store total. Two polls — three
+ * envelopes, then none — and the honest report of the second is `0`. No command in the frozen
+ * eight reports an outbox figure at all (`profile.ts:476-479` is the whole of what `doctor`
+ * returns), so the outbox row may report none.
+ */
+
+/** `${ESC}[H${ESC}[2J`, the prefix `paint()` writes before every frame (tui-shell.ts:548). */
+const FRAME_HOME = `${String.fromCharCode(27)}[H${String.fromCharCode(27)}[2J`;
+/** Distinctive, so waiting for it proves the SECOND poll's frame is the one being read. */
+const SECOND_POLL_REJECTION = "94a6f678-0000-4000-8000-0000000023a2";
+
+/** The last frame written, with the SGR runs `styleFrame` added stripped back out. */
+function lastFrame(painted: string): string {
+  const frame = painted.split(FRAME_HOME).at(-1) ?? "";
+  return frame
+    .split(`${String.fromCharCode(27)}[`)
+    .map((part, index) => (index === 0 ? part : part.replace(/^[0-9;?]*[a-zA-Z]/, "")))
+    .join("");
+}
+
+/** One mailbox-pane row's value, out of a painted frame. */
+function mailboxRow(frame: string, label: "outbox" | "inbox"): string {
+  const line = frame.split("\r\n").find((row) => row.trimStart().startsWith(label));
+  return (line ?? `<no ${label} row was painted>`).trimStart().slice(label.length).trim();
+}
+
+describe("T23 — AC2 over real children: the mailbox reports what a command said, and nothing else", () => {
+  it("shows the figure the LAST poll returned, and no figure no command ever returned", async () => {
+    const operator = await startConsole();
+    await operator.awaitFrame(UNAUDITED_NOTICE);
+
+    // The startup child, reserved before the spawn and settled before the first keystroke.
+    operator.release(await operator.awaitReservedChild("doctor"), INVALID_CONFIGURATION_ENVELOPE, 2);
+    await operator.awaitFrame(STARTUP_OUTCOME);
+
+    // The mailbox pane, which is where the two counts are painted (mailbox-pane.ts:33-34).
+    operator.press("2");
+    await operator.awaitFrame("outbox");
+
+    // First poll: three envelopes arrive. `more: true` is unique to this reply, so waiting for it
+    // proves this poll's frame was painted before the second one is started.
+    operator.reserveNextChild();
+    operator.press("p");
+    operator.release(
+      await operator.awaitReservedChild("poll"),
+      JSON.stringify({ ok: true, data: { received: 3, more: true, rejected: [] } }),
+      0,
+    );
+    await operator.awaitFrame("yes — poll again");
+    expect(mailboxRow(lastFrame(operator.painted()), "inbox"), "the console dropped the figure the poll reported").toContain("3");
+
+    // Second poll: none arrive. The rejection is carried only so that waiting for its envelope id
+    // is an event proving THIS poll's frame is the one read below.
+    operator.reserveNextChild();
+    operator.press("p");
+    operator.release(
+      await operator.awaitReservedChild("poll"),
+      JSON.stringify({ ok: true, data: { received: 0, more: false, rejected: [{ envelopeId: SECOND_POLL_REJECTION, code: "SENDER_NOT_TRUSTED" }] } }),
+      0,
+    );
+    await operator.awaitFrame(SECOND_POLL_REJECTION);
+
+    const frame = lastFrame(operator.painted());
+    const inbox = mailboxRow(frame, "inbox");
+    const outbox = mailboxRow(frame, "outbox");
+
+    await operator.quit();
+
+    // Every child was one this test reserved, so no result below came from a refused second writer.
+    expect(operator.announcements.filter((entry) => !entry.held).map((entry) => entry.command)).toEqual([]);
+    expect(operator.announcements.map((entry) => entry.command)).toEqual(["doctor", "poll", "poll"]);
+
+    // RED. The last poll reported nothing received; the console shows the running total it keeps
+    // itself, which is a number no command returned and the store never held.
+    expect(inbox, "the console added one poll's figure to the next and showed the sum").toContain("0");
+    expect(inbox, "the console is still showing the previous poll's figure").not.toContain("3");
+
+    // RED. No command in the frozen eight reports an outbox figure, so the console has none to
+    // show — and `0 pending` is a claim about an encrypted store this process cannot open.
+    expect(/[0-9]/.test(outbox), `the console painted an outbox figure no command reported — ${JSON.stringify(outbox)}`).toBe(false);
+    for (const sentinel of ["null", "undefined", "NaN"]) {
+      expect(outbox.includes(sentinel), `the outbox row leaked the sentinel ${sentinel} — ${JSON.stringify(outbox)}`).toBe(false);
+    }
+  }, CLI_TEST_TIMEOUT_MS);
 });
 
 describe("the console explains itself when asked", () => {
