@@ -3,6 +3,7 @@ import { z } from "zod";
 import { deriveMailboxId } from "@echolet/crypto-core";
 import { MailboxEnvelopeSchema, signalAddressForDevice, type MailboxEnvelope } from "@echolet/protocol";
 import { importVerifiedSignalBundleV2 } from "@echolet/session-node";
+import { MAX_PLAINTEXT_BYTES } from "../limits";
 import { RelayClient, RelayError } from "../transport/relayClient";
 import { openProfile, PersistenceError, type Profile, type OpenProfileOptions, type ContactIdentifiers } from "./profile";
 import { appendHistory } from "./history";
@@ -22,13 +23,13 @@ const decode = <T>(bytes: Uint8Array): T => JSON.parse(new TextDecoder().decode(
 /**
  * The largest message body this client will encrypt, in bytes.
  *
- * It was a bare `65536` written twice below — once as the schema's character bound and once as the
- * byte bound — and now that `cli.ts` enforces the same limit while reading a body from stdin there
- * would have been a third. One name, one value: a reader that has to bound a plaintext imports this
- * rather than restating the number, so the CLI's stdin guard and the messenger's own refusal can
- * never drift apart the way the message-size constants on the two sides of the wire once did.
+ * The value moved to `../limits` when the operator console became its fourth reader: the console's
+ * pure layer must be able to bound a compose buffer at the same number, and importing this module
+ * to learn it would have pulled the store, the relay client and libsignal into a renderer. It is
+ * re-exported here because this module is where a reader looks for the messenger's own bound, and
+ * because `commands/cli.ts` has imported it from here since the stdin body path landed.
  */
-export const MAX_PLAINTEXT_BYTES = 65536;
+export { MAX_PLAINTEXT_BYTES } from "../limits";
 const inputSchema = z.object({ recipientIdentityId: z.string().min(1), messageId: z.string().uuid(), plaintext: z.string().max(MAX_PLAINTEXT_BYTES) }).strict();
 type SendInput = z.infer<typeof inputSchema>;
 interface Outbox { contentHash: string; envelope: MailboxEnvelope; status: "pending" | "delivered" }

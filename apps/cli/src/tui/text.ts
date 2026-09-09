@@ -15,6 +15,17 @@ export function codePoints(text: string): string[] {
   return [...text];
 }
 
+/**
+ * The UTF-8 byte length of `text`, which is what every bound this console must respect counts in.
+ *
+ * `outbound.ts` re-checks a plaintext with `Buffer.byteLength` before it encrypts one, so a console
+ * that bounded a compose buffer in code points would accept a body the CLI then refuses. Pure, and
+ * therefore usable from both the reducer and the renderer.
+ */
+export function utf8Bytes(text: string): number {
+  return Buffer.byteLength(text, "utf8");
+}
+
 /** Truncates to at most `width` code points. Never pads: panes are laid out inside a frame. */
 export function clipLine(text: string, width: number): string {
   const limit = Math.max(0, Math.floor(width));

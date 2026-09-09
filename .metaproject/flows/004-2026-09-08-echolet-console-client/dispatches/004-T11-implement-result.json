@@ -1,0 +1,274 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-004-t11-implement",
+  "dispatch_id": "004-T11-implement",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "The third wall is down: the console accepts text. Six source files changed and one added, no test file touched. `state.ts` declares `InputField`/`InputState` and the optional `input` field (a field, never a second `Modal`); `intents.ts` gains the five input intents; `tui-shell.ts` gains `inputKey` (routing order 2, reading `key.sequence` and never `key.name`), the five reducer cases with the C0/DEL/C1 filter AT THE REDUCER BOUNDARY, a `send` request built from a submitted message buffer, and the shell's half of the painted-at gate; `shell-chrome.ts` paints the compose row into one body row, names ctrl-c in a composing footer and on the degraded frame, and says a message is pending there. `w` on the conversation pane opens the row. 55 of the specification's 56 cases pass. The single failure is a typo in the specification, reported and NOT fixed: T10-C line 287 types `\"a\"` into the buffer `\"1234567\"` and expects `\"12345678\"`, which no implementation can produce; the implementation returns `\"1234567a\"`, which is that assertion's own stated property (an insertion that exactly reaches the bound is accepted). Whole `apps/cli`: 62 files, 345 tests, 344 pass, that one fail. Two self-mutations confirm the previously-vacuous halves are now load-bearing: deleting `!isBelowMinViewport(painted)` from the input stamp kills 3 of 5 inputViewport cases, and deleting the reducer filter kills 5 cases in tui-shell.input.test.ts while leaving shell-chrome.input.test.ts entirely green — which is exactly the AC7 split the criterion demands.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "1. Typed text accumulates: printable characters, including non-ASCII, reach the buffer with their case intact",
+      "status": "met",
+      "evidence": "T10-A, all 7 cases green. `mapKey` routes to `inputKey` while `state.input` is defined, and `inputKey` reads `key.sequence` — the raw chunk — so case survives (`decodeKey`'s `toLowerCase()` only ever touched `name`, which nothing in the input path reads) and a whole paste is inserted rather than its first code point. `decodeKey` itself is unchanged: it already carried the raw chunk on `sequence`, and the defect was that nothing read it."
+    },
+    {
+      "criterion": "2. AC7: control characters and escape sequences never enter the state, proven at the reducer boundary and not inside renderFrame",
+      "status": "met",
+      "evidence": "T10-B, all 5 cases green including the 400-trial seeded sweep and the exhaustive 65-code-point pass. The filter is `withoutControlPoints` in `reduce`'s `input-insert` case (tui-shell.ts); `renderFrame` filters nothing and `shell-chrome.ts` gained no defensive code. MUTATION: replacing `withoutControlPoints(intent.text)` with `intent.text` turns 5 cases in tui-shell.input.test.ts red and leaves shell-chrome.input.test.ts 17/17 green — the property lives in the state, not in the renderer."
+    },
+    {
+      "criterion": "3. The frame stays exactly rows by cols while typing, at the minimum viewport and beyond, with a body longer than the pane is wide; renderFrame stays pure, total and deterministic (AC6)",
+      "status": "met",
+      "evidence": "T10-G 4/4 and T10-I's `paints the buffer at every supported viewport` green together, so the exactness sweeps are no longer vacuous. The compose row spends one BODY row (11 → 10 pane rows at MIN_VIEWPORT); the buffer is clipped to the room left after the label and the byte counter, showing its TAIL, so a 600-code-point body in four scripts still leaves every line exactly `cols` code points. `composeLine` reads only its two arguments, allocates a new string and mutates nothing."
+    },
+    {
+      "criterion": "4. Input mode and the trust modal cannot be open at once, in either order",
+      "status": "met",
+      "evidence": "tui-shell.inputTrustExclusion.test.ts 8/8. `reduce` refuses `input-open` while `state.modal !== undefined` OR `state.busy` — the second is the mechanism, since a trust modal is only ever opened by the `contact import` handshake, which runs while a child is alive. `mapKey`'s modal branch stays first and stays exactly as written, so even in the state this suite makes unreachable the modal still wins. `insert` and `backspace` also refuse while a modal is up. `Modal` is not a union and no `modal !== undefined` site had to re-narrow."
+    },
+    {
+      "criterion": "5. The unaudited-prototype notice survives every input state and no emitted line exceeds the viewport width",
+      "status": "met",
+      "evidence": "T10-H 3/3 and T10-J 1/1. The notice, header, rule, activity line and footer are untouched by the input row, which is why the notice is still on row 0 at every supported viewport. AC8's half: while composing, `footerLine` returns `[enter] send  [esc] cancel  [ctrl-c] quit` — exactly what `inputKey` binds and nothing else — and `tooSmallFrame` swaps `press q to quit` for `press ctrl-c to quit`, because `q` is text while composing. Q1 answered as `replace`, the option the specification's author recommended."
+    },
+    {
+      "criterion": "6. Nothing typed can be submitted below the minimum viewport, reusing the trust modal's painted-at gate rather than a second rule",
+      "status": "met",
+      "evidence": "Both halves. Reducer half: `input-submit` returns the state object itself while `renderedAt` is null (T10-E, byte-identical). Shell half: `paint()` stamps `input.renderedAt` under the same `!isBelowMinViewport(painted)` condition that stamps the modal's, three lines below it. tui-shell.inputViewport.test.ts 5/5 green. MUTATION M-A′ applied to the new stamp (deleting `&& !isBelowMinViewport(painted)`): 3 failed | 2 passed — the half flow 003 T25 measured decaying silently is now covered."
+    },
+    {
+      "criterion": "No test file edited",
+      "status": "met",
+      "evidence": "`git status --porcelain -- apps/cli` lists six modified source files and one untracked source file; the four *.test.ts committed at 19ecb54 are unmodified. The one red case is reported as a finding, not repaired."
+    },
+    {
+      "criterion": "Properties not to be cost: renderFrame pure/total/deterministic/escape-free/exact, the notice on every frame, no line wider than the viewport, one command in flight, one door on the trust gate",
+      "status": "met",
+      "evidence": "The whole `apps/cli/src/tui` directory: 22 files, 174 tests, 173 pass — every flow 002/003 TUI suite still green, including tui.keyMaterial, tui-shell.singleFlight, tui-shell.trustViewport, shell-chrome.legend and shell-chrome.overflow. Single-flight: submit sets `busy` and refuses while `busy`, so one operator action is still one child. The trust gate keeps its single door: `answer-trust-prompt{answer:true}` is emitted by `trust-confirm` and by nothing else (T10-M)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T11-implement-result.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "This record.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-09T01-12-26-433Z_read.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "The captured run of the four specification files: 1 failed | 55 passed (56), 1.14s. Read after the fact, never piped through head or tail.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-09T01-16-47-580Z_rg.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "The whole apps/cli suite: 61 passed | 1 failed of 62 files, 344 passed | 1 failed of 345 tests. 62 test files exist on disk and 62 were reported, so no file's report was lost under load.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/limits.ts",
+      "change": "added"
+    },
+    {
+      "path": "apps/cli/src/runtime/outbound.ts",
+      "change": "modified"
+    },
+    {
+      "path": "apps/cli/src/tui/state.ts",
+      "change": "modified"
+    },
+    {
+      "path": "apps/cli/src/tui/intents.ts",
+      "change": "modified"
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.ts",
+      "change": "modified"
+    },
+    {
+      "path": "apps/cli/src/tui/shell-chrome.ts",
+      "change": "modified"
+    },
+    {
+      "path": "apps/cli/src/tui/text.ts",
+      "change": "modified"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T11-implement#F-001",
+      "reviewer": "004-T11-implement",
+      "severity": "major",
+      "file": "apps/cli/src/tui/tui-shell.input.test.ts",
+      "line": 287,
+      "symbol": "T10-C > refuses an insertion that would exceed maxBytes and leaves the buffer intact",
+      "problem": "The assertion is unsatisfiable as written. With `composing({ buffer: \"1234567\", maxBytes: 8 })` it types the chunk `\"a\"` and expects the buffer to become `\"12345678\"`. Inserting `\"a\"` into `\"1234567\"` can only produce `\"1234567a\"`; no implementation of an input mode can turn a typed `a` into an `8`. The intended chunk is almost certainly `\"8\"` — the surrounding case is about an insertion that lands EXACTLY on the bound being accepted, and `\"1234567\" + \"8\"` is 8 bytes at `maxBytes: 8`.",
+      "impact": "One red case out of 56 that no correct implementation can turn green, so the suite cannot reach zero failures until its author corrects it. The property it means to assert is nevertheless proved: the line above it (a 2-byte insertion into a 7-byte buffer at maxBytes 8 is REFUSED and the buffer is left intact) passes, and T10-C's second case proves the same boundary in UTF-8 bytes three more times, including `\"éé\"` reaching exactly 4 of 4 bytes and being accepted. The implementation's reported value, `\"1234567a\"`, is the behaviour the assertion describes in prose.",
+      "suggested_fix": "The test's author changes the typed chunk on line 287 from `\"a\"` to `\"8\"`, or the expected value from `\"12345678\"` to `\"1234567a\"`. The implementer did not touch it: AC9 and this dispatch both forbid adjusting a test to fit a fix, and a fix here would be indistinguishable from one.",
+      "evidence": "Captured run (.metaproject/data/gdctx/raw/2026-09-09T01-12-26-433Z_read.log): `AssertionError: expected '1234567a' to be '12345678' // Object.is equality` at src/tui/tui-shell.input.test.ts:287:45. Reproduced identically in all three runs — the four files alone, the whole src/tui directory, and the whole apps/cli suite — at 1-minute loads of 16.09, 23.24 and 12.49, so it is not a load artefact.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.input.test.ts:287"
+        ],
+        "enumeration_method": "All 56 cases in the four committed specification files were executed against the implementation; 55 pass. A second assertion of this shape — an expected value unreachable from the input its own case supplies — would necessarily also be red, and none is. The class therefore has exactly one member, established by execution rather than by inspection."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T11-implement#F-002",
+      "reviewer": "004-T11-implement",
+      "severity": "minor",
+      "file": "apps/cli/src/tui/shell-chrome.ts",
+      "line": 191,
+      "symbol": "HELP_LINES",
+      "problem": "The key list gained a line for `w` and now holds 11 rows plus its heading. At exactly MIN_VIEWPORT (72x16) the help pane has 11 body rows, so `fitPane` truncates by two and paints `… 2 more not shown` — the two dropped rows being `?  close this list` and `q  quit (ctrl-c also quits)`.",
+      "impact": "Bounded, and honest by construction: the pane says how many rows it is not showing (flow 003 AC7), and the FOOTER still carries `[q] quit` and `[?] close` at that width, because both hold ranks 1 and 2 and are the last labels `fitFooter` drops. So the key that leaves the program stays on the frame at the minimum viewport — the D-3 property — and only its duplicate inside the key list is displaced. At 18 rows and above the whole list fits again.",
+      "suggested_fix": "The pane task that lands the `chat` pane and the per-pane footer relation (t35 T-11) owns the key list's contents anyway; when it splits the list per pane, this resolves. Alternatively the heading row could be spent on a row of keys.",
+      "evidence": "HELP_LINES is 12 entries (1 head + 11 rows); `paneLines` passes `bodyRows` = rows - HEAD_ROWS(3) - TAIL_ROWS(2) = 11 at MIN_VIEWPORT.rows 16, and `fitPane` spends one row on `truncationMarker`. shell-chrome.legend.test.ts asserts `[q]` and `[?]` on a frame with the help list CLOSED, and passes.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T11-implement#F-003",
+      "reviewer": "004-T11-implement",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 326,
+      "symbol": "submitRequest",
+      "problem": "Six of the seven fields have no submit. `submitRequest` returns undefined for everything but `message`, so `input-submit` on a `relay-url` or `export-path` row is a refusal that says nothing.",
+      "impact": "Currently unreachable, and deliberately so: no key opens those fields — `w` opens `message` and nothing else — so the state cannot be entered by an operator. The alternative, closing the row on submit, would silently discard an operand; guessing a request would specify the registration and address-book mechanisms this dispatch was not asked for. The footer already reflects the difference: `[enter] send` is printed only for the `message` field, so no frame advertises a submit that would do nothing.",
+      "suggested_fix": "t35 §2.1's checklist task and §2.3's address-book task each add their field's request here. Until then the refusal is the honest state.",
+      "evidence": "t35 §2.1 (the five registration steps), §2.3 (`n` names a contact); the T10 dispatch's own F-001, which records that the tests deliberately open the row through `input-open` so as not to pre-decide the pane model.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-004",
+      "global_id": "004-T11-implement#F-004",
+      "reviewer": "004-T11-implement",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 257,
+      "symbol": "reduce > input-insert (the refusal at the bound)",
+      "problem": "t35 §3.1 says an insertion past `maxBytes` is 'refused and the row says so'. The refusal is implemented; the saying-so is only partial. The compose row shows `<used>/<max> bytes` once past half, which makes the remaining room visible before it runs out, but a refused keystroke produces no message of its own.",
+      "impact": "An operator pasting past the bound sees the counter stop moving rather than a sentence naming what happened. Saying more would need a field on `InputState` that the specification does not name — a `refused` flag or a message string — and inventing one would put an untested field in the state the tests assert over.",
+      "suggested_fix": "If the row should say it, the field belongs in `InputState` with a test that pins when it is set and when it clears. The byte counter satisfies the design's own affordance in the meantime.",
+      "evidence": "t35 §3.1 'Insertion that would exceed the bound is refused and the row says so' and §2.2 item 2 'the row shows 1 402 / 65 536 bytes once past half'. shell-chrome.input.test.ts records at line 264 that the counter is deliberately not pinned.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-005",
+      "global_id": "004-T11-implement#F-005",
+      "reviewer": "004-T11-implement",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 331,
+      "symbol": "submitRequest > messageId",
+      "problem": "The submitted `send` request carries no `messageId`, so the CLI mints one per invocation and t35 §2.2's idempotent-retry rule ('the same id on an unchanged retry, a new id after an edit') is not yet in force.",
+      "impact": "No behaviour regresses — `buildArgv` omits `--message-id` when it is absent, which is what every existing `send` path already does — but a retry after a failure is a new message rather than the same one. Fixing it needs the `TuiIo.newMessageId` seam, which is t35's T-6: minting a uuid inside `reduce` would make the reducer impure, and every purity assertion in this suite reads `reduce`.",
+      "suggested_fix": "T-6 adds `newMessageId` to `TuiIo`, folds an id into `InputState` when the row opens, and mints a new one when the buffer changes after a failure. tui-shell.inputViewport.test.ts needs no change: it reads `command`, `to` and `text` only.",
+      "evidence": "t35 §2.2 'The message id is generated once per body and reused across retries'; cli-bridge.ts:102 makes `--message-id` conditional; the T10 dispatch's F-006 names the same seam.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-006",
+      "global_id": "004-T11-implement#F-006",
+      "reviewer": "004-T11-implement",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 135,
+      "symbol": "inputKey > a chunk decoded as a control keystroke",
+      "problem": "A chunk whose FIRST byte is a C0 control other than CR, LF, ESC or Ctrl-C is dropped whole rather than inserted with its remainder filtered. A paste beginning with a tab therefore loses its text, where the same paste with the tab in the middle keeps everything but the tab.",
+      "impact": "Small and asymmetric, and it is the safe direction: `decodeKey` has already classified such a chunk as a keystroke, and treating a keystroke as text is how an escape-sequence decoder gets into an input path (t35 §2.3 refuses exactly that for arrows). No specification case covers a control-leading paste; the 400-trial sweep generates them and asserts only that nothing of them reaches the buffer, which this satisfies.",
+      "suggested_fix": "If a control-leading paste should keep its remainder, `inputKey` can fall through to `input-insert` for a multi-code-point chunk that is not ESC-leading — the reducer already filters what arrives. It needs a test first; the asymmetry is currently unspecified.",
+      "evidence": "tui-shell.ts `decodeKey` lines 208-210 return `{ ctrl: true }` for any first byte in 1..26; `inputKey` binds only Ctrl-C and drops the rest. tui-shell.input.test.ts T10-B embeds every control point as `a<control>b`, never as a leading byte.",
+      "confidence": "medium",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "The plaintext bound now lives in a new leaf module, apps/cli/src/limits.ts, which runtime/outbound.ts imports and re-exports. Is that the home the flow wants, or should it move to packages/protocol?",
+      "why": "t35 §8 Q2 left the home open and named these two options; the T10 dispatch's F-004 asks only that the console not add a third literal. The console's pure layer cannot import runtime/outbound.ts to learn the number — that module reaches the encrypted store, the relay client and libsignal, and a renderer that loaded all of it to read one integer would have spent the purity src/tui is built on. A leaf module was the cheapest answer that keeps one value; moving it to packages/protocol later is a change to that one file and to nothing that reads it.",
+      "options": [
+        {
+          "id": "leaf",
+          "label": "Keep it in apps/cli/src/limits.ts, imported by the messenger, the CLI's stdin guard and the console",
+          "recommended": true
+        },
+        {
+          "id": "protocol",
+          "label": "Move it to packages/protocol/src/constants/limits.ts, where both sides of the wire can read it",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q2",
+      "question": "`w` opens the compose row on the `history` pane only, and the global footer does not advertise it — the key list under `?` does. Is that the right interim, or should `w` be global until the chat pane lands?",
+      "why": "t35 §2.2 binds `w` on a chat pane that does not exist; ordinal 3 (`history`) is the pane §3.4 renames to `chat`, so that is where the binding went. The footer is one global list, so advertising a per-pane key there would be the lie shell-chrome.ts:125 refuses — but a key only reachable through the help list is a key most operators will not find. The per-pane footer relation is t35's T-11 and settles this properly.",
+      "options": [
+        {
+          "id": "pane",
+          "label": "Keep w on the conversation pane, named in the key list, until T-11 makes the footer pane-aware",
+          "recommended": true
+        },
+        {
+          "id": "global",
+          "label": "Bind w on every pane and add [w] write to the global footer now",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "source_files_changed": 6,
+    "source_files_added": 1,
+    "test_files_changed": 0,
+    "typecheck_exit_code": 0,
+    "build_exit_code": 0,
+    "spec_files_tests": 56,
+    "spec_files_passed": 55,
+    "spec_files_failed": 1,
+    "tui_directory_files": 22,
+    "tui_directory_tests": 174,
+    "tui_directory_passed": 173,
+    "apps_cli_test_files_on_disk": 62,
+    "apps_cli_test_files_reported": 62,
+    "apps_cli_tests": 345,
+    "apps_cli_passed": 344,
+    "apps_cli_failed": 1,
+    "mutations_applied_and_reverted": 2,
+    "mutation_paint_gate_killed_cases": 3,
+    "mutation_reducer_filter_killed_cases": 5,
+    "machine_idle": false,
+    "load_average_1min_at_session_start": 11.9,
+    "load_average_1min_spec_run": 16.09,
+    "load_average_1min_tui_run": 23.24,
+    "load_average_1min_full_suite_start": 12.49,
+    "load_average_1min_full_suite_end": 47.76,
+    "load_average_15min_range": "15.6-35.1",
+    "load_note": "10-core machine, never idle: the operator's own VM and browser hold roughly half of it. The full apps/cli suite spawns real child processes and drove the 1-minute load from 12.5 to 47.8 across its ~3 minutes. Two guards against a lying run: 62 test files exist on disk and 62 were reported, so no file's report was lost; and the one failure reproduced identically in three separate runs at three different loads, including two sub-2-second runs of the pure files alone."
+  },
+  "timestamp_utc": "2026-09-09T01:20:00Z"
+}

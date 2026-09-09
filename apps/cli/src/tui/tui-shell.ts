@@ -4,8 +4,10 @@ import { modalIntent, trustModalIsComplete } from "./modal-host";
 import { MIN_VIEWPORT, isBelowMinViewport, renderFrame, styleFrame } from "./shell-chrome";
 import {
   PANE_IDS,
+  inputMaxBytes,
   type ContactView,
   type HistoryEntryView,
+  type InputState,
   type KeyEvent,
   type OperatorState,
   type RejectionView,
@@ -13,6 +15,7 @@ import {
   type TrustModal,
   type Viewport,
 } from "./state";
+import { utf8Bytes } from "./text";
 
 /**
  * The shell, after the reference TUI's `tui-shell.ts`.
@@ -75,6 +78,16 @@ export function mapKey(key: KeyEvent, state: OperatorState): Intent | undefined 
     return undefined;
   }
 
+  /*
+   * Routing order 2 (t35 §3.1): while the compose row is open it owns the keyboard, and every key
+   * below this line is TEXT. An operator typing "quit" must not quit; a message containing the word
+   * "period" must not poll, doctor and publish on its way in.
+   *
+   * It is not a modal and takes nothing away: Ctrl-C still leaves, because a console that cannot be
+   * left is worse than a lost draft, and AC8 requires a way out in every state.
+   */
+  if (state.input !== undefined) return inputKey(key);
+
   if (key.ctrl) return key.name.toLowerCase() === "c" ? { kind: "quit" } : undefined;
   if (key.name === "q") return { kind: "quit" };
   if (key.name === "?") return { kind: "toggle-help" };
@@ -106,6 +119,29 @@ export function mapKey(key: KeyEvent, state: OperatorState): Intent | undefined 
   return intent;
 }
 
+/**
+ * A keystroke's meaning while the compose row is open. Four input intents, plus the way out.
+ *
+ * It reads `key.sequence` and never `key.name`, which is the whole of wall 1: `decodeKey` keeps
+ * only the first code point of a chunk on `name` and lower-cases it, so a mode that read `name`
+ * would turn "Hello" into "h" and a paste into its first character.
+ *
+ * A chunk that BEGINS with ESC is a key rather than text (t35 §3.1). A bare Escape cancels; an
+ * arrow — `ESC [ A` — is refused outright, because decoding one would put an escape-sequence
+ * decoder in the input path of a program whose security argument rests on the pure layer emitting
+ * no escape bytes (§2.3). A chunk `decodeKey` read as a control keystroke is likewise a key: only
+ * Ctrl-C is bound here, and the rest are dropped rather than pasted.
+ */
+function inputKey(key: KeyEvent): Intent | undefined {
+  if (key.ctrl) return key.name.toLowerCase() === "c" ? { kind: "quit" } : undefined;
+  if (key.sequence.startsWith(ESC)) return key.sequence === ESC ? { kind: "input-cancel" } : undefined;
+  if (key.sequence === "\r" || key.sequence === "\n") return { kind: "input-submit" };
+  if (key.sequence === DEL) return { kind: "input-backspace" };
+  if (key.sequence === "") return undefined;
+  // The RAW chunk. Filtering happens in `reduce`, at the boundary, and nowhere else.
+  return { kind: "input-insert", text: key.sequence };
+}
+
 /** The bindings that depend on the active profile. Split out so the D-1 gate can read the intent. */
 function paneKeyIntent(key: KeyEvent, state: OperatorState): Intent | undefined {
   // The command keys. Each is a precondition away from being unbound: a key that would build an
@@ -126,6 +162,23 @@ function paneKeyIntent(key: KeyEvent, state: OperatorState): Intent | undefined 
       return profile.contactCardPath === undefined
         ? undefined
         : { kind: "run", request: { command: "contact import", profileDir: profile.profileDir, from: profile.contactCardPath } };
+    case "w":
+      /*
+       * Write a message to the selected contact (t35 §2.2 step 1).
+       *
+       * Bound on the conversation pane only — ordinal 3, which §3.4 renames `chat` — because that
+       * is where the operator can see who they are writing to. Three preconditions, each of which
+       * would otherwise open a row whose submit could not build a complete request: a conversation
+       * on the screen, a recipient, and no child already alive.
+       *
+       * It is deliberately absent from the footer: the footer is one global list and this key is
+       * bound on one pane, so advertising it everywhere would be the lie `shell-chrome.ts` refuses.
+       * The key list under `?` names it, which is the same resolution the footer's dropped labels
+       * already have. The per-pane footer relation is t35's T-11.
+       */
+      return state.pane !== "history" || state.selectedContactId === null || state.busy
+        ? undefined
+        : { kind: "input-open", field: "message" };
     case "c": {
       const next = state.contacts[(state.contacts.findIndex((contact) => contact.identityId === state.selectedContactId) + 1) % Math.max(1, state.contacts.length)];
       return next === undefined ? undefined : { kind: "select-contact", identityId: next.identityId };
@@ -172,11 +225,110 @@ export function reduce(state: OperatorState, intent: Intent): Step {
       // An incomplete modal must still be cancellable, or a malformed contact card is a dead end.
       if (state.modal === undefined) return { state, effects: [] };
       return { state: { ...state, modal: undefined }, effects: [{ kind: "answer-trust-prompt", answer: false }] };
+    case "input-open":
+      /*
+       * Both refusals are the coexistence rule, and they are refusals rather than corrections.
+       *
+       * While a modal is open nothing may compose behind it. While a child is alive nothing may
+       * compose at all — which is what makes the coexisting state unreachable rather than merely
+       * handled: a trust modal is only ever opened by the `contact import` handshake, and that runs
+       * while `busy` is set, so a modal can never arrive on top of an open row.
+       */
+      if (state.modal !== undefined || state.busy) return { state, effects: [] };
+      return {
+        state: {
+          ...state,
+          // Unpainted, exactly like `buildTrustModal`'s `renderedAt: null`: the shell stamps it
+          // after the frame carrying the row was written, and never before.
+          input: { field: intent.field, buffer: "", renderedAt: null, maxBytes: inputMaxBytes(intent.field) },
+        },
+        effects: [],
+      };
+    case "input-insert": {
+      const input = state.input;
+      if (input === undefined || state.modal !== undefined) return { state, effects: [] };
+      /*
+       * AC7, at the boundary. Every code point of U+0000..U+001F, U+007F and U+0080..U+009F is
+       * dropped here, so a paste carrying an escape sequence inserts its printable remainder and
+       * nothing else, and no later renderer change can reintroduce the byte. The property belongs
+       * to the state: `renderFrame` filters nothing, and the test that proves this does not import
+       * it (t35 §5 item 4).
+       */
+      const text = withoutControlPoints(intent.text);
+      if (text === "") return { state, effects: [] };
+      const buffer = input.buffer + text;
+      // Refused, not truncated: silently dropping the tail loses part of a message the operator
+      // believes they sent. Counted in UTF-8 bytes because that is what the CLI counts.
+      if (utf8Bytes(buffer) > input.maxBytes) return { state, effects: [] };
+      return { state: { ...state, input: { ...input, buffer } }, effects: [] };
+    }
+    case "input-backspace": {
+      const input = state.input;
+      if (input === undefined || state.modal !== undefined) return { state, effects: [] };
+      // One CODE POINT, not one UTF-16 unit: halving an astral pair would leave a lone surrogate in
+      // the buffer and therefore in a frame.
+      const points = [...input.buffer];
+      points.pop();
+      return { state: { ...state, input: { ...input, buffer: points.join("") } }, effects: [] };
+    }
+    case "input-cancel":
+      if (state.input === undefined) return { state, effects: [] };
+      return { state: { ...state, input: undefined }, effects: [] };
+    case "input-submit": {
+      const input = state.input;
+      if (input === undefined || state.modal !== undefined || state.busy) return { state, effects: [] };
+      // The trust modal's painted-at gate, reused rather than reinvented (t35 §3.2): below
+      // `MIN_VIEWPORT` the frame is the degraded one, which carries no input row, so a submit from
+      // there would send a body the operator never saw. The buffer is kept, because a refusal that
+      // also discarded the draft would punish the operator for the size of their window.
+      if (input.renderedAt === null) return { state, effects: [] };
+      const request = submitRequest(state, input);
+      if (request === undefined) return { state, effects: [] };
+      // `busy` is set here for the same reason `run` sets it: one command in flight at a time, and
+      // the unit is one operator action.
+      return { state: { ...state, input: undefined, busy: true }, effects: [{ kind: "run-cli", request }] };
+    }
     case "quit":
       return { state, effects: [{ kind: "quit" }] };
     default:
       return { state, effects: [] };
   }
+}
+
+/**
+ * True for the three ranges no frame may be able to carry: C0, DEL and C1.
+ *
+ * A numeric predicate rather than a regular expression with literal control bytes, for the same
+ * reason `ESC` below is built from a character code: a literal control byte in a source file is
+ * invisible in review, and searching the pure layer for one has to stay a meaningful check.
+ */
+function isControlPoint(point: string): boolean {
+  const code = point.codePointAt(0) ?? 0;
+  return code <= 0x1f || code === 0x7f || (code >= 0x80 && code <= 0x9f);
+}
+
+/** `text` with every control point removed, iterated by code point so an astral pair survives. */
+function withoutControlPoints(text: string): string {
+  return [...text].filter((point) => !isControlPoint(point)).join("");
+}
+
+/**
+ * The request a submitted buffer builds, or `undefined` when it would be incomplete.
+ *
+ * Only the `message` field has a submit today. The other six are operands of the registration and
+ * address-book steps (t35 §2.1, §2.3), whose requests belong to those tasks; until one lands, no
+ * key opens those fields and a submit on one is a refusal rather than a guess at what it meant.
+ *
+ * The body travels on the request OBJECT and never in an argv: `buildArgv` puts `text` in no token,
+ * and `main.ts` writes it to the child's stdin. That is AC3, and it is why this is a `send` request
+ * rather than a command line.
+ */
+function submitRequest(state: OperatorState, input: InputState): CliRequest | undefined {
+  if (input.field !== "message") return undefined;
+  const profile = state.profiles[state.activeProfile];
+  const to = state.selectedContactId;
+  if (profile === undefined || to === null || input.buffer === "") return undefined;
+  return { command: "send", profileDir: profile.profileDir, to, text: input.buffer };
 }
 
 /**
@@ -186,6 +338,8 @@ export function reduce(state: OperatorState, intent: Intent): Step {
  */
 const ESC = String.fromCharCode(27);
 const CTRL_C = String.fromCharCode(3);
+/** What a terminal sends for Backspace. `decodeKey` gives it a `name` nothing else binds. */
+const DEL = String.fromCharCode(127);
 
 const ALTERNATE_SCREEN_ON = `${ESC}[?1049h${ESC}[?25l`;
 const ALTERNATE_SCREEN_OFF = `${ESC}[?25h${ESC}[?1049l`;
@@ -342,6 +496,12 @@ export function runTuiShell(io: TuiIo, state: OperatorState): Promise<number> {
     const modal = current.modal;
     if (modal !== undefined && modal.renderedAt === null && !isBelowMinViewport(painted)) {
       current = { ...current, modal: { ...modal, renderedAt: io.now() } };
+    }
+    // The same gate, for the same reason, on the compose row: the degraded frame carries no input
+    // row either, so writing one is not the operator seeing what Enter would send.
+    const input = current.input;
+    if (input !== undefined && input.renderedAt === null && !isBelowMinViewport(painted)) {
+      current = { ...current, input: { ...input, renderedAt: io.now() } };
     }
   };
 
