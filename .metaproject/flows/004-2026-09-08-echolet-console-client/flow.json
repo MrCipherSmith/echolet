@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T07:56:01.711Z",
+  "updatedAt": "2026-09-09T09:01:28.309Z",
   "source": {
     "type": "description",
     "ref": null
@@ -625,6 +625,61 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T29",
+      "title": "Close what does not need the operator: the viewport sweep, the console against the tailnet relay, and a stale comment",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T08:01:01.499Z",
+            "outcome": "started",
+            "detail": "AC8 has not been re-measured since flow 002/003 and the console has changed a great deal; AC10 half is reachable because the tailnet relays are live and answering. The address book stays blocked on the pane decision, which is the users."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T30",
+      "title": "Stop naming a key that does nothing, and stop leaving a child alive after the operator quits",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T31",
+      "title": "The gate must finish its verdict when vitest loses a report, not refuse it",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T09:01:28.309Z",
+            "outcome": "started",
+            "detail": "Measured three times identically: 75 of 77 files reported, 496 of 517 tests, six RPC timeouts, zero failing tests. Serial execution reports all 77 and 517 in 504s against 296s, so the loss is a starved worker rather than noise - and the gate now blocks every push. The repair must keep the parallel run, because it is also the only thing that stresses cross-file interference."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -1035,6 +1090,36 @@
       "at": "2026-09-09T07:56:01.711Z",
       "event": "task-done",
       "detail": "T28: Make a received message readable, and filter the launch arguments"
+    },
+    {
+      "at": "2026-09-09T08:01:01.351Z",
+      "event": "task-added",
+      "detail": "T29: Close what does not need the operator: the viewport sweep, the console against the tailnet relay, and a stale comment"
+    },
+    {
+      "at": "2026-09-09T08:01:01.499Z",
+      "event": "task-attempt",
+      "detail": "T29: started (attempt 1) — AC8 has not been re-measured since flow 002/003 and the console has changed a great deal; AC10 half is reachable because the tailnet relays are live and answering. The address book stays blocked on the pane decision, which is the users."
+    },
+    {
+      "at": "2026-09-09T08:31:36.065Z",
+      "event": "task-done",
+      "detail": "T29: Close what does not need the operator: the viewport sweep, the console against the tailnet relay, and a stale comment"
+    },
+    {
+      "at": "2026-09-09T08:31:36.150Z",
+      "event": "task-added",
+      "detail": "T30: Stop naming a key that does nothing, and stop leaving a child alive after the operator quits"
+    },
+    {
+      "at": "2026-09-09T09:01:20.919Z",
+      "event": "task-added",
+      "detail": "T31: The gate must finish its verdict when vitest loses a report, not refuse it"
+    },
+    {
+      "at": "2026-09-09T09:01:28.309Z",
+      "event": "task-attempt",
+      "detail": "T31: started (attempt 1) — Measured three times identically: 75 of 77 files reported, 496 of 517 tests, six RPC timeouts, zero failing tests. Serial execution reports all 77 and 517 in 504s against 296s, so the loss is a starved worker rather than noise - and the gate now blocks every push. The repair must keep the parallel run, because it is also the only thing that stresses cross-file interference."
     }
   ]
 }

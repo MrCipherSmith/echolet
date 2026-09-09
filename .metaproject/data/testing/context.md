@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-09-08T03:47:31.597Z
+generatedAt: 2026-09-09T09:35:06.144Z
 
 ## Frameworks
 
@@ -8,7 +8,9 @@ generatedAt: 2026-09-08T03:47:31.597Z
 
 ## Scripts
 
+- `gate:selftest`: `sh scripts/gate/selftest.sh`
 - `test`: `pnpm -r test`
+- `test:go`: `sh scripts/gate/go-tests.sh`
 
 ## Configs
 
@@ -25,8 +27,12 @@ generatedAt: 2026-09-08T03:47:31.597Z
 ## Test Files
 
 - apps/cli/src/commands/cli.dashOptionValues.test.ts
+- apps/cli/src/commands/cli.doctorContacts.test.ts
+- apps/cli/src/commands/cli.doctorOffline.test.ts
 - apps/cli/src/commands/cli.processFailures.test.ts
 - apps/cli/src/commands/cli.relayErrorCodes.test.ts
+- apps/cli/src/commands/cli.sendEmptyText.test.ts
+- apps/cli/src/commands/cli.sendStdin.test.ts
 - apps/cli/src/commands/cli.senderQuota.test.ts
 - apps/cli/src/commands/cli.test.ts
 - apps/cli/src/runtime/config.test.ts
@@ -37,36 +43,62 @@ generatedAt: 2026-09-08T03:47:31.597Z
 - apps/cli/src/runtime/inbound.test.ts
 - apps/cli/src/runtime/outbound.claimResidual.test.ts
 - apps/cli/src/runtime/outbound.concurrentSend.test.ts
+- apps/cli/src/runtime/outbound.publicationPool.test.ts
 - apps/cli/src/runtime/outbound.publicationPrecondition.test.ts
 - apps/cli/src/runtime/outbound.publish.test.ts
 - apps/cli/src/runtime/outbound.senderAuthentication.test.ts
 - apps/cli/src/runtime/outbound.test.ts
+- apps/cli/src/runtime/profile.publicationPool.test.ts
 - apps/cli/src/runtime/profile.test.ts
 - apps/cli/src/transport/relayClient.claimable.test.ts
 - apps/cli/src/transport/relayClient.loopbackHostname.test.ts
 - apps/cli/src/transport/relayClient.pollCapacity.test.ts
 - apps/cli/src/transport/relayClient.prekeyUnavailable.test.ts
+- apps/cli/src/transport/relayClient.protocolMirror.test.ts
 - apps/cli/src/transport/relayClient.responseBoundDerivation.test.ts
 - apps/cli/src/transport/relayClient.senderQuota.test.ts
 - apps/cli/src/transport/relayClient.sizeSymmetry.test.ts
 - apps/cli/src/transport/relayClient.test.ts
+- apps/cli/src/tui/cli-bridge.sendStdin.test.ts
 - apps/cli/src/tui/cli-bridge.test.ts
+- apps/cli/src/tui/failure-text.test.ts
+- apps/cli/src/tui/history-pane.readable.test.ts
 - apps/cli/src/tui/history-pane.test.ts
 - apps/cli/src/tui/mailbox-pane.test.ts
+- apps/cli/src/tui/main.argvEscape.test.ts
 - apps/cli/src/tui/main.processDriven.test.ts
+- apps/cli/src/tui/main.registration.processDriven.test.ts
+- apps/cli/src/tui/main.sendChild.test.ts
 - apps/cli/src/tui/modal-host.test.ts
 - apps/cli/src/tui/profiles-pane.rosterClaim.test.ts
+- apps/cli/src/tui/profiles-pane.setup.test.ts
 - apps/cli/src/tui/profiles-pane.test.ts
+- apps/cli/src/tui/shell-chrome.input.test.ts
 - apps/cli/src/tui/shell-chrome.legend.test.ts
 - apps/cli/src/tui/shell-chrome.overflow.test.ts
 - apps/cli/src/tui/shell-chrome.recency.test.ts
 - apps/cli/src/tui/shell-chrome.test.ts
+- apps/cli/src/tui/tui-shell.exitClassMatrix.test.ts
+- apps/cli/src/tui/tui-shell.externalText.test.ts
+- apps/cli/src/tui/tui-shell.externalTextViewport.test.ts
+- apps/cli/src/tui/tui-shell.input.test.ts
+- apps/cli/src/tui/tui-shell.inputTrustExclusion.test.ts
+- apps/cli/src/tui/tui-shell.inputViewport.test.ts
+- apps/cli/src/tui/tui-shell.keystrokeDispatch.test.ts
+- apps/cli/src/tui/tui-shell.outcomeEscape.test.ts
+- apps/cli/src/tui/tui-shell.registration.test.ts
 - apps/cli/src/tui/tui-shell.singleFlight.test.ts
 - apps/cli/src/tui/tui-shell.smallViewport.test.ts
+- apps/cli/src/tui/tui-shell.storeTruth.test.ts
+- apps/cli/src/tui/tui-shell.submitSingleFlight.test.ts
 - apps/cli/src/tui/tui-shell.test.ts
+- apps/cli/src/tui/tui-shell.trustViewport.test.ts
+- apps/cli/src/tui/tui-shell.wayOut.test.ts
 - apps/cli/src/tui/tui.keyMaterial.test.ts
+- apps/cli/test/e2e/console-real-cli.test.ts
 - apps/cli/test/e2e/flood-closure.test.ts
 - apps/cli/test/e2e/init-relay-url.test.ts
+- apps/cli/test/e2e/prekey-pool-replenishment.test.ts
 - apps/cli/test/e2e/publication-claimability.test.ts
 - apps/cli/test/e2e/relay-tls.test.ts
 - apps/cli/test/e2e/rewalk-crash-safety.test.ts
@@ -74,18 +106,8 @@ generatedAt: 2026-09-08T03:47:31.597Z
 - apps/mobile/src/screens/MessagingScreen.test.mjs
 - packages/client-core/src/identity/createIdentityProfile.test.ts
 - packages/client-core/src/identity/createSignedPreKeyBundle.test.ts
-- packages/client-db/src/index.test.ts
-- packages/crypto-core/src/mailbox/auth.envelope.test.ts
-- packages/crypto-core/src/mailbox/auth.readThrough.test.ts
-- packages/crypto-core/src/mailbox/auth.test.ts
-- packages/crypto-core/src/session/session.test.ts
-- packages/protocol/src/types/mailboxEnvelope.test.ts
-- packages/protocol/src/types/signalPreKeyBundleV2.test.ts
-- packages/protocol/src/validators/validateDeviceRecord.test.ts
-- packages/session-node/src/EncryptedSqliteStore.test.ts
-- packages/session-node/src/SignalClient.test.ts
-- packages/session-node/src/wire.test.ts
 
+- ... 11 more
 
 ## CI
 

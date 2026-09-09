@@ -1,0 +1,273 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "004-T31-implement-2026-09-09",
+  "dispatch_id": "004-T31-implement",
+  "status": "DONE",
+  "summary": "The push gate now FINISHES an incomplete JavaScript run instead of refusing it. The JS step moved out of scripts/gate/suites.sh into a new scripts/gate/js-suite.sh, which runs the suite exactly as before (same command, same parallelism, same whole-suite scope, same keryx-or-package-manager routes), then reads the run's own output and compares the files that reported against the test files vitest resolves on disk. If some did not report, it re-runs precisely those files with --no-file-parallelism and requires them green; it passes only when every test file in every workspace package has been reported green across the parallel run plus the serial completion. A run that reports everything never reaches any of that and spends no subprocess on it. A lost report is distinguished from a real failure structurally, not by guessing: a failing file REPORTS (its own report line carries `failed`, and it lands in the `Test Files ... failed` tally), a lost report is the ABSENCE of a line; both failure checks run first and block with no completion attempted. Two further narrowings guard the completion path — every error the run raised must be a `[vitest-worker]: Timeout calling` report loss with the recognised count equal to vitest's own `Errors N` tally, and the gate's own file census must agree with vitest's arithmetic for the package. Proved on the real repository in both directions: the real recorded 75-of-77 failing run was completed (missing set computed as exactly apps/cli/src/runtime/inbound.test.ts and inbound.batchIsolation.test.ts, re-run serially, 2 files / 21 tests green, 42 s, exit 0), and a deliberately failing test in the real tree blocked the real full run with 'This is a real failure, not a lost report, and no completion pass is attempted for it'. The self-test grew from 44 to 60 rows; rows L1-L9 pin the new states, including the two that stop this being a bypass. Diagnosis recorded in project memory as an accepted constraint and in docs/STATUS_CURRENT.md; .metaproject/data/testing/context.md regenerated from a clean checkout of HEAD (77 apps/cli test files, 91 overall) because keryx's own scan counts .claude/worktrees twice. Nothing was committed.",
+  "summary_markdown": "## T31 — the gate completes the run instead of giving up\n\n**What changed.** `scripts/gate/js-suite.sh` (new) is the JavaScript step. It runs the suite unchanged, then asks one question the gate never asked before: *did every test file on disk report?* When the answer is no, it re-runs precisely the silent files serially and requires them green. `scripts/gate/suites.sh` delegates to it; `.githooks/pre-push` lists it among the steps whose absence blocks a push.\n\n**How a lost report is told apart from a failure.** Not by inference — by the shape of the evidence. A failing file **reports**: it prints ` ❯ path (n tests | 1 failed)` and lands in `Test Files 1 failed | …`. A lost report is the **absence** of a line. Both failure checks run before anything else and exit immediately, so no failure can be re-labelled as a loss. Two extra conditions must hold before the completion path is entered at all: every error the run raised is a `[vitest-worker]: Timeout calling` report loss (count equal to vitest's `Errors N errors`), and the gate's file census agrees with vitest's own arithmetic. Anything else blocks, exactly as before.\n\n**Proved, on the real repository, in both directions.**\n\n| case | what was staged | what the gate did | cost |\n|---|---|---|---|\n| A | the REAL recorded run that lost two reports (`Test Files 75 passed (77)`, `Tests 496 passed (517)`, 5 × `Timeout calling \"onTaskUpdate\"`, exit 1) | named exactly `src/runtime/inbound.test.ts` and `src/runtime/inbound.batchIsolation.test.ts`, re-ran them serially against the real tree, **2 files / 21 tests green**, exit 0 | **42 s** |\n| B | a deliberately failing test added to `apps/cli/src/runtime`, real keryx, real full suite | `Test Files 1 failed \\| 77 passed (78)` — a COMPLETE run — blocked with *“This is a real failure, not a lost report, and no completion pass is attempted for it”*, exit 1 | 232 s |\n| C | the clean tree, real keryx, real full suite | `apps/cli Test Files 77 passed (77)`, exit 0, fast path, zero extra output and zero extra subprocesses | 229 s |\n\n496 + 21 = 517 — case A's arithmetic closes on the number the operator measured.\n\n**Self-test.** 44 rows → **60 ok, 0 wrong, 0 skipped**. New rows: L1/L1b/L1c a lost report is completed and *precisely* the lost file is re-run; L2 the lost file red on its own blocks; **L3/L3b a real failure blocks and no completion is attempted**; **L4/L4b a failure alongside a lost report is still a failure**; L5 a completion pass that also loses a report blocks; L6/L6b an ordinary green run costs nothing; L7 exit 1 with everything reported and nothing red blocks; L8/L8b an unrecognised error blocks; L9 a completion that never reported the file it was asked to run blocks. Plus S4: deleting `js-suite.sh` blocks. Six pre-existing rows went red on the first attempt (the check over-reached on suites that are not vitest at all) and the fix is in the code, not in the rows.\n\n**Machine, for every figure above:** 10-core Mac carrying the operator's own VM and browser, never idle. 1-minute load averages at the start of each measurement: 11.22 (the diagnosis), 13.41/14.77/10.82 (self-test runs), 20.41 (case A), 14.12 (case B), 33.69 (case C).\n",
+  "acceptance": [
+    {
+      "criterion": "The suite runs as it runs today — same parallelism, same scope, same route",
+      "status": "met",
+      "evidence": "scripts/gate/js-suite.sh carries the keryx route (`keryx test run --strict` in the tree) and the bun/pnpm/yarn/npm fallback ladder verbatim from suites.sh; no vitest flag, no config and no package script was changed. Case C ran the real gate step on the clean tree and produced `apps/cli Test Files 77 passed (77)` in 229 s, against the 296 s and 299.16 s the same command produced before the change."
+    },
+    {
+      "criterion": "An incomplete run is detected by comparing files that reported against test files on disk",
+      "status": "met",
+      "evidence": "Per package, `vitest list --filesOnly` (the run's own config, root and include globs) minus the files that printed a report line. Cross-checked against vitest's own tally in both directions: if `t_total != ondisk` or `t_rep != reported`, the gate blocks rather than acting on a run it is reading wrongly. On the real recorded failing log the parser read 7 tallies, apps/cli 75 of 77, 5 errors all recognised, zero failures, and every package's report-line count equal to its tally."
+    },
+    {
+      "criterion": "Precisely the files whose reports were lost are re-run, serially, and must be green",
+      "status": "met",
+      "evidence": "Case A: `vitest run --no-file-parallelism src/runtime/inbound.batchIsolation.test.ts src/runtime/inbound.test.ts` — the exact two files, no more — giving `Test Files 2 passed (2)`, `Tests 21 passed (21)`, 40.53 s, exit 0. The step additionally requires the re-run to be complete in its own right and to have REPORTED every file it was asked for by name, because vitest's positional arguments are filename filters and a filter that selects nothing produces a green, irrelevant run (self-test row L9)."
+    },
+    {
+      "criterion": "A run that reports everything is unaffected and costs nothing extra",
+      "status": "met",
+      "evidence": "The fast path is `short_n == 0 && suite_rc == 0` over facts already parsed from the log: no `vitest list`, no re-run, no message. Case C on the real tree produced no extra output at all and finished in 229 s. Self-test row L6b asserts the absence of the 'did not obviously report everything' line on a complete green run."
+    },
+    {
+      "criterion": "A real failure still blocks and is never mistaken for a lost report",
+      "status": "met",
+      "evidence": "PROVED, not argued. Case B put a genuinely failing test into apps/cli/src/runtime and ran the real full suite through the real step: `Test Files 1 failed | 77 passed (78)`, `Tests 1 failed | 517 passed (518)` — a complete run — and the gate exited 1 with 'This is a real failure, not a lost report, and no completion pass is attempted for it'. Self-test rows L3/L3b (failure in a complete run) and L4/L4b (failure ALONGSIDE a lost report) assert both the block and the ABSENCE of the completion sentinel, so the fix cannot be edited into a bypass without turning a row red."
+    },
+    {
+      "criterion": "The gate does not become serial, and does not treat a lost report as a pass",
+      "status": "met",
+      "evidence": "`--no-file-parallelism` appears only in the completion re-run of a handful of named files, never in the suite command; the parallel run — the only thing in this project that stresses cross-file interference — is untouched. Nothing is inferred about an unreported file: it is RUN, and its own result decides. Both points are stated in the file where a later reader meets them, and in the accepted memory constraint."
+    },
+    {
+      "criterion": "`pnpm run gate:selftest` was run, and extended to cover the new states",
+      "status": "met",
+      "evidence": "Run three times. First run after the change: 54 ok, 6 WRONG — the new check over-reached on scratch repositories whose test script is not vitest at all (J1, J1d, J4, P2b, P4, P6). Fixed in js-suite.sh by making completeness a per-package question only for packages that actually print a vitest tally. Final two runs: 60 ok, 0 wrong, 0 skipped. 16 rows added (L1-L9 with sub-rows, plus S4 for the new step's deletion)."
+    },
+    {
+      "criterion": "The diagnosis is recorded where it will be found",
+      "status": "met",
+      "evidence": "Accepted memory constraint at .metaproject/memory/constraints/vitest-3-0-8-loses-whole-test-file-reports-under-load.md — signature, the three measurements, why the error text must not be used to name the lost files, and the two refusals (do not go serial, do not treat a loss as a pass). `keryx memory search \"vitest onTaskUpdate lost report\"` returns it. docs/STATUS_CURRENT.md item 6 was falsified and corrected: its claim that the loss was 'never observed at gate loads <= 4.8x' is struck, with the 2026-09-09 numbers and a pointer to the new gate step."
+    },
+    {
+      "criterion": ".metaproject/data/testing/context.md is no longer stale",
+      "status": "met",
+      "evidence": "It listed 61 files. It now lists 91, of which 77 are in apps/cli — matching vitest's own `(77)`. Regenerating it in place was WRONG and was not left that way: keryx's testing scan `IGNORED_DIRS` omits `.claude`, so `keryx test analyze` from the main checkout walked two registered agent worktrees and reported 234 files, three copies of the same suite. The correct census was produced by running the analysis in a throwaway `git worktree add --detach HEAD` and copying the two artifacts back; the operator's worktrees were not touched and `git worktree list` is unchanged."
+    },
+    {
+      "criterion": "Nothing was committed",
+      "status": "met",
+      "evidence": "No git commit, no git add, no push, no branch. `git status --porcelain` shows the changes as unstaged edits and untracked files."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T31-implement-result.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "This result.",
+      "hash": null
+    },
+    {
+      "path": "scripts/gate/js-suite.sh",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "The new JS gate step. Its header states the diagnosis with numbers, what the repair is and is not, and the three mechanical answers: what 'the files whose reports were lost' means, what happens if the re-run also loses a report, and why a real failure cannot be mistaken for a loss.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/memory/constraints/vitest-3-0-8-loses-whole-test-file-reports-under-load.md",
+      "kind": "memory",
+      "exists": true,
+      "summary": "Accepted constraint: the vitest 3.0.8 worker-RPC report loss, its signature, its three measurements, the two refusals, and the related keryx test-analyze worktree trap.",
+      "hash": null
+    },
+    {
+      "path": "scripts/gate/selftest.sh",
+      "kind": "report",
+      "exists": true,
+      "summary": "The gate's executable state table, 44 rows -> 60. Rows L1-L9 and S4 are new.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "scripts/gate/js-suite.sh",
+      "change": "NEW. The JavaScript/TypeScript gate step: runs the suite unchanged, detects an incomplete run by comparing reported files against `vitest list --filesOnly`, completes it by re-running precisely the silent files with --no-file-parallelism, and blocks on anything it cannot account for."
+    },
+    {
+      "path": "scripts/gate/suites.sh",
+      "change": "The JS step's body (runner resolution, keryx route, fallback ladder) moved into js-suite.sh; step 2 is now one delegating call. The step-2 cost note updated from ~215 s to ~300 s to match what the suite actually costs today."
+    },
+    {
+      "path": ".githooks/pre-push",
+      "change": "scripts/gate/js-suite.sh added to the list of steps whose absence blocks a push, and the step-2/3 comment now names it. No change to the gate's decision logic."
+    },
+    {
+      "path": "scripts/gate/selftest.sh",
+      "change": "Copies and PATH-neutralises the new step; row S4 (deleting js-suite.sh blocks); a new LOST REPORTS vs REAL FAILURES section with rows L1-L9 driving the whole hook against scratch repositories that emit vitest-shaped output; run_hook rewritten to return the hook's exit code through a file rather than a command substitution, which is a subshell. Header updated: 44 rows -> 60."
+    },
+    {
+      "path": ".metaproject/memory/constraints/vitest-3-0-8-loses-whole-test-file-reports-under-load.md",
+      "change": "NEW, accepted. The diagnosis, its numbers, and the refusals."
+    },
+    {
+      "path": "docs/STATUS_CURRENT.md",
+      "change": "Item 6 (Ограничения тестового стенда): the falsified claim that the loss was never observed at gate loads <= 4.8x is struck and replaced with the 2026-09-09 measurements, the arithmetic (496 + 21 = 517), the fact that this is the second day it has cost, and what the gate now does about it."
+    },
+    {
+      "path": ".metaproject/data/testing/context.md",
+      "change": "Regenerated from a clean checkout of HEAD: 61 files -> 91, of which 77 are in apps/cli."
+    },
+    {
+      "path": ".metaproject/data/testing/context.json",
+      "change": "Regenerated alongside context.md."
+    },
+    {
+      "path": ".metaproject/data/testing/recommendations.md",
+      "change": "Regenerated by `keryx test analyze`."
+    },
+    {
+      "path": ".metaproject/data/memory/index/index.json",
+      "change": "Disposable memory catalog, regenerated by `keryx memory index`."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T31-implement#F-001",
+      "reviewer": "004-T31-implement",
+      "severity": "minor",
+      "file": "scripts/gate/js-suite.sh",
+      "problem": "One state is deliberately no stricter than the pre-T31 gate: a suite that exits 0 but whose output the step could not read at all. The step then allows the push with a loud warning instead of blocking, because the observation for the keryx route comes from the raw log keryx writes (path taken from latest.json's rawLogPath, freshness-checked against a marker touched immediately before the run), and blocking here would put every push at the mercy of keryx renaming a file.",
+      "impact": "A run that lost reports AND exited 0 would pass unnoticed. That combination has never been observed — the worker-RPC loss raises unhandled errors and always exits 1 — and it would have passed silently before this change too, so the gate is not weaker than it was. It is the one place where the new check can be silently doing nothing.",
+      "suggested_fix": "If the warning is ever seen in practice, the observation route is broken and must be fixed rather than tolerated. A stronger variant is available if wanted: run the suite through the package manager under the step's own tee and let keryx record the normalized report separately — at the cost of dropping the keryx route the project deliberately uses.",
+      "evidence": "scripts/gate/js-suite.sh, function `echolet_js_unobservable_green` and the `[ ! -s \"$OBS\" ]` branch. The keryx capture behaviour was verified rather than assumed: `keryx test run --strict` in a scratch project printed nine summary lines and ZERO lines of the child's output, and wrote both markers into .metaproject/data/testing/logs/latest.raw.log with rawLogPath naming it in latest.json.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T31-implement#F-002",
+      "reviewer": "004-T31-implement",
+      "severity": "minor",
+      "file": "scripts/gate/js-suite.sh",
+      "problem": "Completeness is only asked of a workspace package that printed a vitest `Test Files` tally. A package whose test script is not vitest is unassessable, and if such a package exists in a workspace where another package lost reports, the gate blocks the whole push rather than completing the loss (it names the unassessable packages). Every one of this repository's seven packages runs `vitest run`, so the state is unreachable here today.",
+      "impact": "Conservative in the safe direction — it blocks rather than passes — but it means a future non-vitest workspace package would make the completion path unreachable for the whole workspace, and the operator would be back to a blocked push with no way to finish the run.",
+      "suggested_fix": "If a non-vitest package is ever added, give it its own per-file reporting or teach the step a second reader for it. Do not widen the rule to 'assume unassessable packages passed'.",
+      "evidence": "scripts/gate/js-suite.sh section 5, the `assessed`/`unassessed` split and the block that names unassessed packages. Self-test rows J1/J4/P2b/P4/P6 exercise the whole-workspace-unassessable case (exit code decides, as before); the mixed case has no row because no repository in the self-test can currently produce it.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T31-implement#F-003",
+      "reviewer": "004-T31-implement",
+      "severity": "minor",
+      "repo": "echolet",
+      "file": ".metaproject/data/testing/context.md",
+      "problem": "`keryx test analyze` run from the main checkout produces a wrong test-file census whenever a `git worktree` lives under `.claude/worktrees/`. keryx's testing scan `IGNORED_DIRS` is {.git, .metaproject, node_modules, dist, build, coverage, .next, out} — it omits `.claude`, which another module's `IGNORE_DIRS` in the same bundle does include. With the two agent worktrees registered today, the scan reported 234 test files: three copies of the same suite.",
+      "impact": "The artifact the testing skill tells every agent to read before touching tests would name files that belong to no branch in particular, and would three-count the suite. Anyone who regenerates it in place reintroduces this.",
+      "suggested_fix": "Until keryx adds `.claude` to the testing scan's IGNORED_DIRS, regenerate the context from a throwaway `git worktree add --detach <tmp> HEAD`, run `keryx test analyze` there, and copy context.md and context.json back — which is what was done here. Report the omission upstream to keryx. Adding `.claude/worktrees/` to .gitignore does NOT help: the scan does not consult .gitignore (tried, reverted).",
+      "evidence": "`keryx test analyze` in the main checkout: 234 test files, 28 of them under .claude/worktrees/compassionate-nash-a31cb6/apps/cli/src/tui alone. The same command in a clean worktree of HEAD: 91 test files, 77 in apps/cli. IGNORED_DIRS and IGNORE_DIRS read directly from /opt/homebrew/lib/node_modules/@mrciphersmith/keryx/dist/cli.js.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-004",
+      "global_id": "004-T31-implement#F-004",
+      "reviewer": "004-T31-implement",
+      "severity": "info",
+      "file": "scripts/gate/js-suite.sh",
+      "problem": "The completion path costs a full extra pass over the unreported files, and nothing bounds how many files that can be. If a whole worker's worth of files goes silent, the serial re-run of them could be long — in the measured case it was 2 files and 40.53 s, but the mechanism does not cap it.",
+      "impact": "A degraded push could take materially longer than a healthy one. It is still far cheaper than the 504 s a fully serial suite costs, and cheaper than the alternative of a blocked push.",
+      "suggested_fix": "Leave it. A cap would mean refusing to finish some runs, which is the behaviour this change exists to remove. If it ever bites, the right response is to find out why so many workers are starving.",
+      "evidence": "Case A: 42 s wall for the whole step including parsing, of which 40.53 s was the serial re-run of two files carrying 21 tests.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-005",
+      "global_id": "004-T31-implement#F-005",
+      "reviewer": "004-T31-implement",
+      "severity": "major",
+      "file": "scripts/gate/js-suite.sh",
+      "problem": "The whole check reads vitest's DEFAULT REPORTER TEXT — the ` ✓ path (n tests) 12ms` lines, the `Test Files a passed (b)` tally, the `Errors N errors` line, and pnpm's `<dir> test: ` prefix. A vitest or pnpm upgrade that changes any of those wordings makes the parser find nothing. It then reports zero assessable packages and falls back to the exit code, which is exactly the pre-T31 gate: the check goes quiet without ever saying it has stopped working.",
+      "impact": "This is the most likely way the fix rots. It fails in the SAFE direction — a red suite still blocks, a green suite still passes, nothing is let through that today's gate would stop — but the strengthening silently evaporates, and the next lost-report run would once again block every push with nobody knowing why the completion did not happen.",
+      "suggested_fix": "Two cheap tripwires, either of which would catch it: (a) make the step say out loud, once per run, how many packages it assessed, so a drop from 7 to 0 is visible in the push output; (b) add a self-test row that feeds js-suite.sh the REAL captured vitest output committed as a fixture and asserts the parsed counts, so a reporter change turns a row red on the next `pnpm run gate:selftest` rather than on the next bad push. The L rows use hand-written vitest-shaped output, which pins the parser against a fixture the parser's author wrote — a fixture taken from a real run would be independent of it.",
+      "evidence": "scripts/gate/js-suite.sh, ECHOLET_JS_AWK and the `assessed_n == 0` branch. The parser was validated against the real 2026-09-09 log: 7 tallies, apps/cli 75 of 77, 5 of 5 errors recognised, per-package report-line counts equal to every tally. Every pattern that needs a '/' or a parenthesis is written as a dynamic regex with bracket expressions, because an awk regex literal containing an unescaped '/' and a backslash inside a bracket expression both fail SILENTLY by matching nothing — noted in the file for the same reason.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "scripts/gate/js-suite.sh: the `Test Files` tally pattern (/Test Files +/ plus the `[(][0-9]+[)]` total and the `[|]` segment split)",
+          "scripts/gate/js-suite.sh: the file report line pattern (\"[-A-Za-z0-9_@.+/]+[.](test|spec)[.][A-Za-z]+ [(]\" plus the <=3-byte glyph guard)",
+          "scripts/gate/js-suite.sh: the `Errors N errors` tally pattern (/^ *Errors +[0-9]+ error/)",
+          "scripts/gate/js-suite.sh: the recognised worker-RPC error pattern (\"[[]vitest-worker[]]: Timeout calling\")",
+          "scripts/gate/js-suite.sh: the pnpm recursive-run prefixes (index(line, \" test: \") and index(line, \" test$ \"))",
+          "scripts/gate/js-suite.sh: `vitest list --filesOnly` output shape — one package-relative path per line, assumed to match the reporter's paths",
+          "scripts/gate/js-suite.sh: the `--no-file-parallelism` flag name used by the completion run",
+          "scripts/gate/js-suite.sh: keryx's rawLogPath field in .metaproject/data/testing/artifacts/latest.json, and its conventional fallback path"
+        ],
+        "enumeration_method": "Exhaustive by construction, not by inspection: the file contains exactly one parser (ECHOLET_JS_AWK, used for both the suite log and the completion log) and exactly one place where an external tool's output shape is consumed outside it. The list above is every regex and every index() inside that awk program, read line by line, plus the three non-awk external-shape assumptions (vitest list output, the vitest flag name, the keryx artifact field). A routed search for `match(`, `index(`, `~ \"` and `~ /` in scripts/gate/js-suite.sh returns no site outside this list."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "gate_files_changed": 4,
+    "new_gate_steps": 1,
+    "selftest_rows_before": 44,
+    "selftest_rows_after": 60,
+    "selftest_final": "60 ok, 0 wrong, 0 skipped",
+    "selftest_runs": [
+      { "attempt": 1, "result": "54 ok, 6 wrong", "note": "J1, J1d, J4, P2b, P4, P6 — the new check over-reached on scratch suites that are not vitest. Fixed in the code." },
+      { "attempt": 2, "result": "60 ok, 0 wrong, 0 skipped", "load_1min_at_start": 14.77 },
+      { "attempt": 3, "result": "60 ok, 0 wrong, 0 skipped", "load_1min_at_start": 10.82 }
+    ],
+    "proof_runs": [
+      {
+        "case": "A — the run that loses a report",
+        "staged": "the REAL captured output of the 2026-09-09 failing run, replayed into the tree the way keryx records it, so the parallel run's output is a genuine artefact and everything after it is real",
+        "observed_tally": "apps/cli Test Files 75 passed (77), Tests 496 passed (517), Errors 5 errors, all 5 recognised as [vitest-worker]: Timeout calling \"onTaskUpdate\", zero failing tests",
+        "missing_set_computed": ["src/runtime/inbound.batchIsolation.test.ts", "src/runtime/inbound.test.ts"],
+        "completion_command": "vitest run --no-file-parallelism src/runtime/inbound.batchIsolation.test.ts src/runtime/inbound.test.ts",
+        "completion_result": "Test Files 2 passed (2), Tests 21 passed (21), 40.53 s",
+        "gate_exit_code": 0,
+        "wall_s": 42,
+        "load_1min_at_start": 20.41
+      },
+      {
+        "case": "B — a genuinely failing test",
+        "staged": "a deliberately failing test file added to apps/cli/src/runtime; real keryx, real full suite, nothing else staged",
+        "observed_tally": "apps/cli Test Files 1 failed | 77 passed (78), Tests 1 failed | 517 passed (518) — a COMPLETE run",
+        "gate_message": "This is a real failure, not a lost report, and no completion pass is attempted for it.",
+        "gate_exit_code": 1,
+        "wall_s": 232,
+        "load_1min_at_start": 14.12,
+        "cleanup": "the temporary test file was deleted immediately after the run"
+      },
+      {
+        "case": "C — the ordinary push",
+        "staged": "nothing; the clean tree, real keryx, real full suite",
+        "observed_tally": "apps/cli Test Files 77 passed (77); all seven packages complete",
+        "gate_exit_code": 0,
+        "extra_output": "none — the fast path produced no message and spawned no subprocess",
+        "wall_s": 229,
+        "load_1min_at_start": 33.69
+      }
+    ],
+    "cost": {
+      "ordinary_push": "unchanged. Case C: 229 s for the JS step, against 296 s and 299.16 s measured for the same command before the change. The completeness check on a complete run is a parse of a log file the run already wrote — no process, no message.",
+      "degraded_push": "the suite as usual plus one serial pass over the silent files. Case A measured that pass at 40.53 s for 2 files / 21 tests, 42 s for the whole step. Against the alternatives: a fully serial gate costs 504 s against 296 s on every push, and today's behaviour costs the push entirely."
+    },
+    "machine": "10-core Mac (hw.ncpu 10), uptime 44 days, carrying the operator's own VM and browser throughout; never idle. Every figure above is paired with the 1-minute load average at the moment it was taken.",
+    "discipline": "No long run was piped through head or tail: every suite, self-test and proof run was redirected whole to a file and read back afterwards, and every exit code was captured on the same line as the command it belonged to (never after a trailing echo, whose own status would be reported instead). Every count in this result was taken from a raw log or a direct command — never from a `keryx ctx rg` summary, whose match list can truncate and whose total can over-report.",
+    "routing_audit": {
+      "graph_used": "no -- not-relevant: the dispatch named the mechanism, and the gate is five shell files that reference each other by literal path. The one structural question — which files invoke the JS step — was answered by reading .githooks/pre-push and scripts/gate/suites.sh end to end, and pinned by self-test rows S2 and S4.",
+      "wiki_used": "no -- not-relevant: this is build infrastructure, not architecture or domain behaviour. The prior art that mattered was flow 003's t40-suite-regression-report.md and t23/t38 gate reports, reached through the flow artifacts.",
+      "ctx_used": "yes -- keryx ctx read for package.json, pnpm-workspace.yaml, the contract schemas, memory/index.md and the workspace configs; keryx ctx rg for onTaskUpdate and the prior RPC records; keryx ctx run was declined in favour of documented raw escapes where an exact count or byte-level line format was the evidence.",
+      "raw_rg_used": "yes -- with a stated reason on every call. Three classes: (1) exact counts and set differences that are the evidence for a claim, because a gdctx summary can both truncate its match list and over-report its total; (2) byte-level line formats (cat -v) needed to write a parser that must not silently match nothing; (3) searching the installed keryx bundle at /opt/homebrew/lib/node_modules, which is outside the project and outside what `keryx ctx rg` scopes to.",
+      "testing_context_used": "yes -- read first, found stale (61 files where 77 exist), and repaired as part of the task.",
+      "memory_used": "yes -- searched first and found empty (`keryx memory search \"vitest worker RPC timeout onTaskUpdate\"` returned 0 of 0 entries), which is itself why this had to be rediscovered; an accepted constraint now exists so the third day is not spent."
+    }
+  },
+  "timestamp_utc": "2026-09-09T09:40:00Z"
+}
