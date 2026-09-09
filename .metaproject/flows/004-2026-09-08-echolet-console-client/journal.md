@@ -26,3 +26,8 @@
 - 2026-09-09T01:01:21.877Z - task-added: T11: Implement the input mode and the send key: make the console able to write a message
 - 2026-09-09T01:01:26.994Z - task-attempt: T11: started (attempt 1) — A different agent from the one that wrote the tests, and not the orchestrator. It may not edit a test; the 28 currently-vacuous cases must become non-vacuous by the implementation, not by adjusting them.
 - 2026-09-09T01:23:30.949Z - task-done: T11: Implement the input mode and the send key: make the console able to write a message
+- 2026-09-09T01:28:20.024Z - task-added: T12: Independent verification of the input mode: is the console's send path real, and are the old properties intact
+- 2026-09-09T01:28:25.561Z - task-attempt: T12: started (attempt 1) — The implementer self-mutated twice, which is self-assessment. The previous slice's independent verification found the central criterion unmet after a similar self-report, so this one runs too.
+- 2026-09-09T01:48:31.182Z - task-done: T12: Independent verification of the input mode: is the console's send path real, and are the old properties intact
+- 2026-09-09T01:48:33.215Z - task-added: T13: RED tests: peer-controlled escape sequences must not reach a frame, and the submit path must hold the single-flight rule
+- 2026-09-09T01:48:39.845Z - task-attempt: T13: started (attempt 1) — Security first: a peer controls the plaintext of an inbound message, and it reaches a frame unfiltered. Three other paths do too. Second, the single-flight rule on the submit path, whose mutation survived and is reachable in two keystrokes.

@@ -1,0 +1,226 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow-004-t13-tests",
+  "dispatch_id": "004-T13-tests",
+  "status": "DONE",
+  "summary": "Three new test files, no source change. Two are RED on the clean tree and specify that no text originating outside the console can put a control, escape or display-steering code point into a frame; the third is GREEN on the clean tree and was proved red by applying and immediately reverting the two mutations 004-T12-verify recorded as surviving. Measured on this tree, whole logs captured to files and read after the fact, never piped through head or tail: 38 tests across the three files, 30 failed / 8 passed, vitest exit 1; tsc -p apps/cli --noEmit exit 0. The escape-free boundary for inbound text is placed at the narrowing functions that WRITE each external-origin field, not in the renderer and not in `reduce`: `reduce` is the sole writer of `input.buffer`, which is why AC7's answer was the reducer, but it never touches inbound text, so the transferable half is the principle rather than the location. tui-shell.externalText.test.ts therefore asserts over the STATE and deliberately does not import `renderFrame`, exactly as tui-shell.input.test.ts does — a renderer-side filter leaves all 24 of its failures exactly as red. Two routes into a frame that the verification did not list were found and are pinned: `doctor`'s `identity_id`/`device_id`, which `applyOutcome` (tui-shell.ts:429-431) writes into ProfileView on every doctor — the verifier excluded ProfileView on the ground that its label/relayUrl/profileDir come from argv, and those two do not — and the contact ROSTER, which `observeContact` (tui-shell.ts:521) builds out of the confirmed modal's identifiers and which outlives the modal on the profiles pane. The seven format characters were split rather than accepted or refused wholesale: the eleven bidi controls, U+2028, U+2029 and U+FEFF are specified as refused at both boundaries, with the concrete lie each one makes a frame tell; U+200B, U+00AD and U+200D are deliberately not constrained in either direction, and a positive assertion pins that an emoji ZWJ sequence still composes. The machine was never idle — a 10-core host carrying the operator's own VM and browser, 1-minute load 10.7 at dispatch start, 13.9 during the typecheck, 13.9 at the final run.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "No text originating outside the console can put a control or escape sequence into a frame, specified red, whatever the source",
+      "status": "met",
+      "evidence": "Six routes enumerated by tracing every OperatorState field whose value originates outside the process back to its writer, and each given a hostile value. Four are the verifier's: an inbound message's `plaintext` (readHistoryEntries, tui-shell.ts:386), a rejection's `envelopeId`/`code` (readRejections, tui-shell.ts:374), the CLI's error `code` on the activity line (note(), tui-shell.ts:533), and a trust-modal identifier (readIdentifiers, main.ts:134). Two are new — see the findings. Routes 1, 2 and 5 have a pure seam through `applyOutcome` and are pinned over the STATE in tui-shell.externalText.test.ts (24 red). Routes 3, 4 and 6 are written inside `runTuiShell` and have no pure seam; they are pinned in tui-shell.externalTextViewport.test.ts over the raw bytes handed to stdout.write, minus the console's own nine ANSI literals (6 red). Both files were reproduced independently of the verifier's list rather than taken from it."
+    },
+    {
+      "criterion": "The filtering boundary for inbound text is chosen deliberately and the choice is argued in the file",
+      "status": "met",
+      "evidence": "Argued at length in tui-shell.externalText.test.ts's header. The compose buffer's answer was `reduce` because `reduce` is the SOLE WRITER of `input.buffer` — three assignments, all inside the reducer. Inbound text never passes through `reduce`, so the location does not transfer; the principle does, and it names `readHistoryEntries`, `readRejections`, `applyOutcome`'s doctor case, `note`, the shell's trust listener and `observeContact`. Every one of those is ALREADY a narrowing function that reads fields by name and drops the rest, precisely so that 'whatever else a relay or sender put on this object stays off the operator's screen and out of the state' (tui-shell.ts:380); filtering the bytes there is the same act as filtering the fields there. The renderer is rejected for AC7's reason and one more: `renderFrame` is not the only reader of these fields, so a self-defending renderer would leave the STATE free to hold an escape sequence and would need re-auditing whenever a second reader appeared. The file does not import `renderFrame`, so a renderer-side fix leaves it exactly as red."
+    },
+    {
+      "criterion": "The seven format characters are decided, and the decision is stated with its reason",
+      "status": "met",
+      "evidence": "Split, not accepted or refused wholesale, and the split is on whether the code point STEERS a display. Specified as refused (14 points, at both the inbound and the compose boundary): the bidi controls U+200E, U+200F, U+202A-U+202E, U+2066-U+2069, plus U+2028, U+2029 and U+FEFF. The reasons are concrete rather than categorical — `formatHistoryLines` (history-pane.ts:41) paints `sequence  direction  messageId  plaintext` on ONE line, so an override inside a peer's plaintext reorders the fields painted before it and a correspondent can make their inbound message render with `outbound` where the operator reads the direction; in the trust modal an identifier that renders in an order it was not written in cannot be compared out of band, which is the modal's only purpose; U+2028/U+2029 are line terminators some terminals honour, so a frame's exactly-rows-by-cols promise holds in the value and breaks on the screen, which is the one place it was made; U+FEFF is zero-width and can make two different base64url identifiers paint identically. Deliberately NOT constrained in either direction: U+200B ZWSP and U+00AD SOFT HYPHEN steer nothing, are legitimate in prose, and the verifier flagged them as the user's call (Q2) — so the file asserts nothing about them. U+200D ZWJ is excluded for a stronger reason and pinned positively: it is load-bearing inside emoji sequences, and a test asserts an emoji ZWJ sequence still composes, so a fix reaching for 'every format character' is caught here rather than in somebody's message a year from now. The compose-buffer half is a separate, last describe block so it can be deleted as one unit if the user answers Q2 differently."
+    },
+    {
+      "criterion": "The busy defect at tui-shell.ts:289 is pinned",
+      "status": "met",
+      "evidence": "tui-shell.submitSingleFlight.test.ts, 4 tests, green on the clean tree because the tree is correct — this was a missing test, not a live bug — and proved red by mutation. M-A (deleting `busy: true` from line 289) turns 2 of the 4 red: `expected false to be true` at the reducer postcondition, and `a second child was spawned against the same encrypted store while the send was in flight: expected [ 'send', 'poll' ] to deeply equal [ 'send' ]` through the real `runTuiShell`, which reproduces the verifier's probe message exactly. M-B (deleting `|| state.busy` from line 279, the second survivor the verifier recorded) turns a different one red: `expected [ { kind: 'run-cli', …(1) } ] to deeply equal []`. So the two members of the class are killed by two different assertions and neither is redundant. Both mutations were reverted in the same step; `git diff --stat HEAD` reports apps/cli/src as unchanged."
+    },
+    {
+      "criterion": "Change no source file; take every timeout from apps/cli/test/childProcessTimeouts.ts; run only the files written",
+      "status": "met",
+      "evidence": "`git diff --stat HEAD` reports exactly two changed files, both flow files that were already modified when this dispatch began (flow.json, journal.md), and four untracked files: the T12 verify result that commissioned this work, and the three test files created here. No source file is changed. No timeout was needed and none was invented: all three files inject `runCli` and touch no process, terminal, clock, store or relay, so none of them takes a per-test ceiling, and no millisecond literal appears in any of them — the only numbers are a fixed epoch used as a painted-at stamp and viewport dimensions. `drain()` is `setImmediate`, a microtask flush and not a delay, copied in shape from tui-shell.inputViewport.test.ts. Only the three new files were run."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/cli/src/tui/tui-shell.externalText.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RED, 27 tests / 24 failed. The escape-free property at the STATE boundary, over `applyOutcome`: an inbound message's plaintext and its messageId/contactIdentityId, a rejection's envelopeId/code, and doctor's identity_id/device_id. Asserts by a structural walk of every string anywhere in the resulting OperatorState, so a route nobody enumerated is still caught. Does not import `renderFrame`. Ends with the compose-buffer half of the display-steering decision.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.externalTextViewport.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "RED, 7 tests / 6 failed. The three routes with no pure seam, driven through the real `runTuiShell` and asserted over the bytes handed to stdout.write minus the console's own nine ANSI literals: a hostile CLI error code on the activity line, hostile trust identifiers in the modal, and the same identifiers surviving into the contact roster after the modal closed. Carries a benign control case proving the subtraction is honest.",
+      "hash": null
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.submitSingleFlight.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "GREEN on the clean tree, 4 tests; red under each of the two surviving mutations the verifier recorded. Pins the reducer's postcondition (a painted submit sets busy), the deep refusal `mapKey` cannot reach (a submit while busy emits no effect and keeps the draft), and the driven behaviour (Enter then p/d/r while the send child is alive starts no second child; the next command runs once the send finishes).",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T13-tests-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This record.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/cli/src/tui/tui-shell.externalText.test.ts",
+      "change": "added"
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.externalTextViewport.test.ts",
+      "change": "added"
+    },
+    {
+      "path": "apps/cli/src/tui/tui-shell.submitSingleFlight.test.ts",
+      "change": "added"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "004-T13-tests#F-001",
+      "reviewer": "004-T13-tests",
+      "severity": "major",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 429,
+      "symbol": "applyOutcome > doctor",
+      "problem": "A FIFTH route into a frame, not in 004-T12-verify's enumeration. `applyOutcome`'s `doctor` case overwrites `ProfileView.identityId` and `.deviceId` from the child's JSON — `data.identity_id` and `data.device_id` — on every `doctor`, and `formatProfilesLines` (profiles-pane.ts:72-73) paints both as the `identity` and `device` rows of the profiles pane. The verifier excluded ProfileView from the class on the ground that 'label/relayUrl/profileDir come from the operator's own argv and are therefore not in the class'. Those three do; these two do not.",
+      "impact": "Lower than the inbound-plaintext route and real: the values come from the child's stdout, so anything that can make the CLI print an identifier can paint it, and unlike the modal's identifiers these are repainted on every subsequent frame the profiles pane is on. It is a route the fix has to cover, and a fix scoped to the verifier's four would miss it.",
+      "suggested_fix": "Whatever filter closes routes 1 and 2 belongs on these two assignments as well. The test is already written: `tui-shell.externalText.test.ts` > T13-D > 'cleans the identity and device ids doctor reports'.",
+      "evidence": "RED on the clean tree: `state.profiles[0].identityId = \"SYNTHETIC_BODY_HEAD\\u001b]0;doctor\\u0007SYNTHETIC_BODY_TAIL\": expected [ 'U+001B', 'U+0007' ] to deeply equal []`.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:429",
+          "apps/cli/src/tui/tui-shell.ts:430"
+        ],
+        "enumeration_method": "Every writer of a ProfileView field was traced. `parseOptions` (main.ts:111-126) sets label, profileDir, relayUrl, storeKeyEnv and contactCardPath from the operator's own argv and is outside the class; `applyOutcome`'s doctor case is the only writer that takes a ProfileView string from outside the process, and it writes exactly these two. `contactCount` is passed through `asNumber` and cannot carry text. `published` is a boolean the console computes itself."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "004-T13-tests#F-002",
+      "reviewer": "004-T13-tests",
+      "severity": "major",
+      "file": "apps/cli/src/tui/tui-shell.ts",
+      "line": 521,
+      "symbol": "runTuiShell > observeContact",
+      "problem": "A SIXTH route, sharing the trust modal's source but not its sink or its lifetime. `observeContact` copies all four identifiers out of the confirmed modal into `state.contacts`, and `formatProfilesLines` paints `identityId  deviceId` on the profiles pane for the rest of the session. A filter applied where the MODAL is rendered, or applied only to `state.modal`, leaves the same bytes on every later frame — long after the panel that carried them is gone.",
+      "impact": "It converts a one-frame exposure into a persistent one, and it is reachable by exactly the sequence the console is built for: `i`, the child announces the identifiers, the operator presses `y`, the import succeeds. Recorded separately from route 4 because a fix that treats 'the trust identifiers' as one place will close route 4 and leave this open.",
+      "suggested_fix": "Filter where the identifiers ENTER the state — the shell's `io.onTrustIdentifiers` listener at tui-shell.ts:558 — rather than where either consumer reads them; `observeContact` then inherits the guarantee instead of needing its own copy of it.",
+      "evidence": "RED on the clean tree, asserted over the frames written AFTER the modal closed and the pane was switched back to profiles: `expected [ 'U+001B', 'U+0007', 'U+202E', …(3) ] to deeply equal []` — the hostile identity_id and device_id, once per paint, two paints.",
+      "confidence": "high",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/cli/src/tui/tui-shell.ts:521",
+          "apps/cli/src/tui/tui-shell.ts:558"
+        ],
+        "enumeration_method": "Both writers of state.contacts and state.modal were traced from the identifiers' single origin, `readIdentifiers` (main.ts:134). The shell's trust listener (tui-shell.ts:558) assigns them to `modal`; `observeContact` (tui-shell.ts:521) copies all four out of the confirmed modal into `contacts`. There is no third writer of either field: `createInitialState` starts contacts empty, `reduce` only ever clears `modal`, and no CLI outcome writes contacts."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "004-T13-tests#F-003",
+      "reviewer": "004-T13-tests",
+      "severity": "info",
+      "file": "apps/cli/src/tui/tui-shell.externalTextViewport.test.ts",
+      "line": 26,
+      "symbol": "file header",
+      "problem": "A limit of this specification, recorded rather than papered over. Routes 3, 4 and 6 are written inside `runTuiShell`, so the only thing observable from outside is what it wrote to the terminal. Those six assertions would therefore ALSO be satisfied by a filter placed inside the renderer — which is precisely the placement the boundary argument rejects.",
+      "impact": "None on the routes that matter most: routes 1, 2 and 5, including the peer-controlled inbound plaintext, are held over the STATE in the sibling file, which stays red against a renderer-side fix. The exposure is that a lazy fix could turn the driven file green without moving the property into the state for the three shell-internal routes.",
+      "suggested_fix": "If a later task wants those three closed as tightly, the cheapest seam is to lift `note` and the trust listener's assignment into `reduce` as intents — which F-007 of 004-T12-verify already recommends for the listener on independent grounds.",
+      "evidence": "Stated in the file's own header, under 'WHAT THIS FILE CAN AND CANNOT SETTLE'.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-004",
+      "global_id": "004-T13-tests#F-004",
+      "reviewer": "004-T13-tests",
+      "severity": "info",
+      "file": "apps/cli/src/tui/shell-chrome.test.ts",
+      "line": 124,
+      "symbol": "the pure layer emits plain text > puts no escape sequence in any rendered frame",
+      "problem": "Names the hole flow 002's escape-free assertion has, so the next reader does not have to rediscover it. That assertion ranges over five panes x four viewports of ONE hand-written fixture, every string in which the test itself typed. It proves the console's own chrome carries no escape byte; it says nothing about text the console did not write, which is the whole of the class this dispatch specifies.",
+      "impact": "None on the assertion's truth — it is correct about what it covers. The consequence is that 'renderFrame is escape-free' should be read as a statement about REACHABLE states, and it becomes true only once the ingestion boundaries filter. Stated so AC6's clause is not reported as re-verified on the strength of a fixture.",
+      "suggested_fix": "No change to that file. The two new files are the extension of it to states the console can actually reach.",
+      "evidence": "shell-chrome.test.ts:50-74 builds the only state it renders and the only viewports it renders at; every string in `stateFor` is a literal in the test.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Should the compose-buffer half of the display-steering rule (T13-E in tui-shell.externalText.test.ts) stay, given that AC7 as frozen says 'control character' and the design read that as C0/DEL/C1?",
+      "why": "It widens what a message may contain, which the verifier flagged as a user decision (its Q2). It is specified here because what the operator composes becomes a correspondent's inbound plaintext on the other side of the relay, so a console that refuses to paint a stranger's override and cheerfully sends one exports the hazard it declines to import — and because two boundaries with two different predicates is one more thing to keep in agreement than a security property should have. The block is deliberately last and self-contained so it can be removed without touching anything above it.",
+      "options": [
+        {
+          "id": "keep",
+          "label": "Keep it: one predicate at both boundaries, bidi and separators refused, ZWSP/SOFT HYPHEN/ZWJ untouched",
+          "recommended": true
+        },
+        {
+          "id": "inbound-only",
+          "label": "Delete the T13-E block: refuse display-steering points on inbound text only, and leave the compose buffer at C0/DEL/C1",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q2",
+      "question": "Should the filter drop the offending code points and keep the printable remainder, as specified, or is a visible marker wanted in their place?",
+      "why": "Every assertion pairs 'the forbidden points are gone' with 'the message is still there', which refuses the two degenerate fixes — dropping the entry, and replacing it with a placeholder — on the ground that an inbound body the operator never sees is a worse outcome than one with two characters missing. It does NOT decide between silent removal and substituting something visible, and the tests as written pass either way only if the substitute is itself printable. If the flow wants the operator told that a correspondent tried this, that is a further assertion and a design decision, not a bug in these files.",
+      "options": [
+        {
+          "id": "silent",
+          "label": "Silent removal, matching what the compose buffer already does for C0/DEL/C1",
+          "recommended": true
+        },
+        {
+          "id": "marked",
+          "label": "Replace each removed point with a printable marker and add an assertion for it",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "test_files_created": 3,
+    "tests_added": 38,
+    "tests_failing_on_the_clean_tree": 30,
+    "tests_passing_on_the_clean_tree": 8,
+    "vitest_exit_code_on_the_clean_tree": 1,
+    "typecheck_exit_code": 0,
+    "source_files_changed": 0,
+    "external_text_routes_pinned": 6,
+    "external_text_routes_new_to_this_dispatch": 2,
+    "display_steering_points_specified": 14,
+    "format_characters_deliberately_left_unconstrained": 3,
+    "mutations_applied": 2,
+    "mutations_killed": 2,
+    "mutations_survived": 0,
+    "mutation_detail": [
+      "tui-shell.ts:289 drops `busy: true` from input-submit — killed by 2 of the 4 assertions in tui-shell.submitSingleFlight.test.ts, one of them reproducing the verifier's `['send','poll']` vs `['send']` message exactly",
+      "tui-shell.ts:279 drops `|| state.busy` from input-submit's refusal — killed by a third, different assertion in the same file"
+    ],
+    "tree_restored": true,
+    "machine_idle": false,
+    "load_average_1min_at_dispatch_start": 10.86,
+    "load_average_1min_at_typecheck": 13.9,
+    "load_average_1min_at_final_run": 13.85,
+    "load_note": "10-core host, never idle: the operator's own VM and browser were running throughout, and the 1-minute load stayed between 10.7 and 13.9 across every measurement. Guards against a lying run: all three files inject `runCli` and spawn nothing, so none of them can be a timeout artefact; every figure was taken from a whole captured log read after the fact and never piped through head or tail; the two green files each carry a benign control case, so a stripper or a filter that removed too much would show up as a failure rather than as silence; and both mutations were reproduced on the same tree seconds apart, discriminating correctly between mutant and clean.",
+    "git_status_after": " M .metaproject/flows/004-2026-09-08-echolet-console-client/flow.json\n M .metaproject/flows/004-2026-09-08-echolet-console-client/journal.md\n?? .metaproject/flows/004-2026-09-08-echolet-console-client/dispatches/004-T12-verify-result.json\n?? apps/cli/src/tui/tui-shell.externalText.test.ts\n?? apps/cli/src/tui/tui-shell.externalTextViewport.test.ts\n?? apps/cli/src/tui/tui-shell.submitSingleFlight.test.ts"
+  },
+  "timestamp_utc": "2026-09-09T02:05:00Z"
+}

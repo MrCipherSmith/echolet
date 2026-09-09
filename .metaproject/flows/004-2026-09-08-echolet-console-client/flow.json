@@ -9,7 +9,7 @@
   "title": "Echolet: the console becomes a client - registration, conversations, address book",
   "status": "in-progress",
   "createdAt": "2026-09-08T23:00:34.327Z",
-  "updatedAt": "2026-09-09T01:23:30.949Z",
+  "updatedAt": "2026-09-09T01:48:39.845Z",
   "source": {
     "type": "description",
     "ref": null
@@ -238,6 +238,51 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Independent verification of the input mode: is the console's send path real, and are the old properties intact",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T01:28:25.561Z",
+            "outcome": "started",
+            "detail": "The implementer self-mutated twice, which is self-assessment. The previous slice's independent verification found the central criterion unmet after a similar self-report, so this one runs too."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "RED tests: peer-controlled escape sequences must not reach a frame, and the submit path must hold the single-flight rule",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-09T01:48:39.845Z",
+            "outcome": "started",
+            "detail": "Security first: a peer controls the plaintext of an inbound message, and it reaches a frame unfiltered. Three other paths do too. Second, the single-flight rule on the submit path, whose mutation survived and is reachable in two keystrokes."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -368,6 +413,31 @@
       "at": "2026-09-09T01:23:30.949Z",
       "event": "task-done",
       "detail": "T11: Implement the input mode and the send key: make the console able to write a message"
+    },
+    {
+      "at": "2026-09-09T01:28:20.024Z",
+      "event": "task-added",
+      "detail": "T12: Independent verification of the input mode: is the console's send path real, and are the old properties intact"
+    },
+    {
+      "at": "2026-09-09T01:28:25.561Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — The implementer self-mutated twice, which is self-assessment. The previous slice's independent verification found the central criterion unmet after a similar self-report, so this one runs too."
+    },
+    {
+      "at": "2026-09-09T01:48:31.182Z",
+      "event": "task-done",
+      "detail": "T12: Independent verification of the input mode: is the console's send path real, and are the old properties intact"
+    },
+    {
+      "at": "2026-09-09T01:48:33.215Z",
+      "event": "task-added",
+      "detail": "T13: RED tests: peer-controlled escape sequences must not reach a frame, and the submit path must hold the single-flight rule"
+    },
+    {
+      "at": "2026-09-09T01:48:39.845Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — Security first: a peer controls the plaintext of an inbound message, and it reaches a frame unfiltered. Three other paths do too. Second, the single-flight rule on the submit path, whose mutation survived and is reachable in two keystrokes."
     }
   ]
 }
