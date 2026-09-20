@@ -2,7 +2,10 @@ import { build } from "esbuild";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { readFileSync } from "node:fs";
+
 const HERE = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(resolve(HERE, "package.json"), "utf8"));
 
 const common = {
   bundle: true,
@@ -12,6 +15,9 @@ const common = {
   external: ["@signalapp/libsignal-client"],
   legalComments: "none",
   sourcemap: false,
+  define: {
+    __CLI_VERSION__: JSON.stringify(pkg.version),
+  },
   banner: {
     js: '#!/usr/bin/env node\nimport { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);',
   },
