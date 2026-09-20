@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { resolve, dirname, join } from "node:path";
+import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exec, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -7,7 +7,6 @@ import {
   ensureEcholetDirs,
   getGlobalConfig,
   saveGlobalConfig,
-  getProfilesDir,
   getProfileDir,
   getStoreKeyPath,
   getClientDbPath,
@@ -17,9 +16,10 @@ import {
   ensureKeyPermissions,
 } from "../runtime/globalPaths.js";
 import { startDaemon, stopDaemon, getDaemonStatus } from "../runtime/daemon.js";
-import { ask, askChoice, confirm } from "./prompts.js";
+import { ask, confirm } from "./prompts.js";
 import { openProfile } from "../runtime/profile.js";
 import { openOutboundMessenger } from "../runtime/outbound.js";
+import { RelayClient } from "../transport/relayClient.js";
 
 const HERE = typeof __dirname !== "undefined" ? __dirname : dirname(fileURLToPath(import.meta.url));
 
@@ -33,7 +33,7 @@ function resolveWebServerPath(): string {
   for (const c of candidates) {
     if (existsSync(c)) return c;
   }
-  return candidates[2];
+  return candidates[2] ?? candidates[0] ?? "";
 }
 
 function openBrowser(url: string): void {
@@ -53,7 +53,6 @@ export async function handleStationCommand(args: string[]): Promise<void> {
   if (sub === "setup" || (!sub.startsWith("-") && sub === "station")) {
     console.log(`\n=== 📻 МАСТЕР НАСТРОЙКИ СТАНЦИИ ECHOLET ===\n`);
     const callsign = await ask("Введите позывной станции (Callsign)", "Echo-Operator");
-    const profiles = listProfiles();
     const dir = getProfileDir(callsign);
 
     if (existsSync(dir) && existsSync(getClientDbPath(callsign))) {
@@ -103,7 +102,7 @@ export async function handleStationCommand(args: string[]): Promise<void> {
         const messenger = await openOutboundMessenger({
           profileDir: dir,
           environment: process.env,
-          relay: { baseUrl: relayUrl, requestTimeoutMs: 10000 },
+          relay: new RelayClient({ baseUrl: relayUrl, timeoutMs: 10000 }),
         });
         await messenger.publish();
         await messenger.close();
@@ -140,8 +139,9 @@ export async function handleStationCommand(args: string[]): Promise<void> {
 
     let port = 3001;
     const portIdx = args.indexOf("--port");
-    if (portIdx !== -1 && args[portIdx + 1]) {
-      port = parseInt(args[portIdx + 1], 10) || 3001;
+    const portArg = portIdx !== -1 ? args[portIdx + 1] : undefined;
+    if (portArg) {
+      port = parseInt(portArg, 10) || 3001;
     }
 
     const isDaemon = args.includes("--daemon") || args.includes("-d");
@@ -198,7 +198,7 @@ export async function handleStationCommand(args: string[]): Promise<void> {
       setTimeout(() => openBrowser(`http://127.0.0.1:${port}`), 800);
     }
     const child = spawn(process.execPath, serverArgs, { env, stdio: "inherit" });
-    child.on("exit", (code) => {
+    child.on("exit", (code: number | null) => {
       process.exit(code ?? 0);
     });
     return;
@@ -232,8 +232,9 @@ export async function handleStationCommand(args: string[]): Promise<void> {
   if (sub === "open") {
     let port = 3001;
     const portIdx = args.indexOf("--port");
-    if (portIdx !== -1 && args[portIdx + 1]) {
-      port = parseInt(args[portIdx + 1], 10) || 3001;
+    const portArg = portIdx !== -1 ? args[portIdx + 1] : undefined;
+    if (portArg) {
+      port = parseInt(portArg, 10) || 3001;
     }
     openBrowser(`http://127.0.0.1:${port}`);
     console.log(`Открываем интерфейс станции: http://127.0.0.1:${port}`);

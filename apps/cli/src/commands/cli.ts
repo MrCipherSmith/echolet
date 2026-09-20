@@ -485,6 +485,11 @@ async function main(): Promise<number> {
 
   // --- LAYERED DISPATCHER (High-level operator commands) ---
   const first = rawArgs[0];
+  if (first === "--version" || first === "-v" || first === "version") {
+    console.log("0.1.0");
+    return 0;
+  }
+
   if (!first || first === "--help" || first === "-h" || first === "help") {
     const { printHelp } = await import("../operator/banner.js");
     printHelp();

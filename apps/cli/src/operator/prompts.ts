@@ -30,8 +30,10 @@ export async function askChoice(
   });
   const raw = await ask(`Выберите вариант (1-${choices.length})`, String(defaultIndex + 1));
   const num = parseInt(raw, 10);
-  if (!isNaN(num) && num >= 1 && num <= choices.length) {
-    return choices[num - 1].value;
+  const selected = !isNaN(num) && num >= 1 && num <= choices.length ? choices[num - 1] : undefined;
+  if (selected) {
+    return selected.value;
   }
-  return choices[defaultIndex].value;
+  const fallback = choices[defaultIndex];
+  return fallback ? fallback.value : (choices[0]?.value ?? "");
 }
