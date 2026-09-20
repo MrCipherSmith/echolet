@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exec, spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -19,8 +19,13 @@ import { ask, confirm, closeReadline } from "./prompts.js";
 import { openProfile } from "../runtime/profile.js";
 import { openOutboundMessenger } from "../runtime/outbound.js";
 import { RelayClient } from "../transport/relayClient.js";
+import { parseClientConfig, type ClientConfig } from "../runtime/config.js";
 
 const HERE = typeof __dirname !== "undefined" ? __dirname : dirname(fileURLToPath(import.meta.url));
+
+export function readStationProfileConfig(profileDir: string): ClientConfig {
+  return parseClientConfig(JSON.parse(readFileSync(join(profileDir, "config.json"), "utf8")));
+}
 
 function resolveWebServerPath(): string {
   const candidates = [
@@ -162,6 +167,7 @@ export async function handleStationCommand(args: string[]): Promise<void> {
       process.exit(1);
     }
     const storeKey = readFileSync(keyPath, "utf8").trim();
+    const profileConfig = readStationProfileConfig(profileDir);
 
     const serverScript = resolveWebServerPath();
     if (!existsSync(serverScript)) {
@@ -178,11 +184,15 @@ export async function handleStationCommand(args: string[]): Promise<void> {
       profileDir,
       "--label",
       targetProfile,
+      "--relay-url",
+      profileConfig.relay_url,
+      "--store-key-env",
+      profileConfig.store_key_env,
     ];
 
     const env = {
       ...process.env,
-      ECHOLET_STORE_KEY: storeKey,
+      [profileConfig.store_key_env]: storeKey,
       ECHOLET_CLI_PATH: process.argv[1] || resolve(HERE, "../dist/cli.js"),
     };
 

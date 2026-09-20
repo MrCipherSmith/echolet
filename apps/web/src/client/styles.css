@@ -3722,4 +3722,457 @@ body {
   top: 310px;
 }
 
+/* ===========================================================================
+   STATION ACCESSIBILITY AND SMALL-VIEWPORT SAFETY
+   =========================================================================== */
 
+/* These controls belong to the application shell, while the radio hardware
+   remains decorative unless a component receives a real callback. */
+:where(button, input, select, textarea) {
+  font: inherit;
+}
+
+:where(button, input, select, textarea, [role="button"]):focus-visible {
+  outline: 3px solid #facc15;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px rgba(250, 204, 21, 0.28);
+}
+
+.nordic-encoder-control,
+.nordic-jog-assembly,
+.nordic-color-knob {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+}
+
+button.nordic-encoder-control,
+button.nordic-jog-assembly,
+button.nordic-color-knob {
+  display: block;
+}
+
+.nordic-encoder-pointer {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 10px;
+  border-radius: 2px;
+  background-color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.station-empty-state {
+  width: min(100%, 42rem);
+  margin: auto;
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 2px solid currentColor;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.32);
+  color: inherit;
+  text-align: center;
+  font-size: clamp(1rem, 1.6vw, 1.125rem);
+  line-height: 1.5;
+}
+
+.station-empty-actions,
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.station-empty-actions button,
+.dialog-actions button,
+.station-theme-field select {
+  min-height: 2.75rem;
+  padding: 0.6rem 0.9rem;
+  border: 2px solid currentColor;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.station-status,
+.station-profile-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.station-status[data-state="connected"],
+.station-profile-status[data-state="verified"] {
+  color: #14532d;
+  background: #dcfce7;
+}
+
+.station-status[data-state="disconnected"],
+.station-profile-status[data-state="unverified"] {
+  color: #7f1d1d;
+  background: #fee2e2;
+}
+
+.station-status[data-state="unknown"],
+.station-profile-status[data-state="unknown"] {
+  color: #713f12;
+  background: #fef3c7;
+}
+
+.station-theme-field {
+  display: grid;
+  gap: 0.35rem;
+  min-width: min(100%, 14rem);
+  color: inherit;
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.station-theme-field select {
+  width: 100%;
+  color: #111827;
+  background: #ffffff;
+}
+
+.card-dialog {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: clamp(1rem, 4vw, 2rem);
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.dialog-content {
+  width: min(100%, 42rem);
+  max-height: min(90dvh, 48rem);
+  overflow: auto;
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 2px solid #facc15;
+  border-radius: 10px;
+  color: #f8fafc;
+  background: #172033;
+  font-size: 1rem;
+  line-height: 1.5;
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.55);
+}
+
+.dialog-content label {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.9rem;
+  font-weight: 700;
+}
+
+.dialog-content input,
+.dialog-content textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.65rem;
+  border: 2px solid #94a3b8;
+  border-radius: 6px;
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.dialog-content textarea {
+  min-height: 10rem;
+  resize: vertical;
+}
+
+.dialog-error {
+  margin-top: 0.9rem;
+  padding: 0.7rem;
+  border-left: 4px solid #f87171;
+  color: #fecaca;
+  background: #450a0a;
+  font-weight: 700;
+}
+
+.card-preview {
+  max-width: 100%;
+  overflow: auto;
+  margin-top: 1rem;
+  padding: 0.9rem;
+  border: 1px solid #64748b;
+  border-radius: 6px;
+  color: #e2e8f0;
+  background: #020617;
+  font: 0.875rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Parchment needs a dark, opaque empty-state surface; white text on cream is
+   unreadable and this keeps the vintage visual language intact. */
+.skin-vintage-radiola .station-empty-state {
+  color: #2b1307;
+  background: rgba(255, 248, 235, 0.94);
+  border-color: #78350f;
+  box-shadow: 0 0.5rem 1.5rem rgba(43, 19, 7, 0.3);
+}
+
+.skin-vintage-radiola .station-empty-actions button,
+.skin-vintage-radiola .station-theme-field select {
+  color: #2b1307;
+  background: #fde8c8;
+  border-color: #78350f;
+}
+
+/* OP-1 telemetry is data, not etched decoration: preserve the pale skin while
+   bringing its type up to a readable size and contrast. */
+.skin-nordic-op1 .telemetry-mini-stream,
+.skin-nordic-op1 .term-stream-box {
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.skin-nordic-op1 .term-stream-title {
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+.skin-nordic-op1 .term-msg-line {
+  color: #0f172a;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.skin-nordic-op1 .term-msg-line.success { color: #166534; }
+.skin-nordic-op1 .term-msg-line.crypto { color: #854d0e; }
+.skin-nordic-op1 .term-msg-line.warn { color: #9a3412; }
+.skin-nordic-op1 .term-msg-line.error { color: #b91c1c; }
+.skin-nordic-op1 .term-msg-line.info { color: #334155; }
+
+@media (max-width: 900px), (max-height: 640px) {
+  body {
+    height: auto;
+    min-height: 100dvh;
+    overflow: auto;
+  }
+
+  .radio-outer-wrap {
+    width: 100%;
+    height: auto;
+    min-height: 100dvh;
+    align-items: stretch;
+    padding: 0.5rem;
+    overflow: visible;
+  }
+
+  .radio-cabinet {
+    width: 100%;
+    height: auto;
+    min-height: calc(100dvh - 1rem);
+    max-height: none;
+    overflow: visible;
+  }
+
+  .radio-main-body {
+    flex: initial;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .hardware-contacts-zone,
+  .hardware-chat-zone,
+  .hardware-controls-zone {
+    width: 100%;
+    min-width: 0;
+    min-height: 15rem;
+    flex: initial;
+  }
+
+  .hardware-chat-zone {
+    order: 1;
+  }
+
+  .hardware-contacts-zone,
+  .hardware-controls-zone {
+    order: 2;
+  }
+
+  .hardware-input-form {
+    flex-wrap: wrap;
+  }
+
+  .hardware-input-field {
+    min-width: 0;
+    font-size: 1rem;
+  }
+
+  .hardware-transmit-button {
+    min-height: 2.75rem;
+    font-size: 0.95rem;
+  }
+
+  .station-empty-actions > *,
+  .dialog-actions > * {
+    flex: 1 1 12rem;
+  }
+}
+
+@media (max-width: 620px) {
+  .station-empty-state,
+  .dialog-content {
+    font-size: 1rem;
+  }
+
+  .station-empty-actions > *,
+  .dialog-actions > * {
+    flex-basis: 100%;
+  }
+
+  .nordic-encoders-2x2 {
+    gap: 0.75rem;
+  }
+
+  .hardware-msg-text {
+    font-size: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* App shell integration: the station status is a section of several facts,
+   while the theme label and selector intentionally share one class. */
+.station-status {
+  display: flex;
+  width: 100%;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem 0.75rem;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.75rem;
+  border: 0;
+  border-radius: 0;
+  font-size: 0.875rem;
+}
+
+.station-status-label,
+.station-profile-status {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.station-status-label {
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.13);
+  font-weight: 700;
+}
+
+span.station-theme-field {
+  display: block;
+  min-width: 0;
+  color: inherit;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+select.station-theme-field {
+  display: block;
+  width: 100%;
+  min-width: 10rem;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.9375rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+@media (max-width: 900px), (max-height: 640px) {
+  .station-status {
+    justify-content: flex-start;
+    padding-inline: 0.65rem;
+  }
+
+  .radiola-top-deck,
+  .military-top-deck,
+  .hifi-top-deck,
+  .crt-top-deck,
+  .nixie-top-deck,
+  .nordic-top-deck {
+    display: flex !important;
+    height: auto !important;
+    min-height: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    overflow: visible;
+  }
+
+  .radiola-top-deck > *,
+  .military-top-deck > *,
+  .hifi-top-deck > *,
+  .crt-top-deck > *,
+  .nixie-top-deck > *,
+  .nordic-top-deck > * {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  select.station-theme-field {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .station-status-label,
+  .station-profile-status {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .radiola-top-deck,
+  .military-top-deck,
+  .hifi-top-deck,
+  .crt-top-deck,
+  .nixie-top-deck,
+  .nordic-top-deck {
+    align-items: stretch;
+  }
+
+  .radiola-top-deck > *,
+  .military-top-deck > *,
+  .hifi-top-deck > *,
+  .crt-top-deck > *,
+  .nixie-top-deck > *,
+  .nordic-top-deck > * {
+    width: 100%;
+  }
+}

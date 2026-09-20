@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
+import { ModalDialog } from "./ModalDialog";
+import { MAX_CONTACT_CARD_BYTES, type ContactCardPreview, isDuplicateContact, parseContactCard, parseExportCardResponse } from "./contactCard";
+import { effectiveRelayState, isRecord, parseStationStatus, type ConnectionState, type ProfileState, type ReachabilityState } from "./stationStatus";
 import {
   McIntoshVUPair,
   KT88PowerTube,
@@ -16,7 +19,6 @@ import {
   AnalogMeter,
   NixieCluster,
   NordicSpeakerGrille,
-  NordicColorButtons,
   NordicJogDial,
   NordicRotaryEncoder,
   playHardwareClick,
@@ -54,8 +56,31 @@ interface TelemetryItem {
   message: string;
 }
 
+function mapContacts(value: unknown): Contact[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!isRecord(item) || typeof item.identity_id !== "string" || typeof item.device_id !== "string") return [];
+    return [{
+      identity_id: item.identity_id,
+      device_id: item.device_id,
+      device_pubkey: typeof item.device_pubkey === "string" ? item.device_pubkey : undefined,
+      signal_identity_key: typeof item.signal_identity_key === "string" ? item.signal_identity_key : undefined,
+      name: typeof item.name === "string" ? item.name : undefined,
+    }];
+  });
+}
+
+function isTelemetryItem(value: unknown): value is TelemetryItem {
+  return isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.time === "string" &&
+    typeof value.message === "string" &&
+    (value.type === "info" || value.type === "success" || value.type === "warn" || value.type === "error" || value.type === "crypto");
+}
+
+/* Legacy demo fixtures intentionally disabled: real contacts and history only come from the bridge.
 const DEFAULT_CONTACTS: Contact[] = [
-  { identity_id: "atk7QgkCcCVIuvicT0gqmwQOZMbS9ygmjtRws_7xrgY", name: "Elsa Larsson", status: "online" }
+  { identity_id: "atk7QgkCcCVIuvicT0gqmwQOZMbS9ygmjtRws_7xrgY", name: "Elsa Larsson", device_id: "unused" }
 ];
 
 const DEFAULT_HISTORY: HistoryEntry[] = [
@@ -78,6 +103,9 @@ const DEFAULT_MILITARY_TRAFFIC: HistoryEntry[] = [
   { sequence: 3, contactIdentityId: "c1", messageId: "m3", direction: "inbound", plaintext: "ДОКЛАД: СЕКТОР 4 ЧИСТ. ГОТОВЫ К ПРИЕМУ ПАКЕТОВ ДАННЫХ.", createdAtMs: 1789836120000 },
   { sequence: 4, contactIdentityId: "c1", messageId: "m4", direction: "outbound", plaintext: "ПЕРЕДАЮ ТАКТИЧЕСКИЙ ОТЧЕТ. КОНЕЦ СВЯЗИ.", createdAtMs: 1789836180000 }
 ];
+
+void [DEFAULT_CONTACTS, DEFAULT_HISTORY, DEFAULT_RADIOLA_TRAFFIC, DEFAULT_MILITARY_TRAFFIC];
+*/
 
 export function App() {
   const [skin, setSkin] = useState<SkinId>(() => {
@@ -102,19 +130,19 @@ export function App() {
   });
 
   const [label, setLabel] = useState<string>("Operator");
-  const [profile, setProfile] = useState<any>(null);
   const [relayUrl, setRelayUrl] = useState<string>("");
   const [pingMs, setPingMs] = useState<number | null>(null);
-  const [contacts, setContacts] = useState<Contact[]>(DEFAULT_CONTACTS);
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(DEFAULT_CONTACTS[0]);
+  const [relayState, setRelayState] = useState<ConnectionState>("unknown");
+  const [localStationState, setLocalStationState] = useState<ConnectionState>("unknown");
+  const [profileState, setProfileState] = useState<ProfileState>("unknown");
+  const [relayReachability, setRelayReachability] = useState<ReachabilityState>("unknown");
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [telemetry, setTelemetry] = useState<TelemetryItem[]>([]);
   const [inputMsg, setInputMsg] = useState<string>("");
   const [sending, setSending] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [powerOn, setPowerOn] = useState<boolean>(true);
-  const [nordicColor, setNordicColor] = useState<string>("orange");
-  const [jogVal, setJogVal] = useState<number>(45);
+  const [searchQuery] = useState<string>("");
 
   // Nordic Winamp State
   const [freqVal, setFreqVal] = useState<number>(7.100);
@@ -125,40 +153,24 @@ export function App() {
   const [knobGain, setKnobGain] = useState<number>(70);
   const [knobTune, setKnobTune] = useState<number>(110);
   const [currentTimeStr, setCurrentTimeStr] = useState<string>("14:32");
-  const [utcTimeStr, setUtcTimeStr] = useState<string>("12:32");
 
   useEffect(() => {
     const updateTimes = () => {
       const d = new Date();
       setCurrentTimeStr(d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
-      setUtcTimeStr(d.toISOString().substring(11, 16));
     };
     updateTimes();
     const t = setInterval(updateTimes, 10000);
     return () => clearInterval(t);
   }, []);
 
-  const handleScan = () => {
-    playHardwareClick("chirp");
-    let count = 0;
-    const freqs = [7.100, 7.125, 7.145, 7.180, 7.200, 14.150, 14.225, 7.100];
-    const interval = setInterval(() => {
-      count++;
-      setFreqVal(freqs[count % freqs.length]);
-      if (count >= 10) {
-        clearInterval(interval);
-        setFreqVal(7.100);
-      }
-    }, 110);
-  };
-
   const switchChannel = (ch: string) => {
     setActiveChannel(ch);
     playHardwareClick("soft");
-    if (ch === "CH 1-9") { setFreqVal(7.100); setNordicColor("orange"); }
-    else if (ch === "HAM Radio") { setFreqVal(14.200); setNordicColor("ochre"); }
-    else if (ch === "Weather") { setFreqVal(146.520); setNordicColor("cyan"); }
-    else if (ch === "VHF/UHF") { setFreqVal(433.500); setNordicColor("white"); }
+    if (ch === "CH 1-9") setFreqVal(7.100);
+    else if (ch === "HAM Radio") setFreqVal(14.200);
+    else if (ch === "Weather") setFreqVal(146.520);
+    else if (ch === "VHF/UHF") setFreqVal(433.500);
   };
 
   const cycleKnob = (knob: "vol" | "g" | "gain" | "tune") => {
@@ -175,12 +187,24 @@ export function App() {
   // Modals
   const [showImportModal, setShowImportModal] = useState<boolean>(false);
   const [importJsonText, setImportJsonText] = useState<string>("");
+  const [importPreview, setImportPreview] = useState<ContactCardPreview | null>(null);
+  const [validatedCard, setValidatedCard] = useState<Record<string, unknown> | null>(null);
+  const [importError, setImportError] = useState<string>("");
+  const [importing, setImporting] = useState(false);
+  const [validatingImport, setValidatingImport] = useState(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [exportJsonText, setExportJsonText] = useState<string>("");
+  const [exportError, setExportError] = useState<string>("");
+  const [exportLoading, setExportLoading] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<string>("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const crtCanvasRef = useRef<HTMLCanvasElement>(null);
   const nordicCanvasRef = useRef<HTMLCanvasElement>(null);
+  const selectedContactRef = useRef<Contact | null>(null);
+  const historyRequestRef = useRef(0);
+  const exportRequestRef = useRef(0);
+  const importGenerationRef = useRef(0);
 
   const handleSkinChange = (newSkin: SkinId) => {
     setSkin(newSkin);
@@ -188,66 +212,41 @@ export function App() {
   };
 
   // 1. Initial Load
+  const applyStatus = (payload: unknown) => {
+    const status = parseStationStatus(payload);
+    if (!status) return;
+    if (status.label !== null) setLabel(status.label);
+    setRelayUrl(status.relayUrl);
+    setPingMs(status.pingMs);
+    setRelayState(status.relay);
+    setProfileState(status.profileState);
+    setRelayReachability(status.relayReachability);
+    if (status.telemetry) setTelemetry(status.telemetry.filter(isTelemetryItem));
+
+    const mapped = mapContacts(status.profile?.contacts);
+    setContacts(mapped);
+    const selectedId = selectedContactRef.current?.identity_id;
+    const nextSelected = mapped.find((contact) => contact.identity_id === selectedId) ?? mapped[0] ?? null;
+    selectedContactRef.current = nextSelected;
+    setSelectedContact(nextSelected);
+    if (!nextSelected) setHistory([]);
+  };
+
   const loadStatus = async () => {
     try {
       const res = await fetch("/api/status");
-      const data = await res.json();
-      if (data.ok) {
-        setLabel(data.label);
-        setProfile(data.profile);
-        setRelayUrl(data.relayUrl);
-        setPingMs(data.pingMs);
-        if (data.telemetry) setTelemetry(data.telemetry);
-        
-        const rawContacts: any[] = data.profile?.contacts ?? [];
-        if (rawContacts.length > 0) {
-          const mapped: Contact[] = rawContacts.map((c) => ({
-            identity_id: c.identity_id,
-            name: c.name || `Station ${c.identity_id.substring(0, 6).toUpperCase()}`,
-            device_id: c.device_id || "default",
-            device_pubkey: c.device_pubkey,
-            signal_identity_key: c.signal_identity_key,
-            status: "online",
-          }));
-          setContacts(mapped);
-          setSelectedContact(mapped[0]);
-          loadHistory(mapped[0].identity_id);
-        } else {
-          const isAlice = (data.label || "").toLowerCase().includes("alice");
-          const fallbackList: Contact[] = [
-            {
-              identity_id: isAlice ? "bob-identity" : "alice-identity",
-              name: isAlice ? "OSKAR HOLM [BOB]" : "ELSA LARSSON [ALICE]",
-              device_id: "default",
-              status: "online",
-            },
-            {
-              identity_id: "station-telefunken",
-              name: "TELEFUNKEN STN",
-              device_id: "default",
-              status: "online",
-            },
-            {
-              identity_id: "station-agnes",
-              name: "AGNES BERG",
-              device_id: "default",
-              status: "standby",
-            }
-          ];
-          setContacts(fallbackList);
-          setSelectedContact(fallbackList[0]);
-        }
-      }
+      applyStatus(await res.json());
     } catch (e) {
       console.error("Failed to load status", e);
     }
   };
 
   const loadHistory = async (contactId: string) => {
+    const requestId = ++historyRequestRef.current;
     try {
       const res = await fetch(`/api/history?with=${encodeURIComponent(contactId)}`);
       const data = await res.json();
-      if (data.ok && data.data?.entries) {
+      if (data.ok && data.data?.entries && selectedContactRef.current?.identity_id === contactId && requestId === historyRequestRef.current) {
         setHistory(data.data.entries);
       }
     } catch (e) {
@@ -261,6 +260,7 @@ export function App() {
 
   useEffect(() => {
     if (selectedContact) {
+      selectedContactRef.current = selectedContact;
       loadHistory(selectedContact.identity_id);
     }
   }, [selectedContact]);
@@ -271,7 +271,7 @@ export function App() {
 
   // 2. CRT Oscilloscope Canvas Animation
   useEffect(() => {
-    if (skin !== "oscilloscope-crt" || !crtCanvasRef.current) return;
+    if (skin !== "oscilloscope-crt" || !crtCanvasRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const canvas = crtCanvasRef.current;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -318,7 +318,7 @@ export function App() {
 
   // 3. Nordic OP-1 Animated Vector Audio Waveform
   useEffect(() => {
-    if (skin !== "nordic-op1" || !nordicCanvasRef.current) return;
+    if (skin !== "nordic-op1" || !nordicCanvasRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const canvas = nordicCanvasRef.current;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -364,29 +364,44 @@ export function App() {
   // 4. Server-Sent Events (SSE)
   useEffect(() => {
     const sse = new EventSource("/api/events");
+    sse.addEventListener("open", () => setLocalStationState("connected"));
+    sse.addEventListener("error", () => setLocalStationState("disconnected"));
+    sse.addEventListener("status", (e) => {
+      try {
+        applyStatus(JSON.parse(e.data));
+      } catch (error) {
+        console.error("Failed to read station status event", error);
+      }
+    });
     sse.addEventListener("telemetry", (e) => {
       try {
         const item: TelemetryItem = JSON.parse(e.data);
         setTelemetry((prev) => [...prev.slice(-150), item]);
-      } catch {}
+      } catch (error) {
+        console.error("Failed to read telemetry event", error);
+      }
     });
     sse.addEventListener("ping", (e) => {
       try {
         const data = JSON.parse(e.data);
         setPingMs(data.ping);
-      } catch {}
+      } catch (error) {
+        console.error("Failed to read ping event", error);
+      }
     });
     sse.addEventListener("new_message", () => {
-      if (selectedContact) loadHistory(selectedContact.identity_id);
+      const selected = selectedContactRef.current;
+      if (selected) loadHistory(selected.identity_id);
     });
     sse.addEventListener("outbound_sent", () => {
-      if (selectedContact) loadHistory(selectedContact.identity_id);
+      const selected = selectedContactRef.current;
+      if (selected) loadHistory(selected.identity_id);
     });
     sse.addEventListener("contact_added", () => {
       loadStatus();
     });
     return () => sse.close();
-  }, [selectedContact]);
+  }, []);
 
   // 5. Send Message
   const handleSend = async (e?: React.FormEvent) => {
@@ -417,35 +432,125 @@ export function App() {
   };
 
   const handleExportCard = async () => {
+    const requestId = ++exportRequestRef.current;
+    setShowExportModal(true);
+    setExportLoading(true);
+    setExportError("");
+    setExportJsonText("");
+    setCopyStatus("");
     try {
       const res = await fetch("/api/contacts/export");
       const text = await res.text();
-      setExportJsonText(text);
-      setShowExportModal(true);
-    } catch (err: any) {
-      alert(`Ошибка экспорта: ${err.message}`);
+      const exported = parseExportCardResponse(res.status, text);
+      if (!exported.ok) {
+        throw new Error(exported.error);
+      }
+      if (requestId === exportRequestRef.current) setExportJsonText(exported.cardJson);
+    } catch (error) {
+      if (requestId === exportRequestRef.current) {
+        setExportError(error instanceof Error ? error.message : "Не удалось экспортировать карточку.");
+      }
+    } finally {
+      if (requestId === exportRequestRef.current) setExportLoading(false);
     }
   };
 
-  const handleImportCard = async () => {
-    if (!importJsonText.trim()) return;
+  const resetImportPreparation = () => {
+    importGenerationRef.current++;
+    setValidatingImport(false);
+    setImportPreview(null);
+    setValidatedCard(null);
+    setImportError("");
+  };
+
+  const handleImportTextChange = (value: string) => {
+    setImportJsonText(value);
+    resetImportPreparation();
+  };
+
+  const handleImportFile = async (file: File | undefined) => {
+    resetImportPreparation();
+    const generation = importGenerationRef.current;
+    if (!file) return;
+    if (file.size > MAX_CONTACT_CARD_BYTES) {
+      setImportError("Карточка превышает допустимый размер 128 КБ.");
+      return;
+    }
     try {
-      const parsed = JSON.parse(importJsonText);
+      const text = await file.text();
+      if (generation !== importGenerationRef.current) return;
+      setImportJsonText(text);
+    } catch {
+      if (generation === importGenerationRef.current) {
+        setImportError("Не удалось прочитать выбранный файл карточки.");
+      }
+    }
+  };
+
+  const handleValidateImport = async () => {
+    const generation = ++importGenerationRef.current;
+    setImportPreview(null);
+    setValidatedCard(null);
+    setImportError("");
+    const parsed = parseContactCard(importJsonText);
+    if (!parsed.ok) {
+      setImportError(parsed.error);
+      return;
+    }
+    if (isDuplicateContact(parsed.preview, contacts.map((contact) => contact.identity_id))) {
+      setImportError("Этот абонент уже есть в адресной книге.");
+      return;
+    }
+    setValidatingImport(true);
+    try {
+      const res = await fetch("/api/contacts/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardJson: parsed.card }),
+      });
+      const data: unknown = await res.json();
+      if (!res.ok || !isRecord(data) || data.ok !== true) {
+        throw new Error(isRecord(data) && typeof data.error === "string" ? data.error : "Карточка не прошла криптографическую проверку.");
+      }
+      if (generation !== importGenerationRef.current) return;
+      setImportPreview(parsed.preview);
+      setValidatedCard(parsed.card);
+    } catch (error) {
+      if (generation !== importGenerationRef.current) return;
+      setImportError(error instanceof Error ? error.message : "Не удалось проверить карточку.");
+    } finally {
+      if (generation === importGenerationRef.current) setValidatingImport(false);
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!validatedCard || importing) return;
+    const current = parseContactCard(importJsonText);
+    if (!current.ok || JSON.stringify(current.card) !== JSON.stringify(validatedCard)) {
+      setImportError("Карточка изменилась. Проверьте её повторно перед импортом.");
+      return;
+    }
+    setImporting(true);
+    setImportError("");
+    try {
       const res = await fetch("/api/contacts/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cardJson: parsed }),
+        body: JSON.stringify({ cardJson: validatedCard, confirmed: true }),
       });
-      const data = await res.json();
-      if (data.ok) {
-        setShowImportModal(false);
-        setImportJsonText("");
-        await loadStatus();
-      } else {
-        alert(`Ошибка импорта: ${data.code}`);
+      const data: unknown = await res.json();
+      if (!res.ok || !isRecord(data) || data.ok !== true) {
+        throw new Error(isRecord(data) && typeof data.error === "string" ? data.error : "Не удалось импортировать карточку.");
       }
-    } catch (e: any) {
-      alert(`Некорректный JSON карточки: ${e.message}`);
+      importGenerationRef.current++;
+      setShowImportModal(false);
+      setImportJsonText("");
+      resetImportPreparation();
+      await loadStatus();
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Не удалось импортировать карточку.");
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -458,18 +563,41 @@ export function App() {
     );
   });
 
-  const activeTraffic = history.length > 0
-    ? history
-    : skin === "military-r250"
-    ? DEFAULT_MILITARY_TRAFFIC
-    : skin === "vintage-radiola"
-    ? DEFAULT_RADIOLA_TRAFFIC
-    : DEFAULT_HISTORY;
+  const activeTraffic = history;
+  const displayedRelayState = effectiveRelayState(localStationState, relayState);
+  const relayLabel = displayedRelayState === "connected"
+    ? "Соединение с relay подтверждено"
+    : localStationState === "disconnected"
+      ? "Локальная станция недоступна"
+      : displayedRelayState === "disconnected"
+        ? "Соединение с relay отключено"
+      : "Состояние relay неизвестно";
+  const closeImportModal = () => {
+    resetImportPreparation();
+    setShowImportModal(false);
+  };
+  const profileLabel = profileState === "verified"
+    ? "Профиль готов"
+    : profileState === "unverified"
+      ? "Профиль требует проверки"
+      : "Состояние профиля неизвестно";
+  const closeExportModal = () => {
+    exportRequestRef.current++;
+    setShowExportModal(false);
+  };
 
   return (
     <div className={`radio-outer-wrap skin-${skin}`} data-theme={skin}>
       {/* SKEUOMORPHIC CABINET CONTAINER */}
       <div className="radio-cabinet">
+        <section className="station-status" data-state={displayedRelayState} aria-label="Состояние станции">
+          <span className="station-status-label">{relayLabel}</span>
+          <span className="station-profile-status" data-state={profileState}>{profileLabel}</span>
+          <span className="station-status-label" title={relayUrl}>
+            Доступность relay: {relayReachability === "reachable" ? "доступен" : relayReachability === "unreachable" ? "недоступен" : "неизвестна"}
+          </span>
+          <span className="station-status-label">Оператор: {label}</span>
+        </section>
 
         {/* LEFT / RIGHT CHROME MOUNTING GRAB HANDLES (FOR MILITARY R-250) */}
         {skin === "military-r250" && (
@@ -497,19 +625,21 @@ export function App() {
             <div className="radiola-switches-group">
               <div className="radiola-toggle-unit">
                 <div
-                  className={`brass-toggle-lever ${powerOn ? "on" : "off"}`}
-                  onClick={() => { setPowerOn(!powerOn); playHardwareClick("clack"); }}
+                  className="brass-toggle-lever on"
+                  aria-hidden="true"
                 >
                   <div className="lever-nut" />
                   <div className="lever-arm" />
                 </div>
-                <span className="toggle-sub-label">{powerOn ? "On" : "Off"}</span>
+                <span className="toggle-sub-label">ВИЗУАЛЬНО</span>
               </div>
 
               <div className="radiola-skin-selector-bezel">
                 <span className="radiola-selector-title">DIAL SKIN</span>
+                <span className="station-theme-field">Оформление</span>
                 <select
-                  className="radiola-wood-select"
+                  className="radiola-wood-select station-theme-field"
+                  aria-label="Оформление"
                   value={skin}
                   onChange={(e) => handleSkinChange(e.target.value as SkinId)}
                 >
@@ -543,22 +673,22 @@ export function App() {
               </div>
 
               <div className="mil-toggles-row">
-                <div className="mil-bat-switch" onClick={() => playHardwareClick("clack")}>
+                <div className="mil-bat-switch" aria-hidden="true">
                   <span className="mil-jewel-lamp on" />
                   <div className="bat-toggle-stick" />
                   <span className="bat-label">СЕТЬ ВКЛ</span>
                 </div>
-                <div className="mil-bat-switch" onClick={() => playHardwareClick("clack")}>
+                <div className="mil-bat-switch" aria-hidden="true">
                   <span className="mil-jewel-lamp on" />
                   <div className="bat-toggle-stick" />
                   <span className="bat-label">ВЧ ВКЛ</span>
                 </div>
-                <div className="mil-bat-switch" onClick={() => playHardwareClick("clack")}>
+                <div className="mil-bat-switch" aria-hidden="true">
                   <span className="mil-jewel-lamp active" />
                   <div className="bat-toggle-stick" />
                   <span className="bat-label">НЧ ВКЛ</span>
                 </div>
-                <div className="mil-bat-switch" onClick={() => playHardwareClick("clack")}>
+                <div className="mil-bat-switch" aria-hidden="true">
                   <span className="mil-jewel-lamp on" />
                   <div className="bat-toggle-stick" />
                   <span className="bat-label">ПРИЕМ</span>
@@ -579,8 +709,10 @@ export function App() {
               />
               <div className="mil-selector-wrap">
                 <span className="mil-switch-title">РЕЖИМ ПРИЕМА</span>
+                <span className="station-theme-field">Оформление</span>
                 <select
-                  className="military-bakelite-select"
+                  className="military-bakelite-select station-theme-field"
+                  aria-label="Оформление"
                   value={skin}
                   onChange={(e) => handleSkinChange(e.target.value as SkinId)}
                 >
@@ -617,8 +749,10 @@ export function App() {
 
             <div className="hifi-selector-column">
               <span className="hifi-input-label">SOURCE INPUT</span>
+              <span className="station-theme-field">Оформление</span>
               <select
-                className="hifi-gold-select"
+                className="hifi-gold-select station-theme-field"
+                aria-label="Оформление"
                 value={skin}
                 onChange={(e) => handleSkinChange(e.target.value as SkinId)}
               >
@@ -663,8 +797,10 @@ export function App() {
 
             <div className="crt-selector-unit">
               <span className="crt-select-label">SWEEP ATTEN</span>
+              <span className="station-theme-field">Оформление</span>
               <select
-                className="crt-dark-select"
+                className="crt-dark-select station-theme-field"
+                aria-label="Оформление"
                 value={skin}
                 onChange={(e) => handleSkinChange(e.target.value as SkinId)}
               >
@@ -695,8 +831,10 @@ export function App() {
 
             <div className="nixie-selector-unit">
               <span className="nixie-select-label">NIXIE FREQ</span>
+              <span className="station-theme-field">Оформление</span>
               <select
-                className="nixie-dark-select"
+                className="nixie-dark-select station-theme-field"
+                aria-label="Оформление"
                 value={skin}
                 onChange={(e) => handleSkinChange(e.target.value as SkinId)}
               >
@@ -720,7 +858,7 @@ export function App() {
                 <div className="nordic-oled-top-meta-row">
                   <span>ECHOLET OP-1</span>
                   <span>{currentTimeStr} UTC</span>
-                  <span>● SIGNAL LOCK</span>
+                  <span>ВИЗУАЛЬНАЯ СИМУЛЯЦИЯ</span>
                 </div>
                 <div className="nordic-oled-center-freq-row">
                   <span className="nordic-oled-freq-large">{freqVal.toFixed(3)} MHz</span>
@@ -754,8 +892,10 @@ export function App() {
             </div>
 
             <div className="nordic-selector-unit">
+              <span className="station-theme-field">Оформление</span>
               <select
-                className="nordic-clean-select"
+                className="nordic-clean-select station-theme-field"
+                aria-label="Оформление"
                 value={skin}
                 onChange={(e) => handleSkinChange(e.target.value as SkinId)}
               >
@@ -797,8 +937,12 @@ export function App() {
 
             <div className="contacts-items-container">
               {filteredContacts.length === 0 ? (
-                <div className="empty-contacts-badge">
-                  {skin === "military-r250" ? "НЕТ ДАННЫХ В КАРТОТЕКЕ" : "No stations found"}
+                <div className="empty-contacts-badge station-empty-state">
+                  {contacts.length === 0
+                    ? (skin === "military-r250"
+                        ? "КАРТОТЕКА ПУСТА. ДОБАВЬТЕ КАРТОЧКУ АБОНЕНТА."
+                        : "No contacts yet. Add a contact card to start.")
+                    : "Нет подходящих контактов"}
                 </div>
               ) : (
                 filteredContacts.map((contact) => {
@@ -811,10 +955,13 @@ export function App() {
                      `Call-${shortId.toUpperCase()}`);
 
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={contact.identity_id}
                       className={`hardware-contact-card ${isSelected ? "selected" : ""}`}
+                      aria-pressed={isSelected}
                       onClick={() => {
+                        selectedContactRef.current = contact;
                         setSelectedContact(contact);
                         playHardwareClick("soft");
                       }}
@@ -831,15 +978,14 @@ export function App() {
                       <div className="contact-details-box">
                         <div className="contact-title-row">
                           <span className="contact-bold-name">{displayName}</span>
-                          {skin === "military-r250" && <span className="mil-onair-tag">В ЭФИРЕ</span>}
                         </div>
                         <div className="contact-sub-id">{contact.identity_id.substring(0, 14)}…</div>
                       </div>
 
-                      <div className={`contact-status-lamp ${isSelected ? "active" : ""}`} />
+                      <div className={`contact-status-lamp ${isSelected ? "active" : ""}`} aria-hidden="true" />
 
                       {skin === "vintage-radiola" && <div className="plaque-screw right" />}
-                    </div>
+                    </button>
                   );
                 })
               )}
@@ -847,12 +993,10 @@ export function App() {
 
             <div className="contacts-bottom-actions">
               <button className="hardware-action-button" onClick={() => setShowImportModal(true)}>
-                {skin === "military-r250" ? "+ ДОБАВИТЬ КАРТОЧКУ" :
-                 skin === "vintage-radiola" ? "+ Add Radio Card" :
-                 "+ Add Contact"}
+                Добавить контакт
               </button>
               <button className="hardware-action-button secondary" onClick={handleExportCard}>
-                {skin === "military-r250" ? "ЭКСПОРТ КАРТОЧКИ" : "Export Card"}
+                Поделиться моей карточкой
               </button>
             </div>
           </aside>
@@ -973,10 +1117,24 @@ export function App() {
                 </div>
               </>
             ) : (
-              <div className="empty-ether-notice">
+              <div className="empty-ether-notice station-empty-state">
                 <div className="ether-icon">📻</div>
-                <div className="ether-bold">ВЫБЕРИТЕ СТАНЦИЮ АБОНЕНТА</div>
-                <div className="ether-sub">Шифрование Double Ratchet активно на вашем узле</div>
+                <div className="ether-bold">
+                  {contacts.length === 0
+                    ? "Контактов пока нет"
+                    : "Выберите контакт"}
+                </div>
+                <div className="ether-sub">
+                  {contacts.length === 0
+                    ? "Импортируйте карточку абонента или передайте свою карточку собеседнику."
+                    : "Выберите контакт, чтобы увидеть переписку."}
+                </div>
+                {contacts.length === 0 && (
+                  <div className="station-empty-actions">
+                    <button type="button" className="hardware-action-button" onClick={() => setShowImportModal(true)}>Добавить контакт</button>
+                    <button type="button" className="hardware-action-button secondary" onClick={handleExportCard}>Поделиться моей карточкой</button>
+                  </div>
+                )}
               </div>
             )}
           </main>
@@ -992,6 +1150,7 @@ export function App() {
                skin === "nordic-op1" ? "HARDWARE ENCODERS" :
                "HARDWARE RACK"}
             </div>
+            <p className="hardware-simulation-note">Частоты и регуляторы ниже — визуальная симуляция.</p>
 
             {skin === "vintage-radiola" && (
               <div className="radiola-right-hardware-layout">
@@ -1148,54 +1307,83 @@ export function App() {
 
       {/* MODALS */}
       {showImportModal && (
-        <div className="hardware-modal-overlay">
-          <div className="hardware-modal-card">
-            <div className="hardware-modal-header">
-              <span>ИМПОРТ РАДИО-КАРТОЧКИ АБОНЕНТА</span>
-              <button className="modal-close-btn" onClick={() => setShowImportModal(false)}>✕</button>
-            </div>
-            <div className="hardware-modal-body">
-              <p className="modal-help-text">Вставьте JSON-карточку абонента (public identity key & prekeys):</p>
-              <textarea
-                className="modal-json-textarea"
-                placeholder='{"identity_id": "...", "signal_identity_key": "...", ...}'
-                value={importJsonText}
-                onChange={(e) => setImportJsonText(e.target.value)}
-              />
-            </div>
-            <div className="hardware-modal-footer">
-              <button className="hardware-btn-secondary" onClick={() => setShowImportModal(false)}>Отмена</button>
-              <button className="hardware-btn-primary" onClick={handleImportCard}>Импортировать</button>
-            </div>
+        <ModalDialog title="Импорт карточки абонента" titleId="import-card-title" onClose={() => !importing && closeImportModal()}>
+          <div className="hardware-modal-body">
+            <p className="modal-help-text">Выберите файл или вставьте JSON-карточку. Импорт начнётся только после проверки и подтверждения.</p>
+            <label htmlFor="contact-card-file">Файл карточки</label>
+            <input
+              id="contact-card-file"
+              type="file"
+              accept="application/json,.json"
+              disabled={importing || validatingImport}
+              onChange={(event) => void handleImportFile(event.currentTarget.files?.[0])}
+            />
+            <label htmlFor="contact-card-json">JSON карточки</label>
+            <textarea
+              id="contact-card-json"
+              className="modal-json-textarea"
+              placeholder='{"type":"echolet_contact_card", ...}'
+              value={importJsonText}
+              disabled={importing || validatingImport}
+              aria-describedby={importError ? "import-card-error" : undefined}
+              onChange={(event) => handleImportTextChange(event.target.value)}
+            />
+            {importError && <p id="import-card-error" className="dialog-error" role="alert">{importError}</p>}
+            {importPreview && (
+              <div className="card-preview" aria-live="polite">
+                <strong>Карточка проверена и готова к импорту</strong>
+                <span>Identity: {importPreview.identityId}</span>
+                <span>Устройство: {importPreview.deviceId}</span>
+              </div>
+            )}
           </div>
-        </div>
+          <div className="hardware-modal-footer dialog-actions">
+            <button type="button" className="hardware-btn-secondary" disabled={importing} onClick={closeImportModal}>Отмена</button>
+            <button type="button" className="hardware-btn-secondary" disabled={importing || validatingImport} onClick={() => void handleValidateImport()}>{validatingImport ? "Проверяем…" : "Проверить карточку"}</button>
+            <button type="button" className="hardware-btn-primary" disabled={!validatedCard || importing || validatingImport} onClick={() => void handleConfirmImport()}>
+              {importing ? "Импортируется…" : "Подтвердить импорт"}
+            </button>
+          </div>
+        </ModalDialog>
       )}
 
       {showExportModal && (
-        <div className="hardware-modal-overlay">
-          <div className="hardware-modal-card">
-            <div className="hardware-modal-header">
-              <span>ВАША РАДИО-КАРТОЧКА (ЭКСПОРТ)</span>
-              <button className="modal-close-btn" onClick={() => setShowExportModal(false)}>✕</button>
-            </div>
-            <div className="hardware-modal-body">
-              <p className="modal-help-text">Передайте эти публичные ключи собеседнику для шифрования сообщений:</p>
-              <textarea className="modal-json-textarea" readOnly value={exportJsonText} />
-            </div>
-            <div className="hardware-modal-footer">
+        <ModalDialog
+          title="Моя карточка"
+          titleId="export-card-title"
+          onClose={closeExportModal}
+        >
+          <div className="hardware-modal-body">
+            <p className="modal-help-text">Передайте эту публичную карточку собеседнику для защищённой переписки.</p>
+            {exportLoading && <p aria-live="polite">Подготавливаем карточку…</p>}
+            {exportError && <p className="dialog-error" role="alert">{exportError}</p>}
+            {!exportLoading && !exportError && exportJsonText && (
+              <textarea className="modal-json-textarea" aria-label="JSON моей карточки" readOnly value={exportJsonText} />
+            )}
+            {copyStatus && <p aria-live="polite">{copyStatus}</p>}
+          </div>
+          <div className="hardware-modal-footer dialog-actions">
+            {exportError && <button type="button" className="hardware-btn-primary" onClick={handleExportCard}>Повторить экспорт</button>}
+            {exportJsonText && (
               <button
+                type="button"
                 className="hardware-btn-primary"
-                onClick={() => {
-                  navigator.clipboard.writeText(exportJsonText);
-                  alert("Скопировано в буфер обмена!");
-                }}
+                onClick={() => void (async () => {
+                  try {
+                    if (!navigator.clipboard) throw new Error("Clipboard API недоступен");
+                    await navigator.clipboard.writeText(exportJsonText);
+                    setCopyStatus("Карточка скопирована в буфер обмена.");
+                  } catch {
+                    setCopyStatus("Не удалось скопировать карточку. Скопируйте текст вручную.");
+                  }
+                })()}
               >
                 Скопировать в буфер
               </button>
-              <button className="hardware-btn-secondary" onClick={() => setShowExportModal(false)}>Закрыть</button>
-            </div>
+            )}
+            <button type="button" className="hardware-btn-secondary" onClick={closeExportModal}>Закрыть</button>
           </div>
-        </div>
+        </ModalDialog>
       )}
     </div>
   );

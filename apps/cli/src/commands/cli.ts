@@ -8,6 +8,8 @@ import { MAX_PLAINTEXT_BYTES, OutboundError, openOutboundMessenger } from "../ru
 import { openProfile, PersistenceError, ProfileError, type ContactIdentifiers, type Profile } from "../runtime/profile";
 import { RelayClient, RelayError } from "../transport/relayClient";
 
+declare const __CLI_VERSION__: string | undefined;
+
 type ExitCode = 2 | 3 | 4 | 5;
 
 class CliFailure extends Error {
@@ -482,8 +484,6 @@ function writeResult(value: unknown): void {
 
 async function main(): Promise<number> {
   const rawArgs = process.argv.slice(2);
-
-declare const __CLI_VERSION__: string | undefined;
 
   // --- LAYERED DISPATCHER (High-level operator commands) ---
   const first = rawArgs[0];
