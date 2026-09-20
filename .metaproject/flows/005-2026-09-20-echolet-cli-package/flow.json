@@ -1,0 +1,498 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "005",
+  "slug": "echolet-cli-package",
+  "title": "Echolet CLI: npm package, ~/.echolet storage and deployment",
+  "status": "in-progress",
+  "createdAt": "2026-09-20T08:53:34.040Z",
+  "updatedAt": "2026-09-20T09:16:12.854Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6bf5611c71356811ff61616c3647b691b141cb0390e62b5451878103a9929073",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-20T09:16:12.294Z",
+      "note": "globalPaths.ts enforces 0700/0600; 9/9 unit tests pass"
+    },
+    "AC2": {
+      "at": "2026-09-20T09:16:12.379Z",
+      "note": "daemon.ts handles PID lifecycle and SIGTERM/taskkill; 6/6 tests pass"
+    },
+    "AC3": {
+      "at": "2026-09-20T09:16:12.461Z",
+      "note": "Layered Dispatcher in cli.ts; all 7 cli.test.ts pass and unknown commands return exit 2"
+    },
+    "AC4": {
+      "at": "2026-09-20T09:16:12.541Z",
+      "note": "cliBridge.ts resolves via ECHOLET_CLI_PATH with cascading fallback; web build passes"
+    },
+    "AC5": {
+      "at": "2026-09-20T09:16:12.620Z",
+      "note": "station.ts implements setup, start, stop, status, open"
+    },
+    "AC6": {
+      "at": "2026-09-20T09:16:12.695Z",
+      "note": "repeater.ts defaults to Docker setup and manages lifecycle"
+    },
+    "AC7": {
+      "at": "2026-09-20T09:16:12.774Z",
+      "note": "Vitest test suite: 81 files passed, 538 tests passed, 0 failures"
+    },
+    "AC8": {
+      "at": "2026-09-20T09:16:12.854Z",
+      "note": "apps/cli bundle:web bundles web-dist; npm pack dry run packages 33 files (33.8MB unpacked)"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Boilerplate scaffold from init; replaced by concrete tasks"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Boilerplate scaffold from init; replaced by concrete tasks"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Boilerplate scaffold from init; replaced by concrete tasks"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Boilerplate scaffold from init; replaced by concrete tasks"
+    },
+    {
+      "id": "T5",
+      "title": "Core storage module globalPaths.ts (0700/0600 permissions)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-20T08:54:19.835Z",
+            "outcome": "started",
+            "detail": "005-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Daemon lifecycle manager daemon.ts (PID and Unix/Win kill)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-20T08:54:19.916Z",
+            "outcome": "started",
+            "detail": "005-T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Dynamic CLI resolution in cliBridge.ts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-20T08:54:19.999Z",
+            "outcome": "started",
+            "detail": "005-T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Operator profile commands (apps/cli/src/operator/profile.ts)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Operator contact commands (apps/cli/src/operator/contact.ts)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Operator station commands (apps/cli/src/operator/station.ts)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Operator repeater commands (apps/cli/src/operator/repeater.ts)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Layered Dispatcher facade in cli.ts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8",
+        "T9",
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-20T09:06:23.993Z",
+            "outcome": "started",
+            "detail": "005-T12"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Full Vitest test suite and NPM packaging verification",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-20T09:09:50.487Z",
+            "outcome": "started",
+            "detail": "005-T13"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-20T08:53:34.040Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-20T08:53:54.015Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-20T08:53:57.214Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-20T08:54:05.110Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-20T08:54:05.193Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-20T08:54:05.274Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-20T08:54:05.357Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-20T08:54:09.626Z",
+      "event": "task-added",
+      "detail": "T5: Core storage module globalPaths.ts (0700/0600 permissions)"
+    },
+    {
+      "at": "2026-09-20T08:54:09.706Z",
+      "event": "task-added",
+      "detail": "T6: Daemon lifecycle manager daemon.ts (PID and Unix/Win kill)"
+    },
+    {
+      "at": "2026-09-20T08:54:09.790Z",
+      "event": "task-added",
+      "detail": "T7: Dynamic CLI resolution in cliBridge.ts"
+    },
+    {
+      "at": "2026-09-20T08:54:09.873Z",
+      "event": "task-added",
+      "detail": "T8: Operator profile commands (apps/cli/src/operator/profile.ts)"
+    },
+    {
+      "at": "2026-09-20T08:54:09.953Z",
+      "event": "task-added",
+      "detail": "T9: Operator contact commands (apps/cli/src/operator/contact.ts)"
+    },
+    {
+      "at": "2026-09-20T08:54:10.035Z",
+      "event": "task-added",
+      "detail": "T10: Operator station commands (apps/cli/src/operator/station.ts)"
+    },
+    {
+      "at": "2026-09-20T08:54:10.116Z",
+      "event": "task-added",
+      "detail": "T11: Operator repeater commands (apps/cli/src/operator/repeater.ts)"
+    },
+    {
+      "at": "2026-09-20T08:54:10.262Z",
+      "event": "task-added",
+      "detail": "T12: Layered Dispatcher facade in cli.ts"
+    },
+    {
+      "at": "2026-09-20T08:54:10.346Z",
+      "event": "task-added",
+      "detail": "T13: Full Vitest test suite and NPM packaging verification"
+    },
+    {
+      "at": "2026-09-20T08:54:19.835Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 005-T5"
+    },
+    {
+      "at": "2026-09-20T08:54:19.917Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 005-T6"
+    },
+    {
+      "at": "2026-09-20T08:54:19.999Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 005-T7"
+    },
+    {
+      "at": "2026-09-20T08:57:47.976Z",
+      "event": "task-done",
+      "detail": "T5: Core storage module globalPaths.ts (0700/0600 permissions)"
+    },
+    {
+      "at": "2026-09-20T08:59:09.966Z",
+      "event": "task-done",
+      "detail": "T6: Daemon lifecycle manager daemon.ts (PID and Unix/Win kill)"
+    },
+    {
+      "at": "2026-09-20T09:04:28.559Z",
+      "event": "task-done",
+      "detail": "T7: Dynamic CLI resolution in cliBridge.ts"
+    },
+    {
+      "at": "2026-09-20T09:06:14.434Z",
+      "event": "task-done",
+      "detail": "T8: Operator profile commands (apps/cli/src/operator/profile.ts)"
+    },
+    {
+      "at": "2026-09-20T09:06:14.538Z",
+      "event": "task-done",
+      "detail": "T9: Operator contact commands (apps/cli/src/operator/contact.ts)"
+    },
+    {
+      "at": "2026-09-20T09:06:14.631Z",
+      "event": "task-done",
+      "detail": "T10: Operator station commands (apps/cli/src/operator/station.ts)"
+    },
+    {
+      "at": "2026-09-20T09:06:14.734Z",
+      "event": "task-done",
+      "detail": "T11: Operator repeater commands (apps/cli/src/operator/repeater.ts)"
+    },
+    {
+      "at": "2026-09-20T09:06:23.993Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 005-T12"
+    },
+    {
+      "at": "2026-09-20T09:09:39.884Z",
+      "event": "task-done",
+      "detail": "T12: Layered Dispatcher facade in cli.ts"
+    },
+    {
+      "at": "2026-09-20T09:09:50.487Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 005-T13"
+    },
+    {
+      "at": "2026-09-20T09:15:58.782Z",
+      "event": "task-done",
+      "detail": "T13: Full Vitest test suite and NPM packaging verification"
+    },
+    {
+      "at": "2026-09-20T09:16:12.294Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: globalPaths.ts enforces 0700/0600; 9/9 unit tests pass"
+    },
+    {
+      "at": "2026-09-20T09:16:12.379Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: daemon.ts handles PID lifecycle and SIGTERM/taskkill; 6/6 tests pass"
+    },
+    {
+      "at": "2026-09-20T09:16:12.461Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Layered Dispatcher in cli.ts; all 7 cli.test.ts pass and unknown commands return exit 2"
+    },
+    {
+      "at": "2026-09-20T09:16:12.541Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: cliBridge.ts resolves via ECHOLET_CLI_PATH with cascading fallback; web build passes"
+    },
+    {
+      "at": "2026-09-20T09:16:12.620Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: station.ts implements setup, start, stop, status, open"
+    },
+    {
+      "at": "2026-09-20T09:16:12.695Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: repeater.ts defaults to Docker setup and manages lifecycle"
+    },
+    {
+      "at": "2026-09-20T09:16:12.774Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Vitest test suite: 81 files passed, 538 tests passed, 0 failures"
+    },
+    {
+      "at": "2026-09-20T09:16:12.854Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: apps/cli bundle:web bundles web-dist; npm pack dry run packages 33 files (33.8MB unpacked)"
+    }
+  ]
+}

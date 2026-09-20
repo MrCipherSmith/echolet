@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Echolet Skin Studio & Interactive Visual Showcase</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=VT323&display=swap" rel="stylesheet">
+  <style>
+    /* Scanlines effect for CRT */
+    .scanlines {
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.4) 50%);
+      background-size: 100% 4px;
+      pointer-events: none;
+    }
+    .crt-glow-amber {
+      text-shadow: 0 0 8px #ffb000, 0 0 16px #ff8800;
+    }
+    .crt-glow-green {
+      text-shadow: 0 0 8px #00ff66, 0 0 16px #00aa33;
+    }
+    .crt-glow-cyan {
+      text-shadow: 0 0 8px #00f0ff, 0 0 16px #0088cc;
+    }
+    @keyframes blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+    .cursor-blink {
+      animation: blink 1s infinite;
+    }
+  </style>
+</head>
+<body class="bg-[#0b0e14] text-[#e6edf3] font-sans antialiased p-4 min-h-screen">
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Header & Navigation -->
+    <div class="bg-[#121722] border border-[#1e2636] rounded-xl p-5 shadow-lg flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <span class="text-3xl">📻</span>
+          <h1 class="text-xl font-bold text-white tracking-wide">ECHOLET SKIN STUDIO & VISUAL SHOWCASE</h1>
+        </div>
+        <p class="text-sm text-[#8b949e] mt-1">Интерактивные прототипы скинов на едином модульном каркасе</p>
+      </div>
+
+      <!-- Category Filter Tabs -->
+      <div class="flex flex-wrap gap-2" id="tabs">
+        <button onclick="switchTab('new-retro')" id="btn-new-retro" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#ffb000] text-black transition">
+          🌟 Новая ретро-коллекция (5 вариантов)
+        </button>
+        <button onclick="switchTab('retro-pc')" id="btn-retro-pc" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#1b2433] text-[#8b949e] hover:text-white transition">
+          📟 Ретро-ПК 80-х (System-84)
+        </button>
+        <button onclick="switchTab('matrix')" id="btn-matrix" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#1b2433] text-[#8b949e] hover:text-white transition">
+          🟢 Matrix (1999)
+        </button>
+        <button onclick="switchTab('bladerunner')" id="btn-bladerunner" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#1b2433] text-[#8b949e] hover:text-white transition">
+          🟠 Blade Runner 2049
+        </button>
+        <button onclick="switchTab('interstellar')" id="btn-interstellar" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#1b2433] text-[#8b949e] hover:text-white transition">
+          🔘 Interstellar TARS
+        </button>
+        <button onclick="switchTab('gallery')" id="btn-gallery" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#1b2433] text-[#8b949e] hover:text-white transition">
+          🖼 Первые концепты (OP-1 & Ламповые)
+        </button>
+      </div>
+    </div>
+
+    <!-- VIEW 0: NEW RETRO COLLECTION (5 DESIGNS) -->
+    <div id="view-new-retro" class="skin-view space-y-6">
+      <div class="bg-[#121722] border border-[#1e2636] rounded-xl p-6">
+        <h2 class="text-xl font-bold text-amber-400 flex items-center gap-2">
+          <span>📻</span> Новая коллекция ретро-дизайнов Echolet (5 вариантов)
+        </h2>
+        <p class="text-sm text-[#8b949e] mt-1">
+          Аутентичные концепты в духе оригинальных ламповых артов: полярная станция, авиационный кокпит, чемодан разведчика, янтарный CRT-терминал и глубоководный сонар.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Option 1 -->
+        <div class="bg-[#121722] border border-[#1e2636] rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-amber-300 text-base flex items-center gap-2">
+              <span>❄️</span> 1. «Полярная экспедиция СП-14» (1960-е)
+            </h3>
+            <span class="text-xs font-mono bg-[#1f2937] text-amber-200 px-2.5 py-1 rounded">Арктическая станция</span>
+          </div>
+          <p class="text-xs text-[#9ca3af]">Морозостойкая белая эмаль, иней, компас-пеленгатор, барометр, ледяные VU-метры, телетайп.</p>
+          <img src="./polar_expedition_ui_1789858484680.jpg" class="rounded-lg w-full shadow-lg border border-[#1f2937]" alt="Polar Expedition Radio UI" />
+        </div>
+
+        <!-- Option 2 -->
+        <div class="bg-[#121722] border border-[#1e2636] rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-emerald-400 text-base flex items-center gap-2">
+              <span>✈️</span> 2. «Сверхзвуковой кокпит 1970-х» (Concorde / Ту-144)
+            </h3>
+            <span class="text-xs font-mono bg-[#1f2937] text-emerald-300 px-2.5 py-1 rounded">Авионика</span>
+          </div>
+          <p class="text-xs text-[#9ca3af]">Авиационный титан, роликовый счетчик частоты MHz, альтиметр, кнопки Korry, радарный ЭЛТ.</p>
+          <img src="./avionics_cockpit_ui_1789858538190.jpg" class="rounded-lg w-full shadow-lg border border-[#1f2937]" alt="Avionics Cockpit UI" />
+        </div>
+
+        <!-- Option 3 -->
+        <div class="bg-[#121722] border border-[#1e2636] rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-amber-400 text-base flex items-center gap-2">
+              <span>🕵️</span> 3. «Чемодан разведчика Холодной войны» (Spycase)
+            </h3>
+            <span class="text-xs font-mono bg-[#1f2937] text-amber-300 px-2.5 py-1 rounded">OSS / MI6 Field Radio</span>
+          </div>
+          <p class="text-xs text-[#9ca3af]">Кожаный кейс, роторный шифратор, блокнот One-Time Pad, кварц 7.100 MHz, ключ Морзе, лампы EF80.</p>
+          <img src="./spy_briefcase_ui_1789858596025.jpg" class="rounded-lg w-full shadow-lg border border-[#1f2937]" alt="Spy Briefcase UI" />
+        </div>
+
+        <!-- Option 4 -->
+        <div class="bg-[#121722] border border-[#1e2636] rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-orange-400 text-base flex items-center gap-2">
+              <span>💻</span> 4. «Янтарный компьютерный терминал» (PDP-11 / IBM 5100)
+            </h3>
+            <span class="text-xs font-mono bg-[#1f2937] text-orange-300 px-2.5 py-1 rounded">Amber P3 CRT</span>
+          </div>
+          <p class="text-xs text-[#9ca3af]">Теплый янтарный люминофор, ретро-беж пластик, орех, стример кассет DC300, механическая клавиатура.</p>
+          <img src="./amber_terminal_ui_1789858657697.jpg" class="rounded-lg w-full shadow-lg border border-[#1f2937]" alt="Amber Terminal UI" />
+        </div>
+
+        <!-- Option 5 -->
+        <div class="bg-[#121722] border border-[#1e2636] rounded-xl p-5 space-y-3 md:col-span-2">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-cyan-400 text-base flex items-center gap-2">
+              <span>🌊</span> 5. «Глубоководный батискаф «Триест» / Гидроакустика Кусто»
+            </h3>
+            <span class="text-xs font-mono bg-[#1f2937] text-cyan-300 px-2.5 py-1 rounded">Oceanographic Sonar</span>
+          </div>
+          <p class="text-xs text-[#9ca3af]">Литая бронза и патина, круглый сонар PPI, манометр на 345 ATM, глубиномер -3450m, гидроакустическая трубка.</p>
+          <img src="./bathyscaphe_sonar_ui_1789858725632.jpg" class="rounded-lg w-full shadow-lg border border-[#1f2937]" alt="Bathyscaphe Sonar UI" />
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 1: RETRO-PC 80s (SYSTEM-84) -->
+    <div id="view-retro-pc" class="skin-view space-y-4 hidden">
+      <div class="bg-[#dcd4c3] text-[#2b251d] border-4 border-[#b8ae9a] rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+        <!-- Ventilation Slits Top -->
+        <div class="flex justify-between items-center pb-4 border-b-2 border-[#b8ae9a]">
+          <div class="flex items-center gap-3 font-mono font-bold text-sm tracking-wider text-[#635544]">
+            <span class="bg-[#b8ae9a] text-[#2b251d] px-2 py-0.5 rounded">ECHOLET</span>
+            <span>PERSONAL WORKSTATION · MODEL 84</span>
+          </div>
+          <!-- Floppy Activity LED -->
+          <div class="flex items-center gap-3 font-mono text-xs text-[#524433] font-bold">
+            <span>FLOPPY DRIVE A:</span>
+            <span class="inline-block w-3 h-3 rounded-full bg-red-600 shadow-[0_0_8px_#ff0000] animate-pulse"></span>
+            <span>BUSY</span>
+          </div>
+        </div>
+
+        <!-- 3-Column 80s PC Chassis Layout -->
+        <div class="grid grid-cols-12 gap-4 mt-4">
+          <!-- Col 1: Directory List (Contacts) -->
+          <div class="col-span-3 bg-[#2b251d] border-2 border-[#524433] rounded-lg p-3 text-[#ffb000] font-mono text-xs">
+            <div class="border-b border-[#524433] pb-1 mb-2 font-bold flex justify-between text-[11px] text-[#b8ae9a]">
+              <span>DIRECTORY A:\COMMS</span>
+              <span>128K RAM</span>
+            </div>
+            <div class="space-y-1.5">
+              <div class="p-1.5 bg-[#42382c] rounded border border-[#ffb000] cursor-pointer flex items-center justify-between">
+                <span>💾 ALICE.USR</span>
+                <span class="text-[10px] text-[#00ff66]">● ONLINE</span>
+              </div>
+              <div class="p-1.5 hover:bg-[#382f25] rounded cursor-pointer flex items-center justify-between text-[#bfa98d]">
+                <span>💾 BOB.USR</span>
+                <span class="text-[10px] text-[#8b949e]">○ IDLE</span>
+              </div>
+              <div class="p-1.5 hover:bg-[#382f25] rounded cursor-pointer flex items-center justify-between text-[#bfa98d]">
+                <span>💾 RELAY.SYS</span>
+                <span class="text-[10px] text-[#00ff66]">● 24ms</span>
+              </div>
+            </div>
+            <div class="mt-4 pt-3 border-t border-[#524433] text-[10px] text-[#8a7660]">
+              <div>FREE: 42.4 KB</div>
+              <div>BAUD: 9600 BPS</div>
+            </div>
+          </div>
+
+          <!-- Col 2: Amber CRT Terminal (Chat) -->
+          <div class="col-span-6 bg-[#120d06] border-4 border-[#3a2e20] rounded-xl p-4 relative overflow-hidden shadow-inner">
+            <div class="absolute inset-0 scanlines opacity-40"></div>
+            <div class="font-mono text-sm text-[#ffb000] space-y-3 relative z-10 crt-glow-amber">
+              <div class="text-xs text-[#b88214] border-b border-[#3a2e20] pb-1">
+                ECHOLET V1.0 · CP/M E2EE CHANNEL ACTIVE
+              </div>
+              <div class="space-y-2 text-xs leading-relaxed">
+                <div>&gt; [14:20] ALICE.USR: Привет! Канал зашифрован через Double Ratchet.</div>
+                <div>&gt; [14:21] YOU: Подтверждаю прием. Частота 7.100 МГц чистая.</div>
+                <div>&gt; [14:22] ALICE.USR: Пакет проверен. Доставка гарантирована. [CRC: OK]</div>
+              </div>
+              <!-- Input prompt with blinking cursor -->
+              <div class="pt-4 flex items-center text-xs text-[#ffb000]">
+                <span class="mr-1">&gt;</span>
+                <span class="bg-[#1f160a] px-2 py-1 border border-[#6b501e] rounded flex-1 text-white">Передаю статус...</span>
+                <span class="inline-block w-2 h-4 bg-[#ffb000] ml-1 cursor-blink"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Col 3: Hardware Dials / Floppy Controls -->
+          <div class="col-span-3 bg-[#c7bcab] border-2 border-[#a89d8a] rounded-lg p-3 flex flex-col justify-between font-mono text-xs">
+            <div>
+              <div class="font-bold text-[#423627] mb-2 pb-1 border-b border-[#a89d8a]">HARDWARE STATUS</div>
+              <div class="space-y-2 text-[11px] text-[#524433]">
+                <div class="flex justify-between">
+                  <span>TRACK:</span>
+                  <span class="font-bold">40 / 40</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>SECTOR:</span>
+                  <span class="font-bold">09</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>WRITE PROTECT:</span>
+                  <span class="text-green-700 font-bold">OFF</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>PREKEY POOL:</span>
+                  <span class="font-bold text-amber-800">20 VALID</span>
+                </div>
+              </div>
+            </div>
+            <div class="pt-3 border-t border-[#a89d8a] space-y-2">
+              <button class="w-full py-1.5 bg-[#42382c] text-[#ffb000] font-bold rounded shadow border border-[#2b251d] active:translate-y-0.5">
+                EJECT DISK A:
+              </button>
+              <button class="w-full py-1.5 bg-[#8c3127] text-white font-bold rounded shadow border border-[#521913] active:translate-y-0.5">
+                SYSTEM RESET
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 2: THE MATRIX (1999) NEBUCHADNEZZAR -->
+    <div id="view-matrix" class="skin-view hidden space-y-4">
+      <div class="bg-[#050d07] border-2 border-[#00ff41] rounded-2xl p-6 shadow-[0_0_30px_rgba(0,255,65,0.2)] font-mono relative overflow-hidden">
+        <!-- Digital Rain Canvas Background -->
+        <div class="flex justify-between items-center pb-3 border-b border-[#00ff41]/40 text-xs text-[#00ff41]">
+          <div class="flex items-center gap-3">
+            <span class="animate-pulse">●</span>
+            <span class="font-bold tracking-widest">NEBUCHADNEZZAR OPERATOR CONSOLE // HOVERCRAFT PIRATE BROADCAST</span>
+          </div>
+          <div class="flex items-center gap-4 text-[11px]">
+            <span>EMP CAPACITORS: <strong class="text-white">ARMED 100%</strong></span>
+            <span>JACK-IN STATUS: <strong class="text-white">SECURE</strong></span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-12 gap-4 mt-4">
+          <!-- Col 1: Crew Contacts -->
+          <div class="col-span-3 bg-[#0a160d] border border-[#00ff41]/50 rounded-lg p-3 text-xs text-[#00ff41]">
+            <div class="text-[10px] text-[#009926] pb-1 border-b border-[#00ff41]/30 mb-2 font-bold">PIRATE SIGNALS</div>
+            <div class="space-y-2">
+              <div class="p-2 bg-[#00ff41]/10 border-l-2 border-[#00ff41] text-white">
+                <div class="font-bold">[MORPHEUS]</div>
+                <div class="text-[10px] text-[#00ff41]">SIGNAL: 98% · ZION LINK</div>
+              </div>
+              <div class="p-2 hover:bg-[#00ff41]/5 text-[#88cc99] cursor-pointer">
+                <div class="font-bold">[TRINITY]</div>
+                <div class="text-[10px] text-[#009926]">SIGNAL: 95% · MATRIX HARDLINE</div>
+              </div>
+              <div class="p-2 hover:bg-[#00ff41]/5 text-[#88cc99] cursor-pointer">
+                <div class="font-bold">[NEO]</div>
+                <div class="text-[10px] text-[#009926]">SIGNAL: ANOMALY 100%</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Col 2: Matrix Rain & Decoded Messages -->
+          <div class="col-span-6 bg-[#030804] border border-[#00ff41] rounded-xl p-4 relative min-h-[260px] flex flex-col justify-between">
+            <canvas id="matrix-canvas" class="absolute inset-0 w-full h-full opacity-30 pointer-events-none"></canvas>
+            <div class="relative z-10 space-y-3 text-xs text-[#00ff41] crt-glow-green">
+              <div class="text-[#009926] text-[10px] border-b border-[#00ff41]/30 pb-1">DECRYPTED CARRIER FREQ: 7.100 MHZ</div>
+              <div>[TANK]: «Морфеус, сигнал защищен протоколом Double Ratchet. Агенты не могут перехватить трафик.»</div>
+              <div>[MORPHEUS]: «Отлично. Держи канал открытым. Мы выходим на связь с Зионом.»</div>
+            </div>
+            <div class="relative z-10 pt-4 flex gap-2">
+              <input type="text" class="flex-1 bg-[#0a160d] border border-[#00ff41] px-3 py-1.5 text-xs text-white outline-none" value="Загрузить оперативную схему..." />
+              <button class="bg-[#00ff41] text-black px-4 py-1.5 text-xs font-bold hover:bg-white transition">ПЕРЕДАТЬ</button>
+            </div>
+          </div>
+
+          <!-- Col 3: EMP & Security Telemetry -->
+          <div class="col-span-3 bg-[#0a160d] border border-[#00ff41]/50 rounded-lg p-3 text-xs text-[#00ff41] flex flex-col justify-between">
+            <div>
+              <div class="font-bold text-[10px] text-[#009926] mb-2 pb-1 border-b border-[#00ff41]/30">OPERATOR TELEMETRY</div>
+              <div class="space-y-2 text-[11px]">
+                <div>SENTINEL DETECT: <span class="text-white font-bold">0 NEARBY</span></div>
+                <div>SIGNAL RATIO: <span class="text-white font-bold">+18 dB</span></div>
+                <div>RELAY HOPS: <span class="text-white font-bold">4 SECURE</span></div>
+              </div>
+            </div>
+            <button class="w-full py-2 bg-red-950 border border-red-600 text-red-400 font-bold hover:bg-red-900 hover:text-white transition">
+              TRIGGER EMP PULSE
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 3: BLADE RUNNER 2049 -->
+    <div id="view-bladerunner" class="skin-view hidden space-y-4">
+      <div class="bg-[#0f0907] border-2 border-[#ff6600] rounded-2xl p-6 shadow-[0_0_30px_rgba(255,102,0,0.18)] font-mono">
+        <div class="flex justify-between items-center pb-3 border-b border-[#ff6600]/40 text-xs text-[#ffaa44]">
+          <div class="flex items-center gap-2">
+            <span class="text-cyan-400">❖</span>
+            <span class="font-bold tracking-widest text-white">LAPD SPINNER 2049 // SECURE DISPATCH CONSOLE</span>
+          </div>
+          <div class="text-[11px] text-cyan-400 font-bold">
+            BASELINE TEST: <span class="text-green-400">CONSTANT · ACCEPTABLE</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-12 gap-4 mt-4">
+          <!-- Baseline Reticle Vis Deck -->
+          <div class="col-span-12 bg-[#1a0f0a] border border-[#ff6600]/40 rounded-xl p-4 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-full border-2 border-[#ff6600] flex items-center justify-center relative">
+                <div class="w-4 h-4 rounded-full bg-cyan-400 animate-ping"></div>
+                <div class="w-6 h-6 rounded-full border border-cyan-400 absolute"></div>
+              </div>
+              <div>
+                <div class="text-sm font-bold text-white tracking-widest">VOIGHT-KAMPFF / BASELINE STATUS</div>
+                <div class="text-[11px] text-[#ff8833]">«CELLS INTERLINKED WITHIN CELLS INTERLINKED»</div>
+              </div>
+            </div>
+            <div class="text-right text-[11px] text-[#b3774d]">
+              <div>LATENCY: <strong class="text-white">18 MS</strong></div>
+              <div>MEMORY SEAL: <strong class="text-cyan-400">VERIFIED E2EE</strong></div>
+            </div>
+          </div>
+
+          <!-- Chat messages -->
+          <div class="col-span-8 bg-[#0a0503] border border-[#ff6600]/50 rounded-xl p-4 space-y-3 text-xs text-[#ff9933]">
+            <div class="text-[10px] text-cyan-400 border-b border-[#ff6600]/30 pb-1">OFFICER KD6-3.7 DISPATCH STREAM</div>
+            <div class="space-y-2">
+              <div class="p-2 bg-[#ff6600]/10 border-l border-cyan-400">
+                <span class="text-white font-bold">[JOI]:</span> «You look lonely... I can help you decode that transmission.»
+              </div>
+              <div class="p-2 bg-[#ff6600]/10 border-l border-[#ff6600]">
+                <span class="text-white font-bold">[LT. JOSHI]:</span> «KD6-3.7, maintain radio silence. Proceed to Sector 4.»
+              </div>
+            </div>
+          </div>
+
+          <div class="col-span-4 bg-[#140b06] border border-[#ff6600]/40 rounded-xl p-4 text-xs text-[#d98236] space-y-3">
+            <div class="font-bold text-white border-b border-[#ff6600]/30 pb-1">UNIT PARAMETERS</div>
+            <div>SERIAL: <strong class="text-white">N-449-012</strong></div>
+            <div>ENCLAVE: <strong class="text-green-400">0 LEAKS</strong></div>
+            <div>RELAY: <strong class="text-cyan-400">SFO-RELAY-02</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 4: INTERSTELLAR (2014) TARS -->
+    <div id="view-interstellar" class="skin-view hidden space-y-4">
+      <div class="bg-[#0b0d12] border-2 border-slate-600 rounded-2xl p-6 shadow-2xl font-mono text-slate-200">
+        <div class="flex justify-between items-center pb-3 border-b border-slate-700 text-xs">
+          <div class="flex items-center gap-2">
+            <span class="text-sky-400">◼</span>
+            <span class="font-bold tracking-widest text-white">ENDURANCE MISSION CONTROL // TARS SUBSYSTEM</span>
+          </div>
+          <div class="text-sky-400 font-bold">
+            GRAVITATIONAL ANOMALY: <span class="text-green-400">STABILIZED</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-12 gap-4 mt-4">
+          <!-- Gargantua Accretion Waveform Canvas -->
+          <div class="col-span-12 bg-[#06080b] border border-slate-700 rounded-xl p-3 flex items-center justify-between">
+            <div class="space-y-1">
+              <div class="text-[11px] text-slate-400 font-bold">GARGANTUA ACCRETION DISK WAVEFORM</div>
+              <div class="text-xs text-sky-300">TIME DILATION FACTOR: <strong>1 HOUR = 7 YEARS</strong></div>
+            </div>
+            <div class="flex gap-6 text-xs text-slate-400">
+              <div>HONESTY: <strong class="text-white">90%</strong></div>
+              <div>HUMOR: <strong class="text-white">75%</strong></div>
+              <div>RELAY: <strong class="text-sky-400">WORMHOLE LINK</strong></div>
+            </div>
+          </div>
+
+          <!-- Chat Area -->
+          <div class="col-span-8 bg-[#080a0f] border border-slate-800 rounded-xl p-4 text-xs space-y-3">
+            <div class="text-[10px] text-sky-400 border-b border-slate-800 pb-1">TARS QUANTUM DATA TRANSMISSION</div>
+            <div class="space-y-2">
+              <div class="p-2 bg-slate-900 rounded border-l-2 border-sky-400">
+                <span class="text-sky-400 font-bold">[TARS]:</span> «Купер, гравитационные уравнения зашифрованы через Signal Double Ratchet. Мёрф получит данные.»
+              </div>
+              <div class="p-2 bg-slate-900 rounded border-l-2 border-slate-600">
+                <span class="text-slate-300 font-bold">[COOPER]:</span> «Передавай на секундную стрелку часов. Канал надёжен?»
+              </div>
+              <div class="p-2 bg-slate-900 rounded border-l-2 border-sky-400">
+                <span class="text-sky-400 font-bold">[TARS]:</span> «Вероятность успеха 100%. Если не считать моего чувства юмора.»
+              </div>
+            </div>
+          </div>
+
+          <!-- TARS Parameter Sliders -->
+          <div class="col-span-4 bg-[#0d1017] border border-slate-800 rounded-xl p-4 text-xs space-y-3">
+            <div class="font-bold text-white border-b border-slate-800 pb-1">TARS CALIBRATION</div>
+            <div class="space-y-3">
+              <div>
+                <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                  <span>HONESTY</span><span>90%</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1.5 rounded"><div class="bg-sky-400 h-1.5 rounded w-[90%]"></div></div>
+              </div>
+              <div>
+                <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                  <span>HUMOR</span><span>75%</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1.5 rounded"><div class="bg-amber-400 h-1.5 rounded w-[75%]"></div></div>
+              </div>
+              <div>
+                <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                  <span>QUANTUM LINK</span><span class="text-green-400 font-bold">100%</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1.5 rounded"><div class="bg-green-400 h-1.5 rounded w-full"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 5: GALLERY OF APPROVED HIGH-RES SKINS (OP-1 & 2,3,4,5,6) -->
+    <div id="view-gallery" class="skin-view hidden space-y-6">
+      <div class="bg-[#121722] border border-[#1e2636] rounded-xl p-5">
+        <h2 class="text-lg font-bold text-white mb-2">⭐ Скин 7: Nordic Minimalist (Teenage Engineering OP-1)</h2>
+        <p class="text-xs text-[#8b949e] mb-4">Матовый скандинавский корпус, цветные поворотные энкодеры, контрастный векторный OLED-экран частот.</p>
+        <img src="/Users/Goodea/.gemini/antigravity/brain/08e50b7a-33ab-4f8e-9187-d1d444cb5b1d/op1_minimal_skin_1789836795427.jpg" class="rounded-xl border border-[#2d3748] w-full shadow-2xl" alt="OP-1 Minimalist Skin" />
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Skin 2 -->
+        <div class="bg-[#121722] border border-[#1e2636] rounded-xl p-4 space-y-2">
+          <h3 class="font-bold text-amber-400 text-sm">Скин 2: Винтажная Радиола 1950-х (Telefunken / Звезда-54)</h3>
+          <img src="/Users/Goodea/.gemini/antigravity/brain/08e50b7a-33ab-4f8e-9187-d1d444cb5b1d/vintage_radiola_ui_1789836216660.jpg" class="rounded-lg w-full" alt="Vintage Radiola" />
+        </div>
+
+        <!-- Skin 3 -->
+        <div class="bg-[#121722] border border-[#1e2636] rounded-xl p-4 space-y-2">
+          <h3 class="font-bold text-green-400 text-sm">Скин 3: Военный радиоузел Р-250 (Молотковая эмаль)</h3>
+          <img src="/Users/Goodea/.gemini/antigravity/brain/08e50b7a-33ab-4f8e-9187-d1d444cb5b1d/soviet_tube_radio_1789836251332.jpg" class="rounded-lg w-full" alt="Military R-250" />
+        </div>
+
+        <!-- Skin 4 -->
+        <div class="bg-[#121722] border border-[#1e2636] rounded-xl p-4 space-y-2">
+          <h3 class="font-bold text-emerald-400 text-sm">Скин 4: Ламповый осциллограф (Зелёный фосфор ЭЛТ)</h3>
+          <img src="/Users/Goodea/.gemini/antigravity/brain/08e50b7a-33ab-4f8e-9187-d1d444cb5b1d/tube_oscilloscope_ui_1789836294852.jpg" class="rounded-lg w-full" alt="Tube Oscilloscope" />
+        </div>
+
+        <!-- Skin 5 -->
+        <div class="bg-[#121722] border border-[#1e2636] rounded-xl p-4 space-y-2">
+          <h3 class="font-bold text-orange-400 text-sm">Скин 5: Стимпанк-телеграф (Перфолента & Сургуч)</h3>
+          <img src="/Users/Goodea/.gemini/antigravity/brain/08e50b7a-33ab-4f8e-9187-d1d444cb5b1d/steampunk_brass_ui_1789836339337.jpg" class="rounded-lg w-full" alt="Steampunk Telegraph" />
+        </div>
+
+        <!-- Skin 6 -->
+        <div class="bg-[#121722] border border-[#1e2636] rounded-xl p-4 space-y-2 md:col-span-2">
+          <h3 class="font-bold text-sky-400 text-sm">Скин 6: Hi-Fi ламповый усилитель (McIntosh / Luxman с синими VU-метрами)</h3>
+          <img src="/Users/Goodea/.gemini/antigravity/brain/08e50b7a-33ab-4f8e-9187-d1d444cb5b1d/audiophile_tube_ui_1789836391373.jpg" class="rounded-lg w-full" alt="Audiophile McIntosh" />
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    function switchTab(tabId) {
+      document.querySelectorAll('.skin-view').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-[#ffb000]', 'text-black');
+        btn.classList.add('bg-[#1b2433]', 'text-[#8b949e]');
+      });
+
+      const activeView = document.getElementById('view-' + tabId);
+      if (activeView) activeView.classList.remove('hidden');
+
+      const activeBtn = document.getElementById('btn-' + tabId);
+      if (activeBtn) {
+        activeBtn.classList.remove('bg-[#1b2433]', 'text-[#8b949e]');
+        activeBtn.classList.add('bg-[#ffb000]', 'text-black');
+      }
+
+      if (tabId === 'matrix') {
+        startMatrixRain();
+      }
+    }
+
+    // Matrix rain animation
+    let matrixStarted = false;
+    function startMatrixRain() {
+      if (matrixStarted) return;
+      matrixStarted = true;
+      const canvas = document.getElementById('matrix-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+
+      const chars = '0123456789ABCDEFｦｱｳｴｵｶｷｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈ';
+      const fontSize = 12;
+      const columns = Math.floor(canvas.width / fontSize);
+      const drops = Array(columns).fill(1);
+
+      function draw() {
+        ctx.fillStyle = 'rgba(3, 8, 4, 0.08)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#00ff41';
+        ctx.font = fontSize + 'px monospace';
+
+        for (let i = 0; i < drops.length; i++) {
+          const text = chars[Math.floor(Math.random() * chars.length)];
+          ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+          if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+            drops[i] = 0;
+          }
+          drops[i]++;
+        }
+        requestAnimationFrame(draw);
+      }
+      draw();
+    }
+  </script>
+</body>
+</html>
