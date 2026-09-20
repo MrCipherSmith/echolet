@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # create the GitHub Release
+  id-token: write # npm provenance attestation
+
+jobs:
+  release:
+    name: Verify, Pack, Publish and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
+
+      - name: Set up Node.js for npm publish
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          cache: "pnpm"
+
+      - name: Upgrade npm for trusted publishing & provenance
+        run: |
+          set -euo pipefail
+          npm install -g npm@11
+          INSTALLED="$(npm --version)"
+          echo "npm ${INSTALLED}"
+          MAJOR="${INSTALLED%%.*}"
+          if [ "$MAJOR" -lt 11 ]; then
+            echo "::error::npm ${INSTALLED} is below the 11.0.0 trusted-publishing floor"
+            exit 1
+          fi
+
+      - name: Refuse tag if it disagrees with apps/cli/package.json
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(node -p "require('./apps/cli/package.json').version")"
+          echo "tag:      $TAG_VERSION"
+          echo "manifest: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match apps/cli/package.json version ${PKG_VERSION}."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Run Tests (Vitest)
+        run: pnpm run test
+
+      - name: Build CLI & Web Bundle
+        run: pnpm --filter @goodea/echolet run prepublishOnly
+
+      - name: Build and smoke-test the packed artifact
+        run: |
+          set -euo pipefail
+          mkdir -p ./.release
+          cd apps/cli
+          npm pack --pack-destination ../../.release
+          cd ../..
+          ls -la ./.release
+          TARBALL="$(find ./.release -maxdepth 1 -name '*.tgz' -print -quit)"
+          if [ -z "$TARBALL" ]; then
+            echo "::error::npm pack produced no tarball in ./.release"
+            exit 1
+          fi
+          echo "packed: $TARBALL"
+          npm install -g --prefix ./.release/prefix "$TARBALL"
+          ./.release/prefix/bin/echolet --help > /dev/null
+          echo "smoke-test: binary runs --help cleanly"
+          ./.release/prefix/bin/echolet --version
+          echo "smoke-test: binary reports version"
+
+      - name: Publish to npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd apps/cli
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            echo "Publishing using NPM_TOKEN secret..."
+            NODE_AUTH_TOKEN="$NPM_TOKEN" npm publish --provenance --access public
+          else
+            echo "Publishing using OIDC Trusted Publishing..."
+            npm publish --provenance --access public
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            ./.release/*.tgz

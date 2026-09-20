@@ -1,7 +1,7 @@
 {
-  "name": "@echolet/cli",
+  "name": "@goodea/echolet",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "engines": { "node": ">=22.13" },
   "bin": { "echolet": "./dist/cli.js", "echolet-tui": "./dist/tui.js" },
@@ -9,6 +9,13 @@
     "dist",
     "web-dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MrCipherSmith/echolet.git"
+  },
   "scripts": {
     "build": "node build.mjs",
     "bundle:web": "node ../web/build.mjs && rm -rf web-dist && cp -r ../web/dist web-dist",
@@ -18,17 +25,17 @@
     "test:e2e": "vitest run test/e2e"
   },
   "dependencies": {
+    "@signalapp/libsignal-client": "0.102.0"
+  },
+  "devDependencies": {
     "@echolet/client-core": "workspace:*",
     "@echolet/crypto-core": "workspace:*",
     "@echolet/protocol": "workspace:*",
     "@echolet/session-node": "workspace:*",
-    "@signalapp/libsignal-client": "0.102.0",
-    "zod": "4.0.0"
-  },
-  "devDependencies": {
     "@types/node": "^22.13.0",
     "esbuild": "0.25.12",
     "typescript": "5.8.3",
-    "vitest": "3.0.8"
+    "vitest": "3.0.8",
+    "zod": "4.0.0"
   }
 }

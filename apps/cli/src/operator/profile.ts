@@ -63,10 +63,10 @@ export async function handleProfileCommand(args: string[]): Promise<void> {
     }
     const cardContent = readFileSync(cardPath, "utf8");
     const outFlagIdx = args.indexOf("--out");
-    if (outFlagIdx !== -1 && args[outFlagIdx + 1]) {
-      const outPath = args[outFlagIdx + 1];
-      writeFileSync(outPath, cardContent, "utf8");
-      console.log(`✅ Радио-карточка станции "${target}" сохранена в: ${outPath}`);
+    const outArg = outFlagIdx !== -1 ? args[outFlagIdx + 1] : undefined;
+    if (outArg) {
+      writeFileSync(outArg, cardContent, "utf8");
+      console.log(`✅ Радио-карточка станции "${target}" сохранена в: ${outArg}`);
     } else {
       console.log(`\n=== 📻 РАДИО-КАРТОЧКА СТАНЦИИ: ${target} ===`);
       console.log(cardContent);
