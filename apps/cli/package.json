@@ -1,14 +1,14 @@
 {
   "name": "@goodea/echolet",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "type": "module",
   "engines": {
     "node": ">=22.13"
   },
   "bin": {
-    "echolet": "./dist/cli.js",
-    "echolet-tui": "./dist/tui.js"
+    "echolet": "dist/cli.js",
+    "echolet-tui": "dist/tui.js"
   },
   "files": [
     "dist",

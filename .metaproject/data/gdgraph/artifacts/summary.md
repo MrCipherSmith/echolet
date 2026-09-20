@@ -2,21 +2,21 @@
 
 ## Stats
 
-- Source files indexed: 163
+- Source files indexed: 180
 - Imported asset files indexed: 1
-- Total nodes: 164
-- Edges: 327
-- Import edges: 322
+- Total nodes: 181
+- Edges: 352
+- Import edges: 330
 - Asset edges: 5
-- Unresolved imports: 0
-- Import resolution: 100%
-- Skipped generated/static directories: 13
+- Unresolved imports: 17
+- Import resolution: 95.1%
+- Skipped generated/static directories: 16
 
 ## Top Modules
 
 | Module | Source Files |
 |---|---:|
-| apps | 112 |
+| apps | 129 |
 | packages | 50 |
 | .opencode | 1 |
 
@@ -24,7 +24,7 @@
 
 | Type | Count |
 |---|---:|
-| _none_ | 0 |
+| .js | 17 |
 
 ## Skipped Directories
 
@@ -35,6 +35,9 @@
 - `apps/cli/node_modules`
 - `apps/mobile/node_modules`
 - `apps/relay/.cache`
+- `apps/web/dist`
+- `apps/web/node_modules`
+- `apps/web/public`
 - `node_modules`
 - `packages/client-core/node_modules`
 - `packages/client-db/node_modules`
