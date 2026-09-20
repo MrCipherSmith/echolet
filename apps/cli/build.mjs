@@ -1,4 +1,8 @@
 import { build } from "esbuild";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 const common = {
   bundle: true,
@@ -13,9 +17,9 @@ const common = {
   },
 };
 
-await build({ ...common, entryPoints: ["src/commands/cli.ts"], outfile: "dist/cli.js" });
+await build({ ...common, entryPoints: [resolve(HERE, "src/commands/cli.ts")], outfile: resolve(HERE, "dist/cli.js") });
 
 // The operator console (flow 002 T9). It is a separate binary rather than a ninth CLI command:
 // the eight-command surface is deliberately frozen, and the console drives that surface as a
 // child process rather than joining it. It resolves `dist/cli.js` beside itself by default.
-await build({ ...common, entryPoints: ["src/tui/main.ts"], outfile: "dist/tui.js" });
+await build({ ...common, entryPoints: [resolve(HERE, "src/tui/main.ts")], outfile: resolve(HERE, "dist/tui.js") });

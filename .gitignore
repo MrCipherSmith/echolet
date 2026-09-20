@@ -5,6 +5,7 @@ node_modules/
 # Build outputs
 dist/
 build/
+web-dist/
 .out/
 
 # Go
@@ -40,6 +41,7 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+.env.demo
 .data/
 .tmp/
 *.db

@@ -1,0 +1,3725 @@
+/* ==========================================================================
+   ECHOLET ULTRA HIGH-FIDELITY SKEUOMORPHIC TUBE HARDWARE SYSTEM
+   ========================================================================== */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: #080503;
+  color: #fdfbf7;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Animations */
+@keyframes tubeFlicker {
+  0% { opacity: 0.92; filter: drop-shadow(0 0 8px #f59e0b); }
+  50% { opacity: 1; filter: drop-shadow(0 0 16px #ea580c); }
+  100% { opacity: 0.95; filter: drop-shadow(0 0 11px #f59e0b); }
+}
+
+@keyframes magicEyeSector {
+  0% { transform: scaleX(0.75) rotate(-5deg); }
+  50% { transform: scaleX(1.1) rotate(5deg); }
+  100% { transform: scaleX(0.85) rotate(0deg); }
+}
+
+/* Outer Presentation Environment */
+.radio-outer-wrap {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  position: relative;
+  user-select: none;
+}
+
+/* Theme Environments (Tabletops) */
+.skin-vintage-radiola {
+  background: radial-gradient(circle at 50% 35%, #2a150c 0%, #150904 60%, #060301 100%);
+}
+
+.skin-military-r250 {
+  background: radial-gradient(circle at 50% 35%, #273123 0%, #151b13 60%, #060905 100%);
+}
+
+.skin-audiophile-hifi {
+  background: radial-gradient(circle at 50% 35%, #1e293b 0%, #0f172a 60%, #020617 100%);
+}
+
+.skin-oscilloscope-crt {
+  background: radial-gradient(circle at 50% 35%, #1a271f 0%, #0e1712 60%, #040805 100%);
+}
+
+.skin-nixie-tube {
+  background: radial-gradient(circle at 50% 35%, #2c1a0e 0%, #170d07 60%, #070302 100%);
+}
+
+.skin-nordic-op1 {
+  background: radial-gradient(circle at 50% 35%, #f4f5f7 0%, #e5e7eb 65%, #cbd5e1 100%);
+  color: #111827;
+}
+
+/* ==========================================================================
+   THE PHYSICAL RADIO CABINET (THE CASING)
+   ========================================================================== */
+.radio-cabinet {
+  width: 96vw;
+  max-width: 1380px;
+  height: 94vh;
+  max-height: 860px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 35px 90px rgba(0, 0, 0, 0.95), 0 10px 30px rgba(0, 0, 0, 0.85);
+}
+
+/* 1. RADIOLA CABINET: POLISHED MAHOGANY WOOD */
+.skin-vintage-radiola .radio-cabinet {
+  border-radius: 32px;
+  border: 14px solid #3a1a09;
+  background: linear-gradient(180deg, #45210e 0%, #2b1307 45%, #150903 100%);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.95), inset 0 3px 6px rgba(254, 215, 170, 0.35), inset 0 -4px 8px rgba(0, 0, 0, 0.8);
+}
+
+/* 2. MILITARY R-250 CABINET: HAMMERED ENAMEL METAL */
+.skin-military-r250 .radio-cabinet {
+  border-radius: 14px;
+  border: 12px solid #3c4936;
+  background: linear-gradient(180deg, #303a2b 0%, #22291e 50%, #141912 100%);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.95), inset 0 2px 4px rgba(255, 255, 255, 0.25);
+}
+
+/* 3. AUDIOPHILE HI-FI CABINET: WALNUT CHEEKS & CHROME/BLACK */
+.skin-audiophile-hifi .radio-cabinet {
+  border-radius: 14px;
+  border-left: 18px solid #3b2011;
+  border-right: 18px solid #3b2011;
+  border-top: 6px solid #475569;
+  border-bottom: 8px solid #1e293b;
+  background: #090d16;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.95), inset 0 2px 6px rgba(255, 255, 255, 0.6);
+}
+
+/* 4. CRT OSCILLOSCOPE CABINET */
+.skin-oscilloscope-crt .radio-cabinet {
+  border-radius: 12px;
+  border: 10px solid #28372d;
+  background: #0d1611;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.95);
+}
+
+/* 5. NIXIE CABINET */
+.skin-nixie-tube .radio-cabinet {
+  border-radius: 18px;
+  border: 12px solid #452613;
+  background: #150a04;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.95);
+}
+
+/* 6. NORDIC OP-1 CABINET: CNC MILLED ANODIZED ALUMINUM */
+.skin-nordic-op1 .radio-cabinet {
+  border-radius: 28px;
+  border: 12px solid #d4d6db;
+  background: #e2e4e8;
+  box-shadow: 0 35px 80px rgba(0, 0, 0, 0.16), 0 10px 25px rgba(0, 0, 0, 0.1), inset 0 2px 4px #ffffff;
+}
+
+/* Chrome Handles for Military Cabinet */
+.chassis-rack-handle {
+  position: absolute;
+  top: 18%;
+  bottom: 18%;
+  width: 12px;
+  background: linear-gradient(90deg, #94a3b8 0%, #f8fafc 50%, #475569 100%);
+  border-radius: 6px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.8), inset 0 1px 2px #fff;
+  z-index: 10;
+}
+.chassis-rack-handle.handle-left { left: -6px; }
+.chassis-rack-handle.handle-right { right: -6px; }
+
+/* ==========================================================================
+   TOP DECK HEADERS (MATCHING ARTWORK COMPOSITION)
+   ========================================================================== */
+
+/* 1. RADIOLA TOP DECK */
+.radiola-top-deck {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 24px;
+  background: linear-gradient(180deg, #3d1b08 0%, #251004 100%);
+  border-bottom: 3px solid #57290c;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+  gap: 16px;
+}
+
+.radiola-brand-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.radiola-gold-script {
+  font-family: 'Brush Script MT', 'Marck Script', cursive, Georgia, serif;
+  font-size: 40px;
+  color: #fef08a;
+  text-shadow: 0 0 14px rgba(253, 230, 138, 0.6), 0 2px 4px #000;
+  line-height: 1;
+}
+
+.radiola-gold-sub {
+  font-family: 'Times New Roman', serif;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: #d97706;
+  font-weight: bold;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* Vertical Capsule Brass 6E5S Magic Eye */
+.radiola-magiceye-capsule {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.radiola-magiceye-outer-bezel {
+  width: 34px;
+  height: 54px;
+  border-radius: 17px;
+  background: linear-gradient(180deg, #d97706 0%, #78350f 100%);
+  padding: 3px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.6), inset 0 1px 2px #fde68a;
+}
+
+.radiola-magiceye-lens {
+  width: 100%;
+  height: 100%;
+  border-radius: 14px;
+  background: #021a0a;
+  border: 1.5px solid #064e3b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: inset 0 0 8px #000;
+}
+
+.radiola-magiceye-phosphor {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #34d399 0%, #059669 65%, transparent 100%);
+  box-shadow: 0 0 14px #10b981, 0 0 25px #059669;
+  clip-path: polygon(50% 50%, 15% 0, 85% 0, 100% 100%, 0 100%);
+  animation: magicEyeSector 3.5s infinite alternate ease-in-out;
+}
+
+.radiola-magiceye-label {
+  font-family: 'Times New Roman', serif;
+  font-size: 8px;
+  font-weight: 900;
+  color: #fde68a;
+}
+
+/* The Great Illuminated Amber Glass Tuning Scale */
+.radiola-scale-bezel {
+  flex: 1;
+  max-width: 580px;
+  height: 76px;
+  background: radial-gradient(ellipse at 50% 50%, #fef3c7 0%, #f59e0b 45%, #92400e 85%, #451a03 100%);
+  border: 3.5px solid #78350f;
+  border-radius: 8px;
+  box-shadow: 0 0 28px rgba(245, 158, 11, 0.45), inset 0 2px 6px rgba(0,0,0,0.7);
+  position: relative;
+  overflow: hidden;
+  padding: 6px 14px;
+}
+
+.radiola-scale-glare {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 100%);
+  pointer-events: none;
+}
+
+.radiola-scale-inner {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  font-family: 'Times New Roman', Georgia, serif;
+  color: #2b1204;
+  font-weight: bold;
+  user-select: none;
+}
+
+.scale-khz-row,
+.scale-mhz-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+
+.scale-unit {
+  font-weight: 900;
+  color: #1a0a02;
+}
+
+.scale-cities-row {
+  display: flex;
+  justify-content: space-around;
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  color: #1f0b02;
+  font-weight: 900;
+}
+
+.active-station-city {
+  color: #991b1b;
+  text-shadow: 0 0 4px rgba(153, 27, 27, 0.4);
+}
+
+.active-freq-number {
+  background: #991b1b;
+  color: #fef08a;
+  padding: 0 4px;
+  border-radius: 2px;
+}
+
+.radiola-needle-assembly {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 54%;
+  width: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.radiola-gold-needle {
+  width: 2.5px;
+  flex: 1;
+  background: linear-gradient(180deg, #fde68a 0%, #dc2626 50%, #991b1b 100%);
+  box-shadow: 0 0 6px #dc2626;
+}
+
+.radiola-needle-slider {
+  background: linear-gradient(180deg, #d97706 0%, #78350f 100%);
+  border: 1px solid #fde68a;
+  border-radius: 3px;
+  font-family: 'Times New Roman', serif;
+  font-size: 7px;
+  font-weight: bold;
+  color: #fff;
+  padding: 1px 5px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+/* Radiola Switches & Selector Group */
+.radiola-switches-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.radiola-toggle-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.brass-toggle-lever {
+  width: 22px;
+  height: 38px;
+  background: #1c0e05;
+  border: 2px solid #92400e;
+  border-radius: 11px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: inset 0 2px 4px #000;
+  position: relative;
+}
+
+.lever-nut {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fde68a 0%, #b45309 80%);
+  box-shadow: 0 1px 2px #000;
+}
+
+.lever-arm {
+  width: 4px;
+  height: 16px;
+  background: linear-gradient(180deg, #fef08a 0%, #92400e 100%);
+  border-radius: 2px;
+  transition: transform 0.15s ease-out;
+}
+
+.brass-toggle-lever.on .lever-arm {
+  transform: translateY(-4px) rotate(15deg);
+}
+
+.brass-toggle-lever.off .lever-arm {
+  transform: translateY(4px) rotate(-15deg);
+}
+
+.toggle-sub-label {
+  font-family: 'Times New Roman', serif;
+  font-size: 8px;
+  font-weight: bold;
+  color: #fde68a;
+}
+
+.radiola-skin-selector-bezel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.radiola-selector-title {
+  font-family: 'Times New Roman', serif;
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: #d97706;
+  font-weight: 900;
+}
+
+.radiola-wood-select {
+  background: #1b0c03;
+  color: #fde68a;
+  border: 1.5px solid #78350f;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: 11px;
+  font-weight: bold;
+  outline: none;
+  cursor: pointer;
+  box-shadow: inset 0 2px 4px #000;
+}
+
+/* 2. MILITARY R-250 TOP DECK */
+.military-top-deck {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 20px;
+  background: linear-gradient(180deg, #2c3627 0%, #1e251a 100%);
+  border-bottom: 3px solid #141a12;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+  gap: 16px;
+}
+
+.military-top-left-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mil-stencil-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mil-antenna-glyph {
+  font-size: 20px;
+  color: #facc15;
+}
+
+.mil-stencil-texts {
+  display: flex;
+  flex-direction: column;
+}
+
+.mil-title-bold {
+  font-family: 'Courier New', monospace;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #fef08a;
+}
+
+.mil-subtitle {
+  font-family: 'Courier New', monospace;
+  font-size: 8px;
+  color: #a3e635;
+  letter-spacing: 0.5px;
+}
+
+.mil-led-cluster {
+  display: flex;
+  gap: 4px;
+  margin-left: 6px;
+}
+
+.mil-led-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.mil-led-dot.amber { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+.mil-led-dot.red { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+.mil-led-dot.green { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+
+.mil-toggles-row {
+  display: flex;
+  gap: 12px;
+}
+
+.mil-bat-switch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.mil-jewel-lamp {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid #141a12;
+}
+.mil-jewel-lamp.on { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+.mil-jewel-lamp.active { background: #facc15; box-shadow: 0 0 6px #facc15; }
+
+.bat-toggle-stick {
+  width: 8px;
+  height: 18px;
+  background: linear-gradient(180deg, #f8fafc 0%, #64748b 80%);
+  border-radius: 3px;
+  box-shadow: 0 2px 4px #000;
+}
+
+.bat-label {
+  font-family: monospace;
+  font-size: 7.5px;
+  color: #cbd5e1;
+}
+
+/* Circular Optical Projection Dial (R-250) - Dark Glass Lens with Glowing Numbers */
+.soviet-optical-assembly {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.soviet-knurled-ring {
+  width: 102px;
+  height: 102px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(#475569 0% 1%, #1e293b 1% 2%);
+  padding: 6px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.85), inset 0 2px 4px rgba(255,255,255,0.2);
+}
+
+.soviet-glass-lens {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #1c1917 0%, #0c0a09 70%, #000 100%);
+  border: 2.5px solid #78350f;
+  box-shadow: inset 0 0 16px #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.soviet-lens-glare {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(180deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 100%);
+  pointer-events: none;
+}
+
+.soviet-reticle-cross {
+  position: absolute;
+  inset: 8px;
+  border: 1px dashed rgba(254, 240, 138, 0.25);
+  border-radius: 50%;
+}
+
+.soviet-frequency-text {
+  font-family: 'Courier New', monospace;
+  font-size: 17px;
+  font-weight: 900;
+  color: #fef08a;
+  text-shadow: 0 0 10px #f59e0b, 0 0 20px #ea580c;
+  letter-spacing: 1px;
+  z-index: 1;
+}
+
+.soviet-unit-text {
+  font-family: monospace;
+  font-size: 8.5px;
+  font-weight: bold;
+  color: #eab308;
+  z-index: 1;
+}
+
+.military-top-meters-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.soviet-square-meter-housing {
+  width: 130px;
+  height: 80px;
+  background: #1e261a;
+  border: 3px solid #141a12;
+  border-radius: 4px;
+  position: relative;
+  padding: 4px;
+  box-shadow: inset 0 2px 6px #000, 0 4px 8px rgba(0,0,0,0.5);
+}
+
+.soviet-round-meter-face {
+  width: 100%;
+  height: 100%;
+  border-radius: 50% 50% 4px 4px;
+  background: radial-gradient(circle at 50% 120%, #fef3c7 0%, #fde68a 60%, #d97706 100%);
+  border: 1.5px solid #78350f;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.6);
+  overflow: hidden;
+}
+
+.hex-bolt {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #94a3b8;
+  box-shadow: 0 1px 2px #000;
+}
+.hex-bolt.tl { top: 2px; left: 2px; }
+.hex-bolt.tr { top: 2px; right: 2px; }
+.hex-bolt.bl { bottom: 2px; left: 2px; }
+.hex-bolt.br { bottom: 2px; right: 2px; }
+
+.mil-selector-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mil-switch-title {
+  font-family: monospace;
+  font-size: 8px;
+  color: #a3e635;
+  font-weight: bold;
+}
+
+.military-bakelite-select {
+  background: #141a12;
+  color: #a3e635;
+  border: 1.5px solid #3c4936;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-family: monospace;
+  font-size: 10px;
+  outline: none;
+  cursor: pointer;
+}
+
+/* 3. AUDIOPHILE HI-FI MCINTOSH TOP DECK */
+.hifi-top-deck {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 24px;
+  background: linear-gradient(180deg, #64748b 0%, #cbd5e1 30%, #0f172a 100%);
+  border-bottom: 2px solid #334155;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.8);
+  gap: 16px;
+}
+
+.hifi-center-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hifi-brand-gold-text {
+  font-family: 'Times New Roman', serif;
+  font-size: 26px;
+  font-weight: 900;
+  color: #fef08a;
+  letter-spacing: 3px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.9);
+}
+
+.hifi-brand-gold-sub {
+  font-family: sans-serif;
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: #cbd5e1;
+  font-weight: bold;
+}
+
+.hifi-tubes-quartet {
+  display: flex;
+  gap: 10px;
+  background: rgba(0,0,0,0.4);
+  padding: 4px 12px;
+  border-radius: 8px;
+  box-shadow: inset 0 2px 6px #000;
+}
+
+.hifi-selector-column {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hifi-input-label {
+  font-family: monospace;
+  font-size: 8px;
+  color: #fef08a;
+  font-weight: bold;
+}
+
+.hifi-gold-select {
+  background: #0f172a;
+  color: #fef08a;
+  border: 1.5px solid #eab308;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-family: sans-serif;
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+}
+
+/* 4. CRT OSCILLOSCOPE TOP DECK */
+.crt-top-deck {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 20px;
+  background: #111a14;
+  border-bottom: 3px solid #1e2d23;
+  gap: 14px;
+}
+
+.crt-caged-tubes-pair {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.mesh-cage {
+  background: rgba(0,0,0,0.4);
+  border: 1px dashed rgba(255,150,0,0.45);
+  border-radius: 6px;
+  padding: 3px 5px;
+}
+
+.crt-circular-frame {
+  width: 106px;
+  height: 106px;
+  border-radius: 50%;
+  background: #04140b;
+  border: 3.5px solid #22c55e;
+  box-shadow: 0 0 18px rgba(34, 197, 94, 0.35), inset 0 0 12px #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.crt-focus-label {
+  position: absolute;
+  bottom: 4px;
+  font-family: monospace;
+  font-size: 7px;
+  color: #4ade80;
+}
+
+.crt-jewel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.jewel-lamp {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.7);
+}
+.jewel-lamp.red { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+.jewel-lamp.amber { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+.jewel-lamp.green { background: #10b981; box-shadow: 0 0 8px #10b981; }
+
+.crt-dark-select,
+.nixie-dark-select {
+  background: #080d09;
+  color: #4ade80;
+  border: 1.5px solid #22c55e;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-family: monospace;
+  font-size: 10px;
+}
+
+/* 5. NIXIE TOP DECK */
+.nixie-top-deck {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 24px;
+  background: linear-gradient(180deg, #26160d 0%, #150b06 100%);
+  border-bottom: 3px solid #3d2110;
+  gap: 16px;
+}
+
+.nixie-center-bank {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.nixie-cluster-bar {
+  display: inline-flex;
+  gap: 3px;
+  background: #080402;
+  border: 2.5px solid #78350f;
+  border-radius: 6px;
+  padding: 4px 8px;
+  box-shadow: inset 0 2px 8px #000;
+}
+
+.nixie-char.digit {
+  width: 22px;
+  height: 34px;
+  background: #140803;
+  border: 1px solid #451a03;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Courier New', monospace;
+  font-size: 18px;
+  font-weight: 900;
+  color: #ff6600;
+  text-shadow: 0 0 8px #ff4400, 0 0 16px #ff2200;
+}
+
+.nixie-char.punct {
+  color: #ff5500;
+  font-size: 18px;
+  font-weight: 900;
+  text-shadow: 0 0 6px #ff3300;
+  margin: 0 1px;
+}
+
+/* 6. NORDIC OP-1 TOP DECK */
+.nordic-top-deck {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 24px;
+  background: #202226;
+  border-bottom: 2.5px solid #373a40;
+  gap: 16px;
+}
+
+.nordic-top-left-cluster {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.nordic-oled-display-unit {
+  width: 320px;
+  height: 64px;
+  background: #090a0d;
+  border: 2px solid #374151;
+  border-radius: 8px;
+  box-shadow: inset 0 2px 8px #000, 0 2px 4px rgba(0,0,0,0.4);
+  padding: 4px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+}
+
+.nordic-oled-top-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: monospace;
+  font-size: 8px;
+  color: #94a3b8;
+  font-weight: bold;
+}
+
+.nordic-oled-center-freq-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nordic-oled-freq-large {
+  font-family: 'Courier New', monospace;
+  font-size: 20px;
+  font-weight: 900;
+  color: #f8fafc;
+  letter-spacing: 1.5px;
+  text-shadow: 0 0 8px rgba(248, 250, 252, 0.6);
+}
+
+.nordic-oled-band-tag {
+  font-family: monospace;
+  font-size: 9px;
+  background: #1e293b;
+  color: #38bdf8;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.nordic-live-spectrum-canvas {
+  width: 100%;
+  height: 22px;
+}
+
+.nordic-pushbuttons-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.nordic-rubber-circle-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0,0,0,0.3);
+  cursor: pointer;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.4);
+  transition: transform 0.08s ease, filter 0.1s;
+}
+
+.nordic-rubber-circle-btn:active {
+  transform: scale(0.92);
+}
+
+.nordic-rubber-circle-btn.btn-orange { background: #ea580c; }
+.nordic-rubber-circle-btn.btn-ochre { background: #d97706; }
+.nordic-rubber-circle-btn.btn-cyan { background: #0284c7; }
+.nordic-rubber-circle-btn.btn-white { background: #f1f5f9; border-color: #cbd5e1; }
+
+.nordic-clean-select {
+  background: #1e293b;
+  color: #f8fafc;
+  border: 1.5px solid #475569;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  outline: none;
+}
+
+/* ==========================================================================
+   MAIN CHASSIS: 3-COLUMN PHYSICAL HARDWARE ZONES
+   ========================================================================== */
+.radio-main-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+/* --------------------------------------------------------------------------
+   ZONE 1 (LEFT): CHANNELS & CONTACTS
+   -------------------------------------------------------------------------- */
+.hardware-contacts-zone {
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  padding: 10px;
+  border-right: 3px solid rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+
+/* Radiola: Woven Acoustic Tweed Cloth Grille Texture */
+.skin-vintage-radiola .hardware-contacts-zone {
+  background: repeating-linear-gradient(
+    45deg,
+    #cfb18c 0px,
+    #cfb18c 2px,
+    #9c7c58 2px,
+    #9c7c58 4px
+  );
+  box-shadow: inset -4px 0 10px rgba(0,0,0,0.5);
+}
+
+.radiola-vertical-brass-rails {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  pointer-events: none;
+}
+
+.brass-rail {
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(90deg, #b45309 0%, #fef08a 50%, #78350f 100%);
+  box-shadow: 0 0 3px rgba(0,0,0,0.6);
+}
+
+/* Military R-250: Stamped Metal Operator Panel */
+.skin-military-r250 .hardware-contacts-zone {
+  background: linear-gradient(180deg, #242c20 0%, #1a2016 100%);
+  border-right: 3px solid #141a12;
+}
+
+/* Audiophile Hi-Fi: Brushed Black Aluminum */
+.skin-audiophile-hifi .hardware-contacts-zone {
+  background: linear-gradient(180deg, #111827 0%, #0b0f19 100%);
+  border-right: 2px solid #1e293b;
+}
+
+.contacts-zone-header {
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #fef08a;
+  letter-spacing: 1px;
+  text-align: center;
+  padding-bottom: 6px;
+  border-bottom: 1.5px solid rgba(254, 240, 138, 0.3);
+  margin-bottom: 8px;
+  z-index: 1;
+}
+
+.contacts-items-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1;
+}
+
+/* The Skeuomorphic Push-Button / Aluminum Plate Contact Card */
+.hardware-contact-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease-out;
+}
+
+/* Radiola: Cream/Ivory Push-Button with Beveled Brass Nameplate */
+.skin-vintage-radiola .hardware-contact-card {
+  background: linear-gradient(180deg, #fdfbf7 0%, #ecdcc9 60%, #dfcdb5 100%);
+  border: 2px solid #b48c62;
+  border-radius: 6px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.6), inset 0 1px 2px #fff;
+  color: #2b1204;
+  padding: 10px 12px;
+}
+.skin-vintage-radiola .hardware-contact-card .contact-bold-name {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 12px;
+  font-weight: 900;
+  color: #2b1204;
+}
+.skin-vintage-radiola .hardware-contact-card.selected {
+  background: linear-gradient(180deg, #fef08a 0%, #f59e0b 50%, #b45309 100%);
+  border-color: #fef08a;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.7), inset 0 1px 2px #fff;
+  color: #1a0802;
+  transform: scale(0.98);
+}
+
+.plaque-screw {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #78350f;
+}
+
+/* Military R-250: Stamped Aluminum Plate with Screw Terminals */
+.skin-military-r250 .hardware-contact-card {
+  background: linear-gradient(180deg, #475569 0%, #334155 100%);
+  border: 1.5px solid #64748b;
+  color: #f8fafc;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.6);
+}
+.skin-military-r250 .hardware-contact-card.selected {
+  background: linear-gradient(180deg, #65a30d 0%, #3f6212 100%);
+  border-color: #bef264;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(101, 163, 13, 0.6);
+}
+
+.mil-wire-terminal {
+  display: flex;
+  align-items: center;
+  margin-right: 6px;
+}
+.terminal-screw {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f8fafc;
+  box-shadow: 0 1px 2px #000;
+}
+.copper-wire {
+  width: 8px;
+  height: 2px;
+  background: #ea580c;
+}
+
+.contact-details-box {
+  flex: 1;
+  padding: 0 6px;
+}
+
+.contact-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.contact-bold-name {
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.skin-military-r250 .contact-bold-name {
+  font-family: monospace;
+}
+
+.mil-onair-tag {
+  font-family: monospace;
+  font-size: 7.5px;
+  color: #22c55e;
+  font-weight: bold;
+}
+
+.contact-sub-id {
+  font-family: monospace;
+  font-size: 8.5px;
+  opacity: 0.7;
+}
+
+.contact-status-lamp {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.contacts-bottom-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  z-index: 1;
+}
+
+.hardware-action-button {
+  padding: 8px;
+  background: linear-gradient(180deg, #d97706 0%, #92400e 100%);
+  border: 1.5px solid #fde68a;
+  color: #fff;
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: bold;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.6);
+}
+.hardware-action-button.secondary {
+  background: #1c1917;
+  border-color: #78350f;
+  color: #fde68a;
+}
+
+/* --------------------------------------------------------------------------
+   ZONE 2 (CENTER): CHAT MESSAGES SCREEN
+   -------------------------------------------------------------------------- */
+.hardware-chat-zone {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Radiola: Warm Aged Parchment Card */
+.skin-vintage-radiola .hardware-chat-zone {
+  background: radial-gradient(circle at 50% 50%, #f7f1e5 0%, #ecdecb 70%, #dfcdb5 100%);
+  box-shadow: inset 0 0 30px rgba(120, 53, 15, 0.2);
+}
+
+/* Military R-250: Recessed CRT Monitor with Grab Handles */
+.skin-military-r250 .hardware-chat-zone {
+  background: #08120a;
+  border: 4px solid #141a12;
+  box-shadow: inset 0 0 30px #000;
+}
+
+/* Hi-Fi: Dark Luxury Background */
+.skin-audiophile-hifi .hardware-chat-zone {
+  background: #090e18;
+  border-left: 1px solid #1e293b;
+  border-right: 1px solid #1e293b;
+}
+
+/* Vertical Stainless Steel Grab Handles for R-250 Monitor */
+.crt-grab-handle {
+  position: absolute;
+  top: 10%;
+  bottom: 10%;
+  width: 8px;
+  background: linear-gradient(90deg, #cbd5e1 0%, #f8fafc 50%, #64748b 100%);
+  border-radius: 4px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.9);
+  z-index: 10;
+}
+.crt-handle-left { left: 4px; }
+.crt-handle-right { right: 4px; }
+
+/* Top Bezel in Chat Zone */
+.chat-top-bezel {
+  padding: 10px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid rgba(0,0,0,0.3);
+  z-index: 2;
+}
+
+.skin-vintage-radiola .chat-top-bezel {
+  background: rgba(180, 83, 9, 0.08);
+  border-bottom-color: #d4bda8;
+}
+
+.chat-peer-title {
+  font-family: 'Times New Roman', Georgia, serif;
+  font-size: 14px;
+  font-weight: 900;
+  color: #2b1204;
+  display: block;
+}
+
+.skin-military-r250 .chat-peer-title {
+  font-family: monospace;
+  color: #bef264;
+}
+
+.skin-audiophile-hifi .chat-peer-title {
+  color: #fef08a;
+}
+
+.chat-e2ee-hash {
+  font-family: monospace;
+  font-size: 9.5px;
+  opacity: 0.7;
+  color: inherit;
+}
+
+.radiola-wax-seal {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #dc2626 0%, #991b1b 75%, #450a0a 100%);
+  border: 2px solid #7f1d1d;
+  color: #fef2f2;
+  font-size: 8px;
+  font-family: serif;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+
+.soviet-secret-stamp {
+  border: 2px solid #dc2626;
+  color: #dc2626;
+  padding: 2px 8px;
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  font-weight: 900;
+  transform: rotate(-3deg);
+  box-shadow: inset 0 0 3px rgba(220,38,38,0.4);
+}
+
+.hifi-protocol-badge {
+  font-family: monospace;
+  font-size: 9.5px;
+  color: #38bdf8;
+  border: 1px solid #0284c7;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+/* Chat Messages Stream */
+.chat-messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+}
+
+.crt-scanline-grid {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.empty-ether-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  opacity: 0.8;
+}
+.ether-icon { font-size: 40px; margin-bottom: 8px; }
+.ether-bold { font-weight: 900; font-size: 14px; }
+.ether-sub { font-size: 11px; margin-top: 4px; }
+
+.hardware-msg-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  z-index: 2;
+}
+.hardware-msg-row.outbound { justify-content: flex-end; }
+.hardware-msg-row.inbound { justify-content: flex-start; }
+
+/* Radiola Toggle Switch beside Message */
+.radiola-msg-toggle-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.toggle-brass-knob {
+  width: 20px;
+  height: 12px;
+  background: linear-gradient(180deg, #d97706 0%, #78350f 100%);
+  border: 1.5px solid #fde68a;
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+.toggle-brass-knob.on { background: #22c55e; }
+.toggle-state-text {
+  font-family: serif;
+  font-size: 7.5px;
+  font-weight: bold;
+  color: #78350f;
+}
+
+/* Message Bubble */
+.hardware-msg-bubble {
+  max-width: 72%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  position: relative;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+}
+
+/* Radiola Parchment Paper Bubbles */
+.skin-vintage-radiola .hardware-msg-row.inbound .hardware-msg-bubble {
+  background: #fbf6ec;
+  color: #2b1204;
+  border: 1.5px solid #cbb297;
+  font-family: Georgia, serif;
+}
+.skin-vintage-radiola .hardware-msg-row.outbound .hardware-msg-bubble {
+  background: #ecdcc9;
+  color: #1f0c02;
+  border: 1.5px solid #b39578;
+  font-family: Georgia, serif;
+}
+
+/* Military R-250 Phosphor CRT Messages */
+.skin-military-r250 .hardware-msg-bubble {
+  background: #0f1c12;
+  border: 1.5px solid #22c55e;
+  color: #a3e635;
+  font-family: 'Courier New', monospace;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
+}
+.mil-teletype-stamp-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 9px;
+  color: #facc15;
+}
+
+/* Hi-Fi Dark Luxury Bubbles */
+.skin-audiophile-hifi .hardware-msg-bubble {
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1.5px solid #d4af37;
+  font-family: Georgia, serif;
+  box-shadow: 0 4px 14px rgba(212, 175, 55, 0.2);
+}
+
+.hardware-msg-text {
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.hardware-msg-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 9.5px;
+  opacity: 0.75;
+}
+
+/* Input Transmit Deck */
+.hardware-input-deck {
+  padding: 12px 18px;
+  background: rgba(0,0,0,0.4);
+  border-top: 2px solid rgba(0,0,0,0.3);
+  z-index: 2;
+}
+
+.hardware-input-form {
+  display: flex;
+  gap: 10px;
+}
+
+.hardware-input-field {
+  flex: 1;
+  background: #0e0703;
+  border: 1.5px solid #78350f;
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: #fef08a;
+  font-family: monospace;
+  font-size: 13px;
+  outline: none;
+  box-shadow: inset 0 2px 6px #000;
+}
+
+.hardware-input-field:focus {
+  border-color: #f59e0b;
+}
+
+.hardware-transmit-button {
+  padding: 0 22px;
+  background: linear-gradient(180deg, #d97706 0%, #92400e 100%);
+  border: 1.5px solid #fde68a;
+  color: #fff;
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 900;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.6);
+}
+
+/* --------------------------------------------------------------------------
+   ZONE 3 (RIGHT): HARDWARE CONTROLS & TUBES
+   -------------------------------------------------------------------------- */
+.hardware-controls-zone {
+  width: 290px;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border-left: 3px solid rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.3);
+}
+
+.controls-zone-header {
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #fef08a;
+  letter-spacing: 1px;
+  text-align: center;
+  padding-bottom: 6px;
+  border-bottom: 1.5px solid rgba(254, 240, 138, 0.3);
+  margin-bottom: 8px;
+}
+
+/* A. Radiola Right Hardware Layout */
+.radiola-right-hardware-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+}
+
+.radiola-verniers-column {
+  display: flex;
+  justify-content: space-around;
+}
+
+.radiola-vernier-card {
+  background: rgba(0,0,0,0.3);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #78350f;
+}
+
+/* Vertical Alcove with Two Stacked Tubes (Audio Output) */
+.radiola-tubes-alcove-frame {
+  background: #120702;
+  border: 2.5px solid #92400e;
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: inset 0 4px 12px #000, 0 4px 10px rgba(0,0,0,0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.radiola-alcove-header {
+  font-family: 'Times New Roman', serif;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  color: #fef08a;
+  margin-bottom: 4px;
+}
+
+.radiola-alcove-interior {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.alcove-brass-divider {
+  font-family: 'Times New Roman', serif;
+  font-size: 6px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  color: #d97706;
+  border-top: 1px solid #78350f;
+  border-bottom: 1px solid #78350f;
+  padding: 1px 8px;
+}
+
+.radiola-bottom-mini-knobs {
+  display: flex;
+  justify-content: space-between;
+  margin-top: auto;
+}
+
+/* B. Military R-250 Right Hardware Layout */
+.military-right-hardware-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+}
+
+.mil-knobs-row {
+  display: flex;
+  justify-content: space-around;
+}
+
+.mil-vernier-gear-box {
+  background: #141a12;
+  border: 1.5px solid #3c4936;
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vernier-gear-title {
+  font-family: monospace;
+  font-size: 8px;
+  color: #cbd5e1;
+  font-weight: bold;
+}
+
+.vernier-slider-track {
+  height: 20px;
+  background: #0a0d09;
+  border: 1px solid #22291e;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  position: relative;
+  padding: 0 4px;
+}
+
+.vernier-thumbwheel {
+  width: 14px;
+  height: 26px;
+  background: repeating-linear-gradient(90deg, #f8fafc 0px, #64748b 2px);
+  border-radius: 3px;
+  box-shadow: 0 2px 4px #000;
+  position: absolute;
+  left: 45%;
+}
+
+.vernier-scale-ticks {
+  font-family: monospace;
+  font-size: 7px;
+  color: #64748b;
+  letter-spacing: 3px;
+  width: 100%;
+  text-align: center;
+}
+
+.soviet-cathode-bank {
+  background: #121811;
+  border: 2px solid #3c4936;
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.soviet-cathode-title {
+  font-family: monospace;
+  font-size: 8px;
+  color: #facc15;
+  font-weight: 900;
+}
+
+.soviet-cathode-row {
+  display: flex;
+  gap: 4px;
+}
+
+.mini-cathode-tube {
+  width: 18px;
+  height: 30px;
+  background: #080d07;
+  border: 1px solid #475569;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+}
+
+.cathode-glow-digit {
+  font-family: monospace;
+  font-size: 14px;
+  font-weight: 900;
+  color: #ff6600;
+  text-shadow: 0 0 6px #ff4400;
+}
+
+.mil-bottom-controls-row {
+  display: flex;
+  justify-content: space-around;
+  margin-top: auto;
+}
+
+/* C. Audiophile Hi-Fi Right Hardware Layout */
+.hifi-right-hardware-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+}
+
+.hifi-gold-knobs-row {
+  display: flex;
+  justify-content: space-around;
+}
+
+.mcintosh-bias-frame {
+  background: #140d04;
+  border: 1.5px solid #d4af37;
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.2);
+}
+
+.mcintosh-bias-title {
+  font-family: monospace;
+  font-size: 8px;
+  color: #fef08a;
+  font-weight: bold;
+}
+
+.mcintosh-bias-tubes {
+  display: flex;
+  gap: 8px;
+}
+
+.mcintosh-binding-posts-row {
+  display: flex;
+  justify-content: space-around;
+  margin-top: auto;
+  background: rgba(0,0,0,0.4);
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+}
+
+.binding-post-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.binding-post-sub {
+  font-family: monospace;
+  font-size: 7px;
+  color: #94a3b8;
+}
+
+.posts-pair {
+  display: flex;
+  gap: 6px;
+}
+
+.gold-binding-post {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fef08a;
+}
+.gold-binding-post.red { background: #dc2626; }
+.gold-binding-post.black { background: #18181b; }
+
+/* D. CRT & Nixie Telemetry Stream */
+.telemetry-mini-stream {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #080503;
+  border: 1px solid #451a03;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.term-stream-title {
+  background: #1c0e05;
+  padding: 3px 6px;
+  font-family: monospace;
+  font-size: 8px;
+  color: #fbbf24;
+  font-weight: bold;
+}
+
+.term-stream-box {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  font-family: monospace;
+  font-size: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.term-msg-line.success { color: #4ade80; }
+.term-msg-line.crypto { color: #facc15; }
+.term-msg-line.warn { color: #fb923c; }
+.term-msg-line.error { color: #f87171; }
+.term-msg-line.info { color: #94a3b8; }
+
+/* ==========================================================================
+   GENERIC SKEUOMORPHIC CONTROLS
+   ========================================================================== */
+.hardware-rotary-knob {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.knob-face {
+  border-radius: 50%;
+  position: relative;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.7), inset 0 2px 4px rgba(255,255,255,0.4);
+}
+
+.hardware-rotary-knob.brass .knob-face {
+  background: radial-gradient(circle at 35% 35%, #fde68a 0%, #d97706 45%, #78350f 85%, #451a03 100%);
+  border: 2px solid #b45309;
+}
+
+.hardware-rotary-knob.bakelite .knob-face {
+  background: radial-gradient(circle at 35% 35%, #44403c 0%, #1c1917 65%, #0c0a09 100%);
+  border: 2px solid #292524;
+}
+
+.hardware-rotary-knob.silver .knob-face {
+  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #cbd5e1 50%, #475569 90%, #1e293b 100%);
+  border: 2px solid #94a3b8;
+}
+
+.knob-indicator {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 30%;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 0 3px #000;
+}
+
+.knob-label {
+  font-family: monospace;
+  font-size: 8px;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: #cbd5e1;
+}
+
+/* E. Nordic OP-1 Right Hardware Layout */
+.nordic-right-hardware-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  align-items: center;
+}
+
+.nordic-encoders-2x2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+  justify-items: center;
+  background: #f1f5f9;
+  padding: 10px 6px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+}
+
+.nordic-jog-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.nordic-jog-label {
+  font-family: monospace;
+  font-size: 8px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+}
+
+/* Specific Zone Skin Overrides */
+
+/* Nordic OP-1 Zones */
+.skin-nordic-op1 .hardware-contacts-zone {
+  background: #f8fafc;
+  border-right: 2px solid #cbd5e1;
+}
+.skin-nordic-op1 .contacts-zone-header {
+  color: #334155;
+  border-bottom: 1.5px solid #cbd5e1;
+}
+.skin-nordic-op1 .hardware-contact-card {
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  color: #0f172a;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+}
+.skin-nordic-op1 .hardware-contact-card .contact-bold-name {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #0f172a;
+  font-weight: 700;
+}
+.skin-nordic-op1 .hardware-contact-card.selected {
+  background: #f1f5f9;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.3);
+}
+.skin-nordic-op1 .hardware-action-button {
+  background: #0284c7;
+  border: 1px solid #0369a1;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.skin-nordic-op1 .hardware-action-button.secondary {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+.skin-nordic-op1 .hardware-chat-zone {
+  background: #ffffff;
+}
+.skin-nordic-op1 .chat-top-bezel {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+.skin-nordic-op1 .chat-peer-title {
+  color: #0f172a;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 700;
+}
+.skin-nordic-op1 .chat-e2ee-hash {
+  color: #64748b;
+}
+.skin-nordic-op1 .hardware-msg-row.inbound .hardware-msg-bubble {
+  background: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.skin-nordic-op1 .hardware-msg-row.outbound .hardware-msg-bubble {
+  background: #0284c7;
+  color: #ffffff;
+  border: 1px solid #0369a1;
+  border-radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.skin-nordic-op1 .hardware-msg-row.outbound .hardware-msg-meta {
+  color: #bae6fd;
+}
+.skin-nordic-op1 .hardware-input-deck {
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+.skin-nordic-op1 .hardware-input-field {
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  color: #0f172a;
+  box-shadow: none;
+}
+.skin-nordic-op1 .hardware-input-field:focus {
+  border-color: #0284c7;
+}
+.skin-nordic-op1 .hardware-transmit-button {
+  background: #0284c7;
+  border: 1px solid #0369a1;
+  color: #ffffff;
+}
+.skin-nordic-op1 .hardware-controls-zone {
+  background: #f8fafc;
+  border-left: 2px solid #cbd5e1;
+}
+.skin-nordic-op1 .controls-zone-header {
+  color: #334155;
+  border-bottom: 1.5px solid #cbd5e1;
+}
+.skin-nordic-op1 .telemetry-mini-stream {
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+.skin-nordic-op1 .term-stream-title {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+/* CRT Oscilloscope Zones */
+.skin-oscilloscope-crt .hardware-contacts-zone {
+  background: #07130a;
+  border-right: 2px solid #1e2d23;
+}
+.skin-oscilloscope-crt .contacts-zone-header {
+  color: #4ade80;
+  border-bottom-color: #166534;
+}
+.skin-oscilloscope-crt .hardware-contact-card {
+  background: #0c1c11;
+  border: 1.5px solid #166534;
+  color: #86efac;
+}
+.skin-oscilloscope-crt .hardware-contact-card.selected {
+  background: #14532d;
+  border-color: #4ade80;
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.4);
+}
+.skin-oscilloscope-crt .hardware-chat-zone {
+  background: #030a05;
+  border-left: 1px solid #14281b;
+  border-right: 1px solid #14281b;
+}
+.skin-oscilloscope-crt .chat-peer-title {
+  color: #4ade80;
+  font-family: monospace;
+}
+.skin-oscilloscope-crt .hardware-msg-bubble {
+  background: #06180a;
+  border: 1.5px solid #16a34a;
+  color: #86efac;
+  font-family: monospace;
+  box-shadow: 0 0 8px rgba(22, 163, 74, 0.2);
+}
+.skin-oscilloscope-crt .hardware-input-deck {
+  background: #06180a;
+  border-top-color: #1e2d23;
+}
+.skin-oscilloscope-crt .hardware-input-field {
+  background: #020c04;
+  border-color: #16a34a;
+  color: #4ade80;
+}
+.skin-oscilloscope-crt .hardware-transmit-button {
+  background: linear-gradient(180deg, #16a34a 0%, #14532d 100%);
+  border-color: #86efac;
+}
+
+/* Nixie Tube Zones */
+.skin-nixie-tube .hardware-contacts-zone {
+  background: #140904;
+  border-right: 2px solid #3d2110;
+}
+.skin-nixie-tube .contacts-zone-header {
+  color: #fb923c;
+  border-bottom-color: #7c2d12;
+}
+.skin-nixie-tube .hardware-contact-card {
+  background: #1f0d06;
+  border: 1.5px solid #7c2d12;
+  color: #fed7aa;
+}
+.skin-nixie-tube .hardware-contact-card.selected {
+  background: #7c2d12;
+  border-color: #f97316;
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.5);
+}
+.skin-nixie-tube .hardware-chat-zone {
+  background: #0b0502;
+}
+.skin-nixie-tube .chat-peer-title {
+  color: #fdba74;
+  font-family: monospace;
+}
+.skin-nixie-tube .hardware-msg-bubble {
+  background: #1a0c05;
+  border: 1.5px solid #ea580c;
+  color: #fed7aa;
+  font-family: monospace;
+  box-shadow: 0 0 8px rgba(234, 88, 12, 0.25);
+}
+.skin-nixie-tube .hardware-input-deck {
+  background: #140904;
+  border-top-color: #3d2110;
+}
+.skin-nixie-tube .hardware-input-field {
+  background: #0d0502;
+  border-color: #ea580c;
+  color: #fed7aa;
+}
+.skin-nixie-tube .hardware-transmit-button {
+  background: linear-gradient(180deg, #ea580c 0%, #9a3412 100%);
+  border-color: #fdba74;
+}
+
+/* Modals */
+.hardware-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.hardware-modal-card {
+  background: #1c1109;
+  border: 2px solid #b45309;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 480px;
+  color: #fef3c7;
+  overflow: hidden;
+  box-shadow: 0 20px 50px #000;
+}
+
+.hardware-modal-header {
+  padding: 10px 16px;
+  background: #2b180c;
+  border-bottom: 1px solid #b45309;
+  font-family: monospace;
+  font-weight: bold;
+  display: flex;
+  justify-content: space-between;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  color: #fef08a;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.hardware-modal-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-help-text {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.modal-json-textarea {
+  width: 100%;
+  height: 120px;
+  background: #0a0603;
+  border: 1px solid #78350f;
+  border-radius: 4px;
+  padding: 8px;
+  color: #fef08a;
+  font-family: monospace;
+  font-size: 10px;
+}
+
+.hardware-modal-footer {
+  padding: 10px 16px;
+  background: #2b180c;
+  border-top: 1px solid #b45309;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.hardware-btn-primary {
+  padding: 6px 14px;
+  background: linear-gradient(180deg, #d97706 0%, #92400e 100%);
+  border: 1px solid #fde68a;
+  color: #fff;
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: bold;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.hardware-btn-secondary {
+  background: none;
+  border: 1px solid #78350f;
+  padding: 6px 12px;
+  border-radius: 4px;
+  color: #fef08a;
+  font-family: monospace;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   NORDIC MINIMALIST (TEENAGE ENGINEERING OP-1) COMPLETE DESIGN SYSTEM
+   ========================================================================== */
+
+/* Top Black High-Contrast OLED Deck */
+.nordic-oled-top-deck {
+  background: #000000;
+  border-radius: 14px 14px 0 0;
+  margin: 12px 14px 0 14px;
+  padding: 12px 20px 8px 20px;
+  box-shadow: inset 0 0 12px rgba(0,0,0,0.9), 0 2px 6px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nordic-oled-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.nordic-brand-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.nordic-brand-name {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: 0.8px;
+}
+
+.nordic-brand-sub {
+  font-size: 9px;
+  color: #9ca3af;
+  margin-top: 1px;
+}
+
+.nordic-frequency-display {
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 32px;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.9);
+  letter-spacing: 1px;
+}
+
+.nordic-status-cluster {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: monospace;
+  font-size: 11px;
+  color: #e5e7eb;
+}
+
+.nordic-skin-select {
+  background: #18181b;
+  color: #fafafa;
+  border: 1px solid #3f3f46;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: monospace;
+  font-size: 10px;
+  outline: none;
+  cursor: pointer;
+}
+
+.nordic-waveform-wrapper {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.nordic-waveform-canvas {
+  width: 100%;
+  height: 46px;
+}
+
+/* --- Nordic Left Column (Channels & Contacts) --- */
+.nordic-left-column {
+  width: 250px;
+  background: #ffffff;
+  margin: 10px 0 12px 14px;
+  border-radius: 0 0 0 14px;
+  border: 1.5px solid #d1d5db;
+  border-right: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px 12px;
+  position: relative;
+}
+
+.nordic-left-inner {
+  display: flex;
+  gap: 14px;
+}
+
+.nordic-color-buttons-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nordic-color-knob {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.25), inset 0 1px 2px rgba(255,255,255,0.7);
+  cursor: pointer;
+  position: relative;
+  border: 1.5px solid rgba(0,0,0,0.12);
+  transition: transform 0.1s ease;
+}
+
+.nordic-color-knob:hover {
+  transform: scale(1.05);
+}
+
+.white-knob-notch {
+  width: 2px;
+  height: 9px;
+  background: #18181b;
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 1px;
+}
+
+.nordic-channels-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nordic-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #4b5563;
+  margin-bottom: 2px;
+}
+
+.nordic-channel-pill {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  cursor: pointer;
+}
+
+.nordic-channel-pill.active {
+  background: #e5e7eb;
+}
+
+.nordic-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 6px 0;
+}
+
+.nordic-contacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nordic-contact-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #374151;
+}
+
+.nordic-contact-item.active {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.nordic-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9ca3af;
+}
+
+.nordic-status-dot.active {
+  background: #4b5563;
+}
+
+/* Speaker Grille */
+.nordic-speaker-grille {
+  width: 32px;
+  height: 52px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3.5px;
+  padding: 4px;
+  margin-top: auto;
+}
+
+.speaker-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #374151;
+  box-shadow: inset 0 1px 1px #000;
+}
+
+/* ============================================================================
+   TRUE WINAMP PHOTOREALISTIC HARDWARE ENGINE: NORDIC OP-1
+   ============================================================================ */
+.nordic-stage {
+  min-height: 100vh;
+  background: radial-gradient(circle at 50% 30%, #f1f3f5 0%, #d8dde3 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.nordic-window-box {
+  width: 1024px;
+  background: #1f2124;
+  border-radius: 12px 12px 28px 28px;
+  box-shadow: 0 25px 60px rgba(15, 23, 42, 0.35), 0 4px 16px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+}
+
+/* Winamp-style Window Header Bar */
+.nordic-window-titlebar {
+  height: 34px;
+  background: linear-gradient(180deg, #33363d 0%, #25272c 100%);
+  border-bottom: 1px solid #141518;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+}
+
+.titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.titlebar-e2ee {
+  color: #22c55e;
+  font-size: 10px;
+  background: rgba(34, 197, 94, 0.12);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.titlebar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.titlebar-skin-select {
+  background: #181a1d;
+  color: #f8fafc;
+  border: 1px solid #4b5563;
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 3px 8px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.titlebar-skin-select:hover {
+  border-color: #94a3b8;
+}
+
+.titlebar-btn {
+  background: #2b2e35;
+  border: 1px solid #475569;
+  color: #cbd5e1;
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.titlebar-btn:hover {
+  background: #475569;
+  color: #ffffff;
+}
+
+.titlebar-btn.close:hover {
+  background: #ef4444;
+  border-color: #dc2626;
+}
+
+/* Exact 1024x565 Hardware Canvas */
+.nordic-hardware-canvas {
+  width: 1024px;
+  height: 565px;
+  position: relative;
+  background-color: #e5e5e5;
+  overflow: hidden;
+}
+
+.nordic-chassis-bitmap {
+  width: 1024px;
+  height: 565px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 1. Top Black OLED Screen Overlays */
+.nordic-oled-viewport {
+  position: absolute;
+  left: 46px;
+  top: 48px;
+  width: 754px;
+  height: 133px;
+  background: #000000;
+  border-radius: 8px;
+  box-sizing: border-box;
+  padding: 10px 18px 4px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.9), 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.nordic-oled-top-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  color: #ffffff;
+  font-family: 'Fira Code', monospace;
+}
+
+.nordic-oled-brand {
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+}
+
+.nordic-oled-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #ffffff;
+}
+
+.nordic-oled-sub {
+  font-size: 8.5px;
+  color: #9ca3af;
+  letter-spacing: 0.4px;
+  margin-top: 1px;
+}
+
+.nordic-oled-freq {
+  font-size: 27px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.95), 0 0 22px rgba(255, 255, 255, 0.45);
+  text-align: center;
+  flex: 1;
+}
+
+.nordic-oled-stats {
+  font-size: 11px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: #e5e7eb;
+  width: 200px;
+  justify-content: flex-end;
+}
+
+.nordic-oled-wave-box {
+  width: 100%;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nordic-live-waveform-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* 2. Four Left Rubber Buttons Hotspots */
+.nordic-hotspot-rubber-btn {
+  position: absolute;
+  left: 63px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  cursor: pointer;
+  background: transparent;
+  transition: transform 0.08s ease, filter 0.12s ease;
+}
+
+.nordic-hotspot-rubber-btn:hover {
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+}
+
+.nordic-hotspot-rubber-btn:active {
+  transform: scale(0.92);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+.btn-rubber-orange { top: 204px; }
+.btn-rubber-ochre { top: 250px; }
+.btn-rubber-cyan { top: 294px; }
+.btn-rubber-white { top: 338px; }
+
+/* 3. Left Channels & Contacts List */
+.nordic-channels-viewport {
+  position: absolute;
+  left: 110px;
+  top: 182px;
+  width: 166px;
+  height: 338px;
+  background: #ffffff;
+  border-right: 1.5px solid #e5e7eb;
+  box-sizing: border-box;
+  padding: 8px 10px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Fira Code', -apple-system, BlinkMacSystemFont, sans-serif;
+  user-select: none;
+}
+
+.nordic-panel-heading {
+  font-size: 11px;
+  font-weight: 700;
+  color: #374151;
+  margin: 0 0 6px 4px;
+  height: 16px;
+  line-height: 16px;
+}
+
+.nordic-channels-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nordic-channel-clickable {
+  height: 36px;
+  line-height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  border-radius: 4px;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: all 0.12s;
+}
+
+.nordic-channel-clickable:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.nordic-channel-clickable.active {
+  background: #e5e7eb;
+  color: #000000;
+  font-weight: 700;
+}
+
+.nordic-panel-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 10px 0 8px 0;
+}
+
+.nordic-contacts-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nordic-contact-clickable {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.nordic-contact-clickable:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.nordic-contact-clickable.active {
+  background: #f1f3f5;
+}
+
+.nordic-contact-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.nordic-contact-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9ca3af;
+}
+
+.nordic-contact-led.active {
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.nordic-contact-led.standby {
+  background: #d1d5db;
+}
+
+/* 4. Center Chat Messages Viewport */
+.nordic-chat-live-viewport {
+  position: absolute;
+  left: 276px;
+  top: 182px;
+  width: 506px;
+  height: 338px;
+  background: #ffffff;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  font-family: 'Fira Code', monospace;
+  overflow: hidden;
+}
+
+.nordic-chat-header-bar {
+  padding: 10px 16px 6px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nordic-chat-scroller {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  background: #ffffff;
+}
+
+.nordic-chat-scroller::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.nordic-chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #6b7280;
+  text-align: center;
+}
+
+.empty-title {
+  font-weight: 700;
+  font-size: 12px;
+  color: #374151;
+}
+
+.empty-sub {
+  font-size: 10px;
+  margin-top: 2px;
+}
+
+.nordic-card-row {
+  display: flex;
+  width: 100%;
+}
+
+.nordic-card-row.outbound {
+  justify-content: flex-end;
+}
+
+.nordic-card-row.inbound {
+  justify-content: flex-start;
+}
+
+.nordic-live-card {
+  max-width: 82%;
+  background: #ffffff;
+  border: 1.5px solid #222224;
+  border-radius: 6px;
+  padding: 6px 12px;
+  box-shadow: none;
+}
+
+.nordic-card-row.outbound .nordic-live-card {
+  background: #ffffff;
+  border: 1.5px solid #222224;
+}
+
+.nordic-live-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 2px;
+  gap: 14px;
+}
+
+.nordic-card-ticks {
+  font-weight: bold;
+  color: #111827;
+}
+
+.nordic-live-card-body {
+  font-size: 12px;
+  font-weight: 500;
+  color: #111827;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+/* 5. Message Input Bar */
+.nordic-input-hotspot {
+  height: 44px;
+  padding: 6px 16px 8px 16px;
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.nordic-input-field-live {
+  flex: 1;
+  height: 28px;
+  border: 1.5px solid #222224;
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  padding: 0 12px;
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  color: #111827;
+  outline: none;
+  background: #ffffff;
+}
+
+.nordic-input-field-live:focus {
+  border-color: #000000;
+}
+
+.nordic-send-arrow-btn {
+  height: 28px;
+  background: #ffffff;
+  border: 1.5px solid #222224;
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  font-size: 16px;
+  font-weight: 900;
+  color: #111827;
+  cursor: pointer;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, transform 0.08s;
+}
+
+.nordic-send-arrow-btn:hover {
+  background: #f3f4f6;
+}
+
+.nordic-send-arrow-btn:active {
+  background: #e5e7eb;
+  transform: scale(0.95);
+}
+
+.nordic-send-arrow-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* 6. Right Controls Hotspots (Knurled Encoders & Jog Wheel) */
+.nordic-knob-clickspot {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.spot-vol { left: 808px; top: 60px; }
+.spot-g { left: 880px; top: 60px; }
+.spot-gain { left: 808px; top: 136px; }
+.spot-tune { left: 880px; top: 136px; }
+
+/* Large Jog Wheel Clickspot */
+.nordic-jog-clickspot {
+  position: absolute;
+  left: 808px;
+  top: 218px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* Bottom Pushbuttons (TX, SCAN, REC) */
+.nordic-btn-clickspot {
+  position: absolute;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  cursor: pointer;
+  background: transparent;
+  transition: background 0.1s, transform 0.08s;
+}
+
+.nordic-btn-clickspot:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.nordic-btn-clickspot:active {
+  background: rgba(0, 0, 0, 0.2);
+  transform: scale(0.92);
+}
+
+.spot-tx { left: 824px; top: 476px; }
+.spot-scan { left: 868px; top: 476px; }
+.spot-rec { left: 914px; top: 476px; }
+
+/* ============================================================================
+   TRUE WINAMP PHOTOREALISTIC HARDWARE ENGINE: VINTAGE RADIOLA 1950
+   ============================================================================ */
+.radiola-stage {
+  min-height: 100vh;
+  background: radial-gradient(circle at 50% 30%, #3a2212 0%, #120b06 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.radiola-window-box {
+  width: 1100px;
+  background: #26160b;
+  border-radius: 12px;
+  box-shadow: 0 30px 70px rgba(0,0,0,0.7), 0 6px 20px rgba(0,0,0,0.4);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  border: 1px solid #4a2c16;
+}
+
+.radiola-window-titlebar {
+  height: 34px;
+  background: linear-gradient(180deg, #422714 0%, #29180b 100%);
+  border-bottom: 1px solid #1c1007;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+}
+
+.radiola-hardware-canvas {
+  width: 1100px;
+  height: 614px;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+}
+
+.radiola-stage-inner {
+  width: 1376px;
+  height: 768px;
+  transform: scale(0.8);
+  transform-origin: top left;
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.radiola-chassis-bitmap {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1376px;
+  height: 768px;
+  object-fit: cover;
+}
+
+.radiola-dial-hotspot {
+  position: absolute;
+  left: 425px;
+  top: 68px;
+  width: 755px;
+  height: 114px;
+  cursor: crosshair;
+}
+
+.radiola-golden-needle {
+  position: absolute;
+  top: 0;
+  width: 4px;
+  height: 114px;
+  transform: translateX(-50%);
+  transition: left 0.1s ease-out;
+}
+
+.needle-line {
+  width: 3px;
+  height: 114px;
+  background: linear-gradient(180deg, #ffd700 0%, #b8860b 100%);
+  box-shadow: 0 0 8px #ffd700, 2px 0 6px rgba(0,0,0,0.6);
+  margin: 0 auto;
+}
+
+.needle-badge {
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2c1a0e;
+  border: 1px solid #d4af37;
+  color: #ffd700;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  font-family: monospace;
+}
+
+.radiola-magic-eye-hotspot {
+  position: absolute;
+  left: 330px;
+  top: 74px;
+  width: 66px;
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.radiola-magic-eye-iris {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #34d399 0%, #059669 60%, #064e3b 100%);
+  box-shadow: 0 0 16px #34d399;
+  opacity: 0.85;
+  animation: eyePulse 2.5s infinite alternate;
+}
+
+@keyframes eyePulse {
+  0% { transform: scale(0.92); opacity: 0.75; }
+  100% { transform: scale(1.06); opacity: 0.95; }
+}
+
+.radiola-contacts-overlay {
+  position: absolute;
+  left: 110px;
+  top: 250px;
+  width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 27px;
+}
+
+.radiola-contact-brass-btn {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: linear-gradient(180deg, #ddb86c 0%, #be9031 50%, #946d1a 100%);
+  border: 1.5px solid #5a3f0e;
+  border-radius: 4px;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.45);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.radiola-contact-brass-btn:hover {
+  background: linear-gradient(180deg, #ebd188 0%, #caa141 50%, #a67c22 100%);
+  transform: translateY(-1px);
+}
+
+.radiola-contact-brass-btn.active {
+  background: linear-gradient(180deg, #b08528 0%, #8c6416 50%, #684809 100%);
+  border-color: #f59e0b;
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.6), 0 0 12px rgba(245, 158, 11, 0.45);
+}
+
+.brass-screw {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #5a3f0e;
+  border: 1px solid #362406;
+}
+
+.brass-contact-name {
+  font-family: 'Georgia', serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a0f05;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+}
+
+.brass-pilot-lamp {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #4a3411;
+  border: 1px solid #2e1f06;
+}
+
+.brass-pilot-lamp.lit {
+  background: #f59e0b;
+  box-shadow: 0 0 10px #f59e0b, 0 0 4px #fbbf24;
+  border-color: #fef3c7;
+}
+
+.radiola-parchment-chat-box {
+  position: absolute;
+  left: 422px;
+  top: 222px;
+  width: 595px;
+  height: 468px;
+  background: #fbf5e6;
+  border-radius: 6px;
+  box-shadow: inset 0 2px 10px rgba(90, 60, 20, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.radiola-parchment-header {
+  padding: 12px 20px 8px 20px;
+  border-bottom: 1px dashed #d1c0a5;
+  font-family: 'Georgia', serif;
+  color: #3b2413;
+}
+
+.parchment-header-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.parchment-header-sub {
+  font-size: 11px;
+  color: #785838;
+  margin-top: 2px;
+}
+
+.radiola-parchment-scroller {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.radiola-parchment-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.parchment-msg-row {
+  display: flex;
+  width: 100%;
+}
+
+.parchment-msg-row.outbound {
+  justify-content: flex-end;
+}
+
+.parchment-msg-row.inbound {
+  justify-content: flex-start;
+}
+
+.parchment-card {
+  max-width: 82%;
+  background: #fffdf7;
+  border: 1.5px solid #d8caa7;
+  border-radius: 8px;
+  padding: 8px 14px;
+  box-shadow: 0 2px 6px rgba(60, 40, 15, 0.08);
+}
+
+.parchment-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  color: #7a5c3d;
+  margin-bottom: 3px;
+  gap: 14px;
+  font-family: 'Georgia', serif;
+  font-style: italic;
+}
+
+.parchment-seal {
+  font-weight: 700;
+  color: #9c6e3d;
+  font-style: normal;
+}
+
+.parchment-card-body {
+  font-family: 'Georgia', serif;
+  font-size: 13px;
+  color: #2a190b;
+  line-height: 1.4;
+}
+
+.radiola-parchment-input-form {
+  padding: 8px 18px 12px 18px;
+  display: flex;
+  gap: 8px;
+  background: #f7eed8;
+  border-top: 1px solid #decfaa;
+}
+
+.radiola-parchment-input {
+  flex: 1;
+  height: 34px;
+  padding: 0 12px;
+  font-family: 'Georgia', serif;
+  font-size: 13px;
+  color: #2a190b;
+  background: #fffdf8;
+  border: 1.5px solid #c9b48c;
+  border-radius: 4px;
+  outline: none;
+}
+
+.radiola-parchment-send-btn {
+  height: 34px;
+  padding: 0 16px;
+  background: linear-gradient(180deg, #d8ad62 0%, #b8860b 100%);
+  border: 1.5px solid #785303;
+  border-radius: 4px;
+  font-family: 'Georgia', serif;
+  font-weight: 700;
+  font-size: 11px;
+  color: #fffdf5;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  cursor: pointer;
+  transition: transform 0.08s;
+}
+
+.radiola-vernier-clickspot {
+  position: absolute;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.radiola-vernier-clickspot.upper {
+  left: 1055px;
+  top: 235px;
+  width: 115px;
+  height: 115px;
+}
+
+.radiola-vernier-clickspot.lower {
+  left: 1055px;
+  top: 445px;
+  width: 115px;
+  height: 115px;
+}
+
+.radiola-tube-chamber-glow {
+  position: absolute;
+  left: 1195px;
+  top: 235px;
+  width: 92px;
+  height: 350px;
+  pointer-events: none;
+}
+
+.tube-filament {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.7) 0%, rgba(245, 158, 11, 0) 70%);
+  box-shadow: 0 0 18px #f59e0b;
+  animation: filamentPulse 3s infinite alternate ease-in-out;
+}
+
+.tube-filament.tube-top {
+  top: 70px;
+}
+
+.tube-filament.tube-bottom {
+  top: 230px;
+  animation-delay: 1.5s;
+}
+
+@keyframes filamentPulse {
+  0% { opacity: 0.6; transform: translateX(-50%) scale(0.9); }
+  100% { opacity: 0.95; transform: translateX(-50%) scale(1.15); }
+}
+
+/* ============================================================================
+   TRUE WINAMP PHOTOREALISTIC HARDWARE ENGINE: SOVIET MILITARY R-250 «КИТ»
+   ============================================================================ */
+.military-stage {
+  min-height: 100vh;
+  background: radial-gradient(circle at 50% 30%, #252e26 0%, #111712 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.military-window-box {
+  width: 1100px;
+  background: #1c241e;
+  border-radius: 12px;
+  box-shadow: 0 30px 70px rgba(0,0,0,0.7), 0 6px 20px rgba(0,0,0,0.5);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  border: 1.5px solid #364539;
+}
+
+.military-window-titlebar {
+  height: 34px;
+  background: linear-gradient(180deg, #2d382f 0%, #1c241e 100%);
+  border-bottom: 1px solid #131a14;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+}
+
+.military-hardware-canvas {
+  width: 1100px;
+  height: 614px;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+}
+
+.military-stage-inner {
+  width: 1376px;
+  height: 768px;
+  transform: scale(0.8);
+  transform-origin: top left;
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.military-chassis-bitmap {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1376px;
+  height: 768px;
+  object-fit: cover;
+}
+
+.military-optical-dial-hotspot {
+  position: absolute;
+  left: 596px;
+  top: 82px;
+  width: 152px;
+  height: 152px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #0e1c12 0%, #061109 85%, #020804 100%);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  box-shadow: inset 0 0 16px rgba(0,0,0,0.9);
+  border: 1px solid #1e3a24;
+}
+
+.optical-dial-freq {
+  font-family: 'Fira Code', monospace;
+  font-size: 24px;
+  font-weight: 900;
+  color: #fef08a;
+  text-shadow: 0 0 12px #fde047, 0 0 4px #eab308;
+  margin-top: -2px;
+}
+
+.optical-dial-unit {
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: #ca8a04;
+  letter-spacing: 1.5px;
+}
+
+.military-meter-needle {
+  position: absolute;
+  width: 2px;
+  height: 75px;
+  background: #dc2626;
+  transform-origin: bottom center;
+  transition: transform 0.25s ease-out;
+  box-shadow: 0 0 3px rgba(0,0,0,0.6);
+  pointer-events: none;
+}
+
+.military-meter-needle.voltage-meter {
+  left: 950px;
+  top: 118px;
+}
+
+.military-meter-needle.signal-meter {
+  left: 1180px;
+  top: 118px;
+}
+
+.military-operators-overlay {
+  position: absolute;
+  left: 88px;
+  top: 395px;
+  width: 258px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.military-op-card {
+  height: 66px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  background: linear-gradient(180deg, #d3dad0 0%, #b4bdb0 50%, #9aa396 100%);
+  border: 1.5px solid #475446;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.military-op-card:hover {
+  background: linear-gradient(180deg, #e0e6dd 0%, #c4ccc0 50%, #abb5a7 100%);
+}
+
+.military-op-card.active {
+  background: linear-gradient(180deg, #b8c4b4 0%, #9ba797 50%, #7e8b7a 100%);
+  border-color: #22c55e;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.5), inset 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.op-card-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.op-callsign {
+  font-family: 'Fira Code', monospace;
+  font-weight: 800;
+  font-size: 15px;
+  color: #141f16;
+}
+
+.op-subtext {
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+  color: #3b4d3f;
+  margin-top: 2px;
+}
+
+.op-card-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.op-lamp {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #6b7280;
+}
+
+.op-lamp.on-air {
+  background: #ef4444;
+  box-shadow: 0 0 10px #ef4444;
+}
+
+.op-lamp.standby {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.op-lamp-label {
+  font-size: 8px;
+  font-weight: 700;
+  font-family: monospace;
+  color: #1c261e;
+}
+
+.military-crt-box {
+  position: absolute;
+  left: 380px;
+  top: 268px;
+  width: 630px;
+  height: 424px;
+  background: #07150c;
+  border-radius: 6px;
+  box-shadow: inset 0 0 30px rgba(0,0,0,0.9);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 2px solid #193322;
+}
+
+.military-crt-header {
+  padding: 10px 18px 6px 18px;
+  border-bottom: 1px solid #143d22;
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #34d399;
+  display: flex;
+  justify-content: space-between;
+}
+
+.military-stamp {
+  position: absolute;
+  pointer-events: none;
+  border: 2.5px solid #dc2626;
+  color: #dc2626;
+  font-family: 'Impact', 'Arial Black', sans-serif;
+  font-size: 22px;
+  letter-spacing: 2px;
+  padding: 2px 10px;
+  border-radius: 4px;
+  opacity: 0.55;
+}
+
+.stamp-secret {
+  right: 28px;
+  top: 70px;
+  transform: rotate(-8deg);
+}
+
+.stamp-encrypted {
+  right: 48px;
+  bottom: 80px;
+  transform: rotate(6deg);
+}
+
+.military-crt-scroller {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  color: #a7f3d0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.military-crt-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.military-log-row {
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.military-log-time {
+  color: #059669;
+  margin-right: 8px;
+}
+
+.military-log-peer {
+  font-weight: 700;
+  color: #6ee7b7;
+  margin-right: 8px;
+}
+
+.military-log-body {
+  color: #ecfdf5;
+}
+
+.military-input-form {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: #0c1f13;
+  border-top: 1px solid #164e28;
+  gap: 8px;
+}
+
+.military-prompt {
+  font-family: 'Fira Code', monospace;
+  font-weight: 900;
+  color: #34d399;
+  font-size: 13px;
+}
+
+.military-cmd-input {
+  flex: 1;
+  height: 30px;
+  background: #041008;
+  border: 1px solid #166534;
+  border-radius: 3px;
+  padding: 0 10px;
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  color: #6ee7b7;
+  outline: none;
+}
+
+.military-tx-btn {
+  height: 30px;
+  padding: 0 14px;
+  background: #166534;
+  border: 1px solid #22c55e;
+  border-radius: 3px;
+  font-family: 'Fira Code', monospace;
+  font-weight: 800;
+  font-size: 11px;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.military-nixie-bank {
+  position: absolute;
+  left: 1055px;
+  top: 572px;
+  width: 226px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  pointer-events: none;
+}
+
+.military-nixie-digit {
+  width: 28px;
+  height: 44px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nixie-glow-num {
+  font-family: 'Fira Code', monospace;
+  font-size: 26px;
+  font-weight: 900;
+  color: #ff9800;
+  text-shadow: 0 0 16px #ff5722, 0 0 8px #ff9800, 0 0 3px #ffffff;
+}
+
+.military-knob-spot {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.spot-gross {
+  left: 1070px;
+  top: 310px;
+}
+
+.spot-fine {
+  left: 1205px;
+  top: 310px;
+}
+
+

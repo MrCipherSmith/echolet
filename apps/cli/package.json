@@ -5,8 +5,14 @@
   "type": "module",
   "engines": { "node": ">=22.13" },
   "bin": { "echolet": "./dist/cli.js", "echolet-tui": "./dist/tui.js" },
+  "files": [
+    "dist",
+    "web-dist"
+  ],
   "scripts": {
     "build": "node build.mjs",
+    "bundle:web": "node ../web/build.mjs && rm -rf web-dist && cp -r ../web/dist web-dist",
+    "prepublishOnly": "pnpm run bundle:web && node build.mjs && pnpm test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:e2e": "vitest run test/e2e"
