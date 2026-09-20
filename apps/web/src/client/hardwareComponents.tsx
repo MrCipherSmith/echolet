@@ -1,5 +1,3 @@
-import React from "react";
-
 // ============================================================================
 // 1. DUAL MCINTOSH BLUE VU-METERS (ICONIC RECTANGULAR OCEANIC-BLUE GAUGES)
 // ============================================================================
@@ -23,6 +21,8 @@ export function McIntoshVUPair({
 
     return (
       <div
+        role="img"
+        aria-label={`Декоративный индикатор канала ${chName}: положение ${val} дБ.`}
         style={{
           width: 176,
           height: 104,
@@ -138,7 +138,7 @@ export function McIntoshVUPair({
   };
 
   return (
-    <div style={{ display: "flex", gap: 14 }}>
+    <div role="group" aria-label="Декоративные стереоиндикаторы" style={{ display: "flex", gap: 14 }}>
       {renderMeter(leftVal, "L")}
       {renderMeter(rightVal, "R")}
     </div>
@@ -160,7 +160,11 @@ export function KT88PowerTube({
   lit?: boolean;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+    <div
+      role="img"
+      aria-label={`Декоративная лампа ${model}, ${lit ? "подсвечена" : "не подсвечена"}.`}
+      style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
+    >
       {/* Glass Envelope */}
       <div
         style={{
@@ -568,7 +572,11 @@ export function RotaryKnob({
   const isBig = size >= 50;
 
   return (
-    <div className={`hardware-rotary-knob ${material}`}>
+    <div
+      className={`hardware-rotary-knob ${material}`}
+      role="img"
+      aria-label={`${label}: ${value}. Декоративный регулятор.`}
+    >
       {/* Outer Vernier Calibrated Ring */}
       <div
         style={{
@@ -685,7 +693,12 @@ export function AnalogMeter({
   const ty = cy - Math.cos(rad) * len;
 
   return (
-    <div className={`analog-meter-box ${styleType}`} style={{ width, height }}>
+    <div
+      className={`analog-meter-box ${styleType}`}
+      role="img"
+      aria-label={`${label}: положение ${clamped} ${unit}. Декоративный индикатор.`}
+      style={{ width, height }}
+    >
       <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "100%" }}>
         <path
           d={`M ${width * 0.15} ${cy - 5} A ${len} ${len} 0 0 1 ${width * 0.85} ${cy - 5}`}
@@ -747,16 +760,34 @@ export function NordicColorButtons({
   ];
   return (
     <div className="nordic-color-buttons-stack">
-      {colors.map((c) => (
-        <div
-          key={c.id}
-          className={`nordic-color-knob ${c.id === activeColor ? "active" : ""}`}
-          style={{ backgroundColor: c.hex }}
-          onClick={() => onSelectColor?.(c.id)}
-        >
-          {c.id === "white" && <div className="white-knob-notch" />}
-        </div>
-      ))}
+      {colors.map((c) => {
+        const className = `nordic-color-knob ${c.id === activeColor ? "active" : ""}`;
+        const content = c.id === "white" ? <div className="white-knob-notch" aria-hidden="true" /> : null;
+
+        return onSelectColor ? (
+          <button
+            key={c.id}
+            type="button"
+            className={className}
+            style={{ backgroundColor: c.hex }}
+            aria-label={`Выбрать цвет: ${c.id}`}
+            aria-pressed={c.id === activeColor}
+            onClick={() => onSelectColor(c.id)}
+          >
+            {content}
+          </button>
+        ) : (
+          <div
+            key={c.id}
+            className={className}
+            style={{ backgroundColor: c.hex }}
+            role="img"
+            aria-label={`Образец цвета ${c.id}. Декоративный.`}
+          >
+            {content}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -768,28 +799,24 @@ export function NordicJogDial({
   angle?: number;
   onRotate?: () => void;
 }) {
-  return (
-    <div
-      className="nordic-jog-assembly"
-      onClick={onRotate}
-      title="Jog Dial (Click to spin)"
-      style={{
-        width: 108,
-        height: 108,
-        borderRadius: "50%",
-        background: "radial-gradient(circle at 45% 45%, #f8fafc 0%, #cbd5e1 55%, #94a3b8 100%)",
-        border: "3px solid #64748b",
-        boxShadow: "0 6px 16px rgba(0,0,0,0.25), inset 0 2px 4px #ffffff",
-        position: "relative",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        userSelect: "none",
-        transform: `rotate(${angle}deg)`,
-        transition: "transform 0.15s ease-out",
-      }}
-    >
+  const style = {
+    width: 108,
+    height: 108,
+    borderRadius: "50%",
+    background: "radial-gradient(circle at 45% 45%, #f8fafc 0%, #cbd5e1 55%, #94a3b8 100%)",
+    border: "3px solid #64748b",
+    boxShadow: "0 6px 16px rgba(0,0,0,0.25), inset 0 2px 4px #ffffff",
+    position: "relative" as const,
+    cursor: onRotate ? "pointer" : "default",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    userSelect: "none" as const,
+    transform: `rotate(${angle}deg)`,
+    transition: "transform 0.15s ease-out",
+  };
+
+  const dial = <>
       {/* Concentric CNC Grooves */}
       <div
         style={{
@@ -832,6 +859,15 @@ export function NordicJogDial({
           border: "1px solid #cbd5e1",
         }}
       />
+  </>;
+
+  return onRotate ? (
+    <button type="button" className="nordic-jog-assembly" onClick={onRotate} aria-label={`Изменить положение декоративного колеса: ${angle} градусов`} style={style}>
+      {dial}
+    </button>
+  ) : (
+    <div className="nordic-jog-assembly" role="img" aria-label={`Декоративное колесо: ${angle} градусов.`} style={style}>
+      {dial}
     </div>
   );
 }
@@ -858,10 +894,33 @@ export function NordicRotaryEncoder({
         gap: 4,
       }}
     >
-      <div
-        onClick={onClick}
-        title={`${label}: ${value}`}
-        style={{
+      {onClick ? (
+        <button
+          type="button"
+          className="nordic-encoder-control"
+          onClick={onClick}
+          aria-label={`${label}: ${value}. Изменить положение декоративной ручки.`}
+          style={{
+            width: 46,
+            height: 46,
+            borderRadius: "50%",
+            background: `radial-gradient(circle at 40% 40%, ${color} 0%, #1e293b 85%)`,
+            border: "2.5px solid #0f172a",
+            boxShadow: `0 3px 8px rgba(0,0,0,0.3), inset 0 2px 3px rgba(255,255,255,0.4)`,
+            position: "relative",
+            cursor: "pointer",
+            transform: `rotate(${rotation}deg)`,
+            transition: "transform 0.1s ease-out",
+          }}
+        >
+          <div className="nordic-encoder-pointer" />
+        </button>
+      ) : (
+        <div
+          className="nordic-encoder-control"
+          role="img"
+          aria-label={`${label}: ${value}. Декоративный индикатор.`}
+          style={{
           width: 46,
           height: 46,
           borderRadius: "50%",
@@ -873,21 +932,10 @@ export function NordicRotaryEncoder({
           transform: `rotate(${rotation}deg)`,
           transition: "transform 0.1s ease-out",
         }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: 4,
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: 3,
-            height: 10,
-            borderRadius: 2,
-            backgroundColor: "#ffffff",
-            boxShadow: "0 1px 2px rgba(0,0,0,0.5)",
-          }}
-        />
-      </div>
+        >
+          <div className="nordic-encoder-pointer" />
+        </div>
+      )}
       <span
         style={{
           fontFamily: "monospace",
@@ -933,6 +981,4 @@ export function playHardwareClick(type: "soft" | "clack" | "chirp" = "soft") {
     // AudioContext blocked before interaction
   }
 }
-
-
 

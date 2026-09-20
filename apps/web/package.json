@@ -9,6 +9,8 @@
   },
   "scripts": {
     "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "start": "node ./dist/server.js"
   },
   "dependencies": {

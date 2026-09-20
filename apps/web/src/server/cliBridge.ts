@@ -37,6 +37,8 @@ export interface CliBridgeOptions {
   profileDir: string;
   storeKeyEnv: string;
   relayUrl: string;
+  environment?: NodeJS.ProcessEnv;
+  commandTimeoutMs?: number;
 }
 
 export class CliBridge {
@@ -45,12 +47,28 @@ export class CliBridge {
   private async execute(argv: string[], stdinInput?: string): Promise<CliOutcome> {
     return new Promise((res) => {
       const child = spawn(process.execPath, [this.options.cliPath, ...argv], {
-        env: process.env,
+        env: this.options.environment ?? process.env,
         stdio: ["pipe", "pipe", "pipe"],
       });
 
       let stdout = "";
       let stderr = "";
+      let settled = false;
+      const finish = (outcome: CliOutcome) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        res(outcome);
+      };
+      const timeout = setTimeout(() => {
+        child.kill("SIGKILL");
+        finish({
+          ok: false,
+          code: "CLI_TIMEOUT",
+          exitCode: 1,
+          data: { error: "CLI command timed out" },
+        });
+      }, this.options.commandTimeoutMs ?? 15_000);
 
       child.stdout.on("data", (chunk: Buffer) => {
         stdout += chunk.toString("utf8");
@@ -58,9 +76,12 @@ export class CliBridge {
       child.stderr.on("data", (chunk: Buffer) => {
         stderr += chunk.toString("utf8");
       });
+      child.stdin.on("error", () => {
+        // The CLI may reject before consuming stdin; its close outcome remains authoritative.
+      });
 
       child.on("error", (err) => {
-        res({
+        finish({
           ok: false,
           code: "SPAWN_ERROR",
           exitCode: 1,
@@ -74,7 +95,7 @@ export class CliBridge {
           const trimmed = stdout.trim();
           if (trimmed.startsWith("{")) {
             const parsed = JSON.parse(trimmed);
-            res({
+            finish({
               ok: parsed.ok ?? (code === 0),
               code: parsed.error?.code ?? (code === 0 ? "ok" : "ERROR"),
               exitCode: code,
@@ -85,7 +106,7 @@ export class CliBridge {
         } catch {
           // not json
         }
-        res({
+        finish({
           ok: code === 0,
           code: code === 0 ? "ok" : "NON_ZERO_EXIT",
           exitCode: code,
@@ -155,5 +176,19 @@ export class CliBridge {
       this.options.profileDir,
       "--json",
     ]);
+  }
+
+  async validateContact(cardPath: string): Promise<CliOutcome> {
+    // A negative confirmation reaches the CLI only after schema, expiry and signature checks.
+    // It deliberately leaves the profile unchanged while preserving the CLI as validation authority.
+    return this.execute([
+      "contact",
+      "import",
+      "--from",
+      cardPath,
+      "--profile",
+      this.options.profileDir,
+      "--json",
+    ], "no\n");
   }
 }

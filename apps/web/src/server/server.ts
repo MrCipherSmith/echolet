@@ -1,9 +1,12 @@
 import http from "node:http";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { resolve, extname, dirname, join } from "node:path";
+import { resolve, extname, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CliBridge, DEFAULT_CLI_PATH } from "./cliBridge";
+import { exportContactCard, importContactCardJson, validateContactCardJson } from "./contactCards";
+import { createStatusPayload, validationFailureHttpStatus } from "./stationApi";
+import { StationStatus } from "./stationStatus";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIST = resolve(HERE, "client");
@@ -60,6 +63,10 @@ const bridge = new CliBridge({
   storeKeyEnv: config.storeKeyEnv,
   relayUrl: config.relayUrl,
 });
+const stationStatus = new StationStatus({
+  doctor: () => bridge.doctor(),
+  relayUrl: config.relayUrl,
+});
 
 // Telemetry buffer for the Inspector panel
 interface TelemetryItem {
@@ -88,33 +95,25 @@ function logTelemetry(type: TelemetryItem["type"], message: string) {
 // SSE client tracking
 const sseClients: Set<http.ServerResponse> = new Set();
 
-function broadcastSSE(event: string, data: any) {
+function broadcastSSE(event: string, data: unknown) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const client of sseClients) {
     client.write(payload);
   }
 }
 
-// State cache
-let cachedProfile: any = null;
-let lastPingMs: number | null = null;
+function statusPayload() {
+  return createStatusPayload(config.label, stationStatus.snapshot());
+}
 
-async function checkRelayPing(): Promise<number | null> {
-  const start = Date.now();
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`${config.relayUrl}/health`, { signal: controller.signal });
-    clearTimeout(timeout);
-    if (res.ok) {
-      const ping = Date.now() - start;
-      lastPingMs = ping;
-      return ping;
-    }
-  } catch {
-    lastPingMs = null;
-  }
-  return null;
+function broadcastStatus() {
+  broadcastSSE("status", statusPayload());
+}
+
+function numericField(value: unknown, key: string): number | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  const field = (value as Record<string, unknown>)[key];
+  return typeof field === "number" && Number.isFinite(field) ? field : null;
 }
 
 // Background Auto-poller
@@ -124,8 +123,10 @@ async function pollLoop() {
   polling = true;
   try {
     const outcome = await bridge.poll();
+    stationStatus.recordPoll(outcome);
+    broadcastStatus();
     if (outcome.ok && outcome.data) {
-      const received = outcome.data.received ?? 0;
+      const received = numericField(outcome.data, "received") ?? 0;
       if (received > 0) {
         logTelemetry("success", `[Inbound] ${received} new encrypted message(s) downloaded from relay`);
         broadcastSSE("new_message", { received });
@@ -133,8 +134,9 @@ async function pollLoop() {
     } else if (!outcome.ok) {
       logTelemetry("warn", `[Poll Warning] ${outcome.code}`);
     }
-  } catch (err: any) {
-    logTelemetry("error", `[Poll Error] ${err.message}`);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown poll error";
+    logTelemetry("error", `[Poll Error] ${message}`);
   } finally {
     polling = false;
   }
@@ -143,12 +145,14 @@ async function pollLoop() {
 // Start intervals
 setInterval(pollLoop, 2500);
 setInterval(async () => {
-  const ping = await checkRelayPing();
-  if (ping !== null) {
-    broadcastSSE("ping", { ping, status: "healthy" });
+  await stationStatus.refreshRelayReachability();
+  const snapshot = statusPayload();
+  if (snapshot.pingMs !== null) {
+    broadcastSSE("ping", { ping: snapshot.pingMs, status: "reachable" });
   } else {
     broadcastSSE("ping", { ping: null, status: "unreachable" });
   }
+  broadcastStatus();
 }, 5000);
 
 // Initial bootstrap
@@ -157,18 +161,20 @@ setInterval(async () => {
   logTelemetry("info", `Profile store: ${config.profileDir}`);
   logTelemetry("info", `Target relay: ${config.relayUrl}`);
   
-  const ping = await checkRelayPing();
-  if (ping !== null) {
-    logTelemetry("success", `Connected to Relay: ${ping}ms latency`);
+  await stationStatus.refreshRelayReachability();
+  const snapshot = statusPayload();
+  if (snapshot.pingMs !== null) {
+    logTelemetry("success", `Relay reachable: ${snapshot.pingMs}ms latency`);
   } else {
     logTelemetry("warn", `Relay unreachable or checking...`);
   }
 
-  const doc = await bridge.doctor();
-  if (doc.ok) {
-    cachedProfile = doc.data;
-    logTelemetry("crypto", `Identity verified: ${doc.data.identity_id?.substring(0, 16)}...`);
-    logTelemetry("info", `Pinned contacts count: ${doc.data.contact_count ?? 0}`);
+  await stationStatus.refreshProfile();
+  const profile = statusPayload().profile;
+  const identityId = typeof profile?.identity_id === "string" ? profile.identity_id : "";
+  if (profile) {
+    logTelemetry("crypto", `Identity verified: ${identityId.substring(0, 16)}...`);
+    logTelemetry("info", `Pinned contacts count: ${numericField(profile, "contact_count") ?? 0}`);
   }
 })();
 
@@ -183,19 +189,58 @@ const MIME_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
 };
 
-async function readBody(req: http.IncomingMessage): Promise<any> {
+const MAX_JSON_BODY_BYTES = 128 * 1024;
+
+class RequestBodyError extends Error {
+  constructor(readonly statusCode: number, readonly code: string, message: string) {
+    super(message);
+  }
+}
+
+async function readBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((res, rej) => {
     let body = "";
-    req.on("data", (chunk) => (body += chunk));
+    let bytes = 0;
+    let settled = false;
+    req.on("data", (chunk: Buffer) => {
+      if (settled) return;
+      bytes += chunk.length;
+      if (bytes > MAX_JSON_BODY_BYTES) {
+        settled = true;
+        req.resume();
+        rej(new RequestBodyError(413, "PAYLOAD_TOO_LARGE", "JSON body exceeds 128 KiB"));
+        return;
+      }
+      body += chunk.toString("utf8");
+    });
     req.on("end", () => {
+      if (settled) return;
       try {
-        res(body ? JSON.parse(body) : {});
-      } catch (err) {
-        rej(err);
+        const parsed: unknown = body ? JSON.parse(body) : {};
+        if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+          rej(new RequestBodyError(400, "INVALID_JSON_BODY", "JSON body must be an object"));
+          return;
+        }
+        res(parsed as Record<string, unknown>);
+      } catch {
+        rej(new RequestBodyError(400, "INVALID_JSON_BODY", "JSON body is malformed"));
       }
     });
     req.on("error", rej);
   });
+}
+
+function writeJson(res: http.ServerResponse, statusCode: number, value: unknown): void {
+  res.writeHead(statusCode, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(value));
+}
+
+function writeRequestError(res: http.ServerResponse, error: unknown): void {
+  if (error instanceof RequestBodyError) {
+    writeJson(res, error.statusCode, { ok: false, code: error.code, error: error.message });
+    return;
+  }
+  writeJson(res, 500, { ok: false, code: "INTERNAL_ERROR", error: "Request failed" });
 }
 
 const server = http.createServer(async (req, res) => {
@@ -220,26 +265,22 @@ const server = http.createServer(async (req, res) => {
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     });
-    res.write("\n");
+    res.write(`event: status\ndata: ${JSON.stringify(statusPayload())}\n\n`);
     sseClients.add(res);
     req.on("close", () => sseClients.delete(res));
     return;
   }
 
   if (pathname === "/api/status" && req.method === "GET") {
-    if (!cachedProfile) {
-      const doc = await bridge.doctor();
-      if (doc.ok) cachedProfile = doc.data;
-    }
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({
+    await Promise.all([
+      stationStatus.refreshProfile(),
+      stationStatus.refreshRelayReachability(),
+    ]);
+    writeJson(res, 200, {
       ok: true,
-      label: config.label,
-      profile: cachedProfile,
-      relayUrl: config.relayUrl,
-      pingMs: lastPingMs,
+      ...statusPayload(),
       telemetry: telemetryLogs.slice(-50),
-    }));
+    });
     return;
   }
 
@@ -259,13 +300,15 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/send" && req.method === "POST") {
     try {
       const body = await readBody(req);
-      if (!body.to || !body.text) {
+      const to = typeof body.to === "string" ? body.to : "";
+      const text = typeof body.text === "string" ? body.text : "";
+      if (!to || !text) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: false, error: "Missing 'to' or 'text'" }));
         return;
       }
-      logTelemetry("crypto", `Encrypting message via Double Ratchet for recipient ${body.to.substring(0, 12)}...`);
-      const outcome = await bridge.send(body.to, body.text);
+      logTelemetry("crypto", `Encrypting message via Double Ratchet for recipient ${to.substring(0, 12)}...`);
+      const outcome = await bridge.send(to, text);
       if (outcome.ok) {
         logTelemetry("success", `[Outbound] Envelope delivered to relay (status: ${outcome.data?.status})`);
         broadcastSSE("outbound_sent", outcome.data);
@@ -295,48 +338,65 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/contacts/export" && req.method === "GET") {
-    const tmpOut = resolve(config.profileDir, "../export-temp.json");
-    const outcome = await bridge.exportContact(tmpOut);
-    if (outcome.ok && existsSync(tmpOut)) {
-      const cardJson = await readFile(tmpOut, "utf8");
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(cardJson);
+    const result = await exportContactCard(bridge);
+    if (result.ok) {
+      writeJson(res, 200, result.data.card);
       return;
     }
-    res.writeHead(500, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(outcome));
+    logTelemetry("error", `Contact export failed: ${result.code}`);
+    writeJson(res, 500, { ok: false, code: result.code, error: result.message });
+    return;
+  }
+
+  if (pathname === "/api/contacts/validate" && req.method === "POST") {
+    try {
+      const body = await readBody(req);
+      const result = await validateContactCardJson(bridge, body.cardJson);
+      if (!result.ok) {
+        writeJson(res, validationFailureHttpStatus(result.code), {
+          ok: false,
+          code: result.code,
+          error: result.message,
+        });
+        return;
+      }
+      writeJson(res, 200, { ok: true, data: { preview: result.data.preview } });
+    } catch (error: unknown) {
+      writeRequestError(res, error);
+    }
     return;
   }
 
   if (pathname === "/api/contacts/import" && req.method === "POST") {
     try {
       const body = await readBody(req);
-      let cardPath = body.cardPath;
-      if (body.cardJson) {
-        cardPath = resolve(config.profileDir, "../import-temp.json");
-        await writeFile(cardPath, typeof body.cardJson === "string" ? body.cardJson : JSON.stringify(body.cardJson), "utf8");
+      if (body.cardJson === undefined) {
+        writeJson(res, 400, { ok: false, code: "MISSING_CONTACT_CARD", error: "Missing cardJson" });
+        return;
       }
-      if (!cardPath) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: false, error: "Missing cardPath or cardJson" }));
+      if (body.confirmed !== true) {
+        writeJson(res, 409, { ok: false, code: "CONFIRMATION_REQUIRED", error: "Confirm the validated contact card before import" });
         return;
       }
       logTelemetry("crypto", `Verifying contact card cryptographic signatures...`);
-      const outcome = await bridge.importContact(cardPath);
-      if (outcome.ok) {
+      const result = await importContactCardJson(bridge, body.cardJson);
+      if (result.ok) {
         logTelemetry("success", `Contact trusted & added to secure address book`);
-        // Refresh doctor cache
-        const doc = await bridge.doctor();
-        if (doc.ok) cachedProfile = doc.data;
+        await stationStatus.refreshProfile();
         broadcastSSE("contact_added", {});
+        broadcastStatus();
       } else {
-        logTelemetry("error", `Contact import failed: ${outcome.code}`);
+        logTelemetry("error", `Contact import failed: ${result.code}`);
       }
-      res.writeHead(outcome.ok ? 200 : 500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(outcome));
-    } catch (err: any) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: false, error: err.message }));
+      writeJson(
+        res,
+        result.ok ? 200 : result.code === "INVALID_CONTACT_CARD" || result.code === "TRUST_FAILURE" ? 400 : 500,
+        result.ok
+          ? { ok: true, code: "ok", data: { preview: result.data.preview } }
+          : { ok: false, code: result.code, error: result.message },
+      );
+    } catch (error: unknown) {
+      writeRequestError(res, error);
     }
     return;
   }
