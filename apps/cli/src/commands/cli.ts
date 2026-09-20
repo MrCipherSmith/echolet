@@ -481,8 +481,54 @@ function writeResult(value: unknown): void {
 }
 
 async function main(): Promise<number> {
+  const rawArgs = process.argv.slice(2);
+
+  // --- LAYERED DISPATCHER (High-level operator commands) ---
+  const first = rawArgs[0];
+  if (!first || first === "--help" || first === "-h" || first === "help") {
+    const { printHelp } = await import("../operator/banner.js");
+    printHelp();
+    return 0;
+  }
+
+  if (first === "station") {
+    const { handleStationCommand } = await import("../operator/station.js");
+    await handleStationCommand(rawArgs.slice(1));
+    return 0;
+  }
+
+  if (first === "repeater") {
+    const { handleRepeaterCommand } = await import("../operator/repeater.js");
+    await handleRepeaterCommand(rawArgs.slice(1));
+    return 0;
+  }
+
+  if (first === "profile") {
+    const { handleProfileCommand } = await import("../operator/profile.js");
+    await handleProfileCommand(rawArgs.slice(1));
+    return 0;
+  }
+
+  if (first === "contact" && rawArgs[1] !== "export" && rawArgs[1] !== "import") {
+    const { handleContactCommand } = await import("../operator/contact.js");
+    await handleContactCommand(rawArgs.slice(1));
+    return 0;
+  }
+
+  if (first === "radio" || first === "tui") {
+    const { dirname, resolve } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const { spawn } = await import("node:child_process");
+    const here = dirname(fileURLToPath(import.meta.url));
+    const tuiScript = resolve(here, "tui.js");
+    const child = spawn(process.execPath, [tuiScript, ...rawArgs.slice(1)], { stdio: "inherit" });
+    await new Promise((res) => child.on("exit", res));
+    return 0;
+  }
+  // --- END LAYERED DISPATCHER (Falls through to strict protocol parser) ---
+
   try {
-    const parsed = parseCommand(process.argv.slice(2));
+    const parsed = parseCommand(rawArgs);
     rejectUnexpectedMissing(parsed.command, parsed.values);
     // Resolved HERE rather than inside `execute` so that a missing or oversized body is still an
     // argument failure reported before the profile is opened — the ordering

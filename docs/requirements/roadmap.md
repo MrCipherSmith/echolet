@@ -9,6 +9,7 @@ This index tracks implementation-facing requirements packages. It complements th
 
 | Package | Status | Capability | Runtime state |
 |---|---|---|---|
+| [Echolet CLI](echolet-cli/README.md) | spec ready | Global NPM installation, ~/.echolet isolated storage, CLI Layered Dispatcher, and Docker repeater deployment | Planned |
 | [Echolet CLI prototype](echolet-cli-prototype/README.md) | spec ready | Two computer clients exchange encrypted text through the local relay and recover after restart | Partially implemented prerequisites; CLI, relay v2 allocation, and end-to-end flow are planned |
 
 ## Ordering
