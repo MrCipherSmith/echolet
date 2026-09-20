@@ -1,0 +1,40 @@
+# Flow Journal
+
+- 2026-09-20T08:53:34.040Z - flow created
+- 2026-09-20T08:53:54.015Z - frozen: 8 criteria; checksum recorded
+- 2026-09-20T08:53:57.214Z - started
+- 2026-09-20T08:54:05.110Z - task-done: T1: Collect remaining context
+- 2026-09-20T08:54:05.193Z - task-done: T2: Implement per plan
+- 2026-09-20T08:54:05.274Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-20T08:54:05.357Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-20T08:54:09.626Z - task-added: T5: Core storage module globalPaths.ts (0700/0600 permissions)
+- 2026-09-20T08:54:09.706Z - task-added: T6: Daemon lifecycle manager daemon.ts (PID and Unix/Win kill)
+- 2026-09-20T08:54:09.790Z - task-added: T7: Dynamic CLI resolution in cliBridge.ts
+- 2026-09-20T08:54:09.873Z - task-added: T8: Operator profile commands (apps/cli/src/operator/profile.ts)
+- 2026-09-20T08:54:09.953Z - task-added: T9: Operator contact commands (apps/cli/src/operator/contact.ts)
+- 2026-09-20T08:54:10.035Z - task-added: T10: Operator station commands (apps/cli/src/operator/station.ts)
+- 2026-09-20T08:54:10.116Z - task-added: T11: Operator repeater commands (apps/cli/src/operator/repeater.ts)
+- 2026-09-20T08:54:10.262Z - task-added: T12: Layered Dispatcher facade in cli.ts
+- 2026-09-20T08:54:10.346Z - task-added: T13: Full Vitest test suite and NPM packaging verification
+- 2026-09-20T08:54:19.835Z - task-attempt: T5: started (attempt 1) — 005-T5
+- 2026-09-20T08:54:19.917Z - task-attempt: T6: started (attempt 1) — 005-T6
+- 2026-09-20T08:54:19.999Z - task-attempt: T7: started (attempt 1) — 005-T7
+- 2026-09-20T08:57:47.976Z - task-done: T5: Core storage module globalPaths.ts (0700/0600 permissions)
+- 2026-09-20T08:59:09.966Z - task-done: T6: Daemon lifecycle manager daemon.ts (PID and Unix/Win kill)
+- 2026-09-20T09:04:28.559Z - task-done: T7: Dynamic CLI resolution in cliBridge.ts
+- 2026-09-20T09:06:14.434Z - task-done: T8: Operator profile commands (apps/cli/src/operator/profile.ts)
+- 2026-09-20T09:06:14.538Z - task-done: T9: Operator contact commands (apps/cli/src/operator/contact.ts)
+- 2026-09-20T09:06:14.631Z - task-done: T10: Operator station commands (apps/cli/src/operator/station.ts)
+- 2026-09-20T09:06:14.734Z - task-done: T11: Operator repeater commands (apps/cli/src/operator/repeater.ts)
+- 2026-09-20T09:06:23.993Z - task-attempt: T12: started (attempt 1) — 005-T12
+- 2026-09-20T09:09:39.884Z - task-done: T12: Layered Dispatcher facade in cli.ts
+- 2026-09-20T09:09:50.487Z - task-attempt: T13: started (attempt 1) — 005-T13
+- 2026-09-20T09:15:58.782Z - task-done: T13: Full Vitest test suite and NPM packaging verification
+- 2026-09-20T09:16:12.294Z - ac-confirmed: AC1: globalPaths.ts enforces 0700/0600; 9/9 unit tests pass
+- 2026-09-20T09:16:12.379Z - ac-confirmed: AC2: daemon.ts handles PID lifecycle and SIGTERM/taskkill; 6/6 tests pass
+- 2026-09-20T09:16:12.461Z - ac-confirmed: AC3: Layered Dispatcher in cli.ts; all 7 cli.test.ts pass and unknown commands return exit 2
+- 2026-09-20T09:16:12.541Z - ac-confirmed: AC4: cliBridge.ts resolves via ECHOLET_CLI_PATH with cascading fallback; web build passes
+- 2026-09-20T09:16:12.620Z - ac-confirmed: AC5: station.ts implements setup, start, stop, status, open
+- 2026-09-20T09:16:12.695Z - ac-confirmed: AC6: repeater.ts defaults to Docker setup and manages lifecycle
+- 2026-09-20T09:16:12.774Z - ac-confirmed: AC7: Vitest test suite: 81 files passed, 538 tests passed, 0 failures
+- 2026-09-20T09:16:12.854Z - ac-confirmed: AC8: apps/cli bundle:web bundles web-dist; npm pack dry run packages 33 files (33.8MB unpacked)

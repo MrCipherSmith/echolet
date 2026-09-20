@@ -17,7 +17,11 @@
     "gate:range": "sh scripts/gate/pushed-range.sh",
     "gate:selftest": "sh scripts/gate/selftest.sh",
     "mobile:start": "pnpm --filter @echolet/mobile start",
-    "relay:dev": "go run ./apps/relay/cmd/relay"
+    "relay:dev": "go run ./apps/relay/cmd/relay",
+    "web:build": "node apps/web/build.mjs",
+    "web:start": "bash scripts/start-web.sh",
+    "web:alice": "sh scripts/run-web-alice.sh",
+    "web:bob": "sh scripts/run-web-bob.sh"
   },
   "devDependencies": {
     "eslint": "9.22.0",
