@@ -3,8 +3,13 @@
   "version": "0.1.0",
   "private": false,
   "type": "module",
-  "engines": { "node": ">=22.13" },
-  "bin": { "echolet": "./dist/cli.js", "echolet-tui": "./dist/tui.js" },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "bin": {
+    "echolet": "./dist/cli.js",
+    "echolet-tui": "./dist/tui.js"
+  },
   "files": [
     "dist",
     "web-dist"
@@ -14,7 +19,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/MrCipherSmith/echolet.git"
+    "url": "git+https://github.com/MrCipherSmith/echolet.git"
   },
   "scripts": {
     "build": "node build.mjs",
