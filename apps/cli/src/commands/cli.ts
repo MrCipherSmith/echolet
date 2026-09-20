@@ -483,10 +483,12 @@ function writeResult(value: unknown): void {
 async function main(): Promise<number> {
   const rawArgs = process.argv.slice(2);
 
+declare const __CLI_VERSION__: string | undefined;
+
   // --- LAYERED DISPATCHER (High-level operator commands) ---
   const first = rawArgs[0];
   if (first === "--version" || first === "-v" || first === "version") {
-    console.log("0.1.0");
+    console.log(typeof __CLI_VERSION__ !== "undefined" ? __CLI_VERSION__ : "0.1.1");
     return 0;
   }
 
