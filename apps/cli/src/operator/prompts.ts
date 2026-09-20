@@ -1,15 +1,39 @@
-import { createInterface } from "node:readline/promises";
+import { createInterface, type Interface } from "node:readline";
 import { stdin as input, stdout as output } from "node:process";
 
-export async function ask(question: string, defaultValue = ""): Promise<string> {
-  const rl = createInterface({ input, output });
-  const promptText = defaultValue ? `${question} [${defaultValue}]: ` : `${question}: `;
-  try {
-    const answer = await rl.question(promptText);
-    return answer.trim() || defaultValue;
-  } finally {
-    rl.close();
+let sharedRl: Interface | null = null;
+let sharedIterator: AsyncIterator<string> | null = null;
+
+export function getReadline(): { rl: Interface; iterator: AsyncIterator<string> } {
+  if (!sharedRl) {
+    sharedRl = createInterface({ input, output });
+    sharedIterator = sharedRl[Symbol.asyncIterator]();
+    sharedRl.on("close", () => {
+      sharedRl = null;
+      sharedIterator = null;
+    });
   }
+  return { rl: sharedRl, iterator: sharedIterator! };
+}
+
+export function closeReadline(): void {
+  if (sharedRl) {
+    sharedRl.close();
+    sharedRl = null;
+    sharedIterator = null;
+  }
+}
+
+export async function ask(question: string, defaultValue = ""): Promise<string> {
+  const { rl, iterator } = getReadline();
+  const promptText = defaultValue ? `${question} [${defaultValue}]: ` : `${question}: `;
+  rl.setPrompt(promptText);
+  rl.prompt();
+  const { value, done } = await iterator.next();
+  if (done || typeof value !== "string" || !value.trim()) {
+    return defaultValue;
+  }
+  return value.trim();
 }
 
 export async function confirm(question: string, defaultYes = true): Promise<boolean> {

@@ -1,6 +1,8 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-09T09:35:06.144Z",
+  "generatedAt": "2026-09-20T12:04:28.376Z",
+  "status": "complete",
+  "incompleteReasons": [],
   "frameworks": [
     "vitest"
   ],
@@ -22,6 +24,7 @@
     "apps/cli/tsconfig.json",
     "apps/cli/vitest.config.ts",
     "apps/mobile/tsconfig.json",
+    "apps/web/tsconfig.json",
     "packages/client-core/tsconfig.json",
     "packages/client-db/tsconfig.json",
     "packages/crypto-core/tsconfig.json",
@@ -40,6 +43,8 @@
     "apps/cli/src/commands/cli.senderQuota.test.ts",
     "apps/cli/src/commands/cli.test.ts",
     "apps/cli/src/runtime/config.test.ts",
+    "apps/cli/src/runtime/daemon.test.ts",
+    "apps/cli/src/runtime/globalPaths.test.ts",
     "apps/cli/src/runtime/inbound.batchIsolation.test.ts",
     "apps/cli/src/runtime/inbound.pollBatchSize.test.ts",
     "apps/cli/src/runtime/inbound.pollProgress.test.ts",
@@ -89,7 +94,9 @@
     "apps/cli/src/tui/tui-shell.inputTrustExclusion.test.ts",
     "apps/cli/src/tui/tui-shell.inputViewport.test.ts",
     "apps/cli/src/tui/tui-shell.keystrokeDispatch.test.ts",
+    "apps/cli/src/tui/tui-shell.namedWayOut.test.ts",
     "apps/cli/src/tui/tui-shell.outcomeEscape.test.ts",
+    "apps/cli/src/tui/tui-shell.quitWithChildInFlight.test.ts",
     "apps/cli/src/tui/tui-shell.registration.test.ts",
     "apps/cli/src/tui/tui-shell.singleFlight.test.ts",
     "apps/cli/src/tui/tui-shell.smallViewport.test.ts",
@@ -122,7 +129,10 @@
     "packages/session-node/src/SignalClient.test.ts",
     "packages/session-node/src/wire.test.ts"
   ],
-  "ciFiles": [],
+  "ciFiles": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/release.yml"
+  ],
   "instructionFiles": [
     "AGENTS.md",
     "CLAUDE.md",
@@ -143,6 +153,7 @@
     "docs/PROTOCOL-30_SIGNAL_BUNDLE_V2.md",
     "docs/README.md",
     "docs/REP-02_REPEATER_NODE.md",
+    "docs/REPEATER_DEPLOYMENT_RU.md",
     "docs/RFC-18_CRYPTO_SELECTION.md",
     "docs/RUNBOOK-22_DEMO_DAY.md",
     "docs/SEC-01_IDENTITY.md",
@@ -168,6 +179,12 @@
     "docs/requirements/echolet-cli-prototype/prd.md",
     "docs/requirements/echolet-cli-prototype/runbook.md",
     "docs/requirements/echolet-cli-prototype/specification.md",
+    "docs/requirements/echolet-cli/README.md",
+    "docs/requirements/echolet-cli/prd.md",
+    "docs/requirements/echolet-cli/specification.md",
+    "docs/requirements/echolet-web-skins-2026-09-19/ai/echolet-web-skins.md",
+    "docs/requirements/echolet-web-skins-2026-09-19/en/echolet-web-skins.md",
+    "docs/requirements/echolet-web-skins-2026-09-19/ru/echolet-web-skins.md",
     "docs/requirements/roadmap.md"
   ],
   "conventions": [
@@ -202,7 +219,5 @@
     "docs/CHANGE-24_SPEC_CHANGE_CONTROL.md: 4. после docs update обновить tests/taskpacks;",
     "docs/CHANGE-24_SPEC_CHANGE_CONTROL.md: Affected docs: SEC-01, REP-02, APP-03, STORY-04, PLAN-05, PROTOCOL-07, THREAT-08, API-11, DELIVERY-13, STACK-14, RFC-18, OPS-23, BOARD-27, TEST-16, status entrypoints and linked taskpack prerequisites."
   ],
-  "recommendations": [
-    "No CI test workflow detected. Add CI gate separately from local Metaproject hooks."
-  ]
+  "recommendations": []
 }

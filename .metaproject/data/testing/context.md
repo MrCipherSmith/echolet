@@ -1,6 +1,7 @@
 # Testing Context
 
-generatedAt: 2026-09-09T09:35:06.144Z
+generatedAt: 2026-09-20T12:04:28.376Z
+status: complete
 
 ## Frameworks
 
@@ -17,6 +18,7 @@ generatedAt: 2026-09-09T09:35:06.144Z
 - apps/cli/tsconfig.json
 - apps/cli/vitest.config.ts
 - apps/mobile/tsconfig.json
+- apps/web/tsconfig.json
 - packages/client-core/tsconfig.json
 - packages/client-db/tsconfig.json
 - packages/crypto-core/tsconfig.json
@@ -36,6 +38,8 @@ generatedAt: 2026-09-09T09:35:06.144Z
 - apps/cli/src/commands/cli.senderQuota.test.ts
 - apps/cli/src/commands/cli.test.ts
 - apps/cli/src/runtime/config.test.ts
+- apps/cli/src/runtime/daemon.test.ts
+- apps/cli/src/runtime/globalPaths.test.ts
 - apps/cli/src/runtime/inbound.batchIsolation.test.ts
 - apps/cli/src/runtime/inbound.pollBatchSize.test.ts
 - apps/cli/src/runtime/inbound.pollProgress.test.ts
@@ -85,7 +89,9 @@ generatedAt: 2026-09-09T09:35:06.144Z
 - apps/cli/src/tui/tui-shell.inputTrustExclusion.test.ts
 - apps/cli/src/tui/tui-shell.inputViewport.test.ts
 - apps/cli/src/tui/tui-shell.keystrokeDispatch.test.ts
+- apps/cli/src/tui/tui-shell.namedWayOut.test.ts
 - apps/cli/src/tui/tui-shell.outcomeEscape.test.ts
+- apps/cli/src/tui/tui-shell.quitWithChildInFlight.test.ts
 - apps/cli/src/tui/tui-shell.registration.test.ts
 - apps/cli/src/tui/tui-shell.singleFlight.test.ts
 - apps/cli/src/tui/tui-shell.smallViewport.test.ts
@@ -102,16 +108,13 @@ generatedAt: 2026-09-09T09:35:06.144Z
 - apps/cli/test/e2e/publication-claimability.test.ts
 - apps/cli/test/e2e/relay-tls.test.ts
 - apps/cli/test/e2e/rewalk-crash-safety.test.ts
-- apps/cli/test/e2e/two-process.test.ts
-- apps/mobile/src/screens/MessagingScreen.test.mjs
-- packages/client-core/src/identity/createIdentityProfile.test.ts
-- packages/client-core/src/identity/createSignedPreKeyBundle.test.ts
 
-- ... 11 more
+- ... 15 more
 
 ## CI
 
-- none
+- .github/workflows/ci.yml
+- .github/workflows/release.yml
 
 ## Conventions
 
@@ -148,4 +151,4 @@ generatedAt: 2026-09-09T09:35:06.144Z
 
 ## Recommendations
 
-- No CI test workflow detected. Add CI gate separately from local Metaproject hooks.
+- none

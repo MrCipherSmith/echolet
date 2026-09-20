@@ -1,8 +1,8 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exec, spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   ensureEcholetDirs,
   getGlobalConfig,
@@ -11,12 +11,11 @@ import {
   getStoreKeyPath,
   getClientDbPath,
   getCardPath,
-  getProfileConfigPath,
   listProfiles,
   ensureKeyPermissions,
 } from "../runtime/globalPaths.js";
 import { startDaemon, stopDaemon, getDaemonStatus } from "../runtime/daemon.js";
-import { ask, confirm } from "./prompts.js";
+import { ask, confirm, closeReadline } from "./prompts.js";
 import { openProfile } from "../runtime/profile.js";
 import { openOutboundMessenger } from "../runtime/outbound.js";
 import { RelayClient } from "../transport/relayClient.js";
@@ -55,15 +54,23 @@ export async function handleStationCommand(args: string[]): Promise<void> {
     const callsign = await ask("Введите позывной станции (Callsign)", "Echo-Operator");
     const dir = getProfileDir(callsign);
 
-    if (existsSync(dir) && existsSync(getClientDbPath(callsign))) {
-      const overwrite = await confirm(`Станция "${callsign}" уже существует. Перезаписать ключи? (ВНИМАНИЕ: данные будут удалены)`, false);
-      if (!overwrite) {
-        console.log("Настройка отменена.");
-        return;
+    if (existsSync(dir)) {
+      if (existsSync(getClientDbPath(callsign))) {
+        const overwrite = await confirm(`Станция "${callsign}" уже существует. Перезаписать ключи? (ВНИМАНИЕ: данные будут удалены)`, false);
+        if (!overwrite) {
+          console.log("Настройка отменена.");
+          closeReadline();
+          return;
+        }
       }
+      rmSync(dir, { recursive: true, force: true });
     }
 
-    const relayUrl = await ask("URL ретранслятора/релея", "https://depr.tail5a88fb.ts.net:8443");
+    let relayUrl = (await ask("URL ретранслятора/релея", "https://depr.tail5a88fb.ts.net:8443")).trim();
+    try {
+      const u = new URL(relayUrl);
+      relayUrl = u.origin;
+    } catch {}
     mkdirSync(dir, { recursive: true, mode: 0o700 });
 
     const key = randomBytes(32);
@@ -75,13 +82,13 @@ export async function handleStationCommand(args: string[]): Promise<void> {
     console.log(`\n⏳ Генерация криптографических связок Double Ratchet & PreKeys...`);
     const profileConfig = {
       profile_version: 1,
-      profile_id: callsign,
+      profile_id: randomUUID(),
       relay_url: relayUrl,
       database_path: "client.sqlite",
       store_key_env: "ECHOLET_STORE_KEY",
       request_timeout_ms: 10000,
+      poll_batch_size: 20,
     };
-    writeFileSync(getProfileConfigPath(callsign), JSON.stringify(profileConfig, null, 2), { mode: 0o600 });
 
     process.env.ECHOLET_STORE_KEY = storeKeyBase64;
     const profile = await openProfile({
@@ -96,23 +103,23 @@ export async function handleStationCommand(args: string[]): Promise<void> {
       const cardPath = getCardPath(callsign);
       writeFileSync(cardPath, JSON.stringify(card, null, 2), { mode: 0o600 });
       console.log(`✅ Карточка абонента экспортирована: ${cardPath}`);
-
-      console.log(`⏳ Публикация пред-ключей (PreKeys) на релее...`);
-      try {
-        const messenger = await openOutboundMessenger({
-          profileDir: dir,
-          environment: process.env,
-          relay: new RelayClient({ baseUrl: relayUrl, timeoutMs: 10000 }),
-        });
-        await messenger.publish();
-        await messenger.close();
-        console.log(`✅ Связки успешно опубликованы на ретрансляторе!`);
-      } catch (err: any) {
-        console.warn(`⚠️ Не удалось опубликовать ключи на релее прямо сейчас: ${err.message}`);
-        console.warn(`(Станция опубликует их автоматически при первом подключении к сети)`);
-      }
     } finally {
       await profile.close();
+    }
+
+    console.log(`⏳ Публикация пред-ключей (PreKeys) на релее...`);
+    try {
+      const messenger = await openOutboundMessenger({
+        profileDir: dir,
+        environment: process.env,
+        relay: new RelayClient({ baseUrl: relayUrl, timeoutMs: 10000 }),
+      });
+      await messenger.publish();
+      await messenger.close();
+      console.log(`✅ Связки успешно опубликованы на ретрансляторе!`);
+    } catch (err: any) {
+      console.warn(`⚠️ Не удалось опубликовать ключи на релее прямо сейчас: ${err.message}`);
+      console.warn(`(Станция опубликует их автоматически при первом подключении к сети)`);
     }
 
     const globalCfg = getGlobalConfig();
@@ -121,6 +128,7 @@ export async function handleStationCommand(args: string[]): Promise<void> {
 
     console.log(`\n🎉 Станция "${callsign}" успешно создана и выбрана активной!`);
     console.log(`Запустите веб-клиент командой: echolet station start\n`);
+    closeReadline();
     return;
   }
 
