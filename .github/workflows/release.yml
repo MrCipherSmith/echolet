@@ -63,11 +63,21 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
+      # The push gate's JS step, not a bare `pnpm run test`: vitest 3.0.8 drops
+      # whole test-file reports when a starved worker misses its hardcoded 60 s
+      # onTaskUpdate RPC deadline (exit 1 with zero failing tests). The gate runs
+      # the suite exactly as before, then re-runs only the files that never
+      # reported, serially, and requires them green. A real failure still fails.
+      # See .metaproject/memory/constraints/vitest-3-0-8-loses-whole-test-file-reports-under-load.md
       - name: Run Tests (Vitest)
-        run: pnpm run test
+        run: sh scripts/gate/js-suite.sh "$GITHUB_WORKSPACE" ci
 
+      # Build only. prepublishOnly also runs the whole CLI suite, which would run
+      # it a second time in this job and double the exposure to the flake above.
       - name: Build CLI & Web Bundle
-        run: pnpm --filter @goodea/echolet run prepublishOnly
+        run: |
+          pnpm --filter @goodea/echolet run bundle:web
+          pnpm --filter @goodea/echolet run build
 
       - name: Build and smoke-test the packed artifact
         run: |
@@ -89,6 +99,9 @@ jobs:
           ./.release/prefix/bin/echolet --version
           echo "smoke-test: binary reports version"
 
+      # --ignore-scripts: tests and the build already ran above and the packed
+      # artifact was smoke-tested, so prepublishOnly would only re-run the whole
+      # suite a third time, where one lost report would abort the publish.
       - name: Publish to npm
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -96,10 +109,10 @@ jobs:
           cd apps/cli
           if [ -n "${NPM_TOKEN:-}" ]; then
             echo "Publishing using NPM_TOKEN secret..."
-            NODE_AUTH_TOKEN="$NPM_TOKEN" npm publish --provenance --access public
+            NODE_AUTH_TOKEN="$NPM_TOKEN" npm publish --provenance --access public --ignore-scripts
           else
             echo "Publishing using OIDC Trusted Publishing..."
-            npm publish --provenance --access public
+            npm publish --provenance --access public --ignore-scripts
           fi
 
       - name: Create GitHub Release

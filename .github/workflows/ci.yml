@@ -37,11 +37,21 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
+      # Build only. prepublishOnly also runs the whole CLI suite, which would run
+      # it a second time in this job and double the exposure to the flake above.
       - name: Build CLI & Web Bundle
-        run: pnpm --filter @goodea/echolet run prepublishOnly
+        run: |
+          pnpm --filter @goodea/echolet run bundle:web
+          pnpm --filter @goodea/echolet run build
 
+      # The push gate's JS step, not a bare `pnpm run test`: vitest 3.0.8 drops
+      # whole test-file reports when a starved worker misses its hardcoded 60 s
+      # onTaskUpdate RPC deadline (exit 1 with zero failing tests). The gate runs
+      # the suite exactly as before, then re-runs only the files that never
+      # reported, serially, and requires them green. A real failure still fails.
+      # See .metaproject/memory/constraints/vitest-3-0-8-loses-whole-test-file-reports-under-load.md
       - name: Run Tests (Vitest)
-        run: pnpm run test
+        run: sh scripts/gate/js-suite.sh "$GITHUB_WORKSPACE" ci
 
       - name: Set up Go
         uses: actions/setup-go@v5
