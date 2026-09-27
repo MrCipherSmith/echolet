@@ -115,6 +115,9 @@ func saveSignalV2Authorization(tx *badger.Txn, record *model.DeviceRecord) error
 	if !errors.Is(err, badger.ErrKeyNotFound) {
 		return err
 	}
+	if err := ensureDeviceCapacity(tx, record.IdentityID, record.DeviceID); err != nil {
+		return err
+	}
 	data, err := json.Marshal(record)
 	if err != nil {
 		return err

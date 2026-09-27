@@ -63,10 +63,10 @@ services:
       ECHOLET_CHALLENGE_TTL_SECONDS: "${ECHOLET_CHALLENGE_TTL_SECONDS:-60}"
       # Envelope retention is the store's own TTL — Badger expires records at
       # ECHOLET_MAILBOX_TTL_HOURS above — and needs no sweep interval. The relay's
-      # cleanup ticker deletes nothing, so no interval is offered here (flow 003,
-      # T28; removed rather than implemented behind a knob).
-      # Declared by the relay and enforced nowhere (T7 §6 R-3). Set here so the
-      # value is recorded, not because it bounds anything today.
+      # cleanup tick is fixed (value log GC + storage cap re-measurement), so no
+      # interval is offered here (flow 003, T28).
+      # Enforced: at this size on disk the write routes answer 507 STORAGE_FULL,
+      # while challenge, poll and ack stay open so mailboxes can drain.
       ECHOLET_MAX_STORAGE_BYTES: "${ECHOLET_MAX_STORAGE_BYTES:-2147483648}"
 
     volumes:

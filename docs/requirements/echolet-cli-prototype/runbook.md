@@ -291,8 +291,13 @@ fixed:
   three ordinary polls afterwards cost 4 pages. The attacker can still publish
   identities and enqueue the envelopes, because device-record publication is
   itself unauthenticated, and the recipient still pays that walk **once**; what
-  is closed is the amplification across polls. Relay disk consumption is still
-  unbounded (`ECHOLET_MAX_STORAGE_BYTES` is enforced nowhere).
+  is closed is the amplification across polls. Relay disk consumption is now
+  bounded: `ECHOLET_MAX_STORAGE_BYTES` is enforced on every write route (507
+  `STORAGE_FULL`, while challenge/poll/ack stay open so mailboxes can drain),
+  each cleanup tick runs the value log GC that actually returns expired bytes
+  to the disk, unredeemed challenges expire, and one identity may hold at most
+  16 device records. A flood can therefore fill the relay up to its cap, but
+  not past it.
 
 See [STATUS_CURRENT.md](../../STATUS_CURRENT.md) and the flow's final change
 report for the complete list.

@@ -11,11 +11,11 @@ import (
 func v2Error(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	code := "INTERNAL_ERROR"
-	for _, candidate := range []error{model.ErrV2Schema, model.ErrV2Signature, model.ErrV2Expired, model.ErrV2BundleConflict, model.ErrV2ClaimConflict, model.ErrV2PreKeyReused, model.ErrV2Unavailable} {
+	for _, candidate := range []error{model.ErrV2Schema, model.ErrV2Signature, model.ErrV2Expired, model.ErrV2BundleConflict, model.ErrV2ClaimConflict, model.ErrV2PreKeyReused, model.ErrV2Unavailable, model.ErrTooManyDevices} {
 		if errors.Is(err, candidate) {
 			code = candidate.Error()
 			switch candidate {
-			case model.ErrV2BundleConflict, model.ErrV2ClaimConflict, model.ErrV2PreKeyReused:
+			case model.ErrV2BundleConflict, model.ErrV2ClaimConflict, model.ErrV2PreKeyReused, model.ErrTooManyDevices:
 				status = http.StatusConflict
 			case model.ErrV2Unavailable:
 				status = http.StatusNotFound

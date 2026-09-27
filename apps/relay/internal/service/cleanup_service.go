@@ -12,8 +12,10 @@ import (
 //
 // It is a constant rather than a setting on purpose. ECHOLET_CLEANUP_INTERVAL_SECONDS
 // was removed from the operator surface (flow 003, T28) and then from
-// config.Config itself (T33), because runCleanup() sweeps nothing - retention is
-// Badger's own TTL - so an operator tuning this number would be tuning nothing.
+// config.Config itself (T33): retention is Badger's own TTL, and the tick only
+// reclaims the disk space expired values leave behind and re-measures the
+// storage cap, so an operator tuning this number would be tuning nothing
+// they could observe.
 // The value is the 60 seconds that variable defaulted to, so the relay's
 // behaviour is unchanged; it simply lives with the service that owns the ticker.
 // It is positive by construction, which is also what stops a Config nobody filled
@@ -25,6 +27,12 @@ type CleanupService struct {
 	challengeRepo *repository.ChallengeRepository
 	intervalSec   int
 	mailboxTTL    time.Duration
+
+	// maintenance runs on every tick, in order. It is set once, before Start,
+	// by the router (value log GC, then the storage cap re-measurement); a
+	// service built without it - as the ticker tests build it - ticks and does
+	// nothing.
+	maintenance []func()
 
 	// mu guards the two channels below, which exist only between a Start and
 	// the Stop that answers it. Start and Stop are called from different
@@ -54,6 +62,12 @@ func NewCleanupService(
 		intervalSec:   intervalSec,
 		mailboxTTL:    time.Duration(mailboxTTLHours) * time.Hour,
 	}
+}
+
+// SetMaintenance installs the work each tick performs. It must be called
+// before Start: the ticker goroutine reads the slice without a lock.
+func (s *CleanupService) SetMaintenance(tasks ...func()) {
+	s.maintenance = tasks
 }
 
 // Start launches the cleanup ticker. It is a no-op on a service that is already
@@ -117,7 +131,8 @@ func (s *CleanupService) Stop() {
 
 func (s *CleanupService) runCleanup() {
 	slog.Debug("Running cleanup...")
-	// BadgerDB handles TTL automatically, but we can add custom cleanup logic here
-	// For MVP, BadgerDB's built-in TTL is sufficient for mailbox envelopes
+	for _, task := range s.maintenance {
+		task()
+	}
 	slog.Debug("Cleanup completed")
 }

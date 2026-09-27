@@ -71,6 +71,20 @@ func NewRouter(cfg config.Config, st *storage.Storage) *Router {
 	// it from a Config field meant a Config nobody filled in reached
 	// time.NewTicker with a zero and panicked here.
 	cleanupSvc := service.NewCleanupService(mailboxRepo, challengeRepo, service.DefaultCleanupIntervalSeconds, cfg.MailboxTTLHours)
+
+	// The storage cap guards every route that adds data. It is measured once
+	// here and then on every cleanup tick, right after the value log GC has
+	// given back whatever expired values were holding.
+	storageQuota := middleware.NewStorageQuota(cfg.MaxStorageBytes, st.DiskUsage)
+	storageQuota.Refresh()
+	cleanupSvc.SetMaintenance(
+		func() {
+			if err := st.CollectGarbage(); err != nil {
+				slog.Warn("value log garbage collection failed", "error", err)
+			}
+		},
+		storageQuota.Refresh,
+	)
 	cleanupSvc.Start()
 
 	// Initialize handlers
@@ -87,20 +101,27 @@ func NewRouter(cfg config.Config, st *storage.Storage) *Router {
 		fmt.Fprintf(w, `{"ok":true,"data":{"status":"healthy","uptime_ms":%d}}`, uptimeMs)
 	})
 
+	// Routes that add data to the store are refused once it is full. Challenge,
+	// poll and ack are deliberately outside: draining a mailbox is how space
+	// comes back.
+	writes := r.With(storageQuota.Middleware)
+
 	// Device Record routes
-	r.Post("/v1/device-records/publish", deviceRecordHandler.PublishDeviceRecord)
+	writes.Post("/v1/device-records/publish", deviceRecordHandler.PublishDeviceRecord)
 
 	// PreKey Bundle routes
-	r.Post("/v1/prekeys/publish", preKeyBundleHandler.PublishPreKeyBundle)
-	r.Post("/v2/prekeys/publish", preKeyBundleHandler.PublishSignalPreKeyBundleV2)
-	r.Post("/v2/prekeys/claim", preKeyBundleHandler.ClaimSignalPreKeyBundleV2)
+	writes.Post("/v1/prekeys/publish", preKeyBundleHandler.PublishPreKeyBundle)
+	writes.Post("/v2/prekeys/publish", preKeyBundleHandler.PublishSignalPreKeyBundleV2)
+	writes.Post("/v2/prekeys/claim", preKeyBundleHandler.ClaimSignalPreKeyBundleV2)
 	r.Get("/v1/prekeys/{identityID}", func(w http.ResponseWriter, r *http.Request) {
 		identityID := chi.URLParam(r, "identityID")
 		preKeyBundleHandler.GetPreKeyBundles(w, r, identityID)
 	})
 
 	// Mailbox routes
-	r.Post("/v1/messages/send", mailboxHandler.SendEnvelope)
+	writes.Post("/v1/messages/send", mailboxHandler.SendEnvelope)
+	// The challenge is the first step of every poll and ack, so it stays open on
+	// a full relay; its own storage TTL is what bounds it.
 	r.Post("/v1/mailbox/challenge", mailboxHandler.CreateChallenge)
 	r.Post("/v1/mailbox/poll", mailboxHandler.PollMailbox)
 	r.Post("/v1/mailbox/ack", mailboxHandler.AckMailbox)

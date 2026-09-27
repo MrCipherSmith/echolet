@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"echolet/apps/relay/internal/model"
@@ -54,6 +55,11 @@ func (h *DeviceRecordHandler) PublishDeviceRecord(w http.ResponseWriter, r *http
 	}
 
 	if err := h.service.PublishDeviceRecord(req.DeviceRecord); err != nil {
+		if errors.Is(err, model.ErrTooManyDevices) {
+			writeJSONError(w, http.StatusConflict, model.ErrTooManyDevices.Error(),
+				"identity already holds the maximum number of devices")
+			return
+		}
 		writeJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to save device record")
 		return
 	}
