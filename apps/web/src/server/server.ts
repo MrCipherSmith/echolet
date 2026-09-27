@@ -5,6 +5,7 @@ import { resolve, extname, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CliBridge, DEFAULT_CLI_PATH } from "./cliBridge";
 import { exportContactCard, importContactCardJson, validateContactCardJson } from "./contactCards";
+import { checkApiRequest, checkHost, STATION_BIND_HOST } from "./requestGuard";
 import { createStatusPayload, validationFailureHttpStatus } from "./stationApi";
 import { StationStatus } from "./stationStatus";
 
@@ -244,18 +245,23 @@ function writeRequestError(res: http.ServerResponse, error: unknown): void {
 }
 
 const server = http.createServer(async (req, res) => {
+  const hostRejection = checkHost(req.headers, config.port);
+  if (hostRejection) {
+    writeJson(res, hostRejection.status, { ok: false, code: hostRejection.code, error: hostRejection.error });
+    return;
+  }
+
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
   const pathname = url.pathname;
 
-  // CORS headers for local dev flexibility
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    res.writeHead(204);
-    res.end();
-    return;
+  // No CORS headers: the station serves its own page, so every legitimate API
+  // call is same-origin and a cross-origin preflight must fail.
+  if (pathname.startsWith("/api/")) {
+    const apiRejection = checkApiRequest(req.method, req.headers, config.port);
+    if (apiRejection) {
+      writeJson(res, apiRejection.status, { ok: false, code: apiRejection.code, error: apiRejection.error });
+      return;
+    }
   }
 
   // --- API Routes ---
@@ -429,7 +435,7 @@ const server = http.createServer(async (req, res) => {
   res.end("Not Found");
 });
 
-server.listen(config.port, () => {
+server.listen(config.port, STATION_BIND_HOST, () => {
   console.log(`\n=====================================================`);
   console.log(`  ECHOLET WEB CLIENT — ${config.label}`);
   console.log(`=====================================================`);
