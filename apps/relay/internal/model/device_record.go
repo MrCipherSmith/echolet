@@ -1,5 +1,11 @@
 package model
 
+import "errors"
+
+// ErrTooManyDevices refuses a new device for an identity that already holds
+// repository.MaxDevicesPerIdentity device records.
+var ErrTooManyDevices = errors.New("DEVICE_LIMIT_REACHED")
+
 type DeviceRecord struct {
 	Type         string          `json:"type"`
 	Version      int             `json:"version"`

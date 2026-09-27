@@ -8,7 +8,52 @@ import (
 
 	"echolet/apps/relay/internal/model"
 	"echolet/apps/relay/internal/storage"
+
+	"github.com/dgraph-io/badger/v4"
 )
+
+func TestChallengeIsStoredWithATTLBoundedByItsOwnExpiry(t *testing.T) {
+	st, err := storage.NewStorage(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	repo := NewChallengeRepository(st)
+
+	before := time.Now()
+	challenge := &model.MailboxChallenge{ChallengeID: "unredeemed", ExpiresAtMs: before.Add(time.Minute).UnixMilli()}
+	if err := repo.Save(challenge); err != nil {
+		t.Fatal(err)
+	}
+
+	var expiresAt uint64
+	if err := st.DB().View(func(txn *badger.Txn) error {
+		item, err := txn.Get([]byte("challenge:unredeemed"))
+		if err != nil {
+			return err
+		}
+		expiresAt = item.ExpiresAt()
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if expiresAt == 0 {
+		t.Fatal("challenge stored without a TTL: an unredeemed challenge would occupy the store forever")
+	}
+	latest := uint64(before.Add(time.Minute + challengeRetentionGrace + 5*time.Second).Unix())
+	if expiresAt > latest {
+		t.Fatalf("challenge TTL ends at %d, want no later than %d (expiry plus grace)", expiresAt, latest)
+	}
+}
+
+func TestChallengeStorageTTLNeverDropsBelowTheGrace(t *testing.T) {
+	now := time.Now()
+	expired := &model.MailboxChallenge{ExpiresAtMs: now.Add(-time.Hour).UnixMilli()}
+	if got := challengeStorageTTL(expired, now); got != challengeRetentionGrace {
+		t.Fatalf("challengeStorageTTL(already expired) = %s, want %s", got, challengeRetentionGrace)
+	}
+}
 
 func TestChallengeInvalidateAllowsOnlyOneConcurrentConsumer(t *testing.T) {
 	st, err := storage.NewStorage(t.TempDir())

@@ -30,8 +30,24 @@ func (r *ChallengeRepository) Save(challenge *model.MailboxChallenge) error {
 
 	return r.db.Update(func(txn *badger.Txn) error {
 		key := fmt.Sprintf("challenge:%s", challenge.ChallengeID)
-		return txn.Set([]byte(key), data)
+		return txn.SetEntry(badger.NewEntry([]byte(key), data).WithTTL(challengeStorageTTL(challenge, time.Now())))
 	})
+}
+
+// challengeRetentionGrace keeps a challenge stored a little past its own expiry,
+// so a poll racing the deadline still meets ErrInvalidChallenge rather than a
+// missing key, and the two paths stay indistinguishable to the caller.
+const challengeRetentionGrace = time.Minute
+
+// challengeStorageTTL bounds how long an issued challenge occupies the store.
+// The challenge route is unauthenticated, so a challenge nobody redeems must
+// not be kept forever.
+func challengeStorageTTL(challenge *model.MailboxChallenge, now time.Time) time.Duration {
+	remaining := time.UnixMilli(challenge.ExpiresAtMs).Sub(now)
+	if remaining < 0 {
+		remaining = 0
+	}
+	return remaining + challengeRetentionGrace
 }
 
 func (r *ChallengeRepository) Get(challengeID string) (*model.MailboxChallenge, error) {

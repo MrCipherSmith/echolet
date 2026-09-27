@@ -193,7 +193,8 @@ CMD+=(-e ECHOLET_DATA_DIR=/var/lib/echolet
   -e "ECHOLET_CHALLENGE_TTL_SECONDS=${ECHOLET_CHALLENGE_TTL_SECONDS:-60}"
   # No cleanup interval is passed. Envelope retention is the store's own TTL —
   # Badger expires records at ECHOLET_MAILBOX_TTL_HOURS above — and needs no sweep
-  # interval; the relay's cleanup ticker deletes nothing (flow 003, T28).
+  # interval; the relay's cleanup tick is fixed (flow 003, T28). The storage cap
+  # below is enforced on every write route.
   -e "ECHOLET_MAX_STORAGE_BYTES=${ECHOLET_MAX_STORAGE_BYTES:-2147483648}"
   "$ECHOLET_IMAGE")
 

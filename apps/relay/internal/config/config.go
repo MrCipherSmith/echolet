@@ -36,7 +36,11 @@ type Config struct {
 	DataDir                  string `env:"ECHOLET_DATA_DIR" envDefault:"./.data/relay"`
 	LogLevel                 string `env:"ECHOLET_LOG_LEVEL" envDefault:"info"`
 	NodeCallsign             string `env:"ECHOLET_NODE_CALLSIGN" envDefault:"RPT-LOCAL-DEV"`
-	MaxStorageBytes          int64  `env:"ECHOLET_MAX_STORAGE_BYTES" envDefault:"2147483648"`
+	// MaxStorageBytes caps the store's size on disk. Once it is reached the write
+	// routes answer 507 STORAGE_FULL while poll and ack keep working, so
+	// recipients can drain the mailboxes that hold the space. Zero - the value of
+	// a Config nobody filled in - means no cap; negative is refused by Validate().
+	MaxStorageBytes int64 `env:"ECHOLET_MAX_STORAGE_BYTES" envDefault:"2147483648"`
 	// MaxMessageBytes is the largest ciphertext this deployment accepts. Its
 	// default IS the protocol maximum (protocol.MaxMessageBytes, mirroring
 	// LIMITS.MAX_MESSAGE_BYTES); the envDefault has to be a literal because it is
@@ -58,8 +62,9 @@ type Config struct {
 	RateLimitPerMinute           int `env:"ECHOLET_RATE_LIMIT_PER_MINUTE" envDefault:"120"`
 	// There is deliberately no cleanup interval here. ECHOLET_CLEANUP_INTERVAL_SECONDS
 	// was removed from every operator-facing file (flow 003, T28) because the
-	// service it configured sweeps nothing - retention is Badger's own TTL, and
-	// CleanupService.runCleanup() is two debug log lines. A field that outlived the
+	// service it configured sweeps nothing on a schedule an operator could observe -
+	// retention is Badger's own TTL, and each tick only reclaims the disk space
+	// expired values leave behind and re-measures the storage cap. A field that outlived the
 	// documented knob could only mislead: it logged an interval at startup that no
 	// document mentions, and it accepted a value from an operator that changed
 	// nothing they could observe. The ticker's period now belongs to the service
@@ -106,6 +111,9 @@ func (c Config) Validate() error {
 	}
 	if c.TLSReloadIntervalSeconds < 0 {
 		return fmt.Errorf("ECHOLET_TLS_RELOAD_INTERVAL_SECONDS must not be negative, got %d", c.TLSReloadIntervalSeconds)
+	}
+	if c.MaxStorageBytes < 0 {
+		return fmt.Errorf("ECHOLET_MAX_STORAGE_BYTES must not be negative, got %d", c.MaxStorageBytes)
 	}
 	if c.MaxMessageBytes < 0 {
 		// Not merely useless: this value is the ciphertext bound the send route

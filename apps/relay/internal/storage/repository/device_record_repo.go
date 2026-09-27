@@ -48,6 +48,9 @@ func (r *DeviceRecordRepository) Save(record *model.DeviceRecord) error {
 	var lastErr error
 	for attempt := 0; attempt < deviceRecordConflictRetries; attempt++ {
 		lastErr = r.db.Update(func(txn *badger.Txn) error {
+			if err := ensureDeviceCapacity(txn, record.IdentityID, record.DeviceID); err != nil {
+				return err
+			}
 			if err := txn.Set(deviceRecordKey(record.IdentityID, record.DeviceID), data); err != nil {
 				return err
 			}
